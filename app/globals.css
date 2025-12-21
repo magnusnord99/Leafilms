@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* ═══════════════════════════════════════════════════ */
+  /* DESIGN TOKENS - Hovedfarger */
+  /* ═══════════════════════════════════════════════════ */
+  
+  /* Tekstfarger - de to hovedfargene */
+  --color-white: #BFB5A9;      /* Hvit variant (du kan endre til #ffffff) */
+  --color-dark: #2F2F2F;        /* Mørk tekstfarge */
+  
+  /* Bakgrunnsfarger */
+  --color-background: #D9D9D9;  /* Lys grå bakgrunn */
+  --color-background-surface: #D9D9D9;
+  --color-background-elevated: #D9D9D9;
+  --color-background-widget: #B6CBD7;
+  --color-background-widget-medium: #8FA8B8;
+  --color-background-widget-dark: #434242;
+  
+  /* Knapp-farger */
+  --color-primary: #ffffff;
+  --color-primary-text: #000000;
+  --color-primary-hover: #f5f5f5;
+  
+  --color-secondary: #27272a;
+  --color-secondary-text: #ffffff;
+  --color-secondary-hover: #3f3f46;
+  
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  
+  /* Status-farger */
+  --color-success: #10b981;
+  --color-success-bg: rgba(16, 185, 129, 0.2);
+  --color-success-text: #10b981;
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.2);
+  --color-warning-text: #f59e0b;
+  --color-info: #3b82f6;
+  --color-info-bg: rgba(59, 130, 246, 0.2);
+  --color-info-text: #3b82f6;
+  
+  /* Admin-side farger (mørk bakgrunn) */
+  --color-admin-bg: #000000;
+  --color-admin-surface: #18181b;  /* zinc-900 */
+  --color-admin-surface-light: #27272a;  /* zinc-800 */
+  --color-admin-border: #3f3f46;  /* zinc-700 */
+  --color-admin-text: #ffffff;
+  --color-admin-text-muted: #a1a1aa;  /* zinc-400 */
+  --color-admin-text-subtle: #71717a;  /* zinc-500 */
+  
+  /* Rammefarger */
+  --color-border: #3f3f46;
+  --color-border-light: #52525b;
+  --color-border-dark: #27272a;
+  
+  /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme inline {
+  /* Map CSS variabler til Tailwind */
+  --color-white: var(--color-white);
+  --color-dark: var(--color-dark);
+  --color-primary: var(--color-primary);
+  --color-primary-text: var(--color-primary-text);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-text: var(--color-secondary-text);
+  --color-secondary-hover: var(--color-secondary-hover);
+  --color-danger: var(--color-danger);
+  --color-danger-hover: var(--color-danger-hover);
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-success-text: var(--color-success-text);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-warning-text: var(--color-warning-text);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-text: var(--color-info-text);
+  --color-admin-bg: var(--color-admin-bg);
+  --color-admin-surface: var(--color-admin-surface);
+  --color-admin-surface-light: var(--color-admin-surface-light);
+  --color-admin-border: var(--color-admin-border);
+  --color-admin-text: var(--color-admin-text);
+  --color-admin-text-muted: var(--color-admin-text-muted);
+  --color-admin-text-subtle: var(--color-admin-text-subtle);
+  --color-background: var(--color-background);
+  --color-background-surface: var(--color-background-surface);
+  --color-background-elevated: var(--color-background-elevated);
+  --color-background-widget: var(--color-background-widget);
+  --color-background-widget-dark: var(--color-background-widget-dark);
+  --color-background-widget-medium: var(--color-background-widget-medium);
+  --color-border: var(--color-border);
+  --color-border-light: var(--color-border-light);
+  --color-border-dark: var(--color-border-dark);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-dark);
+  font-family: var(--font-sans), Arial, sans-serif;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }

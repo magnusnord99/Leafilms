@@ -6,21 +6,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "tsx scripts/run-migrations.ts",
+    "migrate:psql": "bash scripts/run-migrations-psql.sh",
+    "migrate:supabase": "npx supabase db push"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.80.0",
+    "install": "^0.13.0",
+    "next": "16.0.1",
+    "npm": "^11.6.2",
+    "openai": "^6.8.1",
     "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "next": "16.0.1"
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "16.0.1"
+    "eslint-config-next": "16.0.1",
+    "tailwindcss": "^4",
+    "tsx": "^4.7.0",
+    "typescript": "^5"
   }
 }

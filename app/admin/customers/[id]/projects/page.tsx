@@ -152,36 +152,90 @@ export default function CustomerProjectsPage() {
 
                       {/* Tilbud */}
                       {project.quotes && project.quotes.length > 0 ? (
-                        <div className="mb-3">
-                          <Text variant="body" className="text-sm font-medium mb-1">Pristilbud:</Text>
+                        <div className="mb-3 p-3 bg-background-elevated rounded-lg">
+                          <Text variant="body" className="text-sm font-medium mb-2">Pristilbud ({project.quotes.length}):</Text>
                           <div className="space-y-2">
                             {project.quotes.map((quote) => (
-                              <div key={quote.id} className="flex items-center gap-2 text-sm flex-wrap">
-                                <Badge variant={quote.status === 'accepted' ? 'success' : 'secondary'}>
-                                  {quote.version} - {quote.status}
-                                </Badge>
-                                {quote.pdf_path ? (
-                                  <a
-                                    href={supabase.storage.from('assets').getPublicUrl(quote.pdf_path).data.publicUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-400 hover:text-blue-300 underline text-xs"
-                                  >
-                                    📄 Se PDF
-                                  </a>
-                                ) : (
+                              <div key={quote.id} className="flex items-center justify-between p-2 bg-background rounded border border-border">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant={quote.status === 'accepted' ? 'published' : quote.status === 'sent' ? 'published' : 'draft'}>
+                                    {quote.version || 'V1'}
+                                  </Badge>
+                                  <Badge variant={quote.status === 'accepted' ? 'published' : 'draft'}>
+                                    {quote.status === 'accepted' ? 'Godtatt' : 
+                                     quote.status === 'sent' ? 'Sendt' : 
+                                     quote.status === 'rejected' ? 'Avslått' : 
+                                     'Utkast'}
+                                  </Badge>
+                                  {quote.pdf_path ? (
+                                    <a
+                                      href={supabase.storage.from('assets').getPublicUrl(quote.pdf_path).data.publicUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 underline text-xs"
+                                    >
+                                      📄 Se PDF
+                                    </a>
+                                  ) : (
+                                    <Text variant="muted" className="text-xs">
+                                      (Ingen PDF lagret)
+                                    </Text>
+                                  )}
+                                  {quote.accepted_at && (
+                                    <Text variant="muted" className="text-xs">
+                                      Akseptert: {new Date(quote.accepted_at).toLocaleDateString('nb-NO')}
+                                    </Text>
+                                  )}
                                   <Text variant="muted" className="text-xs">
-                                    (Ingen PDF lagret)
+                                    {new Date(quote.created_at).toLocaleDateString('nb-NO', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    })}
                                   </Text>
-                                )}
-                                {quote.accepted_at && (
-                                  <Text variant="muted" className="text-xs">
-                                    Akseptert: {new Date(quote.accepted_at).toLocaleDateString('nb-NO')}
-                                  </Text>
-                                )}
-                                <Text variant="muted" className="text-xs">
-                                  Opprettet: {new Date(quote.created_at).toLocaleDateString('nb-NO')}
-                                </Text>
+                                </div>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!confirm('Er du sikker på at du vil slette dette tilbudet? Dette kan ikke angres.')) {
+                                      return
+                                    }
+
+                                    try {
+                                      // Slett PDF fra storage hvis den finnes
+                                      if (quote.pdf_path) {
+                                        const { error: storageError } = await supabase.storage
+                                          .from('assets')
+                                          .remove([quote.pdf_path])
+
+                                        if (storageError) {
+                                          console.error('Error deleting PDF from storage:', storageError)
+                                        }
+                                      }
+
+                                      // Slett quote fra database
+                                      const { error: deleteError } = await supabase
+                                        .from('quotes')
+                                        .delete()
+                                        .eq('id', quote.id)
+
+                                      if (deleteError) {
+                                        console.error('Error deleting quote:', deleteError)
+                                        alert('Kunne ikke slette tilbud. Prøv igjen.')
+                                      } else {
+                                        // Refresh data
+                                        fetchData()
+                                      }
+                                    } catch (error: any) {
+                                      console.error('Error deleting quote:', error)
+                                      alert('Kunne ikke slette tilbud. Prøv igjen.')
+                                    }
+                                  }}
+                                  className="text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  🗑️ Slett
+                                </Button>
                               </div>
                             ))}
                           </div>

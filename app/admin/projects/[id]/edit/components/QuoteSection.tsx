@@ -38,18 +38,6 @@ type QuoteSectionProps = {
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
 }
 
-type SavedQuote = {
-  id: string
-  project_id: string
-  sheet_url: string
-  version: string
-  status: string
-  pdf_path: string | null
-  quote_data: QuoteData | null
-  created_at: string
-  updated_at: string
-}
-
 export function QuoteSection({
   section,
   project,
@@ -60,8 +48,6 @@ export function QuoteSection({
   const [acceptingQuote, setAcceptingQuote] = useState(false)
   const [quoteAccepted, setQuoteAccepted] = useState(false)
   const [contractId, setContractId] = useState<string | null>(null)
-  const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([])
-  const [deletingQuoteId, setDeletingQuoteId] = useState<string | null>(null)
   
   // Eksempel-data for å vise hvordan det ser ut
   const exampleQuoteData: QuoteData = {
@@ -117,86 +103,6 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
     section.content.discount || 0
   )
 
-  // Hent lagrede quotes ved mount
-  useEffect(() => {
-    if (project.id) {
-      fetchSavedQuotes()
-    }
-  }, [project.id])
-
-  const fetchSavedQuotes = async () => {
-    if (!project.id) return
-    
-    try {
-      const { supabase } = await import('@/lib/supabase')
-      const { data, error } = await supabase
-        .from('quotes')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching saved quotes:', error)
-      } else {
-        setSavedQuotes((data || []) as SavedQuote[])
-      }
-    } catch (error) {
-      console.error('Error fetching saved quotes:', error)
-    }
-  }
-
-  // Slett tilbud
-  const deleteQuote = async (quoteId: string, pdfPath: string | null) => {
-    if (!confirm('Er du sikker på at du vil slette dette tilbudet? Dette kan ikke angres.')) {
-      return
-    }
-
-    setDeletingQuoteId(quoteId)
-
-    try {
-      const { supabase } = await import('@/lib/supabase')
-
-      // Slett PDF fra storage hvis den finnes
-      if (pdfPath) {
-        const { error: storageError } = await supabase.storage
-          .from('assets')
-          .remove([pdfPath])
-
-        if (storageError) {
-          console.error('Error deleting PDF from storage:', storageError)
-          // Fortsett med å slette fra database selv om storage-sletting feiler
-        } else {
-          console.log('✅ PDF slettet fra storage:', pdfPath)
-        }
-      }
-
-      // Slett quote fra database
-      const { error: deleteError } = await supabase
-        .from('quotes')
-        .delete()
-        .eq('id', quoteId)
-
-      if (deleteError) {
-        console.error('Error deleting quote:', deleteError)
-        alert('Kunne ikke slette tilbud. Prøv igjen.')
-      } else {
-        console.log('✅ Quote slettet fra database')
-        // Oppdater liste
-        setSavedQuotes(prev => prev.filter(q => q.id !== quoteId))
-        
-        // Hvis det slettede tilbudet er det som vises, fjern det
-        if (quoteData && savedQuotes.find(q => q.id === quoteId && q.quote_data === quoteData)) {
-          setQuoteData(null)
-          updateSectionContent(section.id, 'quoteData', null)
-        }
-      }
-    } catch (error: any) {
-      console.error('Error deleting quote:', error)
-      alert('Kunne ikke slette tilbud. Prøv igjen.')
-    } finally {
-      setDeletingQuoteId(null)
-    }
-  }
 
   // Hent quote-data fra API hvis URL er satt
   // NOTE: Dette krever at Python API har /generate-json endpoint
@@ -298,6 +204,12 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
       return
     }
 
+    // Sørg for at terms alltid er inkludert i PDF-en (selv om den ikke vises i UI)
+    const dataWithTerms = {
+      ...data,
+      terms: data.terms || exampleQuoteData.terms
+    }
+
     console.log('💾 Starter lagring av tilbud-PDF for prosjekt:', project.id, project.title)
     
     try {
@@ -307,7 +219,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          quoteData: data,
+          quoteData: dataWithTerms,
           projectId: project.id,
           language,
           reise,
@@ -339,7 +251,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
             version: version,
             status: 'draft' as const,
             pdf_path: storagePath,
-            quote_data: data
+            quote_data: dataWithTerms // Inkluder terms i lagret data
           }
 
           if (existingQuotes && existingQuotes.length > 0) {
@@ -367,8 +279,6 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
             }
           }
           
-          // Oppdater liste med lagrede quotes
-          await fetchSavedQuotes()
         } else {
           console.warn('⚠️ Ingen storage path returnert fra API - PDF ble ikke lagret')
         }
@@ -390,6 +300,12 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
     }
 
     try {
+      // Sørg for at terms alltid er inkludert i PDF-en (selv om den ikke vises i UI)
+      const quoteDataWithTerms = quoteData ? {
+        ...quoteData,
+        terms: quoteData.terms || exampleQuoteData.terms
+      } : undefined
+
       // OPTIMAL FLYTE: Hvis vi allerede har data, send det direkte til PDF-generering
       // Dette unngår å hente data på nytt fra Google Sheets
       const response = await fetch('/api/generate-quote-pdf', {
@@ -399,7 +315,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
         },
         body: JSON.stringify({
           url: quoteData ? undefined : sheetsUrl, // Kun send URL hvis vi ikke har data
-          quoteData: quoteData, // Send eksisterende data hvis tilgjengelig
+          quoteData: quoteDataWithTerms, // Send eksisterende data med terms hvis tilgjengelig
           projectId: project.id, // For å lagre PDF i riktig mappe
           language,
           reise,
@@ -453,6 +369,13 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
 
     setAcceptingQuote(true)
     try {
+      // Sørg for at terms alltid er inkludert
+      const quoteDataWithTerms = {
+        ...quoteData,
+        terms: quoteData.terms || exampleQuoteData.terms,
+        sheetsUrl
+      }
+
       const response = await fetch('/api/accept-quote', {
         method: 'POST',
         headers: {
@@ -460,10 +383,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
         },
         body: JSON.stringify({
           projectId: project.id,
-          quoteData: {
-            ...quoteData,
-            sheetsUrl
-          },
+          quoteData: quoteDataWithTerms,
           acceptedBy: project.client_name || 'Kunde'
         })
       })
@@ -608,69 +528,6 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
             </p>
           </div>
 
-          {/* Liste over lagrede tilbud */}
-          {savedQuotes.length > 0 && (
-            <div className="mt-6 p-4 bg-background-elevated rounded-lg">
-              <Heading as="h3" size="md" className="mb-4">
-                Lagrede tilbud
-              </Heading>
-              <div className="space-y-2">
-                {savedQuotes.map((quote) => (
-                  <div
-                    key={quote.id}
-                    className="flex items-center justify-between p-3 bg-background rounded-lg border border-border"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Text variant="body" className="font-semibold">
-                          {quote.version}
-                        </Text>
-                        <Badge variant={quote.status === 'accepted' ? 'published' : 'draft'}>
-                          {quote.status}
-                        </Badge>
-                        {quote.pdf_path && (
-                          <Text variant="small" className="text-dark/60">
-                            📄 PDF lagret
-                          </Text>
-                        )}
-                      </div>
-                      <Text variant="small" className="text-dark/60">
-                        Opprettet: {new Date(quote.created_at).toLocaleDateString('nb-NO', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </Text>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          if (quote.quote_data) {
-                            setQuoteData(quote.quote_data)
-                            updateSectionContent(section.id, 'quoteData', quote.quote_data)
-                          }
-                        }}
-                        className="text-sm"
-                      >
-                        Vis
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => deleteQuote(quote.id, quote.pdf_path)}
-                        disabled={deletingQuoteId === quote.id}
-                        className="text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        {deletingQuoteId === quote.id ? 'Sletter...' : '🗑️ Slett'}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -882,29 +739,6 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
               📄 Last ned som PDF
             </Button>
             
-            {/* Accept Quote Button - kun i public view */}
-            {!editMode && !quoteAccepted && (
-              <Button
-                onClick={handleAcceptQuote}
-                variant="primary"
-                disabled={acceptingQuote}
-                className="w-full sm:w-auto"
-              >
-                {acceptingQuote ? 'Aksepterer...' : '✅ Godta tilbud'}
-              </Button>
-            )}
-            
-            {/* Quote Accepted Message */}
-            {!editMode && quoteAccepted && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <Text variant="body" className="text-green-800 font-semibold mb-2">
-                  ✅ Tilbud akseptert!
-                </Text>
-                <Text variant="small" className="text-green-700">
-                  Kontrakt er opprettet og klar for signering. Du vil motta en e-post med signeringslenke.
-                </Text>
-              </div>
-            )}
           </div>
         </div>
       ) : (

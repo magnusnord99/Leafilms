@@ -1137,6 +1137,15 @@ export default function EditProject({ params }: Props) {
           }}
           onSelect={handleImageSelect}
           selectedImageIds={imagePickerSectionId ? sectionImages[imagePickerSectionId]?.map(img => img.id) || [] : []}
+          maxSelection={
+            imagePickerSectionId 
+              ? (() => {
+                  const section = sections.find(s => s.id === imagePickerSectionId)
+                  // Team og example_work kan ha flere bilder, resten skal ha 1
+                  return section?.type === 'team' || section?.type === 'example_work' ? undefined : 1
+                })()
+              : undefined
+          }
         />
 
         {/* Collage Preset Picker Modal */}

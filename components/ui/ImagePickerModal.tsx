@@ -80,6 +80,17 @@ export function ImagePickerModal({
   }, [selectedCategory, searchQuery])
 
   function toggleSelection(imageId: string) {
+    // Hvis maxSelection er 1, erstatt alltid det gamle bildet med det nye
+    if (maxSelection === 1) {
+      setSelectedIds(prev => 
+        prev.includes(imageId) 
+          ? [] // Deselect hvis man klikker på samme bilde
+          : [imageId] // Erstatt med nytt bilde
+      )
+      return
+    }
+
+    // For flere bilder, bruk normal toggle-logikk
     if (maxSelection && selectedIds.length >= maxSelection && !selectedIds.includes(imageId)) {
       alert(`Du kan maksimalt velge ${maxSelection} bilder`)
       return

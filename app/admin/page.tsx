@@ -135,7 +135,12 @@ export default function AdminDashboard() {
 
         {/* Recent Projects - Sist åpnet */}
         <div className="space-y-4 mb-12">
-          <Heading as="h2" size="md" className="mb-4 !text-white">Sist åpnet</Heading>
+          <div className="flex items-center justify-between">
+            <Heading as="h2" size="md" className="!text-white">Sist åpnet</Heading>
+            <Link href="/admin/projects">
+              <Button variant="secondary" size="sm">Se alle prosjekter</Button>
+            </Link>
+          </div>
           
           {recentProjects && recentProjects.length > 0 ? (
             <div className="grid gap-4">
@@ -194,14 +199,14 @@ export default function AdminDashboard() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <Heading as="h3" size="sm">{customer.name}</Heading>
+                          <Heading as="h3" size="sm" className="font-bold">{customer.name}</Heading>
                           {customer.company && (
                             <Text variant="muted">• {customer.company}</Text>
                           )}
                         </div>
                         <div className="space-y-1 mb-3">
                           {customer.email && (
-                            <Text variant="body" className="text-sm">📧 {customer.email}</Text>
+                            <Text variant="body" className="text-sm ">📧 {customer.email}</Text>
                           )}
                           {customer.phone && (
                             <Text variant="body" className="text-sm">📞 {customer.phone}</Text>

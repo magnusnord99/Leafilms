@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getQuoteApiToken } from '@/lib/auth/quote-api-auth'
+import { createClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,14 +22,12 @@ export async function POST(req: NextRequest) {
 
     const backendUrl = process.env.QUOTE_API_URL
     
-    // Hent token fra auth service (støtter både service token og user session)
-    // TODO: Når innlogging er på plass, hent session her
-    // const cookieStore = await cookies()
-    // const session = cookieStore.get('session')
-    // const apiToken = await getQuoteApiToken(session?.value ? JSON.parse(session.value) : null)
+    // Hent session fra Supabase (hvis brukeren er logget inn)
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
     
-    // Hent token fra auth service
-    const apiToken = await getQuoteApiToken(null)
+    // Hent token fra auth service (støtter både service token og user session)
+    const apiToken = await getQuoteApiToken(session)
     
     if (!backendUrl) {
       console.error('❌ QUOTE_API_URL ikke satt i environment variables')

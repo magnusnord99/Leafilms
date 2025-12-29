@@ -61,7 +61,7 @@ export default function EditAIExample({ params }: Props) {
           example_text: formData.example_text,
           quality_score: formData.quality_score,
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .eq('id', id)
 
       if (error) throw error

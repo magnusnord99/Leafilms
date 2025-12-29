@@ -124,7 +124,7 @@ export default function ImagesPage() {
         {/* Header */}
         <div className="mb-12">
           <Button
-            variant="ghost"
+            variant="secondary"
             onClick={() => router.push('/admin')}
             className="mb-4 -ml-2"
           >
@@ -132,8 +132,8 @@ export default function ImagesPage() {
           </Button>
           <div className="flex items-center justify-between">
             <div>
-              <Heading as="h1" size="lg" className="mb-2">Bildebibliotek</Heading>
-              <Text variant="muted">Administrer bilder for gjenbruk i prosjekter</Text>
+              <Heading as="h1" size="lg" className="mb-2 text-white">Bildebibliotek</Heading>
+              <Text variant="muted" className="text-white">Administrer bilder for gjenbruk i prosjekter</Text>
             </div>
             <div className="flex gap-3">
               <Link href="/admin/images/presets">

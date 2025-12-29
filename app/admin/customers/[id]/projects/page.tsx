@@ -253,7 +253,7 @@ export default function CustomerProjectsPage() {
                           <div className="space-y-1">
                             {project.contracts.map((contract) => (
                               <div key={contract.id} className="flex items-center gap-2 text-sm">
-                                <Badge variant={contract.status === 'signed' ? 'success' : 'secondary'}>
+                                <Badge variant={contract.status === 'signed' ? 'published' : 'draft'}>
                                   {contract.status === 'signed' ? '✅ Signert' : 
                                    contract.status === 'sent' ? '📤 Sendt' : 
                                    '⏳ Ventende'}

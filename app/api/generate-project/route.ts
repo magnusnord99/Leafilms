@@ -2,9 +2,15 @@ import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { supabase } from '@/lib/supabase'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily to avoid build-time errors
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set')
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  })
+}
 
 // Labels for lesbar output
 const contentTypeLabels: Record<string, string> = {
@@ -335,6 +341,7 @@ ${examplesText}
 
 Skriv teksten nå. Kun teksten, ingen overskrifter eller ekstra formattering.`
 
+  const openai = getOpenAIClient()
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -382,6 +389,7 @@ Svar i dette JSON-formatet:
   ...
 ]`
 
+  const openai = getOpenAIClient()
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -574,6 +582,7 @@ Svar BARE med gyldig JSON i dette formatet:
 ]`
 
   try {
+    const openai = getOpenAIClient()
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [

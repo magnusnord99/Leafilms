@@ -2,9 +2,15 @@ import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { supabase } from '@/lib/supabase'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily to avoid build-time errors
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set')
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  })
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,6 +106,7 @@ ${examplesText}
 Nå, skriv en ny "${sectionNames[sectionType]}"-seksjon for dette prosjektet. Følg samme stil, struktur og lengde som eksemplene, men tilpass innholdet til prosjekttypen, mediumet og målgruppen.`
 
     // Kall OpenAI
+    const openai = getOpenAIClient()
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [

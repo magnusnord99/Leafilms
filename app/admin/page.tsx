@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase-client'
 import { Button, Card, Badge, Heading, Text } from '@/components/ui'
 import { Project, Customer } from '@/lib/types'
 
@@ -25,32 +25,38 @@ export default function AdminDashboard() {
   }, [customers])
 
   async function fetchData() {
-    // Hent 3 siste prosjekter (sortert på updated_at)
-    const { data: projectsData, error: projectsError } = await supabase
-      .from('projects')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(3)
+    try {
+      // Hent 3 siste prosjekter (sortert på updated_at)
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(3)
 
-    if (projectsError) {
-      console.error('Error fetching projects:', projectsError)
-    } else {
-      setRecentProjects((projectsData || []) as Project[])
+      if (projectsError) {
+        console.error('Error fetching projects:', projectsError)
+        console.error('Projects error details:', JSON.stringify(projectsError, null, 2))
+      } else {
+        setRecentProjects((projectsData || []) as Project[])
+      }
+
+      // Hent alle kunder
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (customersError) {
+        console.error('Error fetching customers:', customersError)
+        console.error('Customers error details:', JSON.stringify(customersError, null, 2))
+      } else {
+        setCustomers((customersData || []) as Customer[])
+      }
+    } catch (error) {
+      console.error('Unexpected error in fetchData:', error)
+    } finally {
+      setLoading(false)
     }
-
-    // Hent alle kunder
-    const { data: customersData, error: customersError } = await supabase
-      .from('customers')
-      .select('*')
-      .order('name', { ascending: true })
-
-    if (customersError) {
-      console.error('Error fetching customers:', customersError)
-    } else {
-      setCustomers((customersData || []) as Customer[])
-    }
-
-    setLoading(false)
   }
 
   async function fetchProjectCounts() {
@@ -127,6 +133,9 @@ export default function AdminDashboard() {
             </Link>
             <Link href="/admin/ai-examples">
               <Button variant="secondary">AI Eksempler</Button>
+            </Link>
+            <Link href="/admin/users">
+              <Button variant="secondary">Brukere</Button>
             </Link>
             <Link href="/admin/projects/new">
               <Button variant="primary">+ Nytt Prosjekt</Button>

@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate": "tsx scripts/run-migrations.ts",
-    "migrate:psql": "bash scripts/run-migrations-psql.sh",
-    "migrate:supabase": "npx supabase db push"
+    "migrate": "bash scripts/migrate.sh",
+    "migrate:single": "bash scripts/migrate-single.sh",
+    "migrate:show": "tsx scripts/migrate-show.ts",
+    "migrate:psql": "bash scripts/run-migrations-psql.sh"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.80.0",
     "install": "^0.13.0",
     "next": "16.0.1",

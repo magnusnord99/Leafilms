@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getQuoteApiToken } from '@/lib/auth/quote-api-auth'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase-server'
 import { getQuotePath } from '@/lib/storage/paths'
 
 export async function POST(req: NextRequest) {
@@ -19,14 +19,12 @@ export async function POST(req: NextRequest) {
 
     const backendUrl = process.env.QUOTE_API_URL
     
-    // Hent token fra auth service (støtter både service token og user session)
-    // TODO: Når innlogging er på plass, hent session her
-    // const cookieStore = await cookies()
-    // const session = cookieStore.get('session')
-    // const apiToken = await getQuoteApiToken(session?.value ? JSON.parse(session.value) : null)
+    // Hent session fra Supabase (hvis brukeren er logget inn)
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
     
-    // Hent token fra auth service
-    const apiToken = await getQuoteApiToken(null)
+    // Hent token fra auth service (støtter både service token og user session)
+    const apiToken = await getQuoteApiToken(session)
     
     if (!backendUrl) {
       return NextResponse.json(
@@ -119,7 +117,7 @@ export async function POST(req: NextRequest) {
     let storagePath: string | null = null
     if (saveToStorage && projectId) {
       try {
-        // Hent prosjekt og kundeinfo
+        // Hent prosjekt og kundeinfo (bruk samme supabase client)
         const { data: project, error: projectError } = await supabase
           .from('projects')
           .select('id, title, customer_id')

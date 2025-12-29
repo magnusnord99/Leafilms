@@ -36,7 +36,7 @@ export async function saveSectionImages(
     .from('section_images')
     .delete()
     .eq('section_id', sectionId)
-    .select('id', { count: 'exact', head: true })
+    .select('id')
 
   if (deleteError) {
     console.error('❌ Error deleting existing images:', deleteError)

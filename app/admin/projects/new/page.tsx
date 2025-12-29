@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button, Input, Select, Textarea, Card } from '@/components/ui'
@@ -65,7 +65,7 @@ const scopeOptions = [
   { value: 'large', label: 'Stort (1+ uke produksjon)' }
 ]
 
-export default function NewProject() {
+function NewProjectContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
@@ -513,5 +513,17 @@ Eksempel:
         </form>
       </div>
     </div>
+  )
+}
+
+export default function NewProject() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-white border-t-transparent rounded-full" />
+      </div>
+    }>
+      <NewProjectContent />
+    </Suspense>
   )
 }

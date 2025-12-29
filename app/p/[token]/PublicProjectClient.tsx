@@ -17,6 +17,7 @@ import {
   QuoteSection
 } from '@/app/admin/projects/[id]/edit/components'
 import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
+import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 
 // Helper for å hente bilde-URL
 function getImageUrl(filePath: string): string {
@@ -32,6 +33,7 @@ type PublicProjectClientProps = {
   caseStudies: CaseStudy[]
   collageImages: CollageImages
   selectedPreset: CollagePreset | null
+  shareToken: string
 }
 
 export function PublicProjectClient({
@@ -42,8 +44,13 @@ export function PublicProjectClient({
   teamMembers,
   caseStudies,
   collageImages,
-  selectedPreset
+  selectedPreset,
+  shareToken
 }: PublicProjectClientProps) {
+  
+  // Initialize analytics tracking
+  const sectionIds = sections.map(s => s.id)
+  useProjectAnalytics(project.id, shareToken, sectionIds)
   
   // Refs for scroll animations
   const goalSectionRef = useRef<HTMLDivElement>(null)
@@ -186,22 +193,24 @@ export function PublicProjectClient({
     <div className="min-h-screen bg-background text-foreground">
       {/* Hero Section */}
       {heroSection && (
-        <HeroSection
-          section={heroSection}
-          project={project}
-          editMode={false}
-          sectionImages={sectionImages}
-          sectionImageData={sectionImageData}
-          editingImageSectionId={null}
-          imagePosition={{}}
-          getBackgroundStyle={getBackgroundStyle}
-          updateSectionContent={noop}
-          saveBackgroundPosition={noopAsync}
-          setImagePosition={noop}
-          onImageClick={noop}
-          onEditPositionClick={noopEvent}
-          onImagePickerOpen={noop}
-        />
+        <div data-section-id={heroSection.id}>
+          <HeroSection
+            section={heroSection}
+            project={project}
+            editMode={false}
+            sectionImages={sectionImages}
+            sectionImageData={sectionImageData}
+            editingImageSectionId={null}
+            imagePosition={{}}
+            getBackgroundStyle={getBackgroundStyle}
+            updateSectionContent={noop}
+            saveBackgroundPosition={noopAsync}
+            setImagePosition={noop}
+            onImageClick={noop}
+            onEditPositionClick={noopEvent}
+            onImagePickerOpen={noop}
+          />
+        </div>
       )}
 
       {/* Sections */}
@@ -221,6 +230,7 @@ export function PublicProjectClient({
             return (
               <section
                 key={section.id}
+                data-section-id={section.id}
                 className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : 'py-section px-2 md:px-4'} ${section.type === 'cases' ? 'bg-transparent' : 'bg-background'} relative`}
               >
                 <div className={section.type === 'team' || section.type === 'concept' || section.type === 'example_work' ? 'w-full' : 'max-w-7xl mx-auto'}>

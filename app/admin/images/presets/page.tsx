@@ -17,8 +17,6 @@ type CollageImages = {
   pos3: Image | null
   pos4: Image | null
   pos5: Image | null
-  pos6: Image | null
-  pos7: Image | null
 }
 
 type PresetWithImages = CollagePreset & {
@@ -56,8 +54,7 @@ export default function CollagePresetsPage() {
             .eq('preset_id', preset.id)
 
           const images: CollageImages = {
-            pos1: null, pos2: null, pos3: null, pos4: null,
-            pos5: null, pos6: null, pos7: null
+            pos1: null, pos2: null, pos3: null, pos4: null, pos5: null
           }
 
           presetImages?.forEach((pi: any) => {
@@ -79,31 +76,28 @@ export default function CollagePresetsPage() {
     }
   }
 
-  // Mini-preview komponent
+  // Mini-preview komponent (5 bilder)
   const CollagePreview = ({ images }: { images: CollageImages }) => (
     <div className="bg-zinc-800 p-2 rounded">
-      <div className="grid grid-cols-3 gap-1 h-[120px]">
-        <div className="row-span-3 bg-zinc-700 rounded overflow-hidden">
-          {images.pos1 ? <img src={getImageUrl(images.pos1)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">1</div>}
-        </div>
-        <div className="bg-zinc-700 rounded overflow-hidden">
+      {/* Pos 1 - full bredde */}
+      <div className="h-[40px] bg-zinc-700 rounded overflow-hidden mb-1">
+        {images.pos1 ? <img src={getImageUrl(images.pos1)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">1</div>}
+      </div>
+      {/* Midtseksjon */}
+      <div className="grid grid-cols-2 gap-1 h-[80px]">
+        <div className="row-span-2 bg-zinc-700 rounded overflow-hidden">
           {images.pos2 ? <img src={getImageUrl(images.pos2)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">2</div>}
         </div>
         <div className="bg-zinc-700 rounded overflow-hidden">
           {images.pos3 ? <img src={getImageUrl(images.pos3)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">3</div>}
         </div>
-        <div className="col-span-2 bg-zinc-700 rounded overflow-hidden">
+        <div className="bg-zinc-700 rounded overflow-hidden">
           {images.pos4 ? <img src={getImageUrl(images.pos4)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">4</div>}
         </div>
-        <div className="bg-zinc-700 rounded overflow-hidden">
-          {images.pos5 ? <img src={getImageUrl(images.pos5)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">5</div>}
-        </div>
-        <div className="bg-zinc-700 rounded overflow-hidden">
-          {images.pos6 ? <img src={getImageUrl(images.pos6)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">6</div>}
-        </div>
       </div>
+      {/* Pos 5 - full bredde */}
       <div className="mt-1 h-[30px] bg-zinc-700 rounded overflow-hidden">
-        {images.pos7 ? <img src={getImageUrl(images.pos7)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">7</div>}
+        {images.pos5 ? <img src={getImageUrl(images.pos5)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">5</div>}
       </div>
     </div>
   )
@@ -115,14 +109,14 @@ export default function CollagePresetsPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <Button
-              variant="ghost"
+              variant="secondary"
               onClick={() => router.push('/admin/images')}
               className="mb-4 -ml-2"
             >
               ← Tilbake til bilder
             </Button>
-            <Heading as="h1" size="lg" className="mb-2">Bilde-sett (7 bilder)</Heading>
-            <Text variant="muted">Administrer forhåndsdefinerte bilde-sett for eksempelarbeid-collagen</Text>
+            <Heading as="h1" size="lg" className="mb-2 text-white">Bilde-sett (5 bilder)</Heading>
+            <Text variant="body" className="text-white">Administrer forhåndsdefinerte bilde-sett for eksempelarbeid-collagen</Text>
           </div>
         </div>
 
@@ -136,14 +130,16 @@ export default function CollagePresetsPage() {
             {presets.map((preset) => (
               <Card key={preset.id} className="bg-zinc-900 overflow-hidden">
                 {/* Preview av collage */}
-                <div className="p-4">
-                  <CollagePreview images={preset.images} />
+                <div className="p-4 flex justify-center">
+                  <div className="max-w-[300px] w-full">
+                    <CollagePreview images={preset.images} />
+                  </div>
                 </div>
                 
                 {/* Info og handlinger */}
                 <div className="p-4 border-t border-zinc-800">
                   <div className="flex items-center justify-between mb-2">
-                    <Heading as="h3" size="sm">{preset.name}</Heading>
+                    <Heading as="h3" size="sm" className="text-white">{preset.name}</Heading>
                     <Text variant="muted" className="text-xs">ID: {preset.id}</Text>
                   </div>
                   {preset.description && (

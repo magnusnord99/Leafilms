@@ -120,6 +120,15 @@ export default function NewImage() {
       const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
       const filePath = `images/${fileName}`
 
+      // Sjekk om Supabase er riktig konfigurert
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      
+      if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+        console.error('Supabase not configured:', { supabaseUrl, hasKey: !!supabaseKey })
+        throw new Error('Supabase er ikke riktig konfigurert. Sjekk environment variables.')
+      }
+
       const { error: uploadError } = await supabase.storage
         .from('assets')
         .upload(filePath, imageFile, {
@@ -129,7 +138,18 @@ export default function NewImage() {
 
       if (uploadError) {
         console.error('Upload error details:', uploadError)
-        throw new Error(`Kunne ikke laste opp bilde: ${uploadError.message}`)
+        console.error('Supabase URL:', supabaseUrl)
+        console.error('File path:', filePath)
+        console.error('File size:', imageFile.size)
+        
+        // Gi mer spesifikk feilmelding basert på feiltype
+        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('does not exist')) {
+          throw new Error('Storage bucket "assets" finnes ikke. Du må opprette den i Supabase Dashboard under Storage.')
+        } else if (uploadError.message.includes('new row violates row-level security') || uploadError.message.includes('RLS')) {
+          throw new Error('Row Level Security blokkerer opplastingen. Sjekk RLS policies for storage.objects i Supabase.')
+        } else {
+          throw new Error(`Kunne ikke laste opp bilde: ${uploadError.message}`)
+        }
       }
 
       // Hent bilde-dimensjoner (valgfritt, kan gjøres senere)

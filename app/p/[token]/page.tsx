@@ -236,6 +236,7 @@ export default async function PublicProjectView({ params }: Props) {
       caseStudies={caseStudies}
       collageImages={collageImages}
       selectedPreset={selectedPreset}
+      shareToken={token}
     />
   )
 }

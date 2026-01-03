@@ -19,9 +19,11 @@ export function PageHeader({ projectId, projectTitle, projectStatus, onRefresh }
           📊 Prosjekt Analytics: {projectTitle || 'Prosjekt'}
         </Heading>
         {projectStatus && (
-          <Badge variant={projectStatus === 'published' ? 'published' : 'draft'} className="mt-2">
-            {projectStatus === 'published' ? '🟢 Publisert' : '🟡 Utkast'}
-          </Badge>
+          <div className="mt-2">
+            <Badge variant={projectStatus === 'published' ? 'published' : 'draft'}>
+              {projectStatus === 'published' ? '🟢 Publisert' : '🟡 Utkast'}
+            </Badge>
+          </div>
         )}
       </div>
       <Button variant="secondary" onClick={onRefresh}>

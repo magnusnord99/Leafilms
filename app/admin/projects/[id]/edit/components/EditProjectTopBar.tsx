@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Project, Section } from '@/lib/types'
 import { Button, Badge, Heading, Text } from '@/components/ui'
 
@@ -73,6 +74,15 @@ export function EditProjectTopBar({
               📋 Kopier link
             </Button>
           )}
+          {/* Se statistikk knapp */}
+          <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+            <Button
+              variant="secondary"
+              size="sm"
+            >
+              📊 Se statistikk
+            </Button>
+          </Link>
           {/* Legg til Pristilbud-seksjon */}
           {editMode && !sections.find(s => s.type === 'quote') && (
             <Button

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createPublicClient } from '@/lib/supabase-server'
 import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, CollagePreset } from '@/lib/types'
 import { PublicProjectClient } from './PublicProjectClient'
 import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
@@ -14,38 +14,106 @@ type Props = {
 
 export default async function PublicProjectView({ params }: Props) {
   const { token } = await params
+  
+  // Validate token
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    console.error('[PublicProjectView] Invalid or missing token')
+    notFound()
+  }
+
+  const supabase = createPublicClient()
 
   // Finn prosjekt fra token
-  const { data: share } = await supabase
+  const { data: share, error: shareError } = await supabase
     .from('project_shares')
     .select('project_id')
-    .eq('token', token)
+    .eq('token', token.trim())
     .single()
 
-  if (!share) {
+  if (shareError) {
+    console.error('[PublicProjectView] Error fetching share:', {
+      error: shareError,
+      message: shareError.message,
+      code: shareError.code,
+      details: shareError.details,
+      hint: shareError.hint,
+      token: token.substring(0, 10) + '...' // Log first 10 chars only
+    })
+    notFound()
+  }
+
+  if (!share || !share.project_id) {
+    console.error('[PublicProjectView] No share found for token:', token.substring(0, 10) + '...')
     notFound()
   }
 
   // Hent prosjekt
-  const { data: project } = await supabase
+  const { data: project, error: projectError } = await supabase
     .from('projects')
     .select('*')
     .eq('id', share.project_id)
     .single()
 
+  if (projectError) {
+    console.error('[PublicProjectView] Error fetching project:', projectError)
+    notFound()
+  }
+
   if (!project) {
+    console.error('[PublicProjectView] No project found for id:', share.project_id)
+    notFound()
+  }
+
+  // Check if project is published
+  if (project.status !== 'published') {
+    console.error('[PublicProjectView] Project is not published:', {
+      project_id: project.id,
+      status: project.status
+    })
     notFound()
   }
 
   // Hent synlige seksjoner
-  const { data: sections } = await supabase
+  const { data: sections, error: sectionsError } = await supabase
     .from('sections')
     .select('*')
     .eq('project_id', share.project_id)
     .eq('visible', true)
     .order('order_index', { ascending: true })
 
+  if (sectionsError) {
+    console.error('[PublicProjectView] Error fetching sections:', sectionsError)
+  }
+
+  // Debug: Log sections count
+  console.log('[PublicProjectView] Fetched sections:', {
+    count: sections?.length || 0,
+    project_id: share.project_id,
+    error: sectionsError?.message
+  })
+
+  // Hent ALLE seksjoner (inkludert usynlige) for debugging
+  const { data: allSections } = await supabase
+    .from('sections')
+    .select('*')
+    .eq('project_id', share.project_id)
+    .order('order_index', { ascending: true })
+
+  console.log('[PublicProjectView] All sections (including invisible):', {
+    count: allSections?.length || 0,
+    sections: allSections?.map(s => ({ id: s.id, type: s.type, visible: s.visible }))
+  })
+
   const sectionsList = (sections || []) as Section[]
+
+  // Hvis ingen seksjoner, log dette som en advarsel (ikke feil, kan være normalt)
+  if (sectionsList.length === 0) {
+    console.warn('[PublicProjectView] No visible sections found for project:', {
+      project_id: share.project_id,
+      project_title: project.title,
+      all_sections_count: allSections?.length || 0
+    })
+  }
 
   // Hent alle seksjonsbilder - samme metode som i edit-siden
   const sectionImages: Record<string, Image[]> = {}

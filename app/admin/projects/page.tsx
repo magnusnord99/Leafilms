@@ -11,6 +11,7 @@ export default function ProjectsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState<Project[]>([])
+  const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchProjects()
@@ -46,6 +47,26 @@ export default function ProjectsPage() {
         })
         
         setProjects(sortedProjects as Project[])
+
+        // Hent share tokens for publiserte prosjekter
+        const publishedProjectIds = sortedProjects
+          .filter(p => p.status === 'published')
+          .map(p => p.id)
+
+        if (publishedProjectIds.length > 0) {
+          const { data: sharesData } = await supabase
+            .from('project_shares')
+            .select('project_id, token')
+            .in('project_id', publishedProjectIds)
+
+          if (sharesData) {
+            const links: Record<string, string> = {}
+            sharesData.forEach(share => {
+              links[share.project_id] = `${window.location.origin}/p/${share.token}`
+            })
+            setShareLinks(links)
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -136,6 +157,32 @@ export default function ProjectsPage() {
                       <Link href={`/admin/projects/${project.id}/edit`}>
                         <Button variant="primary" size="sm">Åpne</Button>
                       </Link>
+                      {shareLinks[project.id] && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            window.open(shareLinks[project.id], '_blank')
+                          }}
+                        >
+                          🔗 Se publisert
+                        </Button>
+                      )}
+                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
+                      </Link>
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleDelete(project.id, project.title)
+                        }}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                      >
+                        Slett
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -170,6 +217,20 @@ export default function ProjectsPage() {
                       <Link href={`/admin/projects/${project.id}/edit`}>
                         <Button variant="primary" size="sm">Åpne</Button>
                       </Link>
+                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
+                      </Link>
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleDelete(project.id, project.title)
+                        }}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                      >
+                        Slett
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -204,6 +265,20 @@ export default function ProjectsPage() {
                       <Link href={`/admin/projects/${project.id}/edit`}>
                         <Button variant="primary" size="sm">Åpne</Button>
                       </Link>
+                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
+                      </Link>
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleDelete(project.id, project.title)
+                        }}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                      >
+                        Slett
+                      </Button>
                     </div>
                   </div>
                 </Card>

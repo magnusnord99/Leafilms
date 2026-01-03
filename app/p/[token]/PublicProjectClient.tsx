@@ -48,6 +48,16 @@ export function PublicProjectClient({
   shareToken
 }: PublicProjectClientProps) {
   
+  // Debug logging
+  useEffect(() => {
+    console.log('[PublicProjectClient] Rendering with:', {
+      projectId: project?.id,
+      projectTitle: project?.title,
+      sectionsCount: sections?.length,
+      shareToken: shareToken?.substring(0, 10) + '...'
+    })
+  }, [project, sections, shareToken])
+  
   // Initialize analytics tracking
   const sectionIds = sections.map(s => s.id)
   useProjectAnalytics(project.id, shareToken, sectionIds)
@@ -189,8 +199,37 @@ export function PublicProjectClient({
   const selectedTeamMemberIds = teamMembers.map(m => m.id)
   const selectedCaseIds = caseStudies.map(c => c.id)
 
+  // Safety check - if no project, show error
+  if (!project) {
+    console.error('[PublicProjectClient] No project provided')
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="text-center">
+          <Text variant="body" className="!text-foreground">
+            Feil: Prosjekt ikke funnet
+          </Text>
+        </div>
+      </div>
+    )
+  }
+
+  // Debug: Log what we're about to render
+  console.log('[PublicProjectClient] About to render:', {
+    hasProject: !!project,
+    hasHeroSection: !!heroSection,
+    sectionsToRender: sections.filter(s => s.type !== 'hero' && s.visible).length,
+    totalSections: sections.length
+  })
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Debug info - remove after fixing */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-0 left-0 bg-red-500 text-white p-2 z-50 text-xs">
+          Debug: Project={project?.title}, Sections={sections.length}, Hero={heroSection ? 'Yes' : 'No'}
+        </div>
+      )}
+      
       {/* Hero Section */}
       {heroSection && (
         <div data-section-id={heroSection.id}>
@@ -215,17 +254,36 @@ export function PublicProjectClient({
 
       {/* Sections */}
       <div className="relative">
-        {sections
-          .filter(s => s.type !== 'hero')
-          .sort((a, b) => {
-            // Sorter kontakt-seksjonen alltid til slutt
-            if (a.type === 'contact' && b.type !== 'contact') return 1
-            if (a.type !== 'contact' && b.type === 'contact') return -1
-            // Ellers bruk order_index
-            return a.order_index - b.order_index
-          })
-          .map((section) => {
-            if (!section.visible) return null
+        {sections.length === 0 ? (
+          <div className="py-20 px-4 text-center max-w-2xl mx-auto">
+            <Text variant="body" className="!text-foreground mb-4">
+              Ingen seksjoner å vise
+            </Text>
+            <Text variant="small" className="!text-foreground/60">
+              Prosjektet har ingen synlige seksjoner. Kontakt prosjekteier for mer informasjon.
+            </Text>
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 p-4 bg-yellow-500/20 border border-yellow-500 rounded text-left text-xs">
+                <p className="font-bold mb-2">Debug Info:</p>
+                <p>Project ID: {project.id}</p>
+                <p>Project Title: {project.title}</p>
+                <p>Sections Count: {sections.length}</p>
+                <p>Share Token: {shareToken.substring(0, 20)}...</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          sections
+            .filter(s => s.type !== 'hero')
+            .sort((a, b) => {
+              // Sorter kontakt-seksjonen alltid til slutt
+              if (a.type === 'contact' && b.type !== 'contact') return 1
+              if (a.type !== 'contact' && b.type === 'contact') return -1
+              // Ellers bruk order_index
+              return a.order_index - b.order_index
+            })
+            .map((section) => {
+              if (!section.visible) return null
             
             return (
               <section
@@ -326,6 +384,7 @@ export function PublicProjectClient({
                       project={project}
                       editMode={false}
                       updateSectionContent={noop}
+                      shareToken={shareToken}
                     />
                   )}
 
@@ -370,7 +429,8 @@ export function PublicProjectClient({
                 </div>
               </section>
             )
-          })}
+          })
+        )}
       </div>
 
       {/* Footer */}

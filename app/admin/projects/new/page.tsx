@@ -253,17 +253,42 @@ function NewProjectContent() {
         })
 
         if (!aiResponse.ok) {
-          const errorData = await aiResponse.json()
-          console.warn('AI generation failed:', errorData.error)
+          let errorMessage = 'Unknown error'
+          try {
+            const errorData = await aiResponse.json()
+            errorMessage = errorData.error || errorData.message || 'Unknown error'
+            console.error('AI generation failed:', errorMessage)
+            console.error('Response status:', aiResponse.status)
+            console.error('Full error data:', errorData)
+          } catch (e) {
+            // If response is not JSON, try to get text
+            try {
+              const errorText = await aiResponse.text()
+              console.error('AI generation failed (non-JSON response):', errorText)
+              errorMessage = errorText || `HTTP ${aiResponse.status}`
+            } catch (textError) {
+              console.error('AI generation failed:', `HTTP ${aiResponse.status}`)
+            }
+          }
           // Fortsett selv om AI feiler - prosjektet er opprettet
+        } else {
+          try {
+            const aiData = await aiResponse.json()
+            console.log('AI generation successful:', aiData)
+          } catch (e) {
+            console.warn('AI generation response was not JSON, but status was OK')
+          }
         }
       } catch (aiError) {
-        console.warn('AI generation error:', aiError)
+        console.error('AI generation error:', aiError)
         // Fortsett selv om AI feiler
       }
 
-      // Redirect til prosjekt-editoren
-      router.push(`/admin/projects/${project.id}/edit`)
+      // Vent litt for å sikre at alle database-oppdateringer er ferdig
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Redirect til prosjekt-editoren med query parameter for å trigge refresh
+      router.push(`/admin/projects/${project.id}/edit?generated=true`)
       router.refresh()
     } catch (error) {
       console.error('Error creating project:', error)

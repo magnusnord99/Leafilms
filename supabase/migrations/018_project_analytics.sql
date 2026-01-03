@@ -64,6 +64,8 @@ CREATE TRIGGER update_project_analytics_updated_at
   EXECUTE FUNCTION update_project_analytics_updated_at();
 
 -- View for å se aggregerte analytics per prosjekt
+-- Note: This view is SECURITY INVOKER by default (runs with caller's privileges)
+-- This ensures RLS policies are enforced based on the querying user's context
 CREATE OR REPLACE VIEW project_analytics_summary AS
 WITH section_aggregates AS (
   SELECT 
@@ -102,4 +104,5 @@ GROUP BY p.id, p.title;
 COMMENT ON TABLE project_analytics IS 'Anonymiserte analytics for public project views. Ingen personlig informasjon lagres.';
 COMMENT ON COLUMN project_analytics.share_token IS 'Token fra project_shares - brukes for å koble analytics til prosjektet';
 COMMENT ON COLUMN project_analytics.section_times IS 'JSONB objekt med section_id som key og antall sekunder som value';
+COMMENT ON VIEW project_analytics_summary IS 'Aggregated analytics summary. Uses SECURITY INVOKER (default) to enforce RLS based on caller permissions.';
 

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
-import { supabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase-server'
 
 // Initialize OpenAI client lazily to avoid build-time errors
 function getOpenAIClient() {
@@ -66,6 +66,8 @@ const mediumLabels: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('[generate-project] Starting project generation...')
+    
     const { 
       projectId,
       title,
@@ -79,9 +81,30 @@ export async function POST(req: NextRequest) {
       context
     } = await req.json()
 
+    console.log('[generate-project] Received data:', {
+      projectId,
+      title,
+      contentType,
+      projectType,
+      targetAudience
+    })
+
     // Valider påkrevd input
     if (!projectId || !contentType || !projectType || !targetAudience) {
+      console.error('[generate-project] Missing required information')
       return Response.json({ error: 'Mangler påkrevd informasjon' }, { status: 400 })
+    }
+
+    let supabase
+    try {
+      supabase = createServiceClient()
+      console.log('[generate-project] Service client created successfully')
+    } catch (clientError: any) {
+      console.error('[generate-project] Error creating service client:', clientError.message)
+      return Response.json({ 
+        error: 'Kunne ikke koble til database. Sjekk at SUPABASE_SERVICE_ROLE_KEY er satt.',
+        details: clientError.message
+      }, { status: 500 })
     }
 
     // Hent seksjoner for prosjektet
@@ -195,7 +218,11 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
       generatedContent.team = { selectedTeamIds }
       
       // 5.5 Legg til faste BTS-bilder i team-galleriet
-      await addBTSImagesToTeamGallery(teamSection.id)
+      try {
+        await addBTSImagesToTeamGallery(teamSection.id)
+      } catch (error) {
+        console.error('Error adding BTS images to team gallery:', error)
+      }
     }
 
     // 6. Velg CASE STUDIES
@@ -219,44 +246,82 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
 
     // 8. Velg BAKGRUNNSBILDE for Hero
     if (heroSection) {
-      const heroImageId = await selectSectionImage(contentType, industry, 'hero')
-      if (heroImageId) {
-        await linkImageToSection(heroSection.id, heroImageId, 'background')
-        generatedContent.hero = { ...generatedContent.hero, imageId: heroImageId }
+      try {
+        console.log('[generate-project] Selecting hero image...')
+        const heroImageId = await selectSectionImage(contentType, industry, 'hero')
+        if (heroImageId) {
+          console.log(`[generate-project] Hero image selected: ${heroImageId}, linking to section ${heroSection.id}...`)
+          await linkImageToSection(heroSection.id, heroImageId, 'background')
+          generatedContent.hero = { ...generatedContent.hero, imageId: heroImageId }
+          console.log('[generate-project] ✅ Hero image linked successfully')
+        } else {
+          console.warn('[generate-project] ⚠️ No hero image selected')
+        }
+      } catch (error) {
+        console.error('[generate-project] ❌ Error linking hero image:', error)
       }
     }
 
     // 9. Velg BAKGRUNNSBILDE for Konsept
     if (conceptSection) {
-      const conceptImageId = await selectSectionImage(contentType, industry, 'concept')
-      if (conceptImageId) {
-        await linkImageToSection(conceptSection.id, conceptImageId, 'background')
-        generatedContent.concept = { ...generatedContent.concept, imageId: conceptImageId }
+      try {
+        console.log('[generate-project] Selecting concept image...')
+        const conceptImageId = await selectSectionImage(contentType, industry, 'concept')
+        if (conceptImageId) {
+          console.log(`[generate-project] Concept image selected: ${conceptImageId}, linking to section ${conceptSection.id}...`)
+          await linkImageToSection(conceptSection.id, conceptImageId, 'background')
+          generatedContent.concept = { ...generatedContent.concept, imageId: conceptImageId }
+          console.log('[generate-project] ✅ Concept image linked successfully')
+        } else {
+          console.warn('[generate-project] ⚠️ No concept image selected')
+        }
+      } catch (error) {
+        console.error('[generate-project] ❌ Error linking concept image:', error)
       }
     }
 
     // 10. Velg BAKGRUNNSBILDE for Mål
     if (goalSection) {
-      const goalImageId = await selectSectionImage(contentType, industry, 'goal')
-      if (goalImageId) {
-        await linkImageToSection(goalSection.id, goalImageId, 'background')
-        generatedContent.goal = { ...generatedContent.goal, imageId: goalImageId }
+      try {
+        console.log('[generate-project] Selecting goal image...')
+        const goalImageId = await selectSectionImage(contentType, industry, 'goal')
+        if (goalImageId) {
+          console.log(`[generate-project] Goal image selected: ${goalImageId}, linking to section ${goalSection.id}...`)
+          await linkImageToSection(goalSection.id, goalImageId, 'background')
+          generatedContent.goal = { ...generatedContent.goal, imageId: goalImageId }
+          console.log('[generate-project] ✅ Goal image linked successfully')
+        } else {
+          console.warn('[generate-project] ⚠️ No goal image selected')
+        }
+      } catch (error) {
+        console.error('[generate-project] ❌ Error linking goal image:', error)
       }
     }
 
     // 11. Velg BAKGRUNNSBILDE for Levering (bruker deliverablesSection fra steg 4.5)
     if (deliverablesSection) {
-      const deliverableImageId = await selectSectionImage(contentType, industry, 'deliverables')
-      if (deliverableImageId) {
-        await linkImageToSection(deliverablesSection.id, deliverableImageId, 'background')
-        generatedContent.deliverables = { ...generatedContent.deliverables, imageId: deliverableImageId }
+      try {
+        console.log('[generate-project] Selecting deliverables image...')
+        const deliverableImageId = await selectSectionImage(contentType, industry, 'deliverables')
+        if (deliverableImageId) {
+          console.log(`[generate-project] Deliverables image selected: ${deliverableImageId}, linking to section ${deliverablesSection.id}...`)
+          await linkImageToSection(deliverablesSection.id, deliverableImageId, 'background')
+          generatedContent.deliverables = { ...generatedContent.deliverables, imageId: deliverableImageId }
+          console.log('[generate-project] ✅ Deliverables image linked successfully')
+        } else {
+          console.warn('[generate-project] ⚠️ No deliverables image selected')
+        }
+      } catch (error) {
+        console.error('[generate-project] ❌ Error linking deliverables image:', error)
       }
     }
 
     // Oppdater seksjonene i databasen
+    console.log('Updating sections with generated content:', generatedContent)
     for (const section of sections || []) {
       const content = generatedContent[section.type]
       if (content) {
+        console.log(`Updating section ${section.id} (${section.type}) with:`, content)
         if (section.type === 'team' && content.selectedTeamIds) {
           // For team, lagre i section_team_members tabellen
           await supabase
@@ -298,26 +363,51 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
             .eq('id', section.id)
         } else {
           // For andre seksjoner, oppdater content direkte
-          await supabase
+          const currentContent = section.content || {}
+          const { error: updateError } = await supabase
             .from('sections')
             .update({ 
-              content: { ...section.content, ...content },
+              content: { ...currentContent, ...content },
               updated_at: new Date().toISOString()
             })
             .eq('id', section.id)
+          
+          if (updateError) {
+            console.error(`Error updating section ${section.id} (${section.type}):`, updateError)
+          } else {
+            console.log(`Successfully updated section ${section.id} (${section.type}) with content:`, content)
+          }
         }
       }
     }
 
-    return Response.json({
-      success: true,
-      generatedContent
+    console.log('[generate-project] ✅ Project generation completed successfully!')
+    console.log('[generate-project] Generated content summary:', {
+      hero: generatedContent.hero ? '✅' : '❌',
+      goal: generatedContent.goal ? '✅' : '❌',
+      concept: generatedContent.concept ? '✅' : '❌',
+      timeline: generatedContent.timeline ? '✅' : '❌',
+      deliverables: generatedContent.deliverables ? '✅' : '❌',
+      team: generatedContent.team ? '✅' : '❌',
+      cases: generatedContent.cases ? '✅' : '❌',
+      example_work: generatedContent.example_work ? '✅' : '❌'
     })
 
-  } catch (error) {
-    console.error('Error generating project:', error)
+    return Response.json({
+      success: true,
+      generatedContent,
+      message: 'Prosjekt generert med tekst og bilder'
+    })
+
+  } catch (error: any) {
+    console.error('[generate-project] Error generating project:', error)
+    console.error('[generate-project] Error stack:', error.stack)
     return Response.json(
-      { error: 'Kunne ikke generere prosjekt. Sjekk at OPENAI_API_KEY er satt.' },
+      { 
+        error: 'Kunne ikke generere prosjekt',
+        details: error.message || 'Unknown error',
+        hint: 'Sjekk at OPENAI_API_KEY og SUPABASE_SERVICE_ROLE_KEY er satt i miljøvariablene'
+      },
       { status: 500 }
     )
   }
@@ -429,6 +519,7 @@ async function selectTeamMembers(
   projectType: string,
   scope: string
 ): Promise<string[]> {
+  const supabase = createServiceClient()
   // Hent alle team-medlemmer med deres roller/tags
   const { data: teamMembers } = await supabase
     .from('team_members')
@@ -480,6 +571,7 @@ async function selectCaseStudies(
   projectType: string,
   industry: string
 ): Promise<string[]> {
+  const supabase = createServiceClient()
   const { data: cases } = await supabase
     .from('case_studies')
     .select('id, title, tags')
@@ -518,6 +610,7 @@ async function selectCollagePreset(
   contentType: string,
   industry: string
 ): Promise<number | null> {
+  const supabase = createServiceClient()
   const { data: presets } = await supabase
     .from('collage_presets')
     .select('id, name, keywords')
@@ -643,13 +736,24 @@ async function selectSectionImage(
   industry: string,
   sectionType: 'hero' | 'deliverables' | 'concept' | 'goal'
 ): Promise<string | null> {
+  const supabase = createServiceClient()
   // Hent bilder fra biblioteket
-  const { data: images } = await supabase
+  const { data: images, error: imagesError } = await supabase
     .from('images')
     .select('id, category, subcategory, tags, title')
     .limit(50)
 
-  if (!images || images.length === 0) return null
+  if (imagesError) {
+    console.error(`Error fetching images for ${sectionType}:`, imagesError)
+    return null
+  }
+
+  if (!images || images.length === 0) {
+    console.warn(`No images found in database for ${sectionType}`)
+    return null
+  }
+
+  console.log(`Found ${images.length} images to choose from for ${sectionType}`)
 
   // Definer preferanser basert på seksjonstype
   const sectionPreferences: Record<string, string[]> = {
@@ -699,12 +803,15 @@ async function selectSectionImage(
 
   // Returner beste match hvis score > 0, ellers tilfeldig
   if (scored[0]?.score > 0) {
+    console.log(`Selected image ${scored[0].id} for ${sectionType} with score ${scored[0].score}`)
     return scored[0].id
   }
   
   // Fallback: returner et tilfeldig bilde
   const randomIndex = Math.floor(Math.random() * images.length)
-  return images[randomIndex]?.id || null
+  const selectedId = images[randomIndex]?.id || null
+  console.log(`Selected random image ${selectedId} for ${sectionType} (no high-scoring matches)`)
+  return selectedId
 }
 
 // Koble et bilde til en seksjon
@@ -713,15 +820,20 @@ async function linkImageToSection(
   imageId: string,
   position: string = 'background'
 ): Promise<void> {
+  const supabase = createServiceClient()
   // Slett eksisterende kobling først (for å unngå duplikater)
-  await supabase
+  const { error: deleteError } = await supabase
     .from('section_images')
     .delete()
     .eq('section_id', sectionId)
     .eq('position', position)
 
+  if (deleteError) {
+    console.error(`Error deleting existing section_images for section ${sectionId}:`, deleteError)
+  }
+
   // Opprett ny kobling
-  await supabase
+  const { error: insertError } = await supabase
     .from('section_images')
     .insert({
       section_id: sectionId,
@@ -729,10 +841,18 @@ async function linkImageToSection(
       position: position,
       order_index: 0
     })
+
+  if (insertError) {
+    console.error(`Error linking image ${imageId} to section ${sectionId} (${position}):`, insertError)
+    throw insertError
+  } else {
+    console.log(`Successfully linked image ${imageId} to section ${sectionId} (${position})`)
+  }
 }
 
 // Legg til faste BTS-bilder i team-seksjonens galleri
 async function addBTSImagesToTeamGallery(teamSectionId: string): Promise<void> {
+  const supabase = createServiceClient()
   // Hent alle BTS-bilder fra biblioteket
   const { data: btsImages, error } = await supabase
     .from('images')
@@ -741,17 +861,28 @@ async function addBTSImagesToTeamGallery(teamSectionId: string): Promise<void> {
     .order('created_at', { ascending: true })
     .limit(10) // Maks 10 BTS-bilder
 
-  if (error || !btsImages || btsImages.length === 0) {
+  if (error) {
+    console.error('Error fetching BTS images:', error)
+    return
+  }
+
+  if (!btsImages || btsImages.length === 0) {
     console.log('No BTS images found for team gallery')
     return
   }
 
+  console.log(`Found ${btsImages.length} BTS images for team gallery`)
+
   // Slett eksisterende galleri-bilder for denne seksjonen
-  await supabase
+  const { error: deleteError } = await supabase
     .from('section_images')
     .delete()
     .eq('section_id', teamSectionId)
     .eq('position', 'gallery')
+
+  if (deleteError) {
+    console.error(`Error deleting existing gallery images for section ${teamSectionId}:`, deleteError)
+  }
 
   // Legg til BTS-bildene i galleriet
   const inserts = btsImages.map((img, index) => ({
@@ -761,9 +892,16 @@ async function addBTSImagesToTeamGallery(teamSectionId: string): Promise<void> {
     position: 'gallery'
   }))
 
-  await supabase
+  const { error: insertError } = await supabase
     .from('section_images')
     .insert(inserts)
+
+  if (insertError) {
+    console.error(`Error inserting BTS images to section ${teamSectionId}:`, insertError)
+    throw insertError
+  } else {
+    console.log(`Successfully added ${inserts.length} BTS images to team gallery (section ${teamSectionId})`)
+  }
 }
 
 // Last inn bilder fra et preset til example_work seksjonen
@@ -772,31 +910,56 @@ async function loadPresetImagesToSection(
   presetId: number,
   projectId: string
 ): Promise<void> {
+  const supabase = createServiceClient()
   // Hent bilder fra preset
   const { data: presetImages } = await supabase
     .from('collage_preset_images')
     .select('image_id, position')
     .eq('preset_id', presetId)
 
-  if (!presetImages || presetImages.length === 0) return
+  if (!presetImages || presetImages.length === 0) {
+    console.log(`No preset images found for preset ${presetId}`)
+    return
+  }
 
-  // Slett eksisterende project_collage_images
+  // Sorter manuelt basert på position (pos1, pos2, etc.)
+  presetImages.sort((a: any, b: any) => {
+    const aMatch = a.position?.match(/pos(\d+)/)
+    const bMatch = b.position?.match(/pos(\d+)/)
+    const aNum = aMatch ? parseInt(aMatch[1]) : 999
+    const bNum = bMatch ? parseInt(bMatch[1]) : 999
+    return aNum - bNum
+  })
+
+  // Slett eksisterende section_images for denne seksjonen
   await supabase
-    .from('project_collage_images')
+    .from('section_images')
     .delete()
     .eq('section_id', sectionId)
 
-  // Opprett nye koblinger for hvert bilde i preset
-  const inserts = presetImages.map((pi: any) => ({
-    project_id: projectId,
-    section_id: sectionId,
-    image_id: pi.image_id,
-    position: pi.position,
-    original_preset_id: presetId
-  }))
+  // Opprett nye koblinger i section_images (samme struktur som andre seksjoner)
+  // Map position (pos1, pos2, etc.) til order_index (0, 1, 2, etc.)
+  const inserts = presetImages.map((pi: any, index: number) => {
+    // Extract position number from "pos1", "pos2", etc.
+    const positionMatch = pi.position?.match(/pos(\d+)/)
+    const orderIndex = positionMatch ? parseInt(positionMatch[1]) - 1 : index
+    
+    return {
+      section_id: sectionId,
+      image_id: pi.image_id,
+      order_index: orderIndex,
+      position: 'gallery' // Use 'gallery' position for collage images
+    }
+  })
 
-  await supabase
-    .from('project_collage_images')
+  const { error: insertError } = await supabase
+    .from('section_images')
     .insert(inserts)
+
+  if (insertError) {
+    console.error('Error inserting preset images to section_images:', insertError)
+  } else {
+    console.log(`Successfully loaded ${inserts.length} preset images to section ${sectionId}`)
+  }
 }
 

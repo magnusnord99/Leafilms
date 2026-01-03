@@ -1,7 +1,7 @@
 'use client'
 
-import { use, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Section, CollagePreset } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
@@ -27,6 +27,7 @@ type Props = {
 
 export default function EditProject({ params }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { id } = use(params)
   const [saving, setSaving] = useState(false)
   const [showCasePicker, setShowCasePicker] = useState(false)
@@ -75,6 +76,22 @@ export default function EditProject({ params }: Props) {
     setSectionImageData,
     refreshData
   } = useProjectData(id)
+
+  // Refresh data hvis prosjektet nettopp ble generert
+  useEffect(() => {
+    if (searchParams.get('generated') === 'true') {
+      console.log('[EditProject] Project was just generated, refreshing data...')
+      // Vent litt for å sikre at alle database-oppdateringer er ferdig
+      // Økt ventetid for å sikre at alle bilder er ferdig lagret
+      const timeout = setTimeout(() => {
+        console.log('[EditProject] Refreshing data after generation...')
+        refreshData()
+        // Fjern query parameter
+        router.replace(`/admin/projects/${id}/edit`)
+      }, 3000) // Økt fra 1000 til 3000ms
+      return () => clearTimeout(timeout)
+    }
+  }, [searchParams, refreshData, router, id])
 
   const {
     goalSectionProgress,

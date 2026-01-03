@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Section, Project } from '@/lib/types'
 import { Heading, Text, Button, Badge } from '@/components/ui'
+import { useQuoteAnalytics } from '@/hooks/useQuoteAnalytics'
+import { supabase } from '@/lib/supabase'
 
 type QuoteLineItem = {
   description: string
@@ -36,18 +38,21 @@ type QuoteSectionProps = {
   project: Project
   editMode: boolean
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  shareToken?: string // For analytics tracking in public view
 }
 
 export function QuoteSection({
   section,
   project,
   editMode,
-  updateSectionContent
+  updateSectionContent,
+  shareToken
 }: QuoteSectionProps) {
   const [loading, setLoading] = useState(false)
   const [acceptingQuote, setAcceptingQuote] = useState(false)
   const [quoteAccepted, setQuoteAccepted] = useState(false)
   const [contractId, setContractId] = useState<string | null>(null)
+  const [quoteId, setQuoteId] = useState<string | null>(null)
   
   // Eksempel-data for å vise hvordan det ser ut
   const exampleQuoteData: QuoteData = {
@@ -103,6 +108,171 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
     section.content.discount || 0
   )
 
+  // Hent quoteData og quote_id fra databasen (kun i public view, ikke edit mode)
+  useEffect(() => {
+    if (!editMode && project.id && shareToken) {
+      // Sjekk om quoteData allerede er satt fra section.content
+      const hasQuoteData = section.content.quoteData || quoteData
+      
+      if (!hasQuoteData) {
+        // Hent siste quote for prosjektet hvis quoteData ikke allerede er satt
+        supabase
+          .from('quotes')
+          .select('id, quote_data, version')
+          .eq('project_id', project.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle() // Use maybeSingle instead of single to handle no rows gracefully
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('[QuoteSection] Error fetching quote:', {
+                error,
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+                project_id: project.id
+              })
+              return
+            }
+            
+            if (data) {
+              setQuoteId(data.id)
+              // Hvis quoteData ikke er satt i section.content, bruk quote_data fra databasen
+              if (data.quote_data) {
+                setQuoteData(data.quote_data as QuoteData)
+              } else {
+                console.warn('[QuoteSection] Quote found but quote_data is null:', data.id)
+              }
+            } else {
+              console.warn('[QuoteSection] No quote found for project:', project.id)
+              console.log('[QuoteSection] Creating quote automatically for analytics tracking...')
+              
+              // Opprett quote automatisk for å aktivere analytics tracking
+              const quoteDataToCreate = {
+                project_id: project.id,
+                sheet_url: sheetsUrl || '', // sheet_url is required, use empty string if not available
+                version: exampleQuoteData.version || 'V1',
+                status: 'draft' as const,
+                quote_data: exampleQuoteData
+              }
+              
+              supabase
+                .from('quotes')
+                .insert(quoteDataToCreate)
+                .select('id')
+                .single()
+                .then(({ data: newQuote, error: createError }) => {
+                  if (createError) {
+                    console.error('[QuoteSection] Error creating quote:', createError)
+                    // Bruk exampleQuoteData som fallback hvis opprettelse feiler
+                    setQuoteData(exampleQuoteData)
+                  } else if (newQuote) {
+                    console.log('[QuoteSection] ✅ Quote created automatically:', newQuote.id)
+                    setQuoteId(newQuote.id)
+                    setQuoteData(exampleQuoteData)
+                  }
+                })
+            }
+          })
+      } else if (quoteData?.version) {
+        // Hvis quoteData allerede er satt, hent quote_id eller opprett ny quote
+        supabase
+          .from('quotes')
+          .select('id')
+          .eq('project_id', project.id)
+          .eq('version', quoteData.version)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle() // Use maybeSingle instead of single
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('[QuoteSection] Error fetching quote_id:', {
+                error,
+                message: error.message,
+                code: error.code,
+                project_id: project.id,
+                version: quoteData.version
+              })
+              return
+            }
+            
+            if (data) {
+              setQuoteId(data.id)
+            } else {
+              console.log('[QuoteSection] No quote found for version:', quoteData.version)
+              console.log('[QuoteSection] Creating quote automatically for analytics tracking...')
+              
+              // Opprett quote automatisk med quoteData fra section.content
+              const quoteDataToCreate = {
+                project_id: project.id,
+                sheet_url: sheetsUrl || '', // sheet_url is required, use empty string if not available
+                version: quoteData.version || 'V1',
+                status: 'draft' as const,
+                quote_data: quoteData
+              }
+              
+              supabase
+                .from('quotes')
+                .insert(quoteDataToCreate)
+                .select('id')
+                .single()
+                .then(({ data: newQuote, error: createError }) => {
+                  if (createError) {
+                    console.error('[QuoteSection] Error creating quote:', createError)
+                  } else if (newQuote) {
+                    console.log('[QuoteSection] ✅ Quote created automatically:', newQuote.id)
+                    setQuoteId(newQuote.id)
+                  }
+                })
+            }
+          })
+      }
+    }
+  }, [editMode, project.id, shareToken, section.content.quoteData])
+
+  // Initialize quote analytics tracking (kun i public view)
+  // Only track if we have all required data: quoteId, shareToken, and quoteData
+  // Track alle deler av quote-en som faktisk finnes
+  const quoteSectionNames = [
+    'header',
+    'line_items', 
+    'totals',
+    'actions'
+  ].filter(name => {
+    // Sjekk om seksjonen faktisk finnes i DOM
+    if (typeof document !== 'undefined') {
+      return document.querySelector(`[data-quote-section="${name}"]`) !== null
+    }
+    return true // I SSR, antar at alle finnes
+  })
+  const shouldTrackQuote = !editMode && !!quoteId && !!shareToken && !!quoteData
+  
+  // Log tracking status for debugging
+  useEffect(() => {
+    if (!editMode) {
+      console.log('[QuoteSection] Analytics tracking status:', {
+        editMode,
+        hasQuoteId: !!quoteId,
+        hasShareToken: !!shareToken,
+        hasQuoteData: !!quoteData,
+        shouldTrack: shouldTrackQuote,
+        projectId: project.id
+      })
+      
+      if (!quoteId) {
+        console.warn('[QuoteSection] ⚠️ Analytics tracking will NOT work because quoteId is missing!')
+        console.warn('[QuoteSection] 💡 Fix: Save the quote PDF in edit mode to create a quote in the database.')
+      }
+    }
+  }, [editMode, quoteId, shareToken, quoteData, shouldTrackQuote, project.id])
+  
+  useQuoteAnalytics(
+    shouldTrackQuote ? quoteId : '', // Only pass quoteId if we should track
+    project.id,
+    shouldTrackQuote ? shareToken : '', // Only pass shareToken if we should track
+    shouldTrackQuote ? quoteSectionNames : [] // Only track if we have all required data
+  )
 
   // Hent quote-data fra API hvis URL er satt
   // NOTE: Dette krever at Python API har /generate-json endpoint
@@ -536,7 +706,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
         <div className="max-w-4xl mx-auto bg-gray-50 rounded-lg shadow-sm border border-border p-8 print:shadow-none print:border-0">
           {/* Endre bakgrunnsfarge her: bytt ut "bg-white" over til f.eks. "bg-gray-50", "bg-blue-50", eller en custom farge */}
           {/* Header */}
-          <div className="mb-8 pb-6 border-b border-border">
+          <div className="mb-8 pb-6 border-b border-border" data-quote-section="header">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <Heading as="h2" size="lg" className="mb-2">
@@ -639,7 +809,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
 
           {/* Line Items Table */}
           {quoteData.lineItems && quoteData.lineItems.length > 0 && (
-            <div className="mb-8 overflow-x-auto">
+            <div className="mb-8 overflow-x-auto" data-quote-section="line_items">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b-2 border-border">
@@ -676,7 +846,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
           )}
 
           {/* Totals */}
-          <div className="border-t-2 border-border pt-6 space-y-2">
+          <div className="border-t-2 border-border pt-6 space-y-2" data-quote-section="totals">
             {quoteData.subtotalExclVat !== undefined && (
               <div className="flex justify-between text-dark">
                 <Text variant="body" className="font-semibold">
@@ -730,7 +900,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
           </div>
 
           {/* Download PDF Button */}
-          <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row gap-4">
+          <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row gap-4" data-quote-section="actions">
             <Button
               onClick={handleDownloadPDF}
               variant="secondary"

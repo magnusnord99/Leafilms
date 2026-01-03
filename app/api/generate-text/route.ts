@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
-import { supabase } from '@/lib/supabase'
+import { createPublicClient } from '@/lib/supabase-server'
 
 // Initialize OpenAI client lazily to avoid build-time errors
 function getOpenAIClient() {
@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
     if (!projectType || !medium || !targetAudience || !sectionType) {
       return Response.json({ error: 'Mangler påkrevd informasjon' }, { status: 400 })
     }
+
+    const supabase = createPublicClient()
 
     // Hent eksempler fra database
     const { data: examplesData, error: examplesError } = await supabase

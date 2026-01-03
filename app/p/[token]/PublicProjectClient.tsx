@@ -47,17 +47,6 @@ export function PublicProjectClient({
   selectedPreset,
   shareToken
 }: PublicProjectClientProps) {
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('[PublicProjectClient] Rendering with:', {
-      projectId: project?.id,
-      projectTitle: project?.title,
-      sectionsCount: sections?.length,
-      shareToken: shareToken?.substring(0, 10) + '...'
-    })
-  }, [project, sections, shareToken])
-  
   // Initialize analytics tracking
   const sectionIds = sections.map(s => s.id)
   useProjectAnalytics(project.id, shareToken, sectionIds)
@@ -213,23 +202,8 @@ export function PublicProjectClient({
     )
   }
 
-  // Debug: Log what we're about to render
-  console.log('[PublicProjectClient] About to render:', {
-    hasProject: !!project,
-    hasHeroSection: !!heroSection,
-    sectionsToRender: sections.filter(s => s.type !== 'hero' && s.visible).length,
-    totalSections: sections.length
-  })
-
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Debug info - remove after fixing */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-0 left-0 bg-red-500 text-white p-2 z-50 text-xs">
-          Debug: Project={project?.title}, Sections={sections.length}, Hero={heroSection ? 'Yes' : 'No'}
-        </div>
-      )}
-      
       {/* Hero Section */}
       {heroSection && (
         <div data-section-id={heroSection.id}>
@@ -262,15 +236,6 @@ export function PublicProjectClient({
             <Text variant="small" className="!text-foreground/60">
               Prosjektet har ingen synlige seksjoner. Kontakt prosjekteier for mer informasjon.
             </Text>
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mt-4 p-4 bg-yellow-500/20 border border-yellow-500 rounded text-left text-xs">
-                <p className="font-bold mb-2">Debug Info:</p>
-                <p>Project ID: {project.id}</p>
-                <p>Project Title: {project.title}</p>
-                <p>Sections Count: {sections.length}</p>
-                <p>Share Token: {shareToken.substring(0, 20)}...</p>
-              </div>
-            )}
           </div>
         ) : (
           sections

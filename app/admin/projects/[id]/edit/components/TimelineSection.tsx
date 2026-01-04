@@ -29,7 +29,7 @@ export function TimelineSection({
         </Heading>
       </div>
       
-      <div className="relative overflow-hidden mt-16" style={{ height: '500px' }}>
+      <div className="relative overflow-hidden mt-16" style={{ height: '300px' }}>
         <div 
           className="flex gap-6 transition-transform duration-100 ease-out"
           style={{

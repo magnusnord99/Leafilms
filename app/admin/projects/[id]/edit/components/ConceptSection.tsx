@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
 import { ImagePositionControls } from './ImagePositionControls'
@@ -48,6 +49,22 @@ export function ConceptSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
+  // Sjekk om vi er på mobil (mindre enn 768px = Tailwind's md breakpoint)
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    // Sjekk ved mount
+    checkMobile()
+    
+    // Sjekk ved resize
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
   // Beregn zoom basert på scroll progress
   // START_ZOOM: Hvor stort hele seksjonen er når animasjonen starter (1.0 = 100%, 1.2 = 120%, osv.)
   // ZOOM_AMOUNT: Hvor mye hele seksjonen zoomer inn når man scroller (0.2 = 20% zoom, 0.5 = 50% zoom, osv.)
@@ -55,10 +72,13 @@ export function ConceptSection({
   const ZOOM_AMOUNT = 0.3 // Endre denne verdien for å justere hvor mye seksjonen zoomer inn
   
   // Beregn zoom - alltid bruk START_ZOOM som base (ignorer background_zoom fra DB for scroll-animasjon)
+  // På mobil: ingen zoom (scale(1.0)), på desktop: bruk scroll zoom
   const baseZoom = START_ZOOM
   const scrollZoom = editMode 
     ? 1.0 // Ingen zoom i edit mode
-    : baseZoom + (conceptSectionProgress * ZOOM_AMOUNT) // Legg til zoom basert på scroll
+    : isMobile 
+      ? 1.0 // Ingen zoom på mobil
+      : baseZoom + (conceptSectionProgress * ZOOM_AMOUNT) // Legg til zoom basert på scroll (kun desktop)
   
   // Hent base background style (uten å overstyre backgroundSize)
   const backgroundStyle = sectionImages[section.id]?.[0] 

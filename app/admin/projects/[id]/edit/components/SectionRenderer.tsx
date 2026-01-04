@@ -119,7 +119,7 @@ export function SectionRenderer({
   return (
     <section
       key={section.id}
-      className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : 'py-section px-2 md:px-4'} ${section.type === 'cases' ? 'bg-transparent' : 'bg-background'} relative`}
+      className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'timeline' ? 'pt-section pb-0 px-2 md:px-4' : section.type === 'team' ? 'pt-0 pb-section px-2 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' ? 'bg-transparent' : 'bg-background'} relative`}
     >
       {/* Edit Controls - Absolute positioned in top-right corner */}
       {editMode && (

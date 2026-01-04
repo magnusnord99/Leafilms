@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
 import { ImagePositionControls } from './ImagePositionControls'
@@ -48,22 +49,47 @@ export function GoalSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
+  // Sjekk om vi er på mobil (mindre enn 768px = Tailwind's md breakpoint)
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    // Sjekk ved mount
+    checkMobile()
+    
+    // Sjekk ved resize
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Beregn transform og opacity - skru av animasjon på mobil
+  const imageTransform = editMode || isMobile
+    ? 'translateX(0)'
+    : `translateX(${(1 - goalSectionProgress) * -100}%)`
+  const imageOpacity = editMode || isMobile ? 1 : goalSectionProgress
+  
+  const textTransform = editMode || isMobile
+    ? 'translateX(0)'
+    : `translateX(${(1 - goalSectionProgress) * 100}%)`
+  const textOpacity = editMode || isMobile ? 1 : goalSectionProgress
+
   return (
-    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex items-start overflow-hiddens">
+    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex flex-col md:flex-row items-start overflow-hidden">
       <div 
         onClick={onImageClick}
-        className={`w-1/2 h-[40vh] bg-zinc-300 flex items-center justify-center relative shadow-lg${
+        className={`w-full md:w-1/2 h-[40vh] bg-zinc-300 flex items-center justify-center relative shadow-lg${
           editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-zinc-400 transition-colors' : ''
         }`}
         style={{
           ...(sectionImages[section.id]?.[0] 
             ? getBackgroundStyle(section.id, 0)
             : {}),
-          transform: editMode 
-            ? 'translateX(0)' 
-            : `translateX(${(1 - goalSectionProgress) * -100}%)`,
-          opacity: editMode ? 1 : goalSectionProgress,
-          transition: editMode ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
+          transform: imageTransform,
+          opacity: imageOpacity,
+          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
         }}
       >
         {!sectionImages[section.id]?.[0] && (
@@ -102,13 +128,11 @@ export function GoalSection({
       </div>
       
       <div 
-        className="bg-background-widget-dark w-1/2 min-h-[20vh] p-12 flex flex-col justify-start self-start shadow-lg"
+        className="bg-background-widget-dark w-full md:w-1/2 min-h-[20vh] p-6 md:p-12 flex flex-col justify-start self-start shadow-lg"
         style={{
-          transform: editMode 
-            ? 'translateX(0)' 
-            : `translateX(${(1 - goalSectionProgress) * 100}%)`,
-          opacity: editMode ? 1 : goalSectionProgress,
-          transition: editMode ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
+          transform: textTransform,
+          opacity: textOpacity,
+          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
         }}
       >
         <Heading as="h2" size="2xl" className="mb-4 text-white">

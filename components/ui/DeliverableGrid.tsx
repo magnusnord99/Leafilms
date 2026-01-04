@@ -84,7 +84,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
   }
 
   return (
-    <div className="flex gap-4 mt-8 items-start">
+    <div className="grid grid-cols-2 md:flex md:flex-row gap-4 mt-8 items-start w-full">
       {displayItems.map((item) => (
         <DeliverableCard
           key={item.id}
@@ -112,7 +112,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
             bg-background-elevated/50 border-2 border-dashed border-gray-400
             p-4 flex flex-col items-center justify-center
             transition-all duration-300 cursor-pointer
-            min-w-[100px] h-[120px]
+            w-full md:w-[100px] h-[120px] flex-shrink-0
             hover:bg-background-elevated hover:border-gray-500
           "
         >

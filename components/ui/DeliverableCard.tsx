@@ -46,7 +46,7 @@ export function DeliverableCard({
       className={`
         bg-background-elevated p-4 flex flex-col items-center justify-start
         transition-all duration-300
-        w-[120px] flex-shrink-0 relative
+        w-full md:w-[120px] flex-shrink-0 relative
         ${isExpanded ? 'min-h-[200px]' : 'h-[120px]'}
         ${!editMode ? 'cursor-pointer hover:bg-background-surface' : ''}
       `}

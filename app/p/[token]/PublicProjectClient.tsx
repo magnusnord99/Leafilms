@@ -1,6 +1,5 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
 import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, CollagePreset } from '@/lib/types'
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +17,7 @@ import {
 } from '@/app/admin/projects/[id]/edit/components'
 import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
+import { useScrollAnimations } from '@/hooks/useScrollAnimations'
 
 // Helper for å hente bilde-URL
 function getImageUrl(filePath: string): string {
@@ -51,85 +51,15 @@ export function PublicProjectClient({
   const sectionIds = sections.map(s => s.id)
   useProjectAnalytics(project.id, shareToken, sectionIds)
   
-  // Refs for scroll animations
-  const goalSectionRef = useRef<HTMLDivElement>(null)
-  const timelineSectionRef = useRef<HTMLDivElement>(null)
-  const conceptSectionRef = useRef<HTMLDivElement>(null)
-
-  // Scroll progress states
-  const [goalSectionProgress, setGoalSectionProgress] = useState(0)
-  const [timelineSectionProgress, setTimelineSectionProgress] = useState(0)
-  const [conceptSectionProgress, setConceptSectionProgress] = useState(0)
-
-  // Scroll animations effect - samme logikk som useScrollAnimations hook
-  useEffect(() => {
-    const handleScroll = () => {
-      // Goal section progress
-      if (goalSectionRef.current) {
-        const element = goalSectionRef.current
-        const rect = element.getBoundingClientRect()
-        const windowHeight = window.innerHeight
-        
-        const startPoint = windowHeight * 0.9
-        const endPoint = windowHeight * 0.4
-        
-        const animationRange = startPoint - endPoint
-        const currentPosition = rect.top
-        
-        let progress = (startPoint - currentPosition) / animationRange
-        progress = Math.max(0, Math.min(1, progress))
-        
-        setGoalSectionProgress(progress)
-      }
-
-      // Timeline section progress
-      if (timelineSectionRef.current) {
-        const element = timelineSectionRef.current
-        const rect = element.getBoundingClientRect()
-        const windowHeight = window.innerHeight
-        
-        const startPoint = windowHeight * 0.8
-        const endPoint = -rect.height * 0.002
-        
-        const animationRange = startPoint - endPoint
-        const currentPosition = rect.top
-        
-        let progress = (startPoint - currentPosition) / animationRange
-        progress = Math.max(0, Math.min(1, progress))
-        
-        setTimelineSectionProgress(progress)
-      }
-
-      // Concept section progress (zoom effect)
-      if (conceptSectionRef.current) {
-        const element = conceptSectionRef.current
-        const rect = element.getBoundingClientRect()
-        const windowHeight = window.innerHeight
-        
-        // Start animasjonen når seksjonen kommer inn i viewport
-        const startPoint = windowHeight
-        // Slutt når seksjonen er forbi viewport
-        const endPoint = windowHeight * 0.1
-        
-        const animationRange = startPoint - endPoint
-        const currentPosition = rect.top
-        
-        let progress = (startPoint - currentPosition) / animationRange
-        progress = Math.max(0, Math.min(1, progress))
-        
-        setConceptSectionProgress(progress)
-      }
-    }
-
-    handleScroll()
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    window.addEventListener('resize', handleScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('resize', handleScroll)
-    }
-  }, [])
+  // Use scroll animations hook (editMode = false for public view)
+  const {
+    goalSectionProgress,
+    goalSectionRef,
+    timelineSectionProgress,
+    timelineSectionRef,
+    conceptSectionProgress,
+    conceptSectionRef
+  } = useScrollAnimations(false)
 
   // Hjelpefunksjoner
   const getSectionTitle = (type: string) => {

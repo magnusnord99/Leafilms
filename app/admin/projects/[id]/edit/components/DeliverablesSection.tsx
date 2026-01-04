@@ -85,8 +85,8 @@ export function DeliverablesSection({
             />
           )}
           
-          <div className="mt-24 mb-8 w-full">
-            <div className="bg-background-widget-dark p-8 inline-block min-w-fit">
+          <div className="mt-24 mb-8 w-full px-4 md:px-0">
+            <div className="bg-background-widget-dark p-4 md:p-8 w-1/2 max-w-full">
               <Heading 
                 as="h2" 
                 size="xl" 
@@ -110,7 +110,7 @@ export function DeliverablesSection({
               >
                 {section.content.text || 'Vi leverer et bredt spekter av innhold tilpasset ulike plattformer. Innholdet består av produktbilder i unike, naturlige omgivelser, actionbilder og dokumentarisk materiale som forteller en historie.'}
               </Text>
-              <div onClick={(e) => e.stopPropagation()} className="min-h-[150px]">
+              <div onClick={(e) => e.stopPropagation()} className="min-h-[150px] w-full overflow-x-hidden">
                 <DeliverableGrid 
                   items={section.content.deliverableItems} 
                   editMode={editMode}

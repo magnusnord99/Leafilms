@@ -3,6 +3,7 @@
 import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, CollagePreset } from '@/lib/types'
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
+import { useMemo } from 'react'
 import {
   HeroSection,
   ConceptSection,
@@ -18,6 +19,8 @@ import {
 import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
+import { useAuth } from '@/hooks/useAuth'
+import { SectionNavigation } from '@/components/ui/SectionNavigation'
 
 // Helper for å hente bilde-URL
 function getImageUrl(filePath: string): string {
@@ -47,9 +50,11 @@ export function PublicProjectClient({
   selectedPreset,
   shareToken
 }: PublicProjectClientProps) {
-  // Initialize analytics tracking
-  const sectionIds = sections.map(s => s.id)
-  useProjectAnalytics(project.id, shareToken, sectionIds)
+  // Always call hooks in the same order - useMemo to ensure stable sectionIds
+  const sectionIds = useMemo(() => sections.map(s => s.id), [sections])
+  
+  // Check if user is admin - must be called before other hooks that depend on it
+  const { isAdmin } = useAuth()
   
   // Use scroll animations hook (editMode = false for public view)
   const {
@@ -60,6 +65,9 @@ export function PublicProjectClient({
     conceptSectionProgress,
     conceptSectionRef
   } = useScrollAnimations(false)
+  
+  // Initialize analytics tracking (only if not admin)
+  useProjectAnalytics(project.id, shareToken, sectionIds, isAdmin)
 
   // Hjelpefunksjoner
   const getSectionTitle = (type: string) => {
@@ -134,6 +142,9 @@ export function PublicProjectClient({
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Section Navigation (desktop only, shows on scroll) */}
+      <SectionNavigation sections={sections} getSectionTitle={getSectionTitle} />
+      
       {/* Hero Section */}
       {heroSection && (
         <div data-section-id={heroSection.id}>

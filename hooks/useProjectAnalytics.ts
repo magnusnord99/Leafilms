@@ -24,8 +24,10 @@ interface AnalyticsData {
  * - Total time on page
  * - Time spent per section (when section is visible)
  * - Page visibility changes
+ * 
+ * @param isAdmin - If true, tracking is disabled (admin users should not be tracked)
  */
-export function useProjectAnalytics(projectId: string, shareToken: string, sectionIds: string[]) {
+export function useProjectAnalytics(projectId: string, shareToken: string, sectionIds: string[], isAdmin: boolean = false) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const sessionStartTime = useRef<number>(Date.now())
   const sectionTimers = useRef<Map<string, SectionTime>>(new Map())
@@ -37,6 +39,7 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
 
   // Try to recover sessionId from localStorage on mount
   useEffect(() => {
+    if (isAdmin) return // Skip tracking for admin users
     const storageKey = `analytics_${projectId}_${shareToken}`
     const saved = localStorage.getItem(storageKey)
     if (saved) {
@@ -75,6 +78,7 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
 
   // Initialize section timers
   useEffect(() => {
+    if (isAdmin) return // Skip tracking for admin users
     sectionIds.forEach(sectionId => {
       sectionTimers.current.set(sectionId, {
         sectionId,
@@ -86,6 +90,7 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
 
   // Track page visibility (when user switches tabs, minimizes window, etc.)
   useEffect(() => {
+    if (isAdmin) return // Skip tracking for admin users
     const handleVisibilityChange = () => {
       const now = Date.now()
       
@@ -128,10 +133,14 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [sectionIds])
+  }, [sectionIds, isAdmin])
 
   // Track section visibility using IntersectionObserver + scroll fallback
   useEffect(() => {
+    if (isAdmin) {
+      console.log('[Analytics] Tracking disabled for admin user')
+      return // Skip tracking for admin users
+    }
     console.log(`[Analytics] Setting up IntersectionObserver for ${sectionIds.length} sections:`, sectionIds.map(id => id.substring(0, 8) + '...'))
     console.log(`[Analytics] Initial state: isActive=${isActive.current}, document.hidden=${document.hidden}, visibilityState=${document.visibilityState}`)
     
@@ -358,10 +367,11 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
         observerRef.current = null
       }
     }
-  }, [sectionIds])
+  }, [sectionIds, isAdmin])
 
   // Send analytics data periodically (every 30 seconds) and on page unload
   useEffect(() => {
+    if (isAdmin) return // Skip tracking for admin users
     const sendAnalytics = async (isFinal = false) => {
       const now = Date.now()
       const totalTimeSeconds = Math.floor((now - sessionStartTime.current) / 1000)
@@ -537,7 +547,7 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
       // Don't send final analytics here - beforeunload/pagehide already handles it
       // Sending here can cause duplicate final requests
     }
-  }, [projectId, shareToken, sessionId])
+  }, [projectId, shareToken, sessionId, isAdmin])
 
   return {
     sessionId,

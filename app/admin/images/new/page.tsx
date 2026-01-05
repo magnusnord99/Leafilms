@@ -17,8 +17,9 @@ export default function NewImage() {
     subcategory: '',
     tags: ''
   })
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: any; analyzing: boolean }>>([])
+  const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number | null>(null)
 
   // Kategorier med underkategorier
   const categories = {
@@ -33,32 +34,56 @@ export default function NewImage() {
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Valider alle filer
+    const validFiles: File[] = []
+    for (const file of files) {
       // Valider bilde-type
       if (!file.type.startsWith('image/')) {
-        alert('❌ Filen må være et bilde')
-        return
+        alert(`❌ ${file.name} er ikke et bilde og blir hoppet over`)
+        continue
       }
 
       // Valider størrelse (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        alert('❌ Bildet er for stort. Maks størrelse er 10MB')
-        return
+        alert(`❌ ${file.name} er for stort (max 10MB) og blir hoppet over`)
+        continue
       }
 
-      setImageFile(file)
-      const previewUrl = URL.createObjectURL(file)
-      setImagePreview(previewUrl)
-      
-      // Analyser bildet automatisk med AI
-      analyzeImage(file, previewUrl)
+      validFiles.push(file)
     }
+
+    if (validFiles.length === 0) return
+
+    // Legg til nye filer til listen
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      analyzing: false
+    }))
+
+    setImageFiles(prev => [...prev, ...validFiles])
+    setImagePreviews(prev => [...prev, ...newPreviews])
+
+    // Start analyse for alle nye bilder en etter en
+    validFiles.forEach((file, index) => {
+      const previewIndex = imagePreviews.length + index
+      setTimeout(() => {
+        analyzeImage(file, newPreviews[index].preview, previewIndex)
+      }, index * 500) // Delay hver analyse med 500ms for å unngå rate limiting
+    })
   }
 
-  async function analyzeImage(file: File, previewUrl: string) {
+  async function analyzeImage(file: File, previewUrl: string, previewIndex: number) {
     try {
-      setAnalyzing(true)
+      // Oppdater analyzing status for dette bildet
+      setImagePreviews(prev => {
+        const updated = [...prev]
+        updated[previewIndex] = { ...updated[previewIndex], analyzing: true }
+        return updated
+      })
       
       // Konverter bilde til base64 for å sende til API
       const reader = new FileReader()
@@ -82,44 +107,47 @@ export default function NewImage() {
 
         const analysis = await response.json()
 
-        // Fyll ut formen med AI-forslag
-        setFormData(prev => ({
-          ...prev,
-          category: analysis.category || prev.category,
-          subcategory: analysis.subcategory || prev.subcategory,
-          title: analysis.title || prev.title,
-          description: analysis.description || prev.description,
-          tags: analysis.tags ? analysis.tags.join(', ') : prev.tags
-        }))
-
-        setAnalyzing(false)
+        // Lagre analyseresultatet for dette bildet
+        setImagePreviews(prev => {
+          const updated = [...prev]
+          updated[previewIndex] = { ...updated[previewIndex], analysis, analyzing: false }
+          return updated
+        })
       }
 
       reader.readAsDataURL(file)
     } catch (error) {
       console.error('Error analyzing image:', error)
-      setAnalyzing(false)
-      // Fortsett uten AI-forslag hvis det feiler
+      // Oppdater status til ikke-analyzing hvis det feiler
+      setImagePreviews(prev => {
+        const updated = [...prev]
+        updated[previewIndex] = { ...updated[previewIndex], analyzing: false }
+        return updated
+      })
     }
+  }
+
+  const removeImage = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index))
+    setImagePreviews(prev => {
+      const removed = prev[index]
+      URL.revokeObjectURL(removed.preview) // Cleanup
+      return prev.filter((_, i) => i !== index)
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!imageFile) {
-      alert('❌ Vennligst velg et bilde')
+    if (imageFiles.length === 0) {
+      alert('❌ Vennligst velg minst ett bilde')
       return
     }
 
     setLoading(true)
+    setUploading(true)
 
     try {
-      // Last opp bilde til Supabase Storage
-      setUploading(true)
-      const fileExt = imageFile.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-      const filePath = `images/${fileName}`
-
       // Sjekk om Supabase er riktig konfigurert
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -129,68 +157,96 @@ export default function NewImage() {
         throw new Error('Supabase er ikke riktig konfigurert. Sjekk environment variables.')
       }
 
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .upload(filePath, imageFile, {
-          cacheControl: '3600',
-          upsert: false
-        })
+      let successCount = 0
+      let errorCount = 0
 
-      if (uploadError) {
-        console.error('Upload error details:', uploadError)
-        console.error('Supabase URL:', supabaseUrl)
-        console.error('File path:', filePath)
-        console.error('File size:', imageFile.size)
+      // Prosesser hvert bilde en etter en
+      for (let i = 0; i < imageFiles.length; i++) {
+        const imageFile = imageFiles[i]
+        const previewData = imagePreviews[i]
         
-        // Gi mer spesifikk feilmelding basert på feiltype
-        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('does not exist')) {
-          throw new Error('Storage bucket "assets" finnes ikke. Du må opprette den i Supabase Dashboard under Storage.')
-        } else if (uploadError.message.includes('new row violates row-level security') || uploadError.message.includes('RLS')) {
-          throw new Error('Row Level Security blokkerer opplastingen. Sjekk RLS policies for storage.objects i Supabase.')
-        } else {
-          throw new Error(`Kunne ikke laste opp bilde: ${uploadError.message}`)
+        try {
+          setCurrentProcessingIndex(i)
+          
+          // Last opp bilde til Supabase Storage
+          const fileExt = imageFile.name.split('.').pop()
+          const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+          const filePath = `images/${fileName}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('assets')
+            .upload(filePath, imageFile, {
+              cacheControl: '3600',
+              upsert: false
+            })
+
+          if (uploadError) {
+            console.error(`Upload error for ${imageFile.name}:`, uploadError)
+            errorCount++
+            continue
+          }
+
+          // Hent bilde-dimensjoner
+          const img = new Image()
+          img.src = URL.createObjectURL(imageFile)
+          await new Promise((resolve) => {
+            img.onload = resolve
+          })
+
+          // Bruk AI-analyse hvis tilgjengelig, ellers bruk formData
+          const analysis = previewData?.analysis
+          const tagsArray = analysis?.tags 
+            ? analysis.tags 
+            : formData.tags
+              .split(',')
+              .map(t => t.trim())
+              .filter(t => t.length > 0)
+
+          // Opprett image record i database
+          const { error: dbError } = await supabase
+            .from('images')
+            .insert({
+              filename: imageFile.name,
+              file_path: filePath,
+              title: analysis?.title || formData.title || null,
+              description: analysis?.description || formData.description || null,
+              category: analysis?.category || formData.category,
+              subcategory: analysis?.subcategory || formData.subcategory || null,
+              tags: tagsArray,
+              width: img.width || null,
+              height: img.height || null,
+              file_size: imageFile.size
+            })
+
+          if (dbError) {
+            console.error(`Database error for ${imageFile.name}:`, dbError)
+            errorCount++
+            continue
+          }
+
+          successCount++
+        } catch (error) {
+          console.error(`Error processing ${imageFile.name}:`, error)
+          errorCount++
         }
       }
 
-      // Hent bilde-dimensjoner (valgfritt, kan gjøres senere)
-      const img = new Image()
-      img.src = URL.createObjectURL(imageFile)
-      await new Promise((resolve) => {
-        img.onload = resolve
-      })
-
-      // Parse tags (komma-separert)
-      const tagsArray = formData.tags
-        .split(',')
-        .map(t => t.trim())
-        .filter(t => t.length > 0)
-
-      // Opprett image record i database
-      const { error: dbError } = await supabase
-        .from('images')
-        .insert({
-          filename: imageFile.name,
-          file_path: filePath,
-          title: formData.title || null,
-          description: formData.description || null,
-          category: formData.category,
-          subcategory: formData.subcategory || null,
-          tags: tagsArray,
-          width: img.width || null,
-          height: img.height || null,
-          file_size: imageFile.size
-        })
-
-      if (dbError) throw dbError
-
       setUploading(false)
-      // Bilde lastet opp
-      router.push('/admin/images')
-      router.refresh()
+      setCurrentProcessingIndex(null)
+      
+      // Vis resultat
+      if (successCount > 0) {
+        alert(`✅ ${successCount} bilde${successCount > 1 ? 'r' : ''} lastet opp${errorCount > 0 ? `\n❌ ${errorCount} bilde${errorCount > 1 ? 'r' : ''} feilet` : ''}`)
+        router.push('/admin/images')
+        router.refresh()
+      } else {
+        alert(`❌ Kunne ikke laste opp bildene`)
+      }
     } catch (error) {
-      console.error('Error uploading image:', error)
-      alert('❌ Kunne ikke laste opp bilde')
+      console.error('Error uploading images:', error)
+      alert('❌ Kunne ikke laste opp bildene')
       setUploading(false)
+      setCurrentProcessingIndex(null)
     } finally {
       setLoading(false)
     }
@@ -231,30 +287,63 @@ export default function NewImage() {
                 onChange={handleImageChange}
                 className="hidden"
                 id="image-upload"
-                required
+                multiple
               />
               <label
                 htmlFor="image-upload"
                 className="cursor-pointer inline-block"
               >
                 <div className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors">
-                  {imagePreview ? (
-                    <div>
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="max-w-full max-h-64 mx-auto mb-4 rounded"
-                      />
+                  {imagePreviews.length > 0 ? (
+                    <div className="space-y-4">
+                      <Text variant="body" className="mb-4">
+                        {imagePreviews.length} bilde{imagePreviews.length > 1 ? 'r' : ''} valgt
+                      </Text>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={preview.preview}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-32 object-cover rounded mb-2"
+                            />
+                            {preview.analyzing && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded">
+                                <Text variant="small" className="text-blue-400">
+                                  ✨ Analyserer...
+                                </Text>
+                              </div>
+                            )}
+                            {preview.analysis && !preview.analyzing && (
+                              <div className="absolute top-1 right-1 bg-green-500 rounded-full w-4 h-4 flex items-center justify-center">
+                                <span className="text-white text-xs">✓</span>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="absolute top-1 left-1 bg-red-500 hover:bg-red-600 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs"
+                            >
+                              ×
+                            </button>
+                            {currentProcessingIndex === index && uploading && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-blue-500 text-white text-xs py-1 rounded-b">
+                                Laster opp...
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                       <Text variant="small" className="text-gray-400">
-                        Klikk for å endre bilde
+                        Klikk for å legge til flere bilder
                       </Text>
                     </div>
                   ) : (
                     <div>
                       <Text variant="body" className="mb-2">📷</Text>
-                      <Text variant="body">Klikk for å velge bilde</Text>
+                      <Text variant="body">Klikk for å velge bilde(r)</Text>
                       <Text variant="small" className="text-gray-400 mt-2">
-                        Max 10MB • AI vil automatisk foreslå kategori og tags
+                        Du kan velge flere bilder • Max 10MB per bilde • AI analyserer automatisk
                       </Text>
                     </div>
                   )}
@@ -335,11 +424,17 @@ export default function NewImage() {
           <div className="flex gap-4">
             <Button
               type="submit"
-              disabled={loading || uploading}
+              disabled={loading || uploading || imageFiles.length === 0}
               variant="primary"
               className="flex-1"
             >
-              {uploading ? 'Laster opp...' : loading ? 'Lagrer...' : 'Last opp bilde'}
+              {uploading 
+                ? currentProcessingIndex !== null 
+                  ? `Laster opp ${currentProcessingIndex + 1}/${imageFiles.length}...` 
+                  : 'Laster opp...' 
+                : loading 
+                  ? 'Lagrer...' 
+                  : `Last opp ${imageFiles.length} bilde${imageFiles.length > 1 ? 'r' : ''}`}
             </Button>
             <Button
               type="button"

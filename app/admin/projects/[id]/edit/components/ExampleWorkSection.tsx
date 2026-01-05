@@ -110,32 +110,54 @@ export function ExampleWorkSection({
 
       {/* 5-bilde Collage Layout */}
       <div className="w-full bg-background-widget">
-        {/* Pos 1 - Full bredde topp */}
-        <div className="h-[700px]">
-          <ImageSlot position="pos1" label="1" className="h-full" />
-        </div>
-        
-        {/* Midtseksjon: 2 kolonner */}
-        <div className="grid grid-cols-2 gap-0">
-          {/* Pos 2 - Venstre, strekker over 2 rader */}
-          <div className="row-span-2 h-[1000px]">
+        {/* Mobile: Vertikal stabling */}
+        <div className="flex flex-col md:hidden gap-0">
+          <div className="h-[400px]">
+            <ImageSlot position="pos1" label="1" className="h-full" />
+          </div>
+          <div className="h-[400px]">
             <ImageSlot position="pos2" label="2" className="h-full" />
           </div>
-          
-          {/* Pos 3 - Øverst høyre, overlapper oppover */}
-          <div className="h-[600px] -mt-[200px] relative z-10">
+          <div className="h-[400px]">
             <ImageSlot position="pos3" label="3" className="h-full" />
           </div>
-          
-          {/* Pos 4 - Nederst høyre */}
-          <div className="h-[600px]">
+          <div className="h-[400px]">
             <ImageSlot position="pos4" label="4" className="h-full" />
           </div>
+          <div className="h-[400px]">
+            <ImageSlot position="pos5" label="5" className="h-full" />
+          </div>
         </div>
-        
-        {/* Pos 5 - Full bredde bunn */}
-        <div className="h-[600px]">
-          <ImageSlot position="pos5" label="5" className="h-full" />
+
+        {/* Desktop: Kompleks collage layout */}
+        <div className="hidden md:block">
+          {/* Pos 1 - Full bredde topp */}
+          <div className="h-[700px]">
+            <ImageSlot position="pos1" label="1" className="h-full" />
+          </div>
+          
+          {/* Midtseksjon: 2 kolonner */}
+          <div className="grid grid-cols-2 gap-0">
+            {/* Pos 2 - Venstre, strekker over 2 rader */}
+            <div className="row-span-2 h-[1000px]">
+              <ImageSlot position="pos2" label="2" className="h-full" />
+            </div>
+            
+            {/* Pos 3 - Øverst høyre, overlapper oppover */}
+            <div className="h-[600px] -mt-[200px] relative z-10">
+              <ImageSlot position="pos3" label="3" className="h-full" />
+            </div>
+            
+            {/* Pos 4 - Nederst høyre */}
+            <div className="h-[600px]">
+              <ImageSlot position="pos4" label="4" className="h-full" />
+            </div>
+          </div>
+          
+          {/* Pos 5 - Full bredde bunn */}
+          <div className="h-[600px]">
+            <ImageSlot position="pos5" label="5" className="h-full" />
+          </div>
         </div>
       </div>
     </div>

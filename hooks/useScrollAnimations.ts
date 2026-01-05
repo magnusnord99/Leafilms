@@ -51,9 +51,23 @@ export function useScrollAnimations(editMode: boolean = false) {
     const scrollSpeed = 0.5 // Juster denne for å kontrollere hastighet (lavere = tregere)
     const maxScroll = 500 // Total scroll nødvendig for å fullføre animasjonen
     const slowScrollFactor = 0.5 // Faktor for sakte scrolling (0.1 = 10% av normal hastighet)
+    
+    // Detekter om vi er på mobil
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
+    
+    // For mobil: bruk scroll-basert progress i stedet for hijacking
+    let sectionStartScroll = 0
+    let sectionEndScroll = 0
+
+    const updateProgress = (delta: number) => {
+      accumulatedScroll += delta * scrollSpeed
+      accumulatedScroll = Math.max(0, Math.min(maxScroll, accumulatedScroll))
+      const newProgress = accumulatedScroll / maxScroll
+      setTimelineSectionProgress(newProgress)
+    }
 
     const handleWheel = (e: WheelEvent) => {
-      if (!timelineSectionRef.current) return
+      if (!timelineSectionRef.current || isMobile) return
 
       const element = timelineSectionRef.current
       const rect = element.getBoundingClientRect()
@@ -76,12 +90,7 @@ export function useScrollAnimations(editMode: boolean = false) {
         e.preventDefault()
         
         // Akkumuler scroll-verdi for animasjonen (kan være positiv eller negativ)
-        accumulatedScroll += e.deltaY * scrollSpeed
-        accumulatedScroll = Math.max(0, Math.min(maxScroll, accumulatedScroll))
-        
-        // Oppdater progress
-        const newProgress = accumulatedScroll / maxScroll
-        setTimelineSectionProgress(newProgress)
+        updateProgress(e.deltaY)
         
         // La siden scrolle sakte i retningen brukeren scroller (oppover eller nedover)
         // Sett scroll-posisjonen direkte
@@ -96,34 +105,108 @@ export function useScrollAnimations(editMode: boolean = false) {
       // hvis animasjonen er på start (progress = 0) og man scroller oppover, tillat normal scrolling
     }
 
-    const handleScroll = () => {
-      if (!timelineSectionRef.current) return
-
-      const element = timelineSectionRef.current
-      const rect = element.getBoundingClientRect()
-      const windowHeight = window.innerHeight
-      
-      // Hvis seksjonen ikke er i viewport, reset accumulated scroll
-      const isInViewport = rect.top < windowHeight && rect.bottom > 0
-      
-      if (!isInViewport && rect.top > windowHeight) {
-        // Seksjonen er over viewport - reset
-        accumulatedScroll = 0
-        setTimelineSectionProgress(0)
-      } else if (!isInViewport && rect.bottom < 0) {
-        // Seksjonen er under viewport - fullfør animasjonen
-        accumulatedScroll = maxScroll
-        setTimelineSectionProgress(1)
+    // Throttle scroll updates med requestAnimationFrame
+    let rafId: number | null = null
+    let lastProgress = -1
+    
+    const updateProgressIfNeeded = (newProgress: number) => {
+      // Bare oppdater hvis endringen er signifikant (mer enn 0.01)
+      if (Math.abs(newProgress - lastProgress) > 0.01) {
+        lastProgress = newProgress
+        setTimelineSectionProgress(newProgress)
       }
     }
 
-    // Bruk wheel event for bedre kontroll (kan preventDefault)
-    window.addEventListener('wheel', handleWheel, { passive: false })
+    const handleScroll = () => {
+      if (!timelineSectionRef.current) return
+
+      // Bruk requestAnimationFrame for å throttling
+      if (rafId !== null) {
+        return
+      }
+
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        
+        const element = timelineSectionRef.current
+        if (!element) return
+
+        const rect = element.getBoundingClientRect()
+        const windowHeight = window.innerHeight
+        const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop
+        
+        // Sjekk om tidslinje-seksjonen er i viewport
+        const isInViewport = rect.top < windowHeight && rect.bottom > 0
+        
+        if (isMobile) {
+          // På mobil: beregn progress basert på scroll-posisjon gjennom seksjonen
+          // Start animasjonen når toppen av seksjonen er 70% ned i viewport
+          // Slutt animasjonen når bunnen av seksjonen er 30% opp i viewport
+          const startPoint = windowHeight * 0.7  // Start når toppen er 70% ned
+          const endPoint = windowHeight * 0.3     // Slutt når bunnen er 30% opp
+          
+          const sectionTop = rect.top
+          const sectionBottom = rect.bottom
+          
+          // Sjekk om vi er i animasjonsområdet
+          const isInAnimationRange = sectionTop < startPoint && sectionBottom > endPoint
+          
+          if (isInAnimationRange) {
+            // Beregn progress: 0 når toppen er ved startPoint, 1 når bunnen er ved endPoint
+            // Animasjonsområdet er fra startPoint til endPoint
+            const animationRange = startPoint - endPoint
+            const currentPosition = startPoint - sectionTop
+            const scrollProgress = Math.max(0, Math.min(1, currentPosition / animationRange))
+            
+            updateProgressIfNeeded(scrollProgress)
+          } else if (sectionTop >= startPoint) {
+            // Seksjonen er over start-punkt - reset
+            if (lastProgress !== 0) {
+              lastProgress = 0
+              setTimelineSectionProgress(0)
+            }
+          } else if (sectionBottom <= endPoint) {
+            // Seksjonen er under slutt-punkt - fullfør animasjonen
+            if (lastProgress !== 1) {
+              lastProgress = 1
+              setTimelineSectionProgress(1)
+            }
+          }
+        } else {
+          // Desktop: bruk accumulated scroll
+          if (!isInViewport && rect.top > windowHeight) {
+            // Seksjonen er over viewport - reset
+            accumulatedScroll = 0
+            if (lastProgress !== 0) {
+              lastProgress = 0
+              setTimelineSectionProgress(0)
+            }
+          } else if (!isInViewport && rect.bottom < 0) {
+            // Seksjonen er under viewport - fullfør animasjonen
+            accumulatedScroll = maxScroll
+            if (lastProgress !== 1) {
+              lastProgress = 1
+              setTimelineSectionProgress(1)
+            }
+          }
+        }
+      })
+    }
+
+    // Bruk wheel event for desktop (kan preventDefault)
+    if (!isMobile) {
+      window.addEventListener('wheel', handleWheel, { passive: false })
+    }
     window.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('resize', handleScroll, { passive: true })
 
     return () => {
-      window.removeEventListener('wheel', handleWheel)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      if (!isMobile) {
+        window.removeEventListener('wheel', handleWheel)
+      }
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleScroll)
     }

@@ -77,6 +77,7 @@ const config: Config = {
           elevated: 'var(--color-background-elevated)',
           widget: 'var(--color-background-widget)',
           'widget-dark': 'var(--color-background-widget-dark)',
+          'widget-red': 'var(--color-background-widget-red)',
         },
         
         // ═══════════════════════════════════════════════════

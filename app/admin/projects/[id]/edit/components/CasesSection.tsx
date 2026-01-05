@@ -68,7 +68,7 @@ export function CasesSection({
       )}
       
       {selectedCaseIds.length > 0 && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {selectedCaseIds.map((caseId) => {
             const caseStudy = allCases.find(c => c.id === caseId)
             if (!caseStudy) return null

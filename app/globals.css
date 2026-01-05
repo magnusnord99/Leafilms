@@ -16,6 +16,7 @@
   --color-background-widget: #B6CBD7;
   --color-background-widget-medium: #8FA8B8;
   --color-background-widget-dark: #434242;
+  --color-background-widget-red: #B0A7A9;
   
   /* Knapp-farger */
   --color-primary: #ffffff;
@@ -93,6 +94,7 @@
   --color-background-widget: var(--color-background-widget);
   --color-background-widget-dark: var(--color-background-widget-dark);
   --color-background-widget-medium: var(--color-background-widget-medium);
+  --color-background-widget-red: var(--color-background-widget-red);
   --color-border: var(--color-border);
   --color-border-light: var(--color-border-light);
   --color-border-dark: var(--color-border-dark);

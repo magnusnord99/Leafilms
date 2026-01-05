@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Image } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
 
@@ -13,13 +13,32 @@ type ImageGalleryProps = {
 export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const galleryRef = useRef<HTMLDivElement>(null)
-  const imagesToShow = 3 // Antall bilder som vises samtidig
+  const [imagesToShow, setImagesToShow] = useState(3) // Antall bilder som vises samtidig
   
-  // Reset currentIndex når bildene endres
+  // Detekter skjermstørrelse og sett imagesToShow
   useEffect(() => {
-    console.log('[ImageGallery] Images changed, resetting currentIndex. Image IDs:', images.map(img => img.id).join(', '))
+    const checkScreenSize = () => {
+      // md breakpoint i Tailwind er 768px
+      const isMobile = window.innerWidth < 768
+      setImagesToShow(isMobile ? 1 : 3)
+    }
+    
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => {
+      window.removeEventListener('resize', checkScreenSize)
+    }
+  }, [])
+  
+  // Memoize image IDs string for stable dependency
+  const imageIdsString = useMemo(() => images.map(img => img.id).join(','), [images])
+  
+  // Reset currentIndex når bildene endres eller imagesToShow endres
+  useEffect(() => {
+    console.log('[ImageGallery] Images changed, resetting currentIndex. Image IDs:', imageIdsString)
     setCurrentIndex(0)
-  }, [images.map(img => img.id).join(',')])
+  }, [imageIdsString, imagesToShow])
   
   // Log når bildene endres
   useEffect(() => {
@@ -134,7 +153,10 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
               <div
                 key={`${image.id}-${idx}`}
                 className="relative aspect-[4/5] rounded-lg overflow-hidden bg-gray-200 flex-shrink-0"
-                style={{ width: `calc((100% - ${(imagesToShow - 1) * 1}rem) / ${imagesToShow})` }}
+                style={{ 
+                  width: `calc((100% - ${(imagesToShow - 1) * 1}rem) / ${imagesToShow})`,
+                  minHeight: imagesToShow === 1 ? '400px' : 'auto' // Minimum høyde på mobil
+                }}
               >
                 {cacheBustUrl ? (
                   <img

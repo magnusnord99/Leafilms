@@ -19,7 +19,7 @@ interface DeliverableGridProps {
 }
 
 export function DeliverableGrid({ items, editMode = false, onItemsChange }: DeliverableGridProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   // Default items hvis ingen er gitt
   const defaultItems: DeliverableItem[] = [
@@ -49,11 +49,15 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
   const displayItems = items || defaultItems
 
   const handleToggle = (id: string) => {
-    if (expandedId === id) {
-      setExpandedId(null)
-    } else {
-      setExpandedId(id)
-    }
+    setExpandedIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
   }
 
   const handleRemove = (id: string) => {
@@ -93,7 +97,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
           format={item.format}
           aspectRatio={item.aspectRatio}
           description={item.description}
-          isExpanded={expandedId === item.id}
+          isExpanded={expandedIds.has(item.id)}
           onToggle={() => handleToggle(item.id)}
           onRemove={editMode && onItemsChange ? () => handleRemove(item.id) : undefined}
           onChange={editMode && onItemsChange ? (field, value) => handleFieldChange(item.id, field, value) : undefined}

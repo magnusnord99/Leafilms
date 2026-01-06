@@ -99,7 +99,9 @@ export default function EditProject({ params }: Props) {
     timelineSectionProgress,
     timelineSectionRef,
     conceptSectionProgress,
-    conceptSectionRef
+    conceptSectionRef,
+    casesSectionProgress,
+    casesSectionRef
   } = useScrollAnimations(editMode)
 
   const {
@@ -326,6 +328,8 @@ export default function EditProject({ params }: Props) {
                   timelineSectionRef={timelineSectionRef}
                   conceptSectionProgress={conceptSectionProgress}
                   conceptSectionRef={conceptSectionRef}
+                  casesSectionProgress={casesSectionProgress}
+                  casesSectionRef={casesSectionRef}
                   getBackgroundStyle={getBackgroundStyle}
                   getSectionTitle={getSectionTitle}
                   updateSectionContent={updateSectionContent}

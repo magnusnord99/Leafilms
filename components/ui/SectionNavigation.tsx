@@ -14,6 +14,7 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const [isDesktop, setIsDesktop] = useState(false)
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const navRef = useRef<HTMLDivElement>(null)
 
   // Check if desktop on mount and resize
   useEffect(() => {
@@ -102,6 +103,27 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
     return () => window.removeEventListener('scroll', handleScroll)
   }, [sections, isDesktop])
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!isExpanded || !isDesktop) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setIsExpanded(false)
+      }
+    }
+
+    // Add event listener after a short delay to avoid immediate closing
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside)
+    }, 100)
+
+    return () => {
+      clearTimeout(timeoutId)
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isExpanded, isDesktop])
+
   // Scroll to section smoothly
   const scrollToSection = (sectionId: string) => {
     const element = document.querySelector(`[data-section-id="${sectionId}"]`)
@@ -127,6 +149,7 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
 
   return (
     <div
+      ref={navRef}
       className={`fixed left-0 top-1/2 -translate-y-1/2 z-50 transition-all duration-300 ${
         isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full pointer-events-none'
       }`}
@@ -139,7 +162,7 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
           title="Vis navigasjon"
         >
           <svg
-            className="w-5 h-5 text-foreground/70 hover:text-foreground transition-colors"
+            className="w-5 h-5 text-white transition-colors"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -155,30 +178,6 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
       ) : (
         // Expanded state - show full navigation
         <nav className="bg-background-widget-dark/95 backdrop-blur-sm border-r border-border rounded-r-lg shadow-xl p-3 ml-4 max-h-[80vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-foreground/60 uppercase tracking-wider">
-              Navigasjon
-            </span>
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="p-1 rounded hover:bg-background-widget-dark/50 transition-colors"
-              title="Skjul navigasjon"
-            >
-              <svg
-                className="w-4 h-4 text-foreground/70 hover:text-foreground transition-colors"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
           <ul className="space-y-1.5">
             {visibleSections.map((section) => {
               const isActive = activeSectionId === section.id
@@ -189,11 +188,11 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
                   <button
                     onClick={() => scrollToSection(section.id)}
                     className={`
-                      w-full text-left px-3 py-2 rounded-md transition-all duration-200
+                      w-full text-left text-white px-3 py-2 rounded-md transition-all duration-200
                       text-xs font-medium whitespace-nowrap
                       ${
                         isActive
-                          ? 'bg-background-widget-red text-white shadow-md'
+                          ? 'bg-background-widget-dark text-white shadow-md'
                           : 'text-foreground/70 hover:text-foreground hover:bg-background-widget-dark/50'
                       }
                     `}

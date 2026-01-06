@@ -10,6 +10,9 @@ export function useScrollAnimations(editMode: boolean = false) {
   const [conceptSectionProgress, setConceptSectionProgress] = useState(0)
   const conceptSectionRef = useRef<HTMLDivElement>(null)
 
+  const [casesSectionProgress, setCasesSectionProgress] = useState(0)
+  const casesSectionRef = useRef<HTMLDivElement>(null)
+
   // Scroll-based animation for Goal section
   useEffect(() => {
     if (editMode) return
@@ -247,13 +250,77 @@ export function useScrollAnimations(editMode: boolean = false) {
     }
   }, [editMode])
 
+  // Scroll-based animation for Cases section
+  useEffect(() => {
+    if (editMode) return
+
+    // Throttle scroll updates with requestAnimationFrame
+    let rafId: number | null = null
+    let lastProgress = -1
+    
+    const updateProgressIfNeeded = (newProgress: number) => {
+      // Bare oppdater hvis endringen er signifikant (mer enn 0.01)
+      if (Math.abs(newProgress - lastProgress) > 0.01) {
+        lastProgress = newProgress
+        setCasesSectionProgress(newProgress)
+      }
+    }
+
+    const handleScroll = () => {
+      if (!casesSectionRef.current) return
+
+      // Bruk requestAnimationFrame for å throttling
+      if (rafId !== null) {
+        return
+      }
+
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        
+        const element = casesSectionRef.current
+        if (!element) return
+
+        const rect = element.getBoundingClientRect()
+        const windowHeight = window.innerHeight
+        
+        // Start animasjonen når seksjonen kommer inn i viewport
+        const startPoint = windowHeight * 0.7
+        // Slutt når seksjonen er forbi viewport
+        const endPoint = windowHeight * 0.1
+        
+        const animationRange = startPoint - endPoint
+        const currentPosition = rect.top
+        
+        let progress = (startPoint - currentPosition) / animationRange
+        progress = Math.max(0, Math.min(1, progress))
+        
+        updateProgressIfNeeded(progress)
+      })
+    }
+
+    // Initial call to set progress
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleScroll, { passive: true })
+
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleScroll)
+    }
+  }, [editMode])
+
   return {
     goalSectionProgress,
     goalSectionRef,
     timelineSectionProgress,
     timelineSectionRef,
     conceptSectionProgress,
-    conceptSectionRef
+    conceptSectionRef,
+    casesSectionProgress,
+    casesSectionRef
   }
 }
 

@@ -63,7 +63,9 @@ export function PublicProjectClient({
     timelineSectionProgress,
     timelineSectionRef,
     conceptSectionProgress,
-    conceptSectionRef
+    conceptSectionRef,
+    casesSectionProgress,
+    casesSectionRef
   } = useScrollAnimations(false)
   
   // Initialize analytics tracking (only if not admin)
@@ -303,6 +305,8 @@ export function PublicProjectClient({
                       allCases={caseStudies}
                       updateSectionContent={noop}
                       onCasePickerOpen={noop}
+                      casesSectionProgress={casesSectionProgress}
+                      casesSectionRef={casesSectionRef}
                     />
                   )}
 

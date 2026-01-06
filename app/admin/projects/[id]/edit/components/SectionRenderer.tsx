@@ -29,6 +29,8 @@ type SectionRendererProps = {
   timelineSectionRef: React.RefObject<HTMLDivElement | null>
   conceptSectionProgress: number
   conceptSectionRef: React.RefObject<HTMLDivElement | null>
+  casesSectionProgress: number
+  casesSectionRef: React.RefObject<HTMLDivElement | null>
   getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: any) => void
@@ -75,6 +77,8 @@ export function SectionRenderer({
   timelineSectionRef,
   conceptSectionProgress,
   conceptSectionRef,
+  casesSectionProgress,
+  casesSectionRef,
   getBackgroundStyle,
   getSectionTitle,
   updateSectionContent,
@@ -269,6 +273,8 @@ export function SectionRenderer({
             allCases={allCases}
             updateSectionContent={updateSectionContent}
             onCasePickerOpen={onCasePickerOpen}
+            casesSectionProgress={casesSectionProgress}
+            casesSectionRef={casesSectionRef}
           />
         )}
 

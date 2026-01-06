@@ -48,7 +48,7 @@ export function DeliverableCard({
         transition-all duration-300
         w-full md:w-[120px] flex-shrink-0 relative
         ${isExpanded ? 'min-h-[200px]' : 'h-[120px]'}
-        ${!editMode ? 'cursor-pointer hover:bg-background-surface' : ''}
+        ${!editMode ? 'cursor-pointer hover:bg-background-surface md:hover:scale-105 md:hover:shadow-lg md:hover:-translate-y-1' : ''}
       `}
     >
       {/* Fjern-knapp i edit mode */}

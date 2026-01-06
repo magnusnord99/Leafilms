@@ -12,7 +12,7 @@ type CasesSectionProps = {
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   onCasePickerOpen: () => void
   casesSectionProgress?: number
-  casesSectionRef?: React.RefObject<HTMLDivElement>
+  casesSectionRef?: React.RefObject<HTMLDivElement | null>
 }
 
 export function CasesSection({

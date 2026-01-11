@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createPublicClient } from '@/lib/supabase-server'
 import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, CollagePreset } from '@/lib/types'
 import { PublicProjectClient } from './PublicProjectClient'
-import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
+import { CollageImages } from '@/components/sections'
 
 // Disable caching for this page to ensure fresh data
 export const dynamic = 'force-dynamic'

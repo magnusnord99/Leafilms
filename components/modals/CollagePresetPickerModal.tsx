@@ -3,10 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { CollagePreset, Image } from '@/lib/types'
-import { Button } from './Button'
-import { Heading } from './Heading'
-import { Text } from './Text'
-import { Card } from './Card'
+import { Button, Heading, Text, Card } from '@/components/ui'
 
 // Helper for å få full bilde-URL
 const getImageUrl = (image: Image) => {

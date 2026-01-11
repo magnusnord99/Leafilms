@@ -1,6 +1,6 @@
 'use client'
 
-import { Text } from './Text'
+import { Text } from '@/components/ui'
 
 interface DeliverableCardProps {
   title?: string

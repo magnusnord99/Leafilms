@@ -1,8 +1,6 @@
 'use client'
 
-import { ImagePickerModal, CollagePresetPickerModal } from '@/components/ui'
-import { TeamPickerModal } from './modals/TeamPickerModal'
-import { CasePickerModal } from './modals/CasePickerModal'
+import { ImagePickerModal, CollagePresetPickerModal, TeamPickerModal, CasePickerModal } from '@/components/modals'
 import { Section, CollagePreset, Image } from '@/lib/types'
 
 type EditProjectModalsProps = {

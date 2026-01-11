@@ -2,7 +2,7 @@
 
 import { Section, Image, SectionImage, Project } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
-import { ImagePositionControls } from './ImagePositionControls'
+import { ImagePositionControls } from '@/components/project'
 
 type HeroSectionProps = {
   section: Section

@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { Section, TeamMember, Image } from '@/lib/types'
 import { Button, Heading, Text } from '@/components/ui'
 import { TeamMemberCard } from './TeamMemberCard'
-import { ImageGallery } from './ImageGallery'
+import { ImageGallery } from '@/components/project'
 
 type TeamSectionProps = {
   section: Section

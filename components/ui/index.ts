@@ -7,8 +7,4 @@ export { Card } from './Card'
 export { Badge } from './Badge'
 export { Heading } from './Heading'
 export { Text } from './Text'
-export { DeliverableCard } from './DeliverableCard'
-export { DeliverableGrid } from './DeliverableGrid'
-export { ImagePickerModal } from './ImagePickerModal'
-export { CollagePresetPickerModal } from './CollagePresetPickerModal'
 

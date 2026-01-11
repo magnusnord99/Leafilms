@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
-import { ImagePositionControls } from './ImagePositionControls'
+import { ImagePositionControls } from '@/components/project'
 
 type ConceptSectionProps = {
   section: Section

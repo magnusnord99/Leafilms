@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Section, CollagePreset, Image } from '@/lib/types'
-import { saveSectionImages } from '../services/imageService'
+import { saveSectionImages } from '@/lib/services/imageService'
 
 type UseSectionHandlersProps = {
   project: any

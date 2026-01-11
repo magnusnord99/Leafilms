@@ -1,8 +1,9 @@
 'use client'
 
 import { Section, Image, SectionImage } from '@/lib/types'
-import { Heading, Text, DeliverableGrid } from '@/components/ui'
-import { ImagePositionControls } from './ImagePositionControls'
+import { Heading, Text } from '@/components/ui'
+import { DeliverableGrid } from '@/components/project'
+import { ImagePositionControls } from '@/components/project'
 
 type DeliverablesSectionProps = {
   section: Section

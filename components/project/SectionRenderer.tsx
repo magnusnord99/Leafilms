@@ -12,7 +12,7 @@ import {
   TeamSection,
   ExampleWorkSection,
   QuoteSection
-} from './index'
+} from '@/components/sections'
 
 type SectionRendererProps = {
   section: Section

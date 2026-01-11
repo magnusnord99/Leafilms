@@ -14,13 +14,13 @@ import {
   CasesSection,
   TeamSection,
   ExampleWorkSection,
-  QuoteSection
-} from '@/app/admin/projects/[id]/edit/components'
-import { CollageImages } from '@/app/admin/projects/[id]/edit/components/ExampleWorkSection'
+  QuoteSection,
+  CollageImages
+} from '@/components/sections'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
 import { useAuth } from '@/hooks/useAuth'
-import { SectionNavigation } from '@/components/ui/SectionNavigation'
+import { SectionNavigation } from '@/components/project'
 
 // Helper for å hente bilde-URL
 function getImageUrl(filePath: string): string {

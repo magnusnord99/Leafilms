@@ -4,7 +4,8 @@ import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CollagePreset, Image } from '@/lib/types'
-import { Button, Card, Heading, Text, Input, Textarea, ImagePickerModal } from '@/components/ui'
+import { Button, Card, Heading, Text, Input, Textarea } from '@/components/ui'
+import { ImagePickerModal } from '@/components/modals'
 
 // Helper for å få full bilde-URL
 const getImageUrl = (image: Image) => {

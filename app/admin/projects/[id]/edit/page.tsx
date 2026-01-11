@@ -6,20 +6,20 @@ import { Section, CollagePreset } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
 import { SectionPreview } from '@/components/preview/SectionPreview'
-import { useProjectData } from './hooks/useProjectData'
+import { useProjectData } from '@/hooks/project/useProjectData'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
-import { useSectionImages } from './hooks/useSectionImages'
-import { useAutoSave } from './hooks/useAutoSave'
-import { usePublishing } from './hooks/usePublishing'
-import { useAIGeneration } from './hooks/useAIGeneration'
-import { useSectionHandlers } from './hooks/useSectionHandlers'
-import { useCollageImages } from './hooks/useCollageImages'
+import { useSectionImages } from '@/hooks/project/useSectionImages'
+import { useAutoSave } from '@/hooks/project/useAutoSave'
+import { usePublishing } from '@/hooks/project/usePublishing'
+import { useAIGeneration } from '@/hooks/project/useAIGeneration'
+import { useSectionHandlers } from '@/hooks/project/useSectionHandlers'
+import { useCollageImages } from '@/hooks/project/useCollageImages'
 import {
-  HeroSection,
   EditProjectTopBar,
   SectionRenderer,
   EditProjectModals
-} from './components'
+} from '@/components/project'
+import { HeroSection } from '@/components/sections'
 
 type Props = {
   params: Promise<{ id: string }>

@@ -78,6 +78,7 @@ const config: Config = {
           widget: 'var(--color-background-widget)',
           'widget-dark': 'var(--color-background-widget-dark)',
           'widget-red': 'var(--color-background-widget-red)',
+          'widget-red-hover': 'var(--color-background-widget-red-hover)',
         },
         
         // ═══════════════════════════════════════════════════
@@ -105,8 +106,8 @@ const config: Config = {
                 'body-xs': ['0.50rem', { lineHeight: '1.4' }],   // 12px
                 },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'Arial', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-poppins)', 'Arial', 'sans-serif'],
+        mono: ['var(--font-poppins)', 'monospace'],
       },
       // ═══════════════════════════════════════════════════
       // SPACING & LAYOUT

@@ -60,7 +60,7 @@ export function TimelineSection({
                 className="flex-shrink-0 w-[300px] p-8 rounded-lg shadow-lg transition-all duration-300"
                 style={{
                   backgroundColor: isActive 
-                    ? '#a16a76' // More saturated version of widget-red (#B0A7A9 -> #9a8f91)
+                    ? 'var(--color-background-widget-red-hover)' // More saturated version of widget-red
                     : 'var(--color-background-widget-red)',
                   transform: isActive ? 'scale(1.1)' : 'scale(1)',
                   boxShadow: isActive ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)'

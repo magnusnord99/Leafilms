@@ -69,7 +69,7 @@ export function ConceptSection({
   // START_ZOOM: Hvor stort hele seksjonen er når animasjonen starter (1.0 = 100%, 1.2 = 120%, osv.)
   // ZOOM_AMOUNT: Hvor mye hele seksjonen zoomer inn når man scroller (0.2 = 20% zoom, 0.5 = 50% zoom, osv.)
   const START_ZOOM = 0.8 // Endre denne verdien for å justere startstørrelsen (1.0 = 100%, 1.5 = 150%, osv.)
-  const ZOOM_AMOUNT = 0.3 // Endre denne verdien for å justere hvor mye seksjonen zoomer inn
+  const ZOOM_AMOUNT = 0.1 // Endre denne verdien for å justere hvor mye seksjonen zoomer inn
   
   // Beregn zoom - alltid bruk START_ZOOM som base (ignorer background_zoom fra DB for scroll-animasjon)
   // På mobil: ingen zoom (scale(1.0)), på desktop: bruk scroll zoom

@@ -128,19 +128,19 @@ export function GoalSection({
       </div>
       
       <div 
-        className="bg-background-widget-dark w-full md:w-1/2 min-h-[20vh] p-6 md:p-12 flex flex-col justify-start self-start shadow-lg"
+        className="w-full md:w-1/2 min-h-[20vh] p-6 md:p-12 flex flex-col justify-start self-start"
         style={{
           transform: textTransform,
           opacity: textOpacity,
           transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
         }}
       >
-        <Heading as="h2" size="2xl" className="mb-4 text-white">
+        <Heading as="h2" size="2xl" className="mb-4 text-dark">
           {getSectionTitle(section.type)}
         </Heading>
         <Text 
           variant="body" 
-          className={`text-white whitespace-pre-wrap ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-white/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
+          className={`text-dark whitespace-pre-wrap ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-white/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
           contentEditable={editMode}
           suppressContentEditableWarning
           onBlur={(e) => {

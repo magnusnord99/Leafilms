@@ -43,23 +43,23 @@ export function TeamSection({
   return (
     <div className="w-full">
       {/* Lys blå-grå bakgrunn */}
-      <div className="bg-background-widget py-8 px-4 mb-20md:px-8">
+      <div className="bg-background-widget py-6 px-4 md:px-8">
         {/* TEAM tittel */}
         <Heading 
             as="h2" 
             size="2xl" 
-            className="text-center mb-6 text-dark font-bold"
+            className="text-center mb-4 text-dark font-bold"
           >
             TEAM
           </Heading>
           <Text 
             variant="lead" 
-            className="text-center text-dark max-w-2xl mx-auto"
+            className="text-center text-dark max-w-2xl mx-auto mb-6"
           >
             {section.content.text || 'Leafilms har kompetansen til å gjennomføre prosjekter i alle størrelser. Med teknologi, kunnskap og lidenskap skaper vi engasjerende øyeblikk.'}
           </Text>
         {/* Mørkere blå-grå rektangel i midten */}
-        <div className="max-w-6xl mx-auto mt-8 mb-34 bg-background-widget-medium p-12 md:p-16 shadow-lg">
+        <div className="max-w-3xl mx-auto p-4 md:p-6 ">
 
           {/* Edit button */}
           {editMode && (
@@ -77,14 +77,22 @@ export function TeamSection({
 
           {/* 2x2 Grid med team-medlemmer */}
           {selectedTeamMembers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              {selectedTeamMembers.map((teamMember) => (
-                <TeamMemberCard
-                  key={teamMember.id}
-                  teamMember={teamMember}
-                  editMode={editMode}
-                />
-              ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {selectedTeamMembers.map((teamMember) => {
+                  // Hent prosjekt-spesifikk rolle fra section.content
+                  const teamMemberRoles = section.content?.teamMemberRoles || {}
+                  const projectRole = teamMemberRoles[teamMember.id] || null
+                  
+                  return (
+                    <div key={teamMember.id} className="min-h-[300px]">
+                      <TeamMemberCard
+                        teamMember={teamMember}
+                        editMode={editMode}
+                        projectRole={projectRole}
+                      />
+                    </div>
+                  )
+                })}
             </div>
           ) : (
             <div className="text-center py-12">
@@ -97,7 +105,7 @@ export function TeamSection({
           
         </div>
         {/* Bildegalleri */}
-        <div className="max-w-6xl mx-auto mb-24 mt-12">
+        <div className="max-w-6xl mx-auto mb-12 mt-8">
           <ImageGallery 
               images={galleryImages}
               editMode={editMode}

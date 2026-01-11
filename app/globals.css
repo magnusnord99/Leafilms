@@ -17,6 +17,7 @@
   --color-background-widget-medium: #8FA8B8;
   --color-background-widget-dark: #434242;
   --color-background-widget-red: #B0A7A9;
+  --color-background-widget-red-hover: #a16a76; /* Hover-farge for widget-red (mer mettet versjon) */
   
   /* Knapp-farger */
   --color-primary: #ffffff;
@@ -56,8 +57,8 @@
   --color-border-dark: #27272a;
   
   /* Fonts */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-poppins);
+  --font-mono: var(--font-poppins); /* Bruker Poppins også for mono som fallback */
 }
 
 @theme inline {
@@ -95,6 +96,7 @@
   --color-background-widget-dark: var(--color-background-widget-dark);
   --color-background-widget-medium: var(--color-background-widget-medium);
   --color-background-widget-red: var(--color-background-widget-red);
+  --color-background-widget-red-hover: var(--color-background-widget-red-hover);
   --color-border: var(--color-border);
   --color-border-light: var(--color-border-light);
   --color-border-dark: var(--color-border-dark);

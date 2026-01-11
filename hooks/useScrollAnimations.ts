@@ -81,6 +81,14 @@ export function useScrollAnimations(editMode: boolean = false) {
       
       if (!isInViewport) return
 
+      // Start scroll hijacking kun når toppen av seksjonen er mer synlig
+      // Start når toppen av seksjonen er 70% ned i viewport (samme som mobil)
+      const startPoint = windowHeight * 0.7
+      const isSectionVisible = rect.top < startPoint && rect.bottom > windowHeight * 0.3
+      
+      // Hvis seksjonen ikke er i den synlige posisjonen, tillat normal scrolling
+      if (!isSectionVisible) return
+
       // Beregn nåværende progress basert på scroll-posisjon
       const currentProgress = Math.min(1, Math.max(0, accumulatedScroll / maxScroll))
       
@@ -176,7 +184,11 @@ export function useScrollAnimations(editMode: boolean = false) {
             }
           }
         } else {
-          // Desktop: bruk accumulated scroll
+          // Desktop: bruk accumulated scroll, men resett når seksjonen ikke er i synlig posisjon
+          const startPoint = windowHeight * 0.7
+          const endPoint = windowHeight * 0.3
+          const isSectionVisible = rect.top < startPoint && rect.bottom > endPoint
+          
           if (!isInViewport && rect.top > windowHeight) {
             // Seksjonen er over viewport - reset
             accumulatedScroll = 0
@@ -190,6 +202,24 @@ export function useScrollAnimations(editMode: boolean = false) {
             if (lastProgress !== 1) {
               lastProgress = 1
               setTimelineSectionProgress(1)
+            }
+          } else if (isInViewport && !isSectionVisible) {
+            // Seksjonen er i viewport, men ikke i synlig posisjon - reset accumulated scroll
+            // Dette hindrer at animasjonen starter for tidlig
+            if (rect.top > startPoint) {
+              // Seksjonen er over start-punkt - reset til start
+              accumulatedScroll = 0
+              if (lastProgress !== 0) {
+                lastProgress = 0
+                setTimelineSectionProgress(0)
+              }
+            } else if (rect.bottom < endPoint) {
+              // Seksjonen er under slutt-punkt - fullfør animasjonen
+              accumulatedScroll = maxScroll
+              if (lastProgress !== 1) {
+                lastProgress = 1
+                setTimelineSectionProgress(1)
+              }
             }
           }
         }
@@ -283,8 +313,10 @@ export function useScrollAnimations(editMode: boolean = false) {
         const rect = element.getBoundingClientRect()
         const windowHeight = window.innerHeight
         
-        // Start animasjonen når seksjonen kommer inn i viewport
-        const startPoint = windowHeight * 0.7
+        // Start animasjonen senere - når seksjonen er mer sentrert i viewport
+        // Høyere verdi (f.eks. 0.8) = animasjonen starter senere
+        // Lavere verdi (f.eks. 0.5) = animasjonen starter tidligere
+        const startPoint = windowHeight * 0.8 // Endret fra 0.7 for å starte animasjonen senere
         // Slutt når seksjonen er forbi viewport
         const endPoint = windowHeight * 0.1
         

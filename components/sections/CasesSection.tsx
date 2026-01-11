@@ -56,15 +56,18 @@ export function CasesSection({
     }
 
     // Desktop: 4 corners - use larger offsets for more dramatic effect
+    // Juster verdien: høyere (f.eks. 0.3) = mer flytting, lavere (f.eks. 0.05) = mindre flytting
+    const offsetFactor = 0.1 // Redusert fra 0.2 for mindre flytting
+    
     switch (index) {
       case 0: // Top left
-        return { x: -windowWidth * 0.6, y: -windowHeight * 0.6 }
+        return { x: -windowWidth * offsetFactor, y: -windowHeight * offsetFactor }
       case 1: // Top right
-        return { x: windowWidth * 0.6, y: -windowHeight * 0.6 }
+        return { x: windowWidth * offsetFactor, y: -windowHeight * offsetFactor }
       case 2: // Bottom left
-        return { x: -windowWidth * 0.6, y: windowHeight * 0.6 }
+        return { x: -windowWidth * offsetFactor, y: windowHeight * offsetFactor }
       case 3: // Bottom right
-        return { x: windowWidth * 0.6, y: windowHeight * 0.6 }
+        return { x: windowWidth * offsetFactor, y: windowHeight * offsetFactor }
       default:
         return { x: 0, y: 0 }
     }
@@ -147,7 +150,11 @@ export function CasesSection({
             const translateX = startPos.x * (1 - easedProgress)
             const translateY = startPos.y * (1 - easedProgress)
             const opacity = editMode ? 1 : progress
-            const scale = editMode ? 1 : 0.8 + (easedProgress * 0.2) // Start at 80% scale, animate to 100%
+            
+            // Scale animation: start at minScale, animate to 100%
+            // Juster minScale (f.eks. 0.5 = 50%, 0.6 = 60%, 0.8 = 80%) for å endre startstørrelsen
+            const minScale = 0.9 // Juster denne for å endre hvor små objektene er i starten
+            const scale = editMode ? 1 : minScale + (easedProgress * (1 - minScale))
             
             return (
               <div 

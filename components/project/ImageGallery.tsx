@@ -78,44 +78,7 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
 
   const maxIndex = Math.max(0, images.length - imagesToShow)
 
-  // Scroll-basert animasjon for å automatisk scrolle gjennom bildene
-  useEffect(() => {
-    if (editMode || images.length <= imagesToShow) return
-
-    const handleScroll = () => {
-      if (!galleryRef.current) return
-
-      const element = galleryRef.current
-      const rect = element.getBoundingClientRect()
-      const windowHeight = window.innerHeight
-      
-      // Start animasjonen når galleriet kommer inn i viewport
-      const startPoint = windowHeight * 0.8
-      // Slutt når galleriet er forbi viewport
-      const endPoint = -rect.height * 0.5
-      
-      const animationRange = startPoint - endPoint
-      const currentPosition = rect.top
-      
-      let progress = (startPoint - currentPosition) / animationRange
-      progress = Math.max(0, Math.min(1, progress))
-      
-      // Konverter progress til index (0 til maxIndex)
-      const newIndex = Math.floor(progress * (maxIndex + 1))
-      const clampedIndex = Math.min(newIndex, maxIndex)
-      
-      setCurrentIndex(clampedIndex)
-    }
-
-    handleScroll()
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    window.addEventListener('resize', handleScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('resize', handleScroll)
-    }
-  }, [editMode, images.length, imagesToShow, maxIndex])
+  // Automatisk scrolling er fjernet - bruk pilene for å bla gjennom bildene
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => prev <= 0 ? maxIndex : prev - 1)
@@ -188,12 +151,12 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
           </button>
         )}
 
-        {/* Navigation Arrows - kun synlig i edit mode */}
-        {editMode && images.length > imagesToShow && (
+        {/* Navigation Arrows - alltid synlig når det er flere bilder enn som vises */}
+        {images.length > imagesToShow && (
           <>
             <button
               onClick={goToPrevious}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition z-10"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-black/60 hover:bg-black/80 text-white rounded-full p-3 transition z-10 shadow-lg"
               aria-label="Forrige bilde"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,7 +165,7 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
             </button>
             <button
               onClick={goToNext}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition z-10"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-black/60 hover:bg-black/80 text-white rounded-full p-3 transition z-10 shadow-lg"
               aria-label="Neste bilde"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

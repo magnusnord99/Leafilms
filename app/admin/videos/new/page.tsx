@@ -117,7 +117,6 @@ export default function NewVideo() {
         console.error('❌ Upload error details:', {
           error: uploadError,
           message: uploadError.message,
-          statusCode: uploadError.statusCode,
           name: uploadError.name,
           errorDetails: JSON.stringify(uploadError, null, 2)
         })

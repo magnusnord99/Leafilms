@@ -1,7 +1,7 @@
 'use client'
 
-import { ImagePickerModal, CollagePresetPickerModal, TeamPickerModal, CasePickerModal } from '@/components/modals'
-import { Section, CollagePreset, Image } from '@/lib/types'
+import { ImagePickerModal, VideoPickerModal, CollagePresetPickerModal, TeamPickerModal, CasePickerModal } from '@/components/modals'
+import { Section, CollagePreset, Image, VideoLibrary } from '@/lib/types'
 
 type EditProjectModalsProps = {
   showImagePicker: boolean
@@ -9,8 +9,15 @@ type EditProjectModalsProps = {
   imagePickerSectionId: string | null
   setImagePickerSectionId: (id: string | null) => void
   sectionImages: Record<string, Image[]>
+  sectionVideos?: Record<string, VideoLibrary[]>
   sections: Section[]
   onImageSelect: (imageIds: string[]) => Promise<void>
+  onVideoSelect?: (videoIds: string[]) => Promise<void>
+  
+  showVideoPicker?: boolean
+  setShowVideoPicker?: (show: boolean) => void
+  videoPickerSectionId?: string | null
+  setVideoPickerSectionId?: (id: string | null) => void
   
   showCasePicker: boolean
   setShowCasePicker: (show: boolean) => void
@@ -38,8 +45,14 @@ export function EditProjectModals({
   imagePickerSectionId,
   setImagePickerSectionId,
   sectionImages,
+  sectionVideos = {},
   sections,
   onImageSelect,
+  onVideoSelect,
+  showVideoPicker = false,
+  setShowVideoPicker,
+  videoPickerSectionId = null,
+  setVideoPickerSectionId,
   showCasePicker,
   setShowCasePicker,
   allCases,
@@ -98,6 +111,21 @@ export function EditProjectModals({
             : undefined
         }
       />
+
+      {/* Video Picker Modal */}
+      {onVideoSelect && setShowVideoPicker && setVideoPickerSectionId && (
+        <VideoPickerModal
+          isOpen={showVideoPicker}
+          onClose={() => {
+            setShowVideoPicker(false)
+            setVideoPickerSectionId(null)
+          }}
+          onSelect={onVideoSelect}
+          selectedVideoIds={videoPickerSectionId ? sectionVideos[videoPickerSectionId]?.map(vid => vid.id) || [] : []}
+          maxSelection={1}
+          category="hero"
+        />
+      )}
 
       {/* Collage Preset Picker Modal */}
       <CollagePresetPickerModal

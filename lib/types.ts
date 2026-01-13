@@ -81,6 +81,37 @@ export type Video = {
   created_at: string
 }
 
+// Video Library type (for uploaded videos, not Vimeo)
+export type VideoLibrary = {
+  id: string
+  filename: string
+  file_path: string
+  title: string | null
+  description: string | null
+  category: string
+  subcategory: string | null
+  tags: string[]
+  duration: number | null
+  width: number | null
+  height: number | null
+  file_size: number | null
+  thumbnail_path: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SectionVideo = {
+  id: string
+  section_id: string
+  video_id: string
+  order_index: number
+  position: string | null
+  autoplay: boolean
+  loop: boolean
+  muted: boolean
+  created_at: string
+}
+
 export type ProjectShare = {
   id: string
   project_id: string

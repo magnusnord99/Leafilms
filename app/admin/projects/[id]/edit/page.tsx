@@ -35,6 +35,8 @@ export default function EditProject({ params }: Props) {
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [editMode, setEditMode] = useState(true)
   const [showImagePicker, setShowImagePicker] = useState(false)
+  const [showVideoPicker, setShowVideoPicker] = useState(false)
+  const [videoPickerSectionId, setVideoPickerSectionId] = useState<string | null>(null)
   const [imagePickerSectionId, setImagePickerSectionId] = useState<string | null>(null)
   const [aiSettings, setAiSettings] = useState({
     projectType: '',
@@ -74,6 +76,10 @@ export default function EditProject({ params }: Props) {
     setSectionImages,
     sectionImageData,
     setSectionImageData,
+    sectionVideos,
+    setSectionVideos,
+    sectionVideoData,
+    setSectionVideoData,
     refreshData
   } = useProjectData(id)
 
@@ -161,6 +167,7 @@ export default function EditProject({ params }: Props) {
     toggleTeamSelection,
     saveTeamSelection,
     handleImageSelect,
+    handleVideoSelect,
     saveCaseSelection,
     handlePresetSelect
   } = useSectionHandlers({
@@ -175,9 +182,16 @@ export default function EditProject({ params }: Props) {
     setSectionImages,
     sectionImageData,
     setSectionImageData,
+    sectionVideos,
+    setSectionVideos,
+    sectionVideoData,
+    setSectionVideoData,
     imagePickerSectionId,
     setImagePickerSectionId,
+    videoPickerSectionId,
+    setVideoPickerSectionId,
     setShowImagePicker,
+    setShowVideoPicker,
     setShowCasePicker,
     setShowTeamPicker,
     editMode,
@@ -271,6 +285,8 @@ export default function EditProject({ params }: Props) {
               editMode={editMode}
               sectionImages={sectionImages}
               sectionImageData={sectionImageData}
+              sectionVideos={sectionVideos}
+              sectionVideoData={sectionVideoData}
               editingImageSectionId={editingImageSectionId}
               imagePosition={imagePosition}
               getBackgroundStyle={getBackgroundStyle}
@@ -278,10 +294,8 @@ export default function EditProject({ params }: Props) {
               saveBackgroundPosition={saveBackgroundPosition}
               setImagePosition={setImagePosition}
               onImageClick={() => {
-                if (editMode && !sectionImages[heroSection.id]?.[0]) {
-                  setImagePickerSectionId(heroSection.id)
-                  setShowImagePicker(true)
-                }
+                // Dette brukes ikke lenger - video picker prioriteres alltid
+                // Men beholder for bakoverkompatibilitet
               }}
               onEditPositionClick={(e) => {
                 e.stopPropagation()
@@ -290,6 +304,10 @@ export default function EditProject({ params }: Props) {
               onImagePickerOpen={() => {
                 setImagePickerSectionId(heroSection.id)
                 setShowImagePicker(true)
+              }}
+              onVideoPickerOpen={() => {
+                setVideoPickerSectionId(heroSection.id)
+                setShowVideoPicker(true)
               }}
             />
           )
@@ -368,7 +386,7 @@ export default function EditProject({ params }: Props) {
         {editMode && sections.filter(s => !s.visible && s.type !== 'hero').length > 0 && (
           <section className="py-section px-8 border-t border-zinc-300 bg-background">
             <div className="max-w-5xl mx-auto">
-              <Heading as="h2" size="lg" className="mb-6">
+              <Heading as="h4" className="mb-6">
                 Skjulte seksjoner
               </Heading>
               <div className="space-y-4">
@@ -415,8 +433,14 @@ export default function EditProject({ params }: Props) {
           imagePickerSectionId={imagePickerSectionId}
           setImagePickerSectionId={setImagePickerSectionId}
           sectionImages={sectionImages}
+          sectionVideos={sectionVideos}
           sections={sections}
           onImageSelect={handleImageSelect}
+          onVideoSelect={handleVideoSelect}
+          showVideoPicker={showVideoPicker}
+          setShowVideoPicker={setShowVideoPicker}
+          videoPickerSectionId={videoPickerSectionId}
+          setVideoPickerSectionId={setVideoPickerSectionId}
           showCasePicker={showCasePicker}
           setShowCasePicker={setShowCasePicker}
           allCases={allCases}

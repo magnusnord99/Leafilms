@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { Image, SectionImage } from '@/lib/types'
+import { Image, SectionImage, VideoLibrary, SectionVideo } from '@/lib/types'
 
 export async function saveSectionImages(
   sectionId: string,
@@ -157,3 +157,107 @@ export async function saveBackgroundPosition(
   }
 }
 
+export async function saveSectionVideos(
+  sectionId: string,
+  videoIds: string[]
+): Promise<{ videos: VideoLibrary[]; sectionVideos: SectionVideo[] }> {
+  console.log('💾 saveSectionVideos called with:', { sectionId, videoIds })
+  
+  // Verifiser at sectionId faktisk finnes først
+  const { data: sectionCheck } = await supabase
+    .from('sections')
+    .select('id, type')
+    .eq('id', sectionId)
+    .single()
+  
+  if (!sectionCheck) {
+    console.error('❌ Section not found:', sectionId)
+    throw new Error(`Section ${sectionId} not found`)
+  }
+  console.log('✅ Section found:', sectionCheck)
+  
+  // Slett eksisterende videoer for denne seksjonen
+  const { data: existingVideos, error: fetchError } = await supabase
+        .from('section_video_library')
+    .select('id, video_id, order_index')
+    .eq('section_id', sectionId)
+  
+  if (fetchError) {
+    console.error('Error fetching existing videos:', fetchError)
+  } else {
+    console.log('📋 Existing videos before delete:', existingVideos)
+  }
+  
+  const { error: deleteError, count: deleteCount } = await supabase
+        .from('section_video_library')
+    .delete()
+    .eq('section_id', sectionId)
+    .select('id')
+
+  if (deleteError) {
+    console.error('❌ Error deleting existing videos:', deleteError)
+    throw deleteError
+  }
+  console.log(`✅ Deleted ${deleteCount || existingVideos?.length || 0} existing videos for section ${sectionId}`)
+
+  // Legg til nye videoer
+  if (videoIds.length > 0) {
+    const sectionVideosToInsert = videoIds.map((videoId, index) => ({
+      section_id: sectionId,
+      video_id: videoId,
+      order_index: index,
+      position: 'background',
+      autoplay: true,
+      loop: true,
+      muted: true
+    }))
+
+    console.log('Inserting section videos:', sectionVideosToInsert)
+    const { error: insertError, data: insertData } = await supabase
+        .from('section_video_library')
+      .insert(sectionVideosToInsert)
+      .select('*')
+
+    if (insertError) {
+      console.error('Error inserting videos:', insertError)
+      throw new Error(`Failed to insert videos: ${insertError.message || JSON.stringify(insertError)}`)
+    }
+    console.log('✅ Inserted section videos:', insertData)
+    
+    if (!insertData || insertData.length === 0) {
+      console.error('❌ CRITICAL: No videos were inserted!')
+      throw new Error('Failed to insert videos - no data returned')
+    }
+
+    const insertedSectionVideos = (insertData || []) as SectionVideo[]
+    
+    // Hent videoene i riktig rekkefølge basert på inserted data
+    const fetchedVideoIds = insertedSectionVideos.map(sv => sv.video_id)
+    const { data: videosData, error: videosError } = await supabase
+        .from('video_library')
+      .select('*')
+      .in('id', fetchedVideoIds)
+
+    if (videosError) {
+      console.error('Error fetching videos:', videosError)
+      throw videosError
+    }
+
+    // Sorter videoene i samme rekkefølge som section_videos
+    const videos = fetchedVideoIds
+      .map(id => videosData?.find(vid => vid.id === id))
+      .filter(Boolean) as VideoLibrary[]
+
+    console.log('Returning videos and sectionVideos:', { videos, sectionVideos: insertedSectionVideos })
+    return {
+      videos,
+      sectionVideos: insertedSectionVideos
+    }
+  } else {
+    console.log('No videos to insert, returning empty arrays')
+    return {
+      videos: [],
+      sectionVideos: []
+    }
+  }
+}

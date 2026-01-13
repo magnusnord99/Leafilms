@@ -133,8 +133,7 @@ export function ConceptSection({
           <div className="m-8 w-full max-w-2xl">
             <div className="bg-background-widget p-8 inline-block shadow-xl">
               <Heading 
-                as="h2" 
-                size="2xl" 
+                as="h3" 
                 className="mb-4 break-words"
                 onClick={(e) => e.stopPropagation()}
               >

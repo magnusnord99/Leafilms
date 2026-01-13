@@ -23,8 +23,7 @@ export function ContactSection({
   return (
     <div className="mt-30">
       <Heading 
-        as="h2" 
-        size="xl" 
+        as="h4" 
         className="mb-6 text-center"
       >
         KONTAKT

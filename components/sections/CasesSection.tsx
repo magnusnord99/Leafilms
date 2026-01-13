@@ -86,8 +86,7 @@ export function CasesSection({
       <div className="flex justify-center mb-8 -mt-16">
         <div className="max-w-2xl w-full p-6 bg-background-widget shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-1px_rgba(0,0,0,0.06)] relative z-20">
           <Heading 
-            as="h2" 
-            size="2xl" 
+            as="h3"
             className={`mb-4 text-center ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
             contentEditable={editMode}
             suppressContentEditableWarning

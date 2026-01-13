@@ -135,7 +135,7 @@ export function GoalSection({
           transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
         }}
       >
-        <Heading as="h2" size="2xl" className="mb-4 text-dark">
+        <Heading as="h3" className="mb-4 text-dark">
           {getSectionTitle(section.type)}
         </Heading>
         <Text 

@@ -112,13 +112,27 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
             // Legg til cache-busting basert på image ID
             const cacheBustUrl = imageUrl ? `${imageUrl}?v=${image.id}` : null
 
+            // Sjekk om dette bildet er det midterste av de synlige bildene
+            // Når imagesToShow er 3, er midterste bildet på index 1 i visibleImages
+            // Vi må sjekke om dette bildet er det midterste basert på currentIndex
+            // Ta hensyn til wraparound med modulo
+            const normalizedIdx = idx % images.length
+            const middleIndex = (currentIndex + 1) % images.length
+            const isMiddleImage = imagesToShow === 3 && normalizedIdx === middleIndex
+            
+            // For mobil (1 bilde), ingen highlight
+            const shouldHighlight = imagesToShow === 3 && isMiddleImage
+
             return (
               <div
                 key={`${image.id}-${idx}`}
-                className="relative aspect-[4/5] rounded-lg overflow-hidden bg-gray-200 flex-shrink-0"
+                className={`relative aspect-[4/5] rounded-lg overflow-hidden bg-gray-200 flex-shrink-0 transition-all duration-500 ease-in-out ${
+                  shouldHighlight ? 'shadow-2xl z-10' : 'shadow-md'
+                }`}
                 style={{ 
                   width: `calc((100% - ${(imagesToShow - 1) * 1}rem) / ${imagesToShow})`,
-                  minHeight: imagesToShow === 1 ? '400px' : 'auto' // Minimum høyde på mobil
+                  minHeight: imagesToShow === 1 ? '400px' : 'auto', // Minimum høyde på mobil
+                  transform: shouldHighlight ? 'scale(1.15)' : 'scale(1)',
                 }}
               >
                 {cacheBustUrl ? (

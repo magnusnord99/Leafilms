@@ -24,7 +24,7 @@ export function TimelineSection({
   return (
     <div ref={timelineSectionRef} className="w-full overflow-hidden">
       <div className="mt-10 text-center">
-        <Heading as="h2" size="2xl">
+        <Heading as="h2" size="md">
           {getSectionTitle(section.type)}
         </Heading>
       </div>
@@ -67,8 +67,7 @@ export function TimelineSection({
                 }}
               >
                 <Heading 
-                  as="h3" 
-                  size="sm" 
+                  as="h4" 
                   className={`mb-4 uppercase font-bold ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
                   contentEditable={editMode}
                   suppressContentEditableWarning

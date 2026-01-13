@@ -89,8 +89,7 @@ export function DeliverablesSection({
           <div className="mt-24 mb-8 w-full px-0 md:px-0">
             <div className="bg-background-widget-dark p-4 md:p-8 w-full md:w-1/2 max-w-full">
               <Heading 
-                as="h2" 
-                size="xl" 
+                as="h3" 
                 className="mb-4 break-words text-white"
                 onClick={(e) => e.stopPropagation()}
               >

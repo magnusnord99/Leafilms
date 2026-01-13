@@ -152,6 +152,9 @@ export default function AdminDashboard() {
             <Link href="/admin/images">
               <Button variant="secondary">Bildebibliotek</Button>
             </Link>
+            <Link href="/admin/videos">
+              <Button variant="secondary">Videobibliotek</Button>
+            </Link>
             <Link href="/admin/ai-examples">
               <Button variant="secondary">AI Eksempler</Button>
             </Link>

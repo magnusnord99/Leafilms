@@ -43,11 +43,11 @@ export function TeamSection({
   return (
     <div className="w-full">
       {/* Lys blå-grå bakgrunn */}
-      <div className="bg-background-widget py-6 px-4 md:px-8">
+      <div className="bg-background-widget py-6 px-4 pb-20 md:px-8">
         {/* TEAM tittel */}
         <Heading 
             as="h2" 
-            size="2xl" 
+            size="md" 
             className="text-center mb-4 text-dark font-bold"
           >
             TEAM
@@ -59,7 +59,7 @@ export function TeamSection({
             {section.content.text || 'Leafilms har kompetansen til å gjennomføre prosjekter i alle størrelser. Med teknologi, kunnskap og lidenskap skaper vi engasjerende øyeblikk.'}
           </Text>
         {/* Mørkere blå-grå rektangel i midten */}
-        <div className="max-w-3xl mx-auto p-4 md:p-6 ">
+        <div className="max-w-6xl mx-auto p-4 md:p-6 ">
 
           {/* Edit button */}
           {editMode && (
@@ -75,13 +75,22 @@ export function TeamSection({
             </div>
           )}
 
-          {/* 2x2 Grid med team-medlemmer */}
+          {/* Grid med team-medlemmer: 1 kolonne på mobil, 2 kolonner på tablet, 3 kolonner på desktop */}
           {selectedTeamMembers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {selectedTeamMembers.map((teamMember) => {
                   // Hent prosjekt-spesifikk rolle fra section.content
                   const teamMemberRoles = section.content?.teamMemberRoles || {}
                   const projectRole = teamMemberRoles[teamMember.id] || null
+                  
+                  // Handler for å oppdatere prosjekt-spesifikk rolle
+                  const handleRoleChange = (role: string) => {
+                    const updatedRoles = {
+                      ...teamMemberRoles,
+                      [teamMember.id]: role
+                    }
+                    updateSectionContent(section.id, 'teamMemberRoles', updatedRoles)
+                  }
                   
                   return (
                     <div key={teamMember.id} className="min-h-[300px]">
@@ -89,6 +98,7 @@ export function TeamSection({
                         teamMember={teamMember}
                         editMode={editMode}
                         projectRole={projectRole}
+                        onProjectRoleChange={handleRoleChange}
                       />
                     </div>
                   )

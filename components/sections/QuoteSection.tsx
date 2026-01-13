@@ -709,7 +709,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
           <div className="mb-8 pb-6 border-b border-border" data-quote-section="header">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <Heading as="h2" size="lg" className="mb-2">
+                <Heading as="h4" className="mb-2">
                   LEA FILMS
                 </Heading>
                 <Text variant="small" className="text-dark/70">
@@ -720,7 +720,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
                 </Text>
               </div>
               <div className="text-right">
-                <Heading as="h2" size="lg" className="mb-2">
+                <Heading as="h4" className="mb-2">
                   Tilbud
                 </Heading>
                 {quoteData.version && (

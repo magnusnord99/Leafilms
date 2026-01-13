@@ -1,10 +1,18 @@
 import type { Config } from 'tailwindcss'
 
-const config: Config = {
+const config = {
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  safelist: [
+    'text-heading-3xl',
+    'text-heading-2xl',
+    'text-heading-xl',
+    'text-heading-lg',
+    'text-heading-md',
+    'text-heading-sm',
   ],
   theme: {
     extend: {
@@ -95,10 +103,12 @@ const config: Config = {
       // ═══════════════════════════════════════════════════
              fontSize: {
                // Heading-størrelser (større enn før)
-               'heading-xl': ['6.5rem', { lineHeight: '1', fontWeight: '900' }],      // 88px (fra 72px)
+               'heading-3xl': ['12rem', { lineHeight: '1', fontWeight: '900' }],      // 192px - størst
+               'heading-2xl': ['8rem', { lineHeight: '1', fontWeight: '900' }],      // 128px
+               'heading-xl': ['6.5rem', { lineHeight: '1', fontWeight: '900' }],      // 104px
                'heading-lg': ['3.5rem', { lineHeight: '1.1', fontWeight: '700' }],     // 56px (fra 48px)
                'heading-md': ['2.5rem', { lineHeight: '1.2', fontWeight: '600' }],     // 40px (fra 32px)
-               'heading-sm': ['1.75rem', { lineHeight: '1.3', fontWeight: '600' }],    // 28px (fra 24px)
+               'heading-sm': ['1.25rem', { lineHeight: '1.3', fontWeight: '600' }],    // 20px - mindre for h4
                 // Body-størrelser
                 'body-lg': ['1.125rem', { lineHeight: '1.6' }],  // 18px
                 'body': ['1rem', { lineHeight: '1.5' }],        // 16px
@@ -120,6 +130,24 @@ const config: Config = {
       borderRadius: {
         'card': '0.75rem',          // Standard kort-radius
         'button': '0.5rem',         // Standard knapp-radius
+      },
+      // ═══════════════════════════════════════════════════
+      // ANIMASJONER
+      // ═══════════════════════════════════════════════════
+      keyframes: {
+        'fade-in-up': {
+          '0%': {
+            opacity: '0',
+            transform: 'translateY(20px)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translateY(0)',
+          },
+        },
+      },
+      animation: {
+        'fade-in-up': 'fade-in-up 1s ease-out 0.2s forwards',
       },
     },
   },

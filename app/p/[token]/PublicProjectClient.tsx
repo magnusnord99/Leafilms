@@ -1,6 +1,6 @@
 'use client'
 
-import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, CollagePreset } from '@/lib/types'
+import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { useMemo } from 'react'
@@ -32,6 +32,8 @@ type PublicProjectClientProps = {
   sections: Section[]
   sectionImages: Record<string, Image[]>
   sectionImageData: Record<string, SectionImage[]>
+  sectionVideos?: Record<string, VideoLibrary[]>
+  sectionVideoData?: Record<string, SectionVideo[]>
   teamMembers: TeamMember[]
   caseStudies: CaseStudy[]
   collageImages: CollageImages
@@ -44,6 +46,8 @@ export function PublicProjectClient({
   sections,
   sectionImages,
   sectionImageData,
+  sectionVideos = {},
+  sectionVideoData = {},
   teamMembers,
   caseStudies,
   collageImages,
@@ -156,6 +160,8 @@ export function PublicProjectClient({
             editMode={false}
             sectionImages={sectionImages}
             sectionImageData={sectionImageData}
+            sectionVideos={sectionVideos}
+            sectionVideoData={sectionVideoData}
             editingImageSectionId={null}
             imagePosition={{}}
             getBackgroundStyle={getBackgroundStyle}

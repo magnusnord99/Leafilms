@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Section, CollagePreset, Image } from '@/lib/types'
-import { saveSectionImages } from '@/lib/services/imageService'
+import { Section, CollagePreset, Image, VideoLibrary, SectionVideo } from '@/lib/types'
+import { saveSectionImages, saveSectionVideos } from '@/lib/services/imageService'
 
 type UseSectionHandlersProps = {
   project: any
@@ -15,9 +15,16 @@ type UseSectionHandlersProps = {
   setSectionImages: (images: Record<string, Image[]> | ((prev: Record<string, Image[]>) => Record<string, Image[]>)) => void
   sectionImageData: Record<string, any[]>
   setSectionImageData: (data: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
+  sectionVideos: Record<string, VideoLibrary[]>
+  setSectionVideos: (videos: Record<string, VideoLibrary[]> | ((prev: Record<string, VideoLibrary[]>) => Record<string, VideoLibrary[]>)) => void
+  sectionVideoData: Record<string, SectionVideo[]>
+  setSectionVideoData: (data: Record<string, SectionVideo[]> | ((prev: Record<string, SectionVideo[]>) => Record<string, SectionVideo[]>)) => void
   imagePickerSectionId: string | null
   setImagePickerSectionId: (id: string | null) => void
+  videoPickerSectionId: string | null
+  setVideoPickerSectionId: (id: string | null) => void
   setShowImagePicker: (show: boolean) => void
+  setShowVideoPicker: (show: boolean) => void
   setShowCasePicker: (show: boolean) => void
   setShowTeamPicker: (show: boolean) => void
   editMode: boolean
@@ -40,9 +47,16 @@ export function useSectionHandlers({
   setSectionImages,
   sectionImageData,
   setSectionImageData,
+  sectionVideos,
+  setSectionVideos,
+  sectionVideoData,
+  setSectionVideoData,
   imagePickerSectionId,
   setImagePickerSectionId,
+  videoPickerSectionId,
+  setVideoPickerSectionId,
   setShowImagePicker,
+  setShowVideoPicker,
   setShowCasePicker,
   setShowTeamPicker,
   editMode,
@@ -291,6 +305,73 @@ export function useSectionHandlers({
     }
   }
 
+  const handleVideoSelect = async (videoIds: string[]) => {
+    if (!videoPickerSectionId) {
+      console.error('❌ No videoPickerSectionId set! Cannot save videos.')
+      return
+    }
+
+    try {
+      console.log('💾 [handleVideoSelect] Saving videos for section:', videoPickerSectionId, 'videoIds:', videoIds)
+      const result = await saveSectionVideos(videoPickerSectionId, videoIds)
+      console.log('✅ Save result:', result)
+      
+      if (!result.videos || result.videos.length === 0) {
+        console.warn('⚠️ No videos returned from saveSectionVideos')
+      }
+      
+      // Verifiser at videoene faktisk ble lagret i databasen
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('section_video_library')
+        .select('*')
+        .eq('section_id', videoPickerSectionId)
+        .order('order_index', { ascending: true })
+      
+      if (verifyError) {
+        console.error('❌ Error verifying saved videos:', verifyError)
+      } else {
+        console.log('✅ Verified saved videos in database:', verifyData)
+        if (!verifyData || verifyData.length === 0) {
+          console.error('❌ CRITICAL: Videos were not saved to database!')
+          alert('⚠️ Videoene ble ikke lagret i databasen. Prøv igjen.')
+          return
+        }
+      }
+      
+      setSectionVideos(prev => {
+        const updated = {
+          ...prev,
+          [videoPickerSectionId]: result.videos
+        }
+        console.log('✅ Updated sectionVideos state:', updated)
+        return updated
+      })
+      
+      setSectionVideoData(prev => {
+        const updated = {
+          ...prev,
+          [videoPickerSectionId]: result.sectionVideos
+        }
+        console.log('✅ Updated sectionVideoData state:', updated)
+        return updated
+      })
+      
+      // Refresh data fra databasen for å sikre at alt er synkronisert
+      if (refreshData) {
+        console.log('🔄 Refreshing data from database...')
+        await refreshData()
+        console.log('✅ Data refreshed successfully')
+      }
+    } catch (error) {
+      console.error('❌ Error saving videos:', error)
+      const errorMessage = error instanceof Error ? error.message : (typeof error === 'object' && error !== null && 'message' in error ? String(error.message) : 'Ukjent feil')
+      alert('❌ Kunne ikke lagre videoer: ' + errorMessage)
+    } finally {
+      setShowVideoPicker(false)
+      setVideoPickerSectionId(null)
+    }
+  }
+
   // Lagre cases til database
   const saveCaseSelection = async () => {
     const casesSection = sections.find(s => s.type === 'cases')
@@ -387,6 +468,7 @@ export function useSectionHandlers({
     toggleTeamSelection,
     saveTeamSelection,
     handleImageSelect,
+    handleVideoSelect,
     saveCaseSelection,
     handlePresetSelect
   }

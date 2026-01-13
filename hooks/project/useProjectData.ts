@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Project, Section, CaseStudy, TeamMember, Image, SectionImage } from '@/lib/types'
+import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, VideoLibrary, SectionVideo } from '@/lib/types'
 
 export function useProjectData(projectId: string) {
   const [loading, setLoading] = useState(true)
@@ -14,6 +14,8 @@ export function useProjectData(projectId: string) {
   const [selectedTeamMemberIds, setSelectedTeamMemberIds] = useState<string[]>([])
   const [sectionImages, setSectionImages] = useState<Record<string, Image[]>>({})
   const [sectionImageData, setSectionImageData] = useState<Record<string, SectionImage[]>>({})
+  const [sectionVideos, setSectionVideos] = useState<Record<string, VideoLibrary[]>>({})
+  const [sectionVideoData, setSectionVideoData] = useState<Record<string, SectionVideo[]>>({})
 
   async function fetchData() {
     try {
@@ -182,6 +184,47 @@ export function useProjectData(projectId: string) {
         console.log('Final sectionImageDataMap:', sectionImageDataMap)
         setSectionImages(imagesMap)
         setSectionImageData(sectionImageDataMap)
+
+        // Hent videoer for alle seksjoner (spesielt hero)
+        const videosMap: Record<string, VideoLibrary[]> = {}
+        const sectionVideoDataMap: Record<string, SectionVideo[]> = {}
+        for (const section of sectionsData || []) {
+          const { data: sectionVideosData, error: sectionVideosError } = await supabase
+            .from('section_video_library')
+            .select('*')
+            .eq('section_id', section.id)
+          
+          const sortedSectionVideosData = sectionVideosData?.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+
+          if (sectionVideosError) {
+            console.error(`Error fetching section videos for section ${section.id}:`, sectionVideosError)
+            continue
+          }
+
+          if (sortedSectionVideosData && sortedSectionVideosData.length > 0) {
+            sectionVideoDataMap[section.id] = sortedSectionVideosData as SectionVideo[]
+            
+            const videoIds = sortedSectionVideosData.map(sv => sv.video_id)
+            const { data: videosData, error: videosError } = await supabase
+              .from('video_library')
+              .select('*')
+              .in('id', videoIds)
+
+            if (videosError) {
+              console.error(`Error fetching videos for section ${section.id}:`, videosError)
+              continue
+            }
+
+            if (videosData) {
+              const sortedVideos = videoIds
+                .map(id => videosData.find(vid => vid.id === id))
+                .filter(Boolean) as VideoLibrary[]
+              videosMap[section.id] = sortedVideos
+            }
+          }
+        }
+        setSectionVideos(videosMap)
+        setSectionVideoData(sectionVideoDataMap)
       } catch (error) {
         console.error('Error fetching data:', error)
         alert('Kunne ikke hente prosjektet')
@@ -219,6 +262,10 @@ export function useProjectData(projectId: string) {
     setSectionImages,
     sectionImageData,
     setSectionImageData,
+    sectionVideos,
+    setSectionVideos,
+    sectionVideoData,
+    setSectionVideoData,
     refreshData: fetchData
   }
 }

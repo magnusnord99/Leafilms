@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createPublicClient } from '@/lib/supabase-server'
-import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, CollagePreset } from '@/lib/types'
+import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
 import { PublicProjectClient } from './PublicProjectClient'
 import { CollageImages } from '@/components/sections'
 
@@ -118,6 +118,8 @@ export default async function PublicProjectView({ params }: Props) {
   // Hent alle seksjonsbilder - samme metode som i edit-siden
   const sectionImages: Record<string, Image[]> = {}
   const sectionImageData: Record<string, SectionImage[]> = {}
+  const sectionVideos: Record<string, VideoLibrary[]> = {}
+  const sectionVideoData: Record<string, SectionVideo[]> = {}
   
   for (const section of sectionsList) {
     const { data: sectionImagesData, error: sectionImagesError } = await supabase
@@ -180,6 +182,33 @@ export default async function PublicProjectView({ params }: Props) {
       }
     } else {
       console.log(`[Public] No section images found for section ${section.id} (${section.type})`)
+    }
+
+    // Hent videoer for denne seksjonen
+    const { data: sectionVideosData, error: sectionVideosError } = await supabase
+      .from('section_video_library')
+      .select('*')
+      .eq('section_id', section.id)
+    
+    const sortedSectionVideosData = sectionVideosData?.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+
+    if (sectionVideosError) {
+      console.error(`[Public] Error fetching section videos for section ${section.id} (${section.type}):`, sectionVideosError)
+    } else if (sortedSectionVideosData && sortedSectionVideosData.length > 0) {
+      sectionVideoData[section.id] = sortedSectionVideosData as SectionVideo[]
+      
+      const videoIds = sortedSectionVideosData.map(sv => sv.video_id)
+      const { data: videosData, error: videosError } = await supabase
+        .from('video_library')
+        .select('*')
+        .in('id', videoIds)
+
+      if (!videosError && videosData) {
+        const sortedVideos = videoIds
+          .map(id => videosData.find(vid => vid.id === id))
+          .filter(Boolean) as VideoLibrary[]
+        sectionVideos[section.id] = sortedVideos
+      }
     }
   }
   
@@ -300,6 +329,8 @@ export default async function PublicProjectView({ params }: Props) {
       sections={sectionsList}
       sectionImages={sectionImages}
       sectionImageData={sectionImageData}
+      sectionVideos={sectionVideos}
+      sectionVideoData={sectionVideoData}
       teamMembers={teamMembers}
       caseStudies={caseStudies}
       collageImages={collageImages}

@@ -31,7 +31,7 @@ type SectionRendererProps = {
   conceptSectionRef: React.RefObject<HTMLDivElement | null>
   casesSectionProgress: number
   casesSectionRef: React.RefObject<HTMLDivElement | null>
-  getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
+  getBackgroundStyle: (sectionId: string, imageIndex?: number, options?: { forMobile?: boolean }) => React.CSSProperties
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: any) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>

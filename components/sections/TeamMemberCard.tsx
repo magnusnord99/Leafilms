@@ -1,25 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { TeamMember } from '@/lib/types'
-import { Heading, Text, Textarea } from '@/components/ui'
+import { Heading, Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
+import { PROJECT_ROLES, getRoleDescriptions } from '@/lib/projectRoles'
 
 type TeamMemberCardProps = {
   teamMember: TeamMember
   editMode: boolean
-  projectRole?: string | null // Prosjekt-spesifikk rolle/beskrivelse
-  onProjectRoleChange?: (role: string) => void // Callback for å oppdatere prosjekt-spesifikk rolle
+  projectRoles?: string[] | string | null // Valgte roller (eller enkeltverdi ved tilbakekompatibilitet)
+  onProjectRolesChange?: (roles: string[]) => void
 }
 
-export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRoleChange }: TeamMemberCardProps) {
+export function TeamMemberCard({ teamMember, editMode, projectRoles, onProjectRolesChange }: TeamMemberCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
-  const [editedRole, setEditedRole] = useState(projectRole || '')
 
-  // Oppdater editedRole når projectRole endres
-  useEffect(() => {
-    setEditedRole(projectRole || '')
-  }, [projectRole])
+  // Normaliser til array (tilbakekompatibilitet for gammel enkeltverdi)
+  const selectedIds = Array.isArray(projectRoles) 
+    ? projectRoles 
+    : (projectRoles ? [projectRoles] : [])
+
+  const displayText = getRoleDescriptions(selectedIds.length > 0 ? selectedIds : null)
   
   const profileImageUrl = teamMember.profile_image_path
     ? supabase.storage.from('assets').getPublicUrl(teamMember.profile_image_path).data.publicUrl
@@ -31,15 +33,8 @@ export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRol
       style={{ perspective: '1000px' }}
     >
       <div
-        onClick={() => {
-          if (!editMode) {
-            setIsFlipped(!isFlipped)
-          }
-        }}
-        className={`
-          relative w-full h-full transition-all duration-700
-          ${editMode ? 'cursor-default' : 'cursor-pointer hover:scale-105'}
-        `}
+        onClick={() => setIsFlipped(!isFlipped)}
+        className="relative w-full h-full transition-all duration-700 cursor-pointer hover:scale-105"
         style={{
           transformStyle: 'preserve-3d',
           transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
@@ -143,22 +138,43 @@ export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRol
             
             {/* Prosjekt-spesifikk rolle/beskrivelse */}
             {editMode ? (
-              <Textarea
-                value={editedRole}
-                onChange={(e) => {
-                  setEditedRole(e.target.value)
-                  if (onProjectRoleChange) {
-                    onProjectRoleChange(e.target.value)
-                  }
-                }}
-                placeholder="Beskriv hva medlemmet skal gjøre i dette prosjektet..."
-                className="w-full min-h-[120px] text-dark bg-white/50 border-dark/30 focus:bg-white focus:border-dark"
-                rows={4}
-                onClick={(e) => e.stopPropagation()}
-              />
+              <div className="w-full space-y-2" onClick={(e) => e.stopPropagation()}>
+                <label className="block text-xs font-medium text-dark/80 mb-2">
+                  Velg roller i prosjektet (flere mulig)
+                </label>
+                <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto">
+                  {PROJECT_ROLES.map((role) => {
+                    const isChecked = selectedIds.includes(role.id)
+                    return (
+                      <label
+                        key={role.id}
+                        className="flex items-start gap-2 cursor-pointer hover:bg-white/30 rounded px-2 py-1 -mx-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const next = isChecked
+                              ? selectedIds.filter(id => id !== role.id)
+                              : [...selectedIds, role.id]
+                            onProjectRolesChange?.(next)
+                          }}
+                          className="mt-1 rounded border-dark/30 text-dark focus:ring-dark/30"
+                        />
+                        <span className="text-sm text-dark">{role.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {displayText && (
+                  <p className="text-xs text-dark/70 mt-2 pt-2 border-t border-dark/20">
+                    {displayText}
+                  </p>
+                )}
+              </div>
             ) : (
               <>
-                {projectRole ? (
+                {displayText ? (
                   <Text
                     variant="small"
                     className="text-dark break-words"
@@ -167,7 +183,7 @@ export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRol
                       overflowWrap: 'break-word'
                     }}
                   >
-                    {projectRole}
+                    {displayText}
                   </Text>
                 ) : (
                   <Text variant="small" className="text-dark/70 italic">

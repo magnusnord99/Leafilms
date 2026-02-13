@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
 import { DeliverableGrid } from '@/components/project'
@@ -12,7 +13,7 @@ type DeliverablesSectionProps = {
   sectionImageData: Record<string, SectionImage[]>
   editingImageSectionId: string | null
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
-  getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
+  getBackgroundStyle: (sectionId: string, imageIndex?: number, options?: { forMobile?: boolean }) => React.CSSProperties
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
@@ -45,6 +46,14 @@ export function DeliverablesSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   return (
     <div className="w-full">
       <div className="mt-12 mb-8 mx-0 md:mx-0 lg:mx-0 xl:mx-0">
@@ -53,8 +62,8 @@ export function DeliverablesSection({
           className={`bg-gray-800 pt-12 pb-12 pr-12 min-h-[800px] flex flex-col items-start justify-between w-full relative ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
           }`}
-          style={sectionImages[section.id]?.[0] 
-            ? getBackgroundStyle(section.id, 0)
+          style={sectionImages[section.id]?.[0]
+            ? getBackgroundStyle(section.id, 0, { forMobile: isMobile })
             : {}
           }
         >

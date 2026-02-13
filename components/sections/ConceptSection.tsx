@@ -14,7 +14,7 @@ type ConceptSectionProps = {
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
   conceptSectionProgress: number
   conceptSectionRef: React.RefObject<HTMLDivElement | null>
-  getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
+  getBackgroundStyle: (sectionId: string, imageIndex?: number, options?: { forMobile?: boolean }) => React.CSSProperties
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
@@ -80,9 +80,9 @@ export function ConceptSection({
       ? 1.0 // Ingen zoom på mobil
       : baseZoom + (conceptSectionProgress * ZOOM_AMOUNT) // Legg til zoom basert på scroll (kun desktop)
   
-  // Hent base background style (uten å overstyre backgroundSize)
-  const backgroundStyle = sectionImages[section.id]?.[0] 
-    ? getBackgroundStyle(section.id, 0)
+  // Hent base background style (med mobil-tilpasset zoom)
+  const backgroundStyle = sectionImages[section.id]?.[0]
+    ? getBackgroundStyle(section.id, 0, { forMobile: isMobile })
     : {}
 
   return (

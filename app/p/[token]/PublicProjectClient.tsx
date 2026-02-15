@@ -93,32 +93,26 @@ export function PublicProjectClient({
     return titles[type] || type.toUpperCase()
   }
 
-  const getBackgroundStyle = (
-    sectionId: string,
-    imageIndex = 0,
-    options?: { forMobile?: boolean }
-  ): React.CSSProperties => {
+  const getBackgroundStyle = (sectionId: string, imageIndex = 0): React.CSSProperties => {
     const images = sectionImages[sectionId]
     const imageData = sectionImageData[sectionId]
-
+    
     if (!images || !images[imageIndex]) return {}
-
+    
     const image = images[imageIndex]
     const data = imageData?.[imageIndex]
-
+    
     const posX = data?.background_position_x ?? 50
     const posY = data?.background_position_y ?? 50
-    let zoom = data?.background_zoom
-
-    // På mobil: bruk alltid cover så bildet fyller hele rammen
-    if (options?.forMobile) {
-      zoom = null
-    }
-
-    const backgroundSize = zoom === null || zoom === undefined || zoom === 1.0
-      ? 'cover'
+    const zoom = data?.background_zoom
+    
+    // Håndter zoom: samme logikk som i useSectionImages hook
+    // zoom er lagret som desimal (1.0 = 100%, 1.2 = 120%, etc.)
+    // Hvis null eller 1.0, bruk 'cover' for å fylle hele containeren
+    const backgroundSize = zoom === null || zoom === undefined || zoom === 1.0 
+      ? 'cover' 
       : `${zoom * 100}%`
-
+    
     return {
       backgroundImage: `url(${getImageUrl(image.file_path)})`,
       backgroundSize: backgroundSize,

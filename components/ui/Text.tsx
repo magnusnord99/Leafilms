@@ -17,7 +17,7 @@ export function Text({
     body: { className: 'text-body text-dark', style: { fontSize: '1rem', lineHeight: '1.5' } },
     lead: { className: 'text-body-lg text-dark', style: { fontSize: '1.125rem', lineHeight: '1.6' } },
     small: { className: 'text-body-sm text-dark', style: { fontSize: '0.75rem', lineHeight: '1.5' } },
-    xs: { className: 'text-body-xs text-dark', style: { fontSize: '0.625rem', lineHeight: '1.4' } },
+    xs: { className: 'text-body-xs text-dark', style: { fontSize: '0.5rem', lineHeight: '1.4' } },
     muted: { className: 'text-body-sm text-dark opacity-60', style: { fontSize: '0.75rem', lineHeight: '1.5' } }
   }
 

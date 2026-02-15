@@ -28,34 +28,23 @@ export function useSectionImages(
   }, [editingImageSectionId, sectionImageData])
 
   // Hent bakgrunnsstil for et bilde basert på posisjon/zoom
-  // forMobile: på små skjermer reduseres zoom for å unngå over-cropping (forskjellig aspect ratio)
-  const getBackgroundStyle = (
-    sectionId: string,
-    imageIndex: number = 0,
-    options?: { forMobile?: boolean }
-  ) => {
+  const getBackgroundStyle = (sectionId: string, imageIndex: number = 0) => {
     const sectionImage = sectionImageData[sectionId]?.[imageIndex]
     const image = sectionImages[sectionId]?.[imageIndex]
-
+    
     if (!image) return {}
 
     const imageUrl = supabase.storage.from('assets').getPublicUrl(image.file_path).data.publicUrl
-
+    
     const currentPos = imagePosition[sectionId] || {
       x: sectionImage?.background_position_x ?? 50,
       y: sectionImage?.background_position_y ?? 50,
       zoom: sectionImage?.background_zoom ?? null
     }
 
-    let zoom = currentPos.zoom
-    // På mobil: bruk alltid cover så bildet fyller hele rammen
-    if (options?.forMobile) {
-      zoom = null
-    }
-
-    const backgroundSize = zoom === null || zoom === 1.0
-      ? 'cover'
-      : `${zoom * 100}%`
+    const backgroundSize = currentPos.zoom === null || currentPos.zoom === 1.0 
+      ? 'cover' 
+      : `${currentPos.zoom * 100}%`
 
     return {
       backgroundImage: `url(${imageUrl})`,

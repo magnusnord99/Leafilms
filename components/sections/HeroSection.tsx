@@ -16,7 +16,7 @@ type HeroSectionProps = {
   sectionVideoData?: Record<string, SectionVideo[]>
   editingImageSectionId: string | null
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
-  getBackgroundStyle: (sectionId: string, imageIndex?: number, options?: { forMobile?: boolean }) => React.CSSProperties
+  getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
   setImagePosition: React.Dispatch<React.SetStateAction<Record<string, { x: number; y: number; zoom: number | null }>>>
@@ -63,15 +63,7 @@ export function HeroSection({
 
   // State for fade-in animasjon
   const [isVisible, setIsVisible] = useState(false)
-
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
+  
   // State for scroll-basert størrelse
   const [scrollScale, setScrollScale] = useState(1)
   const headerRef = useRef<HTMLElement>(null)
@@ -177,7 +169,7 @@ export function HeroSection({
       {!hasVideo && hasImage && (
         <div 
           className="absolute inset-0 w-full h-full z-0 pointer-events-none"
-          style={getBackgroundStyle(section.id, 0, { forMobile: isMobile })}
+          style={getBackgroundStyle(section.id, 0)}
         />
       )}
 

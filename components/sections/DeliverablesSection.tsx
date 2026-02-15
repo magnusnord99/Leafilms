@@ -59,7 +59,7 @@ export function DeliverablesSection({
       <div className="mt-12 mb-8 mx-0 md:mx-0 lg:mx-0 xl:mx-0">
         <div 
           onClick={onImageClick}
-          className={`bg-gray-800 pt-12 pb-12 pr-12 min-h-[800px] flex flex-col items-start justify-between w-full relative ${
+          className={`bg-gray-800 pt-12 pb-12 pr-12 min-h-[800px] flex flex-col items-center md:items-start justify-between w-full relative ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
           }`}
           style={sectionImages[section.id]?.[0]
@@ -95,8 +95,8 @@ export function DeliverablesSection({
             />
           )}
           
-          <div className="mt-24 mb-8 w-full px-0 md:px-0">
-            <div className="bg-background-widget-dark p-4 md:p-8 w-full md:w-1/2 max-w-full">
+          <div className="mt-24 mb-8 w-full max-w-[min(480px,calc(100%-2rem))] md:max-w-none px-0 md:px-0 overflow-x-auto">
+            <div className="bg-background-widget-dark p-4 md:p-8 w-full md:w-fit md:max-w-[90vw] md:inline-block md:pr-4">
               <Heading 
                 as="h3" 
                 className="mb-4 break-words text-white"
@@ -119,7 +119,7 @@ export function DeliverablesSection({
               >
                 {section.content.text || 'Vi leverer et bredt spekter av innhold tilpasset ulike plattformer. Innholdet består av produktbilder i unike, naturlige omgivelser, actionbilder og dokumentarisk materiale som forteller en historie.'}
               </Text>
-              <div onClick={(e) => e.stopPropagation()} className="min-h-[150px] w-full overflow-x-hidden">
+              <div onClick={(e) => e.stopPropagation()} className="min-h-[150px] w-full">
                 <DeliverableGrid 
                   items={section.content.deliverableItems} 
                   editMode={editMode}

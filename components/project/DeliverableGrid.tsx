@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { DeliverableCard } from './DeliverableCard'
 
 export interface DeliverableItem {
@@ -19,8 +18,6 @@ interface DeliverableGridProps {
 }
 
 export function DeliverableGrid({ items, editMode = false, onItemsChange }: DeliverableGridProps) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-
   // Default items hvis ingen er gitt
   const defaultItems: DeliverableItem[] = [
     { 
@@ -47,18 +44,6 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
   ]
 
   const displayItems = items || defaultItems
-
-  const handleToggle = (id: string) => {
-    setExpandedIds(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
-      } else {
-        newSet.add(id)
-      }
-      return newSet
-    })
-  }
 
   const handleRemove = (id: string) => {
     if (!onItemsChange) return
@@ -88,7 +73,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
   }
 
   return (
-    <div className="grid grid-cols-2 md:flex md:flex-row gap-4 mt-8 items-start w-full">
+    <div className="grid grid-cols-2 md:flex md:flex-row md:flex-nowrap gap-4 mt-8 items-start w-full min-w-fit">
       {displayItems.map((item) => (
         <DeliverableCard
           key={item.id}
@@ -97,8 +82,6 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
           format={item.format}
           aspectRatio={item.aspectRatio}
           description={item.description}
-          isExpanded={expandedIds.has(item.id)}
-          onToggle={() => handleToggle(item.id)}
           onRemove={editMode && onItemsChange ? () => handleRemove(item.id) : undefined}
           onChange={editMode && onItemsChange ? (field, value) => handleFieldChange(item.id, field, value) : undefined}
           editMode={editMode}
@@ -116,7 +99,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
             bg-background-elevated/50 border-2 border-dashed border-gray-400
             p-4 flex flex-col items-center justify-center
             transition-all duration-300 cursor-pointer
-            w-full md:w-[100px] h-[120px] flex-shrink-0
+            w-full md:w-[100px] min-h-[160px] flex-shrink-0
             hover:bg-background-elevated hover:border-gray-500
           "
         >

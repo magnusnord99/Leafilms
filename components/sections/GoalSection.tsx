@@ -14,7 +14,7 @@ type GoalSectionProps = {
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
   goalSectionProgress: number
   goalSectionRef: React.RefObject<HTMLDivElement | null>
-  getBackgroundStyle: (sectionId: string, imageIndex?: number, options?: { forMobile?: boolean }) => React.CSSProperties
+  getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
@@ -84,8 +84,8 @@ export function GoalSection({
           editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-zinc-400 transition-colors' : ''
         }`}
         style={{
-          ...(sectionImages[section.id]?.[0]
-            ? getBackgroundStyle(section.id, 0, { forMobile: isMobile })
+          ...(sectionImages[section.id]?.[0] 
+            ? getBackgroundStyle(section.id, 0)
             : {}),
           transform: imageTransform,
           opacity: imageOpacity,

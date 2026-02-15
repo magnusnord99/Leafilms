@@ -79,13 +79,15 @@ export function TeamSection({
           {selectedTeamMembers.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {selectedTeamMembers.map((teamMember) => {
+                  // Hent prosjekt-spesifikk rolle fra section.content
                   const teamMemberRoles = section.content?.teamMemberRoles || {}
-                  const projectRoles = teamMemberRoles[teamMember.id] ?? null
+                  const projectRole = teamMemberRoles[teamMember.id] || null
                   
-                  const handleRolesChange = (roles: string[]) => {
+                  // Handler for å oppdatere prosjekt-spesifikk rolle
+                  const handleRoleChange = (role: string) => {
                     const updatedRoles = {
                       ...teamMemberRoles,
-                      [teamMember.id]: roles
+                      [teamMember.id]: role
                     }
                     updateSectionContent(section.id, 'teamMemberRoles', updatedRoles)
                   }
@@ -95,8 +97,8 @@ export function TeamSection({
                       <TeamMemberCard
                         teamMember={teamMember}
                         editMode={editMode}
-                        projectRoles={projectRoles}
-                        onProjectRolesChange={handleRolesChange}
+                        projectRole={projectRole}
+                        onProjectRoleChange={handleRoleChange}
                       />
                     </div>
                   )

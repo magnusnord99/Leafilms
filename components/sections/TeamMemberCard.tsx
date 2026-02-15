@@ -1,27 +1,100 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TeamMember } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
+import { PROJECT_ROLES, ROLE_ACTIONS } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
-import { PROJECT_ROLES, getRoleDescriptions } from '@/lib/projectRoles'
 
 type TeamMemberCardProps = {
   teamMember: TeamMember
   editMode: boolean
-  projectRoles?: string[] | string | null // Valgte roller (eller enkeltverdi ved tilbakekompatibilitet)
-  onProjectRolesChange?: (roles: string[]) => void
+  projectRole?: string | null // Prosjekt-spesifikk rolle/beskrivelse
+  onProjectRoleChange?: (role: string) => void // Callback for å oppdatere prosjekt-spesifikk rolle
 }
 
-export function TeamMemberCard({ teamMember, editMode, projectRoles, onProjectRolesChange }: TeamMemberCardProps) {
+/** Parser lagret prosjekt-rolle til valgte roller + eventuell egentekst */
+function parseProjectRole(text: string | null | undefined): { selected: Set<string>; custom: string } {
+  const str = typeof text === 'string' ? text : ''
+  if (!str.trim()) return { selected: new Set(), custom: '' }
+  const parts = str.split(/[,;/]/).map((p) => p.trim()).filter(Boolean)
+  const selected = new Set<string>()
+  const customParts: string[] = []
+  for (const part of parts) {
+    if ((PROJECT_ROLES as readonly string[]).includes(part)) {
+      selected.add(part)
+    } else {
+      customParts.push(part)
+    }
+  }
+  return { selected, custom: customParts.join(', ') }
+}
+
+/** Lager lagringsformat fra valgte roller og egentekst (kommaseparert, for parsing) */
+function buildRoleText(selected: Set<string>, custom: string): string {
+  const roleList = PROJECT_ROLES.filter((r) => selected.has(r))
+  const parts: string[] = [...roleList]
+  if (custom.trim()) parts.push(custom.trim())
+  return parts.join(', ')
+}
+
+/** Lager beskrivende setning til visning (forteller hva personen skal gjøre) */
+function buildRoleDescription(selected: Set<string>, custom: string, memberName: string): string {
+  const actions = PROJECT_ROLES
+    .filter((r) => selected.has(r))
+    .map((r) => ROLE_ACTIONS[r] || r.toLowerCase())
+  const customTrimmed = custom.trim()
+
+  if (actions.length === 0 && !customTrimmed) return ''
+  const firstName = memberName.split(' ')[0] || memberName
+
+  if (actions.length === 0) {
+    return customTrimmed
+  }
+
+  const actionsFormatted =
+    actions.length === 1
+      ? actions[0]
+      : actions.length === 2
+        ? `${actions[0]} og ${actions[1]}`
+        : `${actions.slice(0, -1).join(', ')} og ${actions[actions.length - 1]}`
+
+  const base = `I dette prosjektet vil ${firstName} stå for ${actionsFormatted}.`
+  return customTrimmed ? `${base} ${customTrimmed}` : base
+}
+
+export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRoleChange }: TeamMemberCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
+  const [customRole, setCustomRole] = useState('')
 
-  // Normaliser til array (tilbakekompatibilitet for gammel enkeltverdi)
-  const selectedIds = Array.isArray(projectRoles) 
-    ? projectRoles 
-    : (projectRoles ? [projectRoles] : [])
+  // Oppdater state når projectRole endres utenfra
+  useEffect(() => {
+    const { selected, custom } = parseProjectRole(projectRole || '')
+    setSelectedRoles(selected)
+    setCustomRole(custom)
+  }, [projectRole])
 
-  const displayText = getRoleDescriptions(selectedIds.length > 0 ? selectedIds : null)
+  const syncRoleToParent = useCallback(
+    (selected: Set<string>, custom: string) => {
+      const text = buildRoleText(selected, custom)
+      onProjectRoleChange?.(text)
+    },
+    [onProjectRoleChange]
+  )
+
+  const toggleRole = (role: string) => {
+    const next = new Set(selectedRoles)
+    if (next.has(role)) next.delete(role)
+    else next.add(role)
+    setSelectedRoles(next)
+    syncRoleToParent(next, customRole)
+  }
+
+  const handleCustomChange = (value: string) => {
+    setCustomRole(value)
+    syncRoleToParent(selectedRoles, value)
+  }
   
   const profileImageUrl = teamMember.profile_image_path
     ? supabase.storage.from('assets').getPublicUrl(teamMember.profile_image_path).data.publicUrl
@@ -33,8 +106,15 @@ export function TeamMemberCard({ teamMember, editMode, projectRoles, onProjectRo
       style={{ perspective: '1000px' }}
     >
       <div
-        onClick={() => setIsFlipped(!isFlipped)}
-        className="relative w-full h-full transition-all duration-700 cursor-pointer hover:scale-105"
+        onClick={() => {
+          if (!editMode) {
+            setIsFlipped(!isFlipped)
+          }
+        }}
+        className={`
+          relative w-full h-full transition-all duration-700
+          ${editMode ? 'cursor-default' : 'cursor-pointer hover:scale-105'}
+        `}
         style={{
           transformStyle: 'preserve-3d',
           transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
@@ -136,60 +216,65 @@ export function TeamMemberCard({ teamMember, editMode, projectRoles, onProjectRo
               {teamMember.role}
             </Text>
             
-            {/* Prosjekt-spesifikk rolle/beskrivelse */}
+            {/* Prosjekt-spesifikk rolle: checkbokser + valgfri egentekst */}
             {editMode ? (
-              <div className="w-full space-y-2" onClick={(e) => e.stopPropagation()}>
-                <label className="block text-xs font-medium text-dark/80 mb-2">
-                  Velg roller i prosjektet (flere mulig)
-                </label>
-                <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto">
-                  {PROJECT_ROLES.map((role) => {
-                    const isChecked = selectedIds.includes(role.id)
-                    return (
-                      <label
-                        key={role.id}
-                        className="flex items-start gap-2 cursor-pointer hover:bg-white/30 rounded px-2 py-1 -mx-2"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            const next = isChecked
-                              ? selectedIds.filter(id => id !== role.id)
-                              : [...selectedIds, role.id]
-                            onProjectRolesChange?.(next)
-                          }}
-                          className="mt-1 rounded border-dark/30 text-dark focus:ring-dark/30"
-                        />
-                        <span className="text-sm text-dark">{role.label}</span>
-                      </label>
-                    )
-                  })}
+              <div
+                className="w-full overflow-y-auto max-h-[200px] space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Text variant="xs" className="text-dark/80 mb-2 block text-left">
+                  Velg roller for dette prosjektet:
+                </Text>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {PROJECT_ROLES.map((role) => (
+                    <label
+                      key={role}
+                      className="flex items-center gap-2 cursor-pointer text-dark hover:text-dark/90"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedRoles.has(role)}
+                        onChange={() => toggleRole(role)}
+                        className="w-4 h-4 rounded border-dark/30 text-dark focus:ring-dark/20"
+                      />
+                      <Text variant="small" as="span">
+                        {role}
+                      </Text>
+                    </label>
+                  ))}
                 </div>
-                {displayText && (
-                  <p className="text-xs text-dark/70 mt-2 pt-2 border-t border-dark/20">
-                    {displayText}
-                  </p>
-                )}
+                <div className="pt-2">
+                  <input
+                    type="text"
+                    value={customRole}
+                    onChange={(e) => handleCustomChange(e.target.value)}
+                    placeholder="Annet (valgfritt)"
+                    className="w-full px-3 py-2 text-sm text-dark bg-white/50 border border-dark/20 rounded focus:outline-none focus:ring-2 focus:ring-dark/20"
+                  />
+                </div>
               </div>
             ) : (
               <>
-                {displayText ? (
-                  <Text
-                    variant="small"
-                    className="text-dark break-words"
-                    style={{ 
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word'
-                    }}
-                  >
-                    {displayText}
-                  </Text>
-                ) : (
-                  <Text variant="small" className="text-dark/70 italic">
-                    Ingen prosjekt-spesifikk rolle definert
-                  </Text>
-                )}
+                {(() => {
+                  const { selected, custom } = parseProjectRole(projectRole)
+                  const description = buildRoleDescription(selected, custom, teamMember.name)
+                  return description ? (
+                    <Text
+                      variant="small"
+                      className="text-dark break-words"
+                      style={{ 
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word'
+                      }}
+                    >
+                      {description}
+                    </Text>
+                  ) : (
+                    <Text variant="small" className="text-dark/70 italic">
+                      Ingen prosjekt-spesifikk rolle definert
+                    </Text>
+                  )
+                })()}
               </>
             )}
           </div>

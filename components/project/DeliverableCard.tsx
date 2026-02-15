@@ -1,6 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { Text } from '@/components/ui'
+
+/**
+ * Leveranse-kort med flip-effekt (som team-medlemskort).
+ * Klikk på kortet for å snu til baksiden med beskrivelse.
+ */
 
 interface DeliverableCardProps {
   title?: string
@@ -8,8 +14,6 @@ interface DeliverableCardProps {
   format?: string // "16:9", "9:16", "1:1", "2:30 min", etc.
   aspectRatio?: string // Beholder for bakoverkompatibilitet
   description?: string
-  isExpanded?: boolean
-  onToggle?: () => void
   onRemove?: () => void
   onChange?: (field: 'title' | 'quantity' | 'format' | 'description', value: string) => void
   editMode?: boolean
@@ -21,130 +25,149 @@ export function DeliverableCard({
   format,
   aspectRatio,
   description,
-  isExpanded = false,
-  onToggle,
   onRemove,
   onChange,
   editMode = false
 }: DeliverableCardProps) {
-  // Bruk format hvis tilgjengelig, ellers aspectRatio
+  const [isFlipped, setIsFlipped] = useState(false)
   const displayFormat = format || aspectRatio
 
-  const editableClass = editMode && onChange 
-    ? 'cursor-text hover:bg-black/5 rounded px-1 min-w-[40px] outline-none focus:bg-black/10' 
+  /* Styling for redigerbare felt i edit-modus */
+  const editableClass = editMode && onChange
+    ? 'cursor-text hover:bg-black/5 rounded px-1 min-w-[40px] outline-none focus:bg-black/10'
     : ''
 
   return (
+    // Kortstørrelse: endre w-full, md:w-[140px], h-[160px] for bredde/høyde
     <div
-      onClick={(e) => {
-        // Bare toggle hvis vi ikke er i edit mode eller klikket på et redigerbart felt
-        if (!editMode) {
-          e.stopPropagation()
-          onToggle?.()
-        }
-      }}
-      className={`
-        bg-background-elevated p-4 flex flex-col items-center justify-start
-        transition-all duration-300
-        w-full md:w-[120px] flex-shrink-0 relative
-        ${isExpanded ? 'min-h-[200px]' : 'h-[120px]'}
-        ${!editMode ? 'cursor-pointer hover:bg-background-surface md:hover:scale-105 md:hover:shadow-lg md:hover:-translate-y-1' : ''}
-      `}
+      className="relative w-full md:w-[140px] h-[160px] flex-shrink-0"
+      style={{ perspective: '1000px' }}
     >
-      {/* Fjern-knapp i edit mode */}
-      {editMode && onRemove && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs flex items-center justify-center transition"
-          title="Fjern leveranse"
-        >
-          ×
-        </button>
-      )}
-
-      {/* Expand/Collapse knapp i edit mode */}
-      {editMode && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggle?.()
-          }}
-          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-gray-300 hover:bg-gray-400 text-gray-700 text-xs flex items-center justify-center transition"
-          title={isExpanded ? 'Lukk' : 'Utvid'}
-        >
-          {isExpanded ? '−' : '+'}
-        </button>
-      )}
-      
-      {/* Tittel - redigerbar */}
-      <Text 
-        variant="small" 
-        className={`text-dark text-center mb-1 mt-4 font-semibold uppercase ${editableClass}`}
-        contentEditable={editMode && !!onChange}
-        suppressContentEditableWarning
-        onBlur={(e) => {
-          if (editMode && onChange) {
-            onChange('title', e.currentTarget.textContent || '')
-          }
+      {/* Flip-animasjon: duration-700 = hastighet, hover:scale-105 = zoom ved hover */}
+      <div
+        onClick={() => setIsFlipped(!isFlipped)}
+        className="relative w-full h-full transition-all duration-700 cursor-pointer hover:scale-105"
+        style={{
+          transformStyle: 'preserve-3d',
+          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
         }}
-        onClick={(e) => editMode && e.stopPropagation()}
       >
-        {title}
-      </Text>
-
-      {/* Antall - redigerbar */}
-      <Text 
-        variant="muted" 
-        className={`text-dark text-center text-xs ${editableClass}`}
-        contentEditable={editMode && !!onChange}
-        suppressContentEditableWarning
-        onBlur={(e) => {
-          if (editMode && onChange) {
-            onChange('quantity', e.currentTarget.textContent || '')
-          }
-        }}
-        onClick={(e) => editMode && e.stopPropagation()}
-      >
-        {quantity || (editMode ? 'Antall' : '')}
-      </Text>
-
-      {/* Format - redigerbar */}
-      <Text 
-        variant="muted" 
-        className={`text-dark/60 text-center text-xs ${editableClass}`}
-        contentEditable={editMode && !!onChange}
-        suppressContentEditableWarning
-        onBlur={(e) => {
-          if (editMode && onChange) {
-            onChange('format', e.currentTarget.textContent || '')
-          }
-        }}
-        onClick={(e) => editMode && e.stopPropagation()}
-      >
-        {displayFormat || (editMode ? 'Format' : '')}
-      </Text>
-
-      {/* Beskrivelse - redigerbar, vises når ekspandert */}
-      {(isExpanded || editMode) && (
-        <Text 
-          variant="small" 
-          className={`text-dark text-center mt-2 px-2 ${editableClass} ${!isExpanded && editMode ? 'hidden' : ''}`}
-          contentEditable={editMode && !!onChange && isExpanded}
-          suppressContentEditableWarning
-          onBlur={(e) => {
-            if (editMode && onChange) {
-              onChange('description', e.currentTarget.textContent || '')
-            }
-          }}
-          onClick={(e) => editMode && e.stopPropagation()}
+        {/* ═══ FORSIDE ═══ 
+            Farge: bg-background-widget-red (se globals.css for andre farger)
+            Padding: p-4 (16px) – endre for mer/mindre luft */}
+        <div
+          className="absolute inset-0 w-full h-full bg-background-widget-red rounded-lg p-4 shadow-lg overflow-hidden"
+          style={{ backfaceVisibility: 'hidden' }}
         >
-          {description || (editMode && isExpanded ? 'Klikk for å legge til beskrivelse...' : '')}
-        </Text>
-      )}
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            {/* Fjern-knapp: vises kun i edit-modus */}
+            {editMode && onRemove && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemove()
+                }}
+                className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs flex items-center justify-center transition"
+                title="Fjern leveranse"
+              >
+                ×
+              </button>
+            )}
+
+            {/* Tittel: line-clamp-2 = max 2 linjer, variant="small" = fontstørrelse */}
+            <Text
+              variant="small"
+              className={`text-dark mb-1 font-semibold uppercase line-clamp-2 break-words ${editableClass}`}
+              contentEditable={editMode && !!onChange}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode && onChange) {
+                  onChange('title', e.currentTarget.textContent || '')
+                }
+              }}
+              onClick={(e) => editMode && e.stopPropagation()}
+            >
+              {title}
+            </Text>
+
+            {/* Antall: f.eks. "1 stk", "10 stk" */}
+            <Text
+              variant="muted"
+              className={`text-dark text-center text-xs ${editableClass}`}
+              contentEditable={editMode && !!onChange}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode && onChange) {
+                  onChange('quantity', e.currentTarget.textContent || '')
+                }
+              }}
+              onClick={(e) => editMode && e.stopPropagation()}
+            >
+              {quantity || (editMode ? 'Antall' : '')}
+            </Text>
+
+            {/* Format: f.eks. "9:16, 30 sek", "1:1" */}
+            <Text
+              variant="muted"
+              className={`text-dark/60 text-center text-xs break-words ${editableClass}`}
+              contentEditable={editMode && !!onChange}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode && onChange) {
+                  onChange('format', e.currentTarget.textContent || '')
+                }
+              }}
+              onClick={(e) => editMode && e.stopPropagation()}
+            >
+              {displayFormat || (editMode ? 'Format' : '')}
+            </Text>
+          </div>
+        </div>
+
+        {/* ═══ BAKSIDE ═══
+            Farge: bg-background-widget-red-hover (mørkere variant)
+            Her vises beskrivelsen */}
+        <div
+          className="absolute inset-0 w-full h-full bg-background-widget-red-hover rounded-lg p-4 shadow-lg overflow-hidden"
+          style={{
+            backfaceVisibility: 'hidden',
+            transform: 'rotateY(180deg)'
+          }}
+        >
+          <div className="flex flex-col items-center justify-center h-full text-center overflow-y-auto [font-size:0.6rem]">
+            <Text
+              variant="xs"
+              className="text-dark font-semibold uppercase mb-2 break-words"
+              style={{ fontSize: '0.6rem' }}
+            >
+              {title}
+            </Text>
+
+            {/* Beskrivelse: textarea i edit-modus, tekst i visningsmodus. 'Ingen beskrivelse' = fallback når tom */}
+            {editMode ? (
+              <textarea
+                value={description || ''}
+                onChange={(e) => onChange?.('description', e.target.value)}
+                placeholder="Beskriv leveransen..."
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex-1 min-h-[80px] text-dark bg-white/50 border border-dark/20 rounded px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-dark/20"
+              />
+            ) : (
+              <Text
+                variant="xs"
+                className="text-dark break-words"
+                style={{
+                  fontSize: '0.6rem',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                }}
+              >
+                {description || 'Ingen beskrivelse'}
+              </Text>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
-

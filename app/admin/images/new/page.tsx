@@ -9,7 +9,6 @@ export default function NewImage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -18,7 +17,7 @@ export default function NewImage() {
     tags: ''
   })
   const [imageFiles, setImageFiles] = useState<File[]>([])
-  const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: any; analyzing: boolean }>>([])
+  const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: any; analyzing: boolean; analysisError?: string }>>([])
   const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number | null>(null)
 
   // Kategorier med underkategorier
@@ -67,63 +66,140 @@ export default function NewImage() {
     setImageFiles(prev => [...prev, ...validFiles])
     setImagePreviews(prev => [...prev, ...newPreviews])
 
-    // Start analyse for alle nye bilder en etter en
-    validFiles.forEach((file, index) => {
-      const previewIndex = imagePreviews.length + index
-      setTimeout(() => {
-        analyzeImage(file, newPreviews[index].preview, previewIndex)
-      }, index * 500) // Delay hver analyse med 500ms for å unngå rate limiting
+    // Vent på at React har oppdatert state, så analyser bilder én om gangen
+    const startIndex = imagePreviews.length
+    const filesToAnalyze = [...validFiles]
+    const previewsToUse = [...newPreviews]
+    setTimeout(async () => {
+      for (let i = 0; i < filesToAnalyze.length; i++) {
+        const previewIndex = startIndex + i
+        await analyzeImage(filesToAnalyze[i], previewsToUse[i].preview, previewIndex)
+      }
+    }, 0)
+  }
+
+  /** Hent base64-data for API – komprimerer store bilder, FileReader for små */
+  async function getImageBase64(file: File): Promise<string> {
+    // Under 800KB: bruk FileReader (raskere, støtter alle formater)
+    if (file.size < 800 * 1024) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Kunne ikke lese bilde'))
+        reader.readAsDataURL(file)
+      })
+    }
+    // Store bilder: komprimer via canvas, fallback til FileReader hvis canvas feiler
+    try {
+      return await compressImageForAnalysis(file)
+    } catch {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Kunne ikke lese bilde'))
+        reader.readAsDataURL(file)
+      })
+    }
+  }
+
+  /** Komprimer bilde via canvas (max 1024px, JPEG 0.8) – fallback for store filer */
+  async function compressImageForAnalysis(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const blobUrl = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(blobUrl)
+        const MAX_SIZE = 1024
+        let w = img.width
+        let h = img.height
+        if (w > MAX_SIZE || h > MAX_SIZE) {
+          if (w > h) {
+            h = (h * MAX_SIZE) / w
+            w = MAX_SIZE
+          } else {
+            w = (w * MAX_SIZE) / h
+            h = MAX_SIZE
+          }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Kunne ikke lage canvas'))
+          return
+        }
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+        resolve(dataUrl)
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(blobUrl)
+        reject(new Error('Kunne ikke laste bilde'))
+      }
+      img.src = blobUrl
     })
   }
 
-  async function analyzeImage(file: File, previewUrl: string, previewIndex: number) {
-    try {
-      // Oppdater analyzing status for dette bildet
+  async function analyzeImage(file: File, _previewUrl: string, previewIndex: number) {
+    const updateAnalyzing = (analyzing: boolean, analysis?: any, error?: string) => {
       setImagePreviews(prev => {
         const updated = [...prev]
-        updated[previewIndex] = { ...updated[previewIndex], analyzing: true }
+        if (updated[previewIndex]) {
+          updated[previewIndex] = {
+            ...updated[previewIndex],
+            analyzing,
+            analysis: analysis !== undefined ? analysis : updated[previewIndex].analysis,
+            analysisError: error
+          }
+        }
         return updated
       })
-      
-      // Konverter bilde til base64 for å sende til API
-      const reader = new FileReader()
-      reader.onloadend = async () => {
-        const base64Image = reader.result as string
-        
-        // Kall AI-analyse API
-        const response = await fetch('/api/analyze-image', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            imageUrl: base64Image
-          })
-        })
+    }
 
-        if (!response.ok) {
-          throw new Error('Kunne ikke analysere bilde')
-        }
+    try {
+      updateAnalyzing(true)
+      const base64Image = await getImageBase64(file)
 
-        const analysis = await response.json()
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 25000)
+      const response = await fetch('/api/analyze-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: base64Image }),
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
 
-        // Lagre analyseresultatet for dette bildet
-        setImagePreviews(prev => {
-          const updated = [...prev]
-          updated[previewIndex] = { ...updated[previewIndex], analysis, analyzing: false }
-          return updated
-        })
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errMsg = data?.error || `Feil: ${response.status}`
+        updateAnalyzing(false, undefined, errMsg)
+        console.error('Analyze API error:', errMsg)
+        return
       }
 
-      reader.readAsDataURL(file)
+      updateAnalyzing(false, data)
+
+      // Fyll inn skjema med AI-forslag (særlig ved ett bilde)
+      if (data && previewIndex === 0) {
+        setFormData(prev => ({
+          ...prev,
+          title: data.title || prev.title,
+          description: data.description || prev.description,
+          category: data.category && Object.keys(categories).includes(data.category) ? data.category : prev.category,
+          subcategory: data.subcategory || prev.subcategory,
+          tags: Array.isArray(data.tags) ? data.tags.join(', ') : (data.tags || prev.tags)
+        }))
+      }
     } catch (error) {
       console.error('Error analyzing image:', error)
-      // Oppdater status til ikke-analyzing hvis det feiler
-      setImagePreviews(prev => {
-        const updated = [...prev]
-        updated[previewIndex] = { ...updated[previewIndex], analyzing: false }
-        return updated
-      })
+      let errMsg = 'Kunne ikke analysere bilde'
+      if (error instanceof Error) {
+        errMsg = error.name === 'AbortError' ? 'Tidsavbrutt – prøv igjen eller sjekk internettforbindelsen' : error.message
+      }
+      updateAnalyzing(false, undefined, errMsg)
     }
   }
 
@@ -275,7 +351,7 @@ export default function NewImage() {
             <label className="block mb-4">
               <div className="flex items-center justify-between mb-2">
                 <Text variant="body">Bilde *</Text>
-                {analyzing && (
+                {imagePreviews.some(p => p.analyzing) && (
                   <Text variant="small" className="text-blue-400">
                     ✨ AI analyserer bildet...
                   </Text>
@@ -314,9 +390,20 @@ export default function NewImage() {
                                 </Text>
                               </div>
                             )}
-                            {preview.analysis && !preview.analyzing && (
+                            {preview.analysis && !preview.analyzing && !preview.analysisError && (
                               <div className="absolute top-1 right-1 bg-green-500 rounded-full w-4 h-4 flex items-center justify-center">
                                 <span className="text-white text-xs">✓</span>
+                              </div>
+                            )}
+                            {preview.analysisError && !preview.analyzing && (
+                              <div className="absolute bottom-8 left-1 right-1">
+                                <button
+                                  type="button"
+                                  onClick={() => analyzeImage(preview.file, preview.preview, index)}
+                                  className="w-full py-1 bg-amber-600 hover:bg-amber-500 rounded text-xs"
+                                >
+                                  ✨ Prøv AI-analysen igjen
+                                </button>
                               </div>
                             )}
                             <button

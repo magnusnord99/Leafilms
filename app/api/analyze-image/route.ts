@@ -25,14 +25,25 @@ const categories = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl } = await req.json()
+    let body: { imageUrl?: string }
+    try {
+      body = await req.json()
+    } catch {
+      return Response.json({ error: 'Ugyldig JSON i forespørsel' }, { status: 400 })
+    }
 
-    if (!imageUrl) {
-      return Response.json({ error: 'Mangler bilde-URL' }, { status: 400 })
+    const { imageUrl } = body
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return Response.json({ error: 'Mangler bilde-URL (base64 data URL)' }, { status: 400 })
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      return Response.json({ error: 'OpenAI API-nøkkel ikke konfigurert' }, { status: 500 })
+      console.error('[analyze-image] OPENAI_API_KEY mangler')
+      return Response.json(
+        { error: 'OpenAI API-nøkkel ikke konfigurert. Legg til OPENAI_API_KEY i miljøvariablene.' },
+        { status: 500 }
+      )
     }
 
     // Analyser bildet med OpenAI Vision API

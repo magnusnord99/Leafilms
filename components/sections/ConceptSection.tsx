@@ -87,10 +87,10 @@ export function ConceptSection({
 
   return (
     <div ref={conceptSectionRef} className="w-full">
-      <div className="max-w-7xl mx-auto mt-0 mb-8 mx-6">
+      <div className="max-w-7xl mx-auto mt-0 mb-8 mx-0 md:mx-6">
         <div 
           onClick={onImageClick}
-          className={`bg-gray-800 p-12 min-h-[800px] flex flex-col items-center justify-center w-full relative overflow-hidden ${
+          className={`bg-gray-800 p-4 md:p-12 min-h-[800px] flex flex-col items-center justify-center w-full relative overflow-hidden ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
           }`}
           style={{

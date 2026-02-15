@@ -56,10 +56,10 @@ export function DeliverablesSection({
 
   return (
     <div className="w-full">
-      <div className="mt-12 mb-8 mx-0 md:mx-0 lg:mx-0 xl:mx-0">
+      <div className="mt-12 mb-8 mx-0">
         <div 
           onClick={onImageClick}
-          className={`bg-gray-800 pt-12 pb-12 pr-12 min-h-[800px] flex flex-col items-center md:items-start justify-between w-full relative ${
+          className={`bg-gray-800 pt-12 pb-12 px-4 md:pl-12 md:pr-12 min-h-[800px] flex flex-col items-center md:items-start justify-between w-full relative overflow-hidden ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
           }`}
           style={sectionImages[section.id]?.[0]

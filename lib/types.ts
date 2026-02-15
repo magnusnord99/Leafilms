@@ -52,7 +52,7 @@ export type Contract = {
 export type Section = {
   id: string
   project_id: string
-  type: 'hero' | 'goal' | 'concept' | 'cases' | 'moodboard' | 'timeline' | 'deliverables' | 'contact' | 'team' | 'example_work' | 'quote'
+  type: 'hero' | 'goal' | 'concept' | 'cases' | 'moodboard' | 'timeline' | 'deliverables' | 'contact' | 'team' | 'example_work' | 'quote' | 'full_image'
   content: Record<string, any>
   visible: boolean
   order_index: number

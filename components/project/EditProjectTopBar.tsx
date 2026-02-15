@@ -18,6 +18,7 @@ interface EditProjectTopBarProps {
   onSave: () => void
   onPublish: () => void
   onAddQuoteSection: () => void
+  onAddFullImageSection?: () => void
 }
 
 export function EditProjectTopBar({
@@ -33,6 +34,7 @@ export function EditProjectTopBar({
   onSave,
   onPublish,
   onAddQuoteSection,
+  onAddFullImageSection,
 }: EditProjectTopBarProps) {
   const router = useRouter()
 
@@ -83,6 +85,16 @@ export function EditProjectTopBar({
               📊 Se statistikk
             </Button>
           </Link>
+          {/* Legg til bildeseksjon */}
+          {editMode && onAddFullImageSection && (
+            <Button
+              onClick={onAddFullImageSection}
+              variant="secondary"
+              size="sm"
+            >
+              + Legg til bildeseksjon
+            </Button>
+          )}
           {/* Legg til Pristilbud-seksjon */}
           {editMode && !sections.find(s => s.type === 'quote') && (
             <Button

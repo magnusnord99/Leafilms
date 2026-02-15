@@ -15,6 +15,7 @@ import {
   TeamSection,
   ExampleWorkSection,
   QuoteSection,
+  FullImageSection,
   CollageImages
 } from '@/components/sections'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
@@ -88,7 +89,8 @@ export function PublicProjectClient({
       contact: 'KONTAKT',
       team: 'TEAM',
       example_work: 'EKSEMPELARBEID',
-      quote: 'PRISTILBUD'
+      quote: 'PRISTILBUD',
+      full_image: 'BILDE'
     }
     return titles[type] || type.toUpperCase()
   }
@@ -203,9 +205,9 @@ export function PublicProjectClient({
               <section
                 key={section.id}
                 data-section-id={section.id}
-                className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' ? 'bg-transparent' : 'bg-background'} relative`}
+                className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative`}
               >
-                <div className={section.type === 'team' || section.type === 'concept' || section.type === 'deliverables' || section.type === 'example_work' ? 'w-full' : 'max-w-7xl mx-auto'}>
+                <div className={section.type === 'team' || section.type === 'concept' || section.type === 'deliverables' || section.type === 'example_work' || section.type === 'full_image' ? 'w-full' : 'max-w-7xl mx-auto'}>
                   {/* Concept Section */}
                   {section.type === 'concept' && (
                     <ConceptSection
@@ -327,6 +329,24 @@ export function PublicProjectClient({
                       updateSectionContent={noop}
                       onTeamPickerOpen={noop}
                       onGalleryImageClick={noop}
+                    />
+                  )}
+
+                  {/* Full Image Section */}
+                  {section.type === 'full_image' && (
+                    <FullImageSection
+                      section={section}
+                      editMode={false}
+                      sectionImages={sectionImages}
+                      sectionImageData={sectionImageData}
+                      editingImageSectionId={null}
+                      imagePosition={{}}
+                      getBackgroundStyle={getBackgroundStyle}
+                      saveBackgroundPosition={noopAsync}
+                      setImagePosition={noop}
+                      onImageClick={noop}
+                      onEditPositionClick={noopEvent}
+                      onImagePickerOpen={noop}
                     />
                   )}
 

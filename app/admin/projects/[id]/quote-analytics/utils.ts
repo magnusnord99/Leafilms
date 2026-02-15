@@ -12,7 +12,8 @@ export const sectionTypeNames: Record<string, string> = {
   contact: 'Kontakt',
   team: 'Team',
   example_work: 'Eksempelarbeid',
-  quote: 'Pristilbud'
+  quote: 'Pristilbud',
+  full_image: 'Bildeseksjon'
 }
 
 // Hjelpefunksjon for å formatere seksjonsnavn

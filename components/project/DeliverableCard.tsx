@@ -135,13 +135,7 @@ export function DeliverableCard({
           }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center overflow-y-auto [font-size:0.6rem]">
-            <Text
-              variant="xs"
-              className="text-dark font-semibold uppercase mb-2 break-words"
-              style={{ fontSize: '0.6rem' }}
-            >
-              {title}
-            </Text>
+            
 
             {/* Beskrivelse: textarea i edit-modus, tekst i visningsmodus. 'Ingen beskrivelse' = fallback når tom */}
             {editMode ? (
@@ -157,7 +151,7 @@ export function DeliverableCard({
                 variant="xs"
                 className="text-dark break-words"
                 style={{
-                  fontSize: '0.6rem',
+                  fontSize: '0.8rem',
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word'
                 }}

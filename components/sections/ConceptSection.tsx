@@ -87,7 +87,7 @@ export function ConceptSection({
 
   return (
     <div ref={conceptSectionRef} className="w-full">
-      <div className="max-w-7xl mx-auto mt-0 mb-8 mx-0 md:mx-6">
+      <div className="max-w-7xl mx-auto mt-0 mb-8 px-4 md:px-6">
         <div 
           onClick={onImageClick}
           className={`bg-gray-800 p-4 md:p-12 min-h-[800px] flex flex-col items-center justify-center w-full relative overflow-hidden ${
@@ -130,8 +130,8 @@ export function ConceptSection({
             />
           )}
           
-          <div className="m-8 w-full max-w-2xl">
-            <div className="bg-background-widget p-8 inline-block shadow-xl">
+          <div className="m-8 w-full max-w-2xl flex flex-col items-center">
+            <div className="bg-background-widget p-8 w-full max-w-2xl shadow-xl">
               <Heading 
                 as="h3" 
                 className="mb-4 break-words"

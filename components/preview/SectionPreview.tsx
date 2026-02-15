@@ -16,7 +16,8 @@ export function SectionPreview({ section, index, caseStudies = [] }: SectionPrev
       moodboard: 'Moodboard',
       timeline: 'Tidslinje',
       deliverables: 'Leveranser',
-      contact: 'Kontakt'
+      contact: 'Kontakt',
+      full_image: 'Bildeseksjon'
     }
     return titles[type] || type
   }

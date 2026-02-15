@@ -161,6 +161,7 @@ export default function EditProject({ params }: Props) {
   const {
     updateSection,
     updateSectionContent,
+    addFullImageSection,
     addQuoteSection,
     handleMoveSection,
     toggleCaseSelection,
@@ -221,7 +222,8 @@ export default function EditProject({ params }: Props) {
       contact: 'Kontakt',
       team: 'Team',
       example_work: 'Eksempelarbeid',
-      quote: 'Pristilbud'
+      quote: 'Pristilbud',
+      full_image: 'Bildeseksjon'
     }
     return titles[type] || type
   }
@@ -268,6 +270,7 @@ export default function EditProject({ params }: Props) {
         onMobilePreviewToggle={() => setShowMobilePreview(!showMobilePreview)}
         onSave={() => handleSave(true)}
         onPublish={togglePublish}
+        onAddFullImageSection={addFullImageSection}
         onAddQuoteSection={addQuoteSection}
       />
 

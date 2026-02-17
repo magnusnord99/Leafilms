@@ -18,6 +18,8 @@ export type Project = {
   client_name: string | null // Deprecated - bruk customer_id
   customer_id: string | null
   status: 'draft' | 'published' | 'archived'
+  parent_project_id?: string | null // Referanse til V1 (null for første versjon)
+  version_number?: number // 1, 2, 3...
   created_at: string
   updated_at: string
 }

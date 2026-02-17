@@ -73,6 +73,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
   }
 
   return (
+    <div className="w-full">
     <div className="grid grid-cols-2 md:flex md:flex-row md:flex-nowrap gap-4 mt-8 items-start w-full min-w-fit">
       {displayItems.map((item) => (
         <DeliverableCard
@@ -107,6 +108,10 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
           <span className="text-xs text-gray-500 mt-1">Legg til</span>
         </button>
       )}
+    </div>
+    <p className="text-center text-white/70 text-sm mt-4">
+      Trykk på kortene for mer info
+    </p>
     </div>
   )
 }

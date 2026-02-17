@@ -55,6 +55,7 @@ export default function EditProject({ params }: Props) {
   const [selectedPreset, setSelectedPreset] = useState<CollagePreset | null>(null)
   const [showPresetPicker, setShowPresetPicker] = useState(false)
   const [collageImagePosition, setCollageImagePosition] = useState<string | null>(null)
+  const [duplicating, setDuplicating] = useState(false)
 
   // Hooks
   const {
@@ -147,6 +148,22 @@ export default function EditProject({ params }: Props) {
     setShareLink,
     id
   )
+
+  const handleDuplicateVersion = async () => {
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/projects/${id}/duplicate`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Kunne ikke opprette ny versjon')
+      router.push(`/admin/projects/${data.project.id}/edit`)
+      router.refresh()
+    } catch (err) {
+      console.error('Duplicate error:', err)
+      alert(err instanceof Error ? err.message : 'Kunne ikke opprette ny versjon')
+    } finally {
+      setDuplicating(false)
+    }
+  }
 
   // Use collage images hook
   useCollageImages({
@@ -272,6 +289,8 @@ export default function EditProject({ params }: Props) {
         onPublish={togglePublish}
         onAddFullImageSection={addFullImageSection}
         onAddQuoteSection={addQuoteSection}
+        onDuplicateVersion={handleDuplicateVersion}
+        duplicating={duplicating}
       />
 
       {/* Inline Editing Layout */}

@@ -19,6 +19,8 @@ interface EditProjectTopBarProps {
   onPublish: () => void
   onAddQuoteSection: () => void
   onAddFullImageSection?: () => void
+  onDuplicateVersion?: () => void
+  duplicating?: boolean
 }
 
 export function EditProjectTopBar({
@@ -35,6 +37,8 @@ export function EditProjectTopBar({
   onPublish,
   onAddQuoteSection,
   onAddFullImageSection,
+  onDuplicateVersion,
+  duplicating = false,
 }: EditProjectTopBarProps) {
   const router = useRouter()
 
@@ -85,6 +89,17 @@ export function EditProjectTopBar({
               📊 Se statistikk
             </Button>
           </Link>
+          {/* Opprett ny versjon */}
+          {onDuplicateVersion && (
+            <Button
+              onClick={onDuplicateVersion}
+              disabled={duplicating}
+              variant="secondary"
+              size="sm"
+            >
+              {duplicating ? 'Oppretter...' : '📋 Opprett ny versjon'}
+            </Button>
+          )}
           {/* Legg til bildeseksjon */}
           {editMode && onAddFullImageSection && (
             <Button

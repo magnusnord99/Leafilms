@@ -19,6 +19,18 @@ interface DeliverableCardProps {
   editMode?: boolean
 }
 
+/** Avgjør om leveransen er video eller bilde basert på tittel og format */
+function getDeliverableType(title: string, format: string): 'video' | 'image' {
+  const t = (title || '').toLowerCase()
+  const f = (format || '').toLowerCase()
+  const videoKeywords = ['film', 'video', 'cutdown', 'reklame', 'spot', 'klipp', 'redigering', 'teaser', 'reel']
+  const imageKeywords = ['bilde', 'bilder', 'foto', 'produktbilde', 'portrett']
+  if (videoKeywords.some(kw => t.includes(kw))) return 'video'
+  if (imageKeywords.some(kw => t.includes(kw))) return 'image'
+  if (/\d+\s*(min|sek)/.test(f) || f.includes('min') || f.includes('sek')) return 'video'
+  return 'image'
+}
+
 export function DeliverableCard({
   title = 'LEVERANSE',
   quantity,
@@ -31,6 +43,7 @@ export function DeliverableCard({
 }: DeliverableCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
   const displayFormat = format || aspectRatio
+  const deliverableType = getDeliverableType(title, displayFormat || '')
 
   /* Styling for redigerbare felt i edit-modus */
   const editableClass = editMode && onChange
@@ -60,6 +73,20 @@ export function DeliverableCard({
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center">
+            {/* Type-ikon: video eller bilde */}
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70" title={deliverableType === 'video' ? 'Video' : 'Bilde'}>
+              {deliverableType === 'video' ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              )}
+            </div>
             {/* Fjern-knapp: vises kun i edit-modus */}
             {editMode && onRemove && (
               <button

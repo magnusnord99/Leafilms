@@ -206,19 +206,18 @@ function NewProjectContent() {
 
       if (projectError) throw projectError
 
-      // Opprett standard-seksjoner (full_image mellom timeline og team)
+      // Opprett standard-seksjoner
       const sections = [
         { type: 'hero', order_index: 1, visible: true },
         { type: 'concept', order_index: 2, visible: true },
         { type: 'goal', order_index: 3, visible: true },
         { type: 'deliverables', order_index: 4, visible: true },
+        { type: 'example_work', order_index: 8, visible: true },
+        { type: 'cases', order_index: 7, visible: true },
+        { type: 'team', order_index: 6, visible: true },
+        { type: 'moodboard', order_index: 9, visible: false },
         { type: 'timeline', order_index: 5, visible: true },
-        { type: 'full_image', order_index: 6, visible: true },
-        { type: 'team', order_index: 7, visible: true },
-        { type: 'cases', order_index: 8, visible: true },
-        { type: 'example_work', order_index: 9, visible: true },
-        { type: 'moodboard', order_index: 10, visible: false },
-        { type: 'contact', order_index: 11, visible: true }
+        { type: 'contact', order_index: 10, visible: true }
       ]
 
       const sectionsToInsert = sections.map(s => ({

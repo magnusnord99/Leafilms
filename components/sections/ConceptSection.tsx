@@ -90,7 +90,7 @@ export function ConceptSection({
       <div className="max-w-7xl mx-auto mt-0 mb-8 px-4 md:px-6">
         <div 
           onClick={onImageClick}
-          className={`bg-gray-800 p-4 md:p-12 min-h-[800px] flex flex-col items-center justify-center w-full relative overflow-hidden ${
+          className={`bg-gray-800 p-4 md:p-12 min-h-[800px] flex flex-col items-center justify-start pt-24 md:pt-32 w-full relative overflow-hidden ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
           }`}
           style={{
@@ -130,8 +130,8 @@ export function ConceptSection({
             />
           )}
           
-          <div className="m-8 w-full max-w-2xl flex flex-col items-center">
-            <div className="bg-background-widget p-8 w-full max-w-2xl shadow-xl">
+          <div className="mt-0 mb-12 mx-8 w-full max-w-2xl flex justify-center">
+            <div className="bg-background-widget p-8 shadow-xl w-fit max-w-full">
               <Heading 
                 as="h3" 
                 className="mb-4 break-words"

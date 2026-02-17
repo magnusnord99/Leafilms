@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Button, Card, Badge, Heading, Text } from '@/components/ui'
 import { Project } from '@/lib/types'
 
+type ProjectWithVersion = Project & { rootId: string; versionNumber: number }
+type ProjectGroup = { rootId: string; baseTitle: string; versions: ProjectWithVersion[] }
+
 export default function ProjectsPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projectGroups, setProjectGroups] = useState<ProjectGroup[]>([])
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -28,36 +29,45 @@ export default function ProjectsPage() {
         console.error('Error fetching projects:', projectsError)
         alert('❌ Kunne ikke hente prosjekter')
       } else {
-        // Sorter prosjekter: publisert først, deretter utkast, deretter arkivert
-        const sortedProjects = (projectsData || []).sort((a, b) => {
-          const statusOrder: Record<string, number> = {
-            'published': 0,
-            'draft': 1,
-            'archived': 2
-          }
-          const aOrder = statusOrder[a.status] ?? 3
-          const bOrder = statusOrder[b.status] ?? 3
-          
-          // Hvis samme status, sorter etter updated_at
-          if (aOrder === bOrder) {
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-          }
-          
-          return aOrder - bOrder
+        const projectsWithVersion = (projectsData || []).map((p: any) => ({
+          ...p,
+          rootId: p.parent_project_id ?? p.id,
+          versionNumber: p.version_number ?? 1
+        }))
+
+        const byRoot = new Map<string, ProjectWithVersion[]>()
+        for (const p of projectsWithVersion) {
+          const list = byRoot.get(p.rootId) ?? []
+          list.push(p)
+          byRoot.set(p.rootId, list)
+        }
+        for (const list of byRoot.values()) {
+          list.sort((a, b) => a.versionNumber - b.versionNumber)
+        }
+
+        const groups: ProjectGroup[] = Array.from(byRoot.entries()).map(([rootId, versions]) => {
+          const rootProject = versions.find(v => v.id === rootId) ?? versions[0]
+          const baseTitle = (rootProject.title || '').replace(/\s+V\d+$/, '').trim() || rootProject.title
+          return { rootId, baseTitle, versions }
         })
-        
-        setProjects(sortedProjects as Project[])
 
-        // Hent share tokens for publiserte prosjekter
-        const publishedProjectIds = sortedProjects
-          .filter(p => p.status === 'published')
-          .map(p => p.id)
+        groups.sort((a, b) => {
+          const newestA = Math.max(...a.versions.map(p => new Date(p.updated_at).getTime()))
+          const newestB = Math.max(...b.versions.map(p => new Date(p.updated_at).getTime()))
+          return newestB - newestA
+        })
 
-        if (publishedProjectIds.length > 0) {
+        setProjectGroups(groups)
+
+        const publishedIds = projectsWithVersion
+          .filter((p: ProjectWithVersion) => p.status === 'published')
+          .map((p: ProjectWithVersion) => p.id)
+
+        if (publishedIds.length > 0) {
           const { data: sharesData } = await supabase
             .from('project_shares')
             .select('project_id, token')
-            .in('project_id', publishedProjectIds)
+            .in('project_id', publishedIds)
 
           if (sharesData) {
             const links: Record<string, string> = {}
@@ -97,10 +107,12 @@ export default function ProjectsPage() {
     }
   }
 
-  // Grupper prosjekter etter status
-  const publishedProjects = projects.filter(p => p.status === 'published')
-  const draftProjects = projects.filter(p => p.status === 'draft')
-  const archivedProjects = projects.filter(p => p.status === 'archived')
+  const getVersionLabel = (p: Project) => {
+    const v = (p as { version_number?: number }).version_number ?? 1
+    return `V${v}`
+  }
+
+  const totalProjects = projectGroups.reduce((sum, g) => sum + g.versions.length, 0)
 
   if (loading) {
     return (
@@ -119,9 +131,9 @@ export default function ProjectsPage() {
             <Link href="/admin" className="text-white/60 hover:text-white mb-2 inline-block">
               ← Tilbake til dashboard
             </Link>
-            <Heading as="h1" size="lg" className="mb-2 !text-white">Alle Prosjekter</Heading>
+            <Heading as="h1" size="lg" className="mb-2 !text-white">Prosjekter</Heading>
             <Text variant="body" className="!text-white">
-              {projects.length} prosjekt{projects.length !== 1 ? 'er' : ''} totalt
+              {projectGroups.length} prosjekt{projectGroups.length !== 1 ? 'er' : ''} · {totalProjects} versjon{totalProjects !== 1 ? 'er' : ''} totalt
             </Text>
           </div>
           <div className="flex gap-3">
@@ -131,31 +143,49 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Publiserte Prosjekter */}
-        {publishedProjects.length > 0 && (
-          <div className="space-y-4 mb-12">
-            <Heading as="h2" size="md" className="mb-4 !text-white">
-              🟢 Publiserte ({publishedProjects.length})
-            </Heading>
-            <div className="grid gap-4">
-              {publishedProjects.map((project) => (
-                <Card key={project.id} hover>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Heading as="h3" size="sm" className="mb-2">{project.title}</Heading>
-                      {project.client_name && (
-                        <Text variant="body" className="mb-2">Kunde: {project.client_name}</Text>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <Badge variant="published">🟢 Publisert</Badge>
-                        <Text variant="muted">
-                          Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                        </Text>
-                      </div>
+        {/* Prosjektmapper med versjoner */}
+        <div className="space-y-6">
+          {projectGroups.map((group) => (
+            <Card key={group.rootId} className="overflow-hidden">
+              {/* Mappe-header */}
+              <div className="p-4 border-b border-white/10 bg-white/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Heading as="h3" size="sm" className="mb-1 !text-white">
+                      📁 {group.baseTitle}
+                    </Heading>
+                    {group.versions[0]?.client_name && (
+                      <Text variant="muted" className="text-sm">
+                        Kunde: {group.versions[0].client_name}
+                      </Text>
+                    )}
+                  </div>
+                  <Text variant="muted" className="text-sm">
+                    {group.versions.length} versjon{group.versions.length !== 1 ? 'er' : ''}
+                  </Text>
+                </div>
+              </div>
+              {/* Versjoner inni mappen */}
+              <div className="divide-y divide-white/10">
+                {group.versions.map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
+                        {project.status === 'published' ? '🟢 Publisert' : project.status === 'archived' ? '⚫ Arkivert' : '🟡 Utkast'}
+                      </Badge>
+                      <span className="text-sm font-medium text-white/90 px-2 py-0.5 rounded bg-white/10">
+                        {getVersionLabel(project)}
+                      </span>
+                      <Text variant="muted" className="text-sm truncate">
+                        Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
+                      </Text>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                       <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Åpne</Button>
+                        <Button variant="primary" size="sm">Rediger</Button>
                       </Link>
                       {shareLinks[project.id] && (
                         <Button
@@ -170,10 +200,10 @@ export default function ProjectsPage() {
                         </Button>
                       )}
                       <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
+                        <Button variant="secondary" size="sm">📊 Statistikk</Button>
                       </Link>
-                      <Button 
-                        variant="secondary" 
+                      <Button
+                        variant="secondary"
                         size="sm"
                         onClick={(e) => {
                           e.preventDefault()
@@ -185,110 +215,14 @@ export default function ProjectsPage() {
                       </Button>
                     </div>
                   </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Utkast */}
-        {draftProjects.length > 0 && (
-          <div className="space-y-4 mb-12">
-            <Heading as="h2" size="md" className="mb-4 !text-white">
-              🟡 Utkast ({draftProjects.length})
-            </Heading>
-            <div className="grid gap-4">
-              {draftProjects.map((project) => (
-                <Card key={project.id} hover>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Heading as="h3" size="sm" className="mb-2">{project.title}</Heading>
-                      {project.client_name && (
-                        <Text variant="body" className="mb-2">Kunde: {project.client_name}</Text>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <Badge variant="draft">🟡 Utkast</Badge>
-                        <Text variant="muted">
-                          Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                        </Text>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Åpne</Button>
-                      </Link>
-                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
-                      </Link>
-                      <Button 
-                        variant="secondary" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          handleDelete(project.id, project.title)
-                        }}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                      >
-                        Slett
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Arkiverte Prosjekter */}
-        {archivedProjects.length > 0 && (
-          <div className="space-y-4 mb-12">
-            <Heading as="h2" size="md" className="mb-4 !text-white">
-              ⚫ Arkiverte ({archivedProjects.length})
-            </Heading>
-            <div className="grid gap-4">
-              {archivedProjects.map((project) => (
-                <Card key={project.id} hover>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Heading as="h3" size="sm" className="mb-2">{project.title}</Heading>
-                      {project.client_name && (
-                        <Text variant="body" className="mb-2">Kunde: {project.client_name}</Text>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <Badge variant="archived">⚫ Arkivert</Badge>
-                        <Text variant="muted">
-                          Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                        </Text>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Åpne</Button>
-                      </Link>
-                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
-                      </Link>
-                      <Button 
-                        variant="secondary" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          handleDelete(project.id, project.title)
-                        }}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                      >
-                        Slett
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
 
         {/* Ingen prosjekter */}
-        {projects.length === 0 && (
+        {projectGroups.length === 0 && (
           <Card className="p-12 text-center">
             <Text variant="body" className="mb-4">Ingen prosjekter ennå</Text>
             <Link href="/admin/projects/new">

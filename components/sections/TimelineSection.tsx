@@ -14,10 +14,10 @@ type TimelineSectionProps = {
 }
 
 const defaultTimelineItems = [
-  { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.' },
-  { title: 'PRODUKSJON', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.' },
-  { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.' },
-  { title: 'LEVERING', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.' }
+  { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.', monthYear: 'Januar 2026' },
+  { title: 'PRODUKSJON', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.', monthYear: 'Februar 2026' },
+  { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.', monthYear: 'Mars 2026' },
+  { title: 'LEVERING', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.', monthYear: 'April 2026' }
 ]
 
 export function TimelineSection({
@@ -31,8 +31,11 @@ export function TimelineSection({
   const [mobileIndex, setMobileIndex] = useState(0)
   const timelineItems = section.content.timelineItems || defaultTimelineItems
 
+  const desktopActiveIndex = Math.min(Math.floor(timelineSectionProgress * 4), 3)
+  const activeIndex = editMode ? 0 : desktopActiveIndex
+
   const renderTimelineCard = (index: number, isActive: boolean) => {
-    const item = timelineItems[index] || { title: 'FASE', text: '' }
+    const item = timelineItems[index] || { title: 'FASE', text: '', monthYear: '' }
     return (
       <div
         key={index}
@@ -53,8 +56,8 @@ export function TimelineSection({
           onBlur={(e) => {
             if (editMode) {
               const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '' }
-              updatedItems[index].title = e.currentTarget.textContent || ''
+              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
+              updatedItems[index] = { ...updatedItems[index], title: e.currentTarget.textContent || '' }
               updateSectionContent(section.id, 'timelineItems', updatedItems)
             }
           }}
@@ -70,14 +73,31 @@ export function TimelineSection({
           onBlur={(e) => {
             if (editMode) {
               const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '' }
-              updatedItems[index].text = e.currentTarget.textContent || ''
+              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
+              updatedItems[index] = { ...updatedItems[index], text: e.currentTarget.textContent || '' }
               updateSectionContent(section.id, 'timelineItems', updatedItems)
             }
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {item.text || (editMode ? 'Klikk for å redigere tekst...' : 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.')}
+        </Text>
+        <Text
+          variant="muted"
+          className={`mt-3 text-dark/70 text-sm ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
+          contentEditable={editMode}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode) {
+              const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
+              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
+              updatedItems[index] = { ...updatedItems[index], monthYear: e.currentTarget.textContent || '' }
+              updateSectionContent(section.id, 'timelineItems', updatedItems)
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(item as { monthYear?: string }).monthYear || (editMode ? 'Måned år (f.eks. April 2026)' : '')}
         </Text>
       </div>
     )
@@ -122,8 +142,11 @@ export function TimelineSection({
         </button>
       </div>
 
-      <p className="lg:hidden text-center text-dark/70 text-sm mt-3 mb-6">
+      <p className="lg:hidden text-center text-dark/70 text-sm mt-3 mb-2">
         {mobileIndex + 1} av {timelineItems.length}
+      </p>
+      <p className="lg:hidden text-center text-dark/70 text-xl font-medium mb-6">
+        {(timelineItems[mobileIndex] as { monthYear?: string })?.monthYear || ''}
       </p>
       
       {/* Desktop: scroll-basert tidslinje (viser fra 1024px) */}
@@ -143,14 +166,8 @@ export function TimelineSection({
             const boxProgress = (timelineSectionProgress * 4) - index
             const fadeProgress = Math.max(0, Math.min(1, 1 - Math.abs(boxProgress - 0.5) * 2))
             
-            const timelineItems = section.content.timelineItems || [
-              { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.' },
-              { title: 'PRODUKSJON', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.' },
-              { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.' },
-              { title: 'LEVERING', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.' }
-            ]
-            
-            const item = timelineItems[index] || { title: 'FASE', text: '' }
+            const desktopItems = section.content.timelineItems || defaultTimelineItems
+            const item = desktopItems[index] || { title: 'FASE', text: '', monthYear: '' }
             
             return (
               <div
@@ -171,11 +188,11 @@ export function TimelineSection({
                   suppressContentEditableWarning
                   onBlur={(e) => {
                     if (editMode) {
-                      const updatedItems = [...(section.content.timelineItems || [])]
+                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
                       if (!updatedItems[index]) {
-                        updatedItems[index] = { title: '', text: '' }
+                        updatedItems[index] = { title: '', text: '', monthYear: '' }
                       }
-                      updatedItems[index].title = e.currentTarget.textContent || ''
+                      updatedItems[index] = { ...updatedItems[index], title: e.currentTarget.textContent || '' }
                       updateSectionContent(section.id, 'timelineItems', updatedItems)
                     }
                   }}
@@ -190,11 +207,11 @@ export function TimelineSection({
                   suppressContentEditableWarning
                   onBlur={(e) => {
                     if (editMode) {
-                      const updatedItems = [...(section.content.timelineItems || [])]
+                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
                       if (!updatedItems[index]) {
-                        updatedItems[index] = { title: '', text: '' }
+                        updatedItems[index] = { title: '', text: '', monthYear: '' }
                       }
-                      updatedItems[index].text = e.currentTarget.textContent || ''
+                      updatedItems[index] = { ...updatedItems[index], text: e.currentTarget.textContent || '' }
                       updateSectionContent(section.id, 'timelineItems', updatedItems)
                     }
                   }}
@@ -202,11 +219,31 @@ export function TimelineSection({
                 >
                   {item.text || (editMode ? 'Klikk for å redigere tekst...' : 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.')}
                 </Text>
+                <Text
+                  variant="muted"
+                  className={`mt-3 text-dark/70 text-sm ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
+                  contentEditable={editMode}
+                  suppressContentEditableWarning
+                  onBlur={(e) => {
+                    if (editMode) {
+                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
+                      if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
+                      updatedItems[index] = { ...updatedItems[index], monthYear: e.currentTarget.textContent || '' }
+                      updateSectionContent(section.id, 'timelineItems', updatedItems)
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {item.monthYear || (editMode ? 'Måned år (f.eks. April 2026)' : '')}
+                </Text>
               </div>
             )
           })}
         </div>
       </div>
+      <p className="hidden lg:block text-center text-dark/70 text-xl font-medium mt-4 mb-10">
+        {(timelineItems[activeIndex] as { monthYear?: string })?.monthYear || ''}
+      </p>
     </div>
   )
 }

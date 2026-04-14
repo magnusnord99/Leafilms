@@ -1,7 +1,6 @@
 'use client'
 
 import { Section } from '@/lib/types'
-import { Heading, Text } from '@/components/ui'
 
 type ContactSectionProps = {
   section: Section
@@ -9,39 +8,66 @@ type ContactSectionProps = {
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
 }
 
-const DEFAULT_CONTACT_TEXT = `LEAFILMS
-eivind@leafilms.no`
+const DEFAULT_CONTACT_TEXT = `LEAFILMS\neivind@leafilms.no`
 
 export function ContactSection({
   section,
   editMode,
   updateSectionContent
 }: ContactSectionProps) {
-  const defaultText = DEFAULT_CONTACT_TEXT
-  const displayText = section.content.text || defaultText
+  const displayText = section.content.text || DEFAULT_CONTACT_TEXT
 
   return (
-    <div className="mt-30">
-      <Heading 
-        as="h4" 
-        className="mb-6 text-center"
-      >
-        KONTAKT
-      </Heading>
-      <Text 
-        variant="body" 
-        className={`whitespace-pre-wrap text-center ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
+    <div className="py-20 md:py-32 px-8 md:px-16 flex flex-col items-start">
+      {/* Section label */}
+      <div className="flex items-center gap-4 mb-10">
+        <div style={{ width: 32, height: 1, background: '#C49434' }} />
+        <span style={{
+          fontFamily: 'var(--font-dm-sans)',
+          fontSize: '0.6rem',
+          letterSpacing: '0.16em',
+          color: '#C49434',
+          textTransform: 'uppercase',
+          fontWeight: 500,
+        }}>
+          Kontakt
+        </span>
+      </div>
+
+      {/* Contact info */}
+      <div
+        className={`whitespace-pre-wrap ${editMode ? 'edit-outline px-4 py-3 min-h-[80px]' : ''}`}
         contentEditable={editMode}
         suppressContentEditableWarning
         onBlur={(e) => {
-          if (editMode) {
-            updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
-          }
+          if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
+        }}
+        style={{
+          fontFamily: 'var(--font-cormorant)',
+          fontSize: 'clamp(2rem, 4vw, 3.5rem)',
+          fontWeight: 300,
+          fontStyle: 'italic',
+          color: '#E8E1D5',
+          lineHeight: 1.3,
+          letterSpacing: '-0.01em',
         }}
       >
         {displayText}
-      </Text>
+      </div>
+
+      {/* Bottom rule */}
+      <div className="mt-16 flex items-center gap-6 w-full max-w-xs">
+        <div style={{ flex: 1, height: 1, background: '#2A261F' }} />
+        <span style={{
+          fontFamily: 'var(--font-dm-sans)',
+          fontSize: '0.55rem',
+          letterSpacing: '0.18em',
+          color: '#62594E',
+          textTransform: 'uppercase',
+        }}>
+          Leafilms
+        </span>
+      </div>
     </div>
   )
 }
-

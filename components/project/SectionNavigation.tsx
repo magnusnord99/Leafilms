@@ -16,189 +16,167 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const navRef = useRef<HTMLDivElement>(null)
 
-  // Check if desktop on mount and resize
   useEffect(() => {
-    const checkDesktop = () => {
-      setIsDesktop(window.innerWidth >= 768) // md breakpoint
-    }
-    checkDesktop()
-    window.addEventListener('resize', checkDesktop)
-    return () => window.removeEventListener('resize', checkDesktop)
+    const check = () => setIsDesktop(window.innerWidth >= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Show navigation when scrolled down, hide when stopped scrolling (only on desktop)
   useEffect(() => {
-    if (!isDesktop) {
-      setIsVisible(false)
-      return
-    }
-
+    if (!isDesktop) { setIsVisible(false); return }
     const handleScroll = () => {
-      const scrollY = window.scrollY
-      
-      // Show navigation after scrolling 200px
-      if (scrollY > 200) {
+      if (window.scrollY > 200) {
         setIsVisible(true)
-        
-        // Clear existing timeout
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current)
-        }
-        
-        // Hide navigation after 2 seconds of no scrolling
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
         scrollTimeoutRef.current = setTimeout(() => {
           setIsVisible(false)
-          setIsExpanded(false) // Also collapse when hiding
-        }, 2000)
+          setIsExpanded(false)
+        }, 2200)
       } else {
-        // Hide immediately if scrolled back to top
         setIsVisible(false)
         setIsExpanded(false)
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current)
-        }
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
       }
     }
-
     window.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll() // Check initial state
-
+    handleScroll()
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current)
-      }
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
     }
   }, [isDesktop])
 
-  // Track which section is currently active based on scroll position
   useEffect(() => {
     if (!isDesktop) return
-
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + window.innerHeight * 0.3 // Offset for better UX
-
-      // Find the section that's currently in view
-      let currentSection: string | null = null
-      
+      const scrollPosition = window.scrollY + window.innerHeight * 0.3
+      let current: string | null = null
       sections.forEach(section => {
-        const element = document.querySelector(`[data-section-id="${section.id}"]`)
-        if (element) {
-          const rect = element.getBoundingClientRect()
-          const elementTop = rect.top + window.scrollY
-          const elementBottom = elementTop + rect.height
-
-          if (scrollPosition >= elementTop && scrollPosition < elementBottom) {
-            currentSection = section.id
-          }
+        const el = document.querySelector(`[data-section-id="${section.id}"]`)
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          const top = rect.top + window.scrollY
+          if (scrollPosition >= top && scrollPosition < top + rect.height) current = section.id
         }
       })
-
-      setActiveSectionId(currentSection)
+      setActiveSectionId(current)
     }
-
     window.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll() // Check initial state
-
+    handleScroll()
     return () => window.removeEventListener('scroll', handleScroll)
   }, [sections, isDesktop])
 
-  // Close menu when clicking outside
   useEffect(() => {
     if (!isExpanded || !isDesktop) return
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+    const handleClick = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
         setIsExpanded(false)
       }
     }
-
-    // Add event listener after a short delay to avoid immediate closing
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside)
-    }, 100)
-
+    const t = setTimeout(() => document.addEventListener('mousedown', handleClick), 100)
     return () => {
-      clearTimeout(timeoutId)
-      document.removeEventListener('mousedown', handleClickOutside)
+      clearTimeout(t)
+      document.removeEventListener('mousedown', handleClick)
     }
   }, [isExpanded, isDesktop])
 
-  // Scroll to section smoothly
   const scrollToSection = (sectionId: string) => {
-    const element = document.querySelector(`[data-section-id="${sectionId}"]`)
-    if (element) {
-      const rect = element.getBoundingClientRect()
-      const offset = 80 // Offset from top
-      const targetPosition = rect.top + window.scrollY - offset
-
-      window.scrollTo({
-        top: targetPosition,
-        behavior: 'smooth'
-      })
+    const el = document.querySelector(`[data-section-id="${sectionId}"]`)
+    if (el) {
+      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 60, behavior: 'smooth' })
     }
   }
 
-  // Filter out hero section and only show visible sections
   const visibleSections = sections.filter(s => s.type !== 'hero' && s.visible)
-
-  // Don't render if not desktop or no sections
-  if (!isDesktop || visibleSections.length === 0) {
-    return null
-  }
+  if (!isDesktop || visibleSections.length === 0) return null
 
   return (
     <div
       ref={navRef}
-      className={`fixed left-0 top-1/2 -translate-y-1/2 z-50 transition-all duration-300 ${
-        isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full pointer-events-none'
-      }`}
+      className="fixed left-0 top-1/2 -translate-y-1/2 z-50"
+      style={{
+        transition: 'opacity 0.3s, transform 0.3s',
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translateY(-50%) translateX(0)' : 'translateY(-50%) translateX(-100%)',
+        pointerEvents: isVisible ? 'auto' : 'none',
+      }}
     >
       {!isExpanded ? (
-        // Collapsed state - just show expand button
         <button
           onClick={() => setIsExpanded(true)}
-          className="bg-background-widget-dark/95 backdrop-blur-sm border-r border-border rounded-r-lg shadow-xl p-3 ml-4 hover:bg-background-widget-dark transition-colors"
+          className="flex items-center justify-center transition-all"
           title="Vis navigasjon"
+          style={{
+            width: 36,
+            height: 36,
+            background: '#161410',
+            border: '1px solid #2A261F',
+            borderLeft: 'none',
+            borderTopRightRadius: 3,
+            borderBottomRightRadius: 3,
+          }}
         >
-          <svg
-            className="w-5 h-5 text-white transition-colors"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
+          <svg className="w-3.5 h-3.5" fill="none" stroke="#9E9287" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       ) : (
-        // Expanded state - show full navigation
-        <nav className="bg-background-widget-dark/95 backdrop-blur-sm border-r border-border rounded-r-lg shadow-xl p-3 ml-4 max-h-[80vh] overflow-y-auto">
-          <ul className="space-y-1.5">
+        <nav
+          style={{
+            background: '#161410',
+            border: '1px solid #2A261F',
+            borderLeft: 'none',
+            borderTopRightRadius: 3,
+            borderBottomRightRadius: 3,
+            padding: '8px 0',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            minWidth: 140,
+          }}
+        >
+          {/* Close row */}
+          <div className="px-3 pb-2 flex justify-end">
+            <button
+              onClick={() => setIsExpanded(false)}
+              style={{
+                color: '#62594E',
+                fontSize: '0.6rem',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-dm-sans)',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <ul>
             {visibleSections.map((section) => {
               const isActive = activeSectionId === section.id
-              const title = getSectionTitle(section.type)
-              
               return (
                 <li key={section.id}>
                   <button
                     onClick={() => scrollToSection(section.id)}
-                    className={`
-                      w-full text-left text-white px-3 py-2 rounded-md transition-all duration-200
-                      text-xs font-medium whitespace-nowrap
-                      ${
-                        isActive
-                          ? 'bg-background-widget-dark text-white shadow-md'
-                          : 'text-foreground/70 hover:text-foreground hover:bg-background-widget-dark/50'
-                      }
-                    `}
-                    title={title}
+                    className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-all group"
+                    style={{ fontFamily: 'var(--font-dm-sans)' }}
                   >
-                    {title}
+                    <span style={{
+                      width: isActive ? 14 : 4,
+                      height: 1,
+                      background: isActive ? '#C49434' : '#38332A',
+                      transition: 'all 0.2s',
+                      flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontSize: '0.6rem',
+                      letterSpacing: '0.1em',
+                      textTransform: 'uppercase',
+                      color: isActive ? '#E8E1D5' : '#62594E',
+                      transition: 'color 0.2s',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {getSectionTitle(section.type)}
+                    </span>
                   </button>
                 </li>
               )
@@ -209,4 +187,3 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
     </div>
   )
 }
-

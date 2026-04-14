@@ -16,7 +16,8 @@ import {
   ExampleWorkSection,
   QuoteSection,
   FullImageSection,
-  CollageImages
+  CollageImages,
+  ProductionScheduleSection
 } from '@/components/sections'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
@@ -90,7 +91,8 @@ export function PublicProjectClient({
       team: 'TEAM',
       example_work: 'EKSEMPELARBEID',
       quote: 'PRISTILBUD',
-      full_image: 'BILDE'
+      full_image: 'BILDE',
+      production_schedule: 'PRODUKSJONSPLAN'
     }
     return titles[type] || type.toUpperCase()
   }
@@ -360,6 +362,15 @@ export function PublicProjectClient({
                       updateSectionContent={noop}
                       onImageClick={noop}
                       onOpenPresetPicker={noop}
+                    />
+                  )}
+
+                  {/* Production Schedule Section */}
+                  {section.type === 'production_schedule' && (
+                    <ProductionScheduleSection
+                      section={section}
+                      editMode={false}
+                      updateSectionContent={noop}
                     />
                   )}
                 </div>

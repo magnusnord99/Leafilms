@@ -180,6 +180,7 @@ export default function EditProject({ params }: Props) {
     updateSectionContent,
     addFullImageSection,
     addQuoteSection,
+    addProductionScheduleSection,
     handleMoveSection,
     toggleCaseSelection,
     toggleTeamSelection,
@@ -240,7 +241,8 @@ export default function EditProject({ params }: Props) {
       team: 'Team',
       example_work: 'Eksempelarbeid',
       quote: 'Pristilbud',
-      full_image: 'Bildeseksjon'
+      full_image: 'Bildeseksjon',
+      production_schedule: 'Produksjonsplan'
     }
     return titles[type] || type
   }
@@ -289,6 +291,7 @@ export default function EditProject({ params }: Props) {
         onPublish={togglePublish}
         onAddFullImageSection={addFullImageSection}
         onAddQuoteSection={addQuoteSection}
+        onAddProductionScheduleSection={addProductionScheduleSection}
         onDuplicateVersion={handleDuplicateVersion}
         duplicating={duplicating}
       />

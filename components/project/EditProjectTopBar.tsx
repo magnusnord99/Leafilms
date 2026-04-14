@@ -19,6 +19,7 @@ interface EditProjectTopBarProps {
   onPublish: () => void
   onAddQuoteSection: () => void
   onAddFullImageSection?: () => void
+  onAddProductionScheduleSection?: () => void
   onDuplicateVersion?: () => void
   duplicating?: boolean
 }
@@ -37,6 +38,7 @@ export function EditProjectTopBar({
   onPublish,
   onAddQuoteSection,
   onAddFullImageSection,
+  onAddProductionScheduleSection,
   onDuplicateVersion,
   duplicating = false,
 }: EditProjectTopBarProps) {
@@ -108,6 +110,16 @@ export function EditProjectTopBar({
               size="sm"
             >
               + Legg til bildeseksjon
+            </Button>
+          )}
+          {/* Legg til Produksjonsplan-seksjon */}
+          {editMode && onAddProductionScheduleSection && (
+            <Button
+              onClick={onAddProductionScheduleSection}
+              variant="secondary"
+              size="sm"
+            >
+              + Produksjonsplan
             </Button>
           )}
           {/* Legg til Pristilbud-seksjon */}

@@ -115,6 +115,36 @@ export function useSectionHandlers({
     }
   }
 
+  // Legg til produksjonsplan-seksjon
+  const addProductionScheduleSection = async () => {
+    if (!project) return
+
+    try {
+      const maxOrderIndex = Math.max(...sections.map(s => s.order_index), 0)
+
+      const { data: newSection, error } = await supabase
+        .from('sections')
+        .insert({
+          project_id: project.id,
+          type: 'production_schedule',
+          content: {
+            title: 'SCHEDULE OF CONTENT PRODUCTION',
+            subtitle: 'Timeline of content production and roll out',
+          },
+          visible: true,
+          order_index: maxOrderIndex + 1
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      setSections([...sections, newSection])
+    } catch (error) {
+      console.error('Error adding production schedule section:', error)
+      alert('❌ Kunne ikke legge til produksjonsplan-seksjon')
+    }
+  }
+
   // Legg til quote-seksjon
   const addQuoteSection = async () => {
     if (!project) return
@@ -491,6 +521,7 @@ export function useSectionHandlers({
     updateSectionContent,
     addFullImageSection,
     addQuoteSection,
+    addProductionScheduleSection,
     handleMoveSection,
     toggleCaseSelection,
     toggleTeamSelection,

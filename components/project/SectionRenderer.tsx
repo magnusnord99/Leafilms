@@ -12,7 +12,8 @@ import {
   TeamSection,
   ExampleWorkSection,
   QuoteSection,
-  FullImageSection
+  FullImageSection,
+  ProductionScheduleSection
 } from '@/components/sections'
 
 type SectionRendererProps = {
@@ -334,6 +335,15 @@ export function SectionRenderer({
             updateSectionContent={updateSectionContent}
             onImageClick={onImageClick}
             onOpenPresetPicker={onOpenPresetPicker}
+          />
+        )}
+
+        {/* Production Schedule Section */}
+        {section.type === 'production_schedule' && (
+          <ProductionScheduleSection
+            section={section}
+            editMode={editMode}
+            updateSectionContent={updateSectionContent}
           />
         )}
       </div>

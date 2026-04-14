@@ -15,29 +15,34 @@ export function MoodboardSection({
   updateSectionContent
 }: MoodboardSectionProps) {
   return (
-    <div>
-      <Text 
-        variant="body"
-        className={editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1 min-h-[80px]' : ''}
+    <div className="px-8 md:px-16 py-12">
+      <Text
+        variant="lead"
+        className={`text-[#E8E1D5] max-w-2xl ${editMode ? 'edit-outline px-3 py-2 min-h-[80px]' : ''}`}
         contentEditable={editMode}
         suppressContentEditableWarning
         onBlur={(e) => {
-          if (editMode) {
-            updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
-          }
+          if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
         }}
       >
         {section.content.description || (editMode ? 'Klikk for å redigere beskrivelse...' : 'Beskrivelse...')}
       </Text>
-      
-      <div className="mt-8 p-4">
-        <div className="border-2 border-dashed border-zinc-400 rounded-lg p-8 bg-zinc-200">
-          <Text variant="body" className="text-center text-zinc-600">
-            {editMode ? 'Bilde kommer her' : ''}
-          </Text>
+
+      <div className="mt-8">
+        <div
+          className="flex items-center justify-center"
+          style={{
+            minHeight: 200,
+            border: '1px dashed #2A261F',
+            borderRadius: 2,
+            background: '#161410',
+          }}
+        >
+          {editMode && (
+            <Text variant="muted">Moodboard-bilde kommer her</Text>
+          )}
         </div>
       </div>
     </div>
   )
 }
-

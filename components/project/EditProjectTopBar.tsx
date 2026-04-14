@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Project, Section } from '@/lib/types'
-import { Button, Badge, Heading, Text } from '@/components/ui'
+import { Button, Badge } from '@/components/ui'
 
 interface EditProjectTopBarProps {
   project: Project
@@ -45,133 +45,140 @@ export function EditProjectTopBar({
   const router = useRouter()
 
   return (
-    <div className="sticky top-0 bg-background border-b border-zinc-300 p-4 z-40">
-      <div className="max-w-[2500px] mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/admin')}
-            size="sm"
+    <div
+      className="sticky top-0 z-40 px-5 py-3 flex items-center justify-between gap-3"
+      style={{
+        background: 'rgba(12,11,9,0.96)',
+        backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid #2A261F',
+      }}
+    >
+      {/* Left — back + title */}
+      <div className="flex items-center gap-4 min-w-0">
+        <button
+          onClick={() => router.push('/admin')}
+          className="flex items-center gap-2 transition-colors flex-shrink-0"
+          style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: '#62594E',
+          }}
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+          </svg>
+          Tilbake
+        </button>
+
+        <div style={{ width: 1, height: 20, background: '#2A261F' }} />
+
+        <div className="min-w-0">
+          <p
+            className="truncate"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              color: '#E8E1D5',
+              letterSpacing: '0.04em',
+            }}
           >
-            ← Tilbake
-          </Button>
-          <div>
-            <Heading as="h1" size="sm" className="mb-0">{project.title}</Heading>
-            {project.client_name && (
-              <Text variant="muted" className="text-xs">Kunde: {project.client_name}</Text>
-            )}
-          </div>
+            {project.title}
+          </p>
+          {project.client_name && (
+            <p style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              color: '#62594E',
+              letterSpacing: '0.08em',
+              marginTop: 1,
+            }}>
+              {project.client_name}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-3">
-          {/* Kopier link knapp - vises kun når prosjektet er publisert */}
-          {shareLink && (
-            <Button
-              onClick={(e) => {
-                navigator.clipboard.writeText(shareLink)
-                // Vis en kort bekreftelse
-                const button = e.currentTarget
-                const originalText = button.textContent || '📋 Kopier link'
-                button.textContent = '✓ Kopiert!'
-                setTimeout(() => {
-                  button.textContent = originalText
-                }, 2000)
-              }}
-              variant="secondary"
-              size="sm"
-            >
-              📋 Kopier link
-            </Button>
-          )}
-          {/* Se statistikk knapp */}
-          <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-            <Button
-              variant="secondary"
-              size="sm"
-            >
-              📊 Se statistikk
-            </Button>
-          </Link>
-          {/* Opprett ny versjon */}
-          {onDuplicateVersion && (
-            <Button
-              onClick={onDuplicateVersion}
-              disabled={duplicating}
-              variant="secondary"
-              size="sm"
-            >
-              {duplicating ? 'Oppretter...' : '📋 Opprett ny versjon'}
-            </Button>
-          )}
-          {/* Legg til bildeseksjon */}
-          {editMode && onAddFullImageSection && (
-            <Button
-              onClick={onAddFullImageSection}
-              variant="secondary"
-              size="sm"
-            >
-              + Legg til bildeseksjon
-            </Button>
-          )}
-          {/* Legg til Produksjonsplan-seksjon */}
-          {editMode && onAddProductionScheduleSection && (
-            <Button
-              onClick={onAddProductionScheduleSection}
-              variant="secondary"
-              size="sm"
-            >
-              + Produksjonsplan
-            </Button>
-          )}
-          {/* Legg til Pristilbud-seksjon */}
-          {editMode && !sections.find(s => s.type === 'quote') && (
-            <Button
-              onClick={onAddQuoteSection}
-              variant="secondary"
-              size="sm"
-            >
-              + Legg til Pristilbud
-            </Button>
-          )}
-          {/* Rediger-modus Toggle */}
+
+        <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
+          {project.status === 'published' ? 'Publisert' : 'Utkast'}
+        </Badge>
+      </div>
+
+      {/* Right — actions */}
+      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+        {shareLink && (
           <Button
-            onClick={onEditModeToggle}
-            variant={editMode ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            {editMode ? ' Rediger-modus' : 'Visning-modus'}
-          </Button>
-          <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-            {project.status === 'published' ? '🟢 Publisert' : '🟡 Utkast'}
-          </Badge>
-          <Button
-            onClick={onMobilePreviewToggle}
-            variant="ghost"
-            size="sm"
-            className="lg:hidden"
-          >
-            {showMobilePreview ? '✏️ Rediger' : '👁️ Preview'}
-          </Button>
-          <Button
-            onClick={onSave}
-            disabled={saving}
+            onClick={(e) => {
+              navigator.clipboard.writeText(shareLink)
+              const btn = e.currentTarget
+              const orig = btn.textContent || 'Kopier link'
+              btn.textContent = 'Kopiert!'
+              setTimeout(() => { btn.textContent = orig }, 2000)
+            }}
             variant="secondary"
             size="sm"
           >
-            {saving ? 'Lagrer...' : '💾 Lagre'}
+            Kopier link
           </Button>
-          <Button
-            onClick={onPublish}
-            disabled={publishing}
-            variant={project?.status === 'published' ? 'danger' : 'primary'}
-            size="sm"
-          >
-            {publishing 
-              ? (project?.status === 'published' ? 'Avpubliserer...' : 'Publiserer...') 
-              : (project?.status === 'published' ? '🔴 Avpubliser' : '🚀 Publiser')}
+        )}
+
+        <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+          <Button variant="secondary" size="sm">Statistikk</Button>
+        </Link>
+
+        {onDuplicateVersion && (
+          <Button onClick={onDuplicateVersion} disabled={duplicating} variant="secondary" size="sm">
+            {duplicating ? 'Oppretter...' : 'Ny versjon'}
           </Button>
-        </div>
+        )}
+
+        {editMode && onAddFullImageSection && (
+          <Button onClick={onAddFullImageSection} variant="secondary" size="sm">
+            + Bildeseksjon
+          </Button>
+        )}
+
+        {editMode && onAddProductionScheduleSection && (
+          <Button onClick={onAddProductionScheduleSection} variant="secondary" size="sm">
+            + Produksjonsplan
+          </Button>
+        )}
+
+        {editMode && !sections.find(s => s.type === 'quote') && (
+          <Button onClick={onAddQuoteSection} variant="secondary" size="sm">
+            + Pristilbud
+          </Button>
+        )}
+
+        <Button onClick={onEditModeToggle} variant={editMode ? 'primary' : 'secondary'} size="sm">
+          {editMode ? 'Redigeringsmodus' : 'Visningsmodus'}
+        </Button>
+
+        <Button
+          onClick={onMobilePreviewToggle}
+          variant="ghost"
+          size="sm"
+          className="lg:hidden"
+        >
+          {showMobilePreview ? 'Rediger' : 'Forhåndsvis'}
+        </Button>
+
+        <Button onClick={onSave} disabled={saving} variant="secondary" size="sm">
+          {saving ? 'Lagrer...' : 'Lagre'}
+        </Button>
+
+        <Button
+          onClick={onPublish}
+          disabled={publishing}
+          variant={project?.status === 'published' ? 'danger' : 'primary'}
+          size="sm"
+        >
+          {publishing
+            ? (project?.status === 'published' ? 'Avpubliserer...' : 'Publiserer...')
+            : (project?.status === 'published' ? 'Avpubliser' : 'Publiser')}
+        </Button>
       </div>
     </div>
   )
 }
-

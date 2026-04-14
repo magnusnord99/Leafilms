@@ -49,69 +49,59 @@ export function ConceptSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
-  // Sjekk om vi er på mobil (mindre enn 768px = Tailwind's md breakpoint)
   const [isMobile, setIsMobile] = useState(false)
-  
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    
-    // Sjekk ved mount
-    checkMobile()
-    
-    // Sjekk ved resize
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Beregn zoom basert på scroll progress
-  // START_ZOOM: Hvor stort hele seksjonen er når animasjonen starter (1.0 = 100%, 1.2 = 120%, osv.)
-  // ZOOM_AMOUNT: Hvor mye hele seksjonen zoomer inn når man scroller (0.2 = 20% zoom, 0.5 = 50% zoom, osv.)
-  const START_ZOOM = 0.8 // Endre denne verdien for å justere startstørrelsen (1.0 = 100%, 1.5 = 150%, osv.)
-  const ZOOM_AMOUNT = 0.1 // Endre denne verdien for å justere hvor mye seksjonen zoomer inn
-  
-  // Beregn zoom - alltid bruk START_ZOOM som base (ignorer background_zoom fra DB for scroll-animasjon)
-  // På mobil: ingen zoom (scale(1.0)), på desktop: bruk scroll zoom
-  const baseZoom = START_ZOOM
-  const scrollZoom = editMode 
-    ? 1.0 // Ingen zoom i edit mode
-    : isMobile 
-      ? 1.0 // Ingen zoom på mobil
-      : baseZoom + (conceptSectionProgress * ZOOM_AMOUNT) // Legg til zoom basert på scroll (kun desktop)
-  
-  // Hent base background style (uten å overstyre backgroundSize)
-  const backgroundStyle = sectionImages[section.id]?.[0] 
+  const START_ZOOM = 0.92
+  const ZOOM_AMOUNT = 0.08
+
+  const scrollZoom = editMode
+    ? 1.0
+    : isMobile
+    ? 1.0
+    : START_ZOOM + conceptSectionProgress * ZOOM_AMOUNT
+
+  const backgroundStyle = sectionImages[section.id]?.[0]
     ? getBackgroundStyle(section.id, 0)
     : {}
 
   return (
     <div ref={conceptSectionRef} className="w-full">
-      <div className="max-w-7xl mx-auto mt-0 mb-8 px-4 md:px-6">
-        <div 
+      <div className="mx-4 md:mx-8 my-0 md:my-4 overflow-hidden rounded-[2px]">
+        <div
           onClick={onImageClick}
-          className={`bg-gray-800 p-4 md:p-12 min-h-[800px] flex flex-col items-center justify-start pt-24 md:pt-32 w-full relative overflow-hidden ${
-            editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-gray-700 transition-colors' : ''
+          className={`relative min-h-[80vh] flex flex-col items-start justify-end overflow-hidden ${
+            editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer' : ''
           }`}
           style={{
+            background: '#161410',
             ...backgroundStyle,
-            transform: editMode 
-              ? undefined 
-              : `scale(${scrollZoom})`,
+            transform: editMode ? undefined : `scale(${scrollZoom})`,
             transformOrigin: 'center center',
-            transition: editMode ? 'none' : 'transform 0.1s ease-out'
+            transition: editMode ? 'none' : 'transform 0.1s ease-out',
           }}
         >
+          {/* Cinematic overlay */}
+          {sectionImages[section.id]?.[0] && (
+            <div className="absolute inset-0 z-[1]" style={{
+              background: 'linear-gradient(to top, rgba(12,11,9,0.92) 0%, rgba(12,11,9,0.4) 40%, transparent 70%)'
+            }} />
+          )}
+
           {editMode && sectionImages[section.id]?.[0] && (
             <button
               onClick={onEditPositionClick}
-              className="absolute top-4 right-4 z-20 bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-              title="Rediger bilde-posisjon"
+              className="absolute top-4 right-4 z-20 bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
             >
-              {editingImageSectionId === section.id ? '✕ Lukk' : '✏️ Rediger posisjon'}
+              {editingImageSectionId === section.id ? 'Lukk' : 'Rediger posisjon'}
             </button>
           )}
-          
+
           {editMode && editingImageSectionId === section.id && sectionImages[section.id]?.[0] && (
             <ImagePositionControls
               sectionId={section.id}
@@ -129,36 +119,53 @@ export function ConceptSection({
               onChangeImage={onImagePickerOpen}
             />
           )}
-          
-          <div className="mt-0 mb-12 mx-8 w-full max-w-2xl flex justify-center">
-            <div className="bg-background-widget p-8 shadow-xl w-fit max-w-full">
-              <Heading 
-                as="h3" 
-                className="mb-4 break-words"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {getSectionTitle(section.type)}
-              </Heading>
-              <Text 
-                variant="lead"
-                className={`whitespace-pre-wrap break-words overflow-wrap-anywhere ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-4 py-2' : ''}`}
-                contentEditable={editMode}
-                suppressContentEditableWarning
-                onBlur={(e) => {
-                  if (editMode) {
-                    updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
-              >
-                {section.content.text || (editMode ? 'Klikk for å redigere...' : 'Ingen tekst lagt til ennå...')}
-              </Text>
+
+          {/* Empty state */}
+          {!sectionImages[section.id]?.[0] && editMode && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="border border-dashed border-[#38332A] px-10 py-8 rounded-[2px] text-center">
+                <Text variant="muted">Klikk for å velge bilde</Text>
+              </div>
             </div>
+          )}
+
+          {/* Text panel — bottom left */}
+          <div
+            className="relative z-[2] px-8 md:px-14 pb-12 md:pb-16 pt-8 w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div style={{ width: 24, height: 1, background: '#C49434' }} />
+              <span style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.16em',
+                color: '#C49434',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              }}>
+                {getSectionTitle(section.type)}
+              </span>
+            </div>
+
+            <Text
+              variant="lead"
+              className={`text-[#E8E1D5] whitespace-pre-wrap ${
+                editMode ? 'edit-outline min-h-[80px] px-3 py-2' : ''
+              }`}
+              contentEditable={editMode}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+            >
+              {section.content.text || (editMode ? 'Klikk for å redigere...' : '')}
+            </Text>
           </div>
         </div>
       </div>
     </div>
   )
 }
-

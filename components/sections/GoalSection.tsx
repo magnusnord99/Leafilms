@@ -49,65 +49,53 @@ export function GoalSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
-  // Sjekk om vi er på mobil (mindre enn 768px = Tailwind's md breakpoint)
   const [isMobile, setIsMobile] = useState(false)
-  
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    
-    // Sjekk ved mount
-    checkMobile()
-    
-    // Sjekk ved resize
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Beregn transform og opacity - skru av animasjon på mobil
   const imageTransform = editMode || isMobile
     ? 'translateX(0)'
-    : `translateX(${(1 - goalSectionProgress) * -100}%)`
+    : `translateX(${(1 - goalSectionProgress) * -60}%)`
   const imageOpacity = editMode || isMobile ? 1 : goalSectionProgress
-  
+
   const textTransform = editMode || isMobile
     ? 'translateX(0)'
-    : `translateX(${(1 - goalSectionProgress) * 100}%)`
+    : `translateX(${(1 - goalSectionProgress) * 60}%)`
   const textOpacity = editMode || isMobile ? 1 : goalSectionProgress
 
   return (
-    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex flex-col md:flex-row items-start overflow-hidden">
-      <div 
+    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch overflow-hidden">
+      {/* Image panel */}
+      <div
         onClick={onImageClick}
-        className={`w-full md:w-1/2 h-[40vh] bg-zinc-300 flex items-center justify-center relative shadow-lg${
-          editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer hover:bg-zinc-400 transition-colors' : ''
+        className={`w-full md:w-1/2 h-[50vh] md:h-auto min-h-[420px] relative overflow-hidden ${
+          editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer' : ''
         }`}
         style={{
-          ...(sectionImages[section.id]?.[0] 
-            ? getBackgroundStyle(section.id, 0)
-            : {}),
+          background: '#161410',
+          ...(sectionImages[section.id]?.[0] ? getBackgroundStyle(section.id, 0) : {}),
           transform: imageTransform,
           opacity: imageOpacity,
-          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
+          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out',
         }}
       >
-        {!sectionImages[section.id]?.[0] && (
-          <Text variant="muted" className="text-center">
-            {editMode ? 'Klikk for å velge bilde' : ''}
-          </Text>
+        {!sectionImages[section.id]?.[0] && editMode && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Text variant="muted">Klikk for å velge bilde</Text>
+          </div>
         )}
-        
         {editMode && sectionImages[section.id]?.[0] && (
           <button
             onClick={onEditPositionClick}
-            className="absolute top-2 right-2 z-20 bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition text-sm"
-            title="Rediger bilde-posisjon"
+            className="absolute top-3 right-3 z-20 bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
           >
-            {editingImageSectionId === section.id ? '✕' : '✏️'}
+            {editingImageSectionId === section.id ? 'Lukk' : 'Rediger'}
           </button>
         )}
-        
         {editMode && editingImageSectionId === section.id && sectionImages[section.id]?.[0] && (
           <ImagePositionControls
             sectionId={section.id}
@@ -126,33 +114,46 @@ export function GoalSection({
           />
         )}
       </div>
-      
-      <div 
-        className="w-full md:w-1/2 min-h-[20vh] p-6 md:p-12 flex flex-col justify-start self-start"
+
+      {/* Text panel */}
+      <div
+        className="w-full md:w-1/2 flex flex-col justify-center px-8 md:px-14 py-14 md:py-20"
         style={{
+          background: '#161410',
           transform: textTransform,
           opacity: textOpacity,
-          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out'
+          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out',
         }}
       >
-        <Heading as="h3" className="mb-4 text-dark">
-          {getSectionTitle(section.type)}
-        </Heading>
-        <Text 
-          variant="body" 
-          className={`text-dark whitespace-pre-wrap ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-white/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
+        {/* Section label */}
+        <div className="flex items-center gap-3 mb-6">
+          <div style={{ width: 24, height: 1, background: '#C49434' }} />
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.16em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}>
+            {getSectionTitle(section.type)}
+          </span>
+        </div>
+
+        <Text
+          variant="lead"
+          className={`text-[#E8E1D5] whitespace-pre-wrap leading-relaxed ${
+            editMode ? 'edit-outline min-h-[100px] px-3 py-2' : ''
+          }`}
           contentEditable={editMode}
           suppressContentEditableWarning
           onBlur={(e) => {
-            if (editMode) {
-              updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
-            }
+            if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
           }}
         >
-          {section.content.text || (editMode ? 'Klikk for å redigere...' : 'Ingen tekst lagt til ennå...')}
+          {section.content.text || (editMode ? 'Klikk for å redigere...' : '')}
         </Text>
       </div>
     </div>
   )
 }
-

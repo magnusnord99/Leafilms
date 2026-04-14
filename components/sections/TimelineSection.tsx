@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Section } from '@/lib/types'
-import { Heading, Text } from '@/components/ui'
 
 type TimelineSectionProps = {
   section: Section
@@ -14,11 +13,137 @@ type TimelineSectionProps = {
 }
 
 const defaultTimelineItems = [
-  { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.', monthYear: 'Januar 2026' },
-  { title: 'PRODUKSJON', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.', monthYear: 'Februar 2026' },
-  { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.', monthYear: 'Mars 2026' },
-  { title: 'LEVERING', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.', monthYear: 'April 2026' }
+  { title: 'Pre-produksjon', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.', monthYear: 'Januar 2026' },
+  { title: 'Produksjon', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.', monthYear: 'Februar 2026' },
+  { title: 'Post-produksjon', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.', monthYear: 'Mars 2026' },
+  { title: 'Levering', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.', monthYear: 'April 2026' },
 ]
+
+// Card width + gap (must match the rendered card exactly)
+const CARD_W = 280
+const CARD_GAP = 16
+const CARD_STEP = CARD_W + CARD_GAP // 296px per card slot
+
+function TimelineCard({
+  index,
+  item,
+  isActive,
+  editMode,
+  section,
+  updateSectionContent,
+}: {
+  index: number
+  item: { title: string; text: string; monthYear: string }
+  isActive: boolean
+  editMode: boolean
+  section: Section
+  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+}) {
+  return (
+    <div
+      className="flex-shrink-0 p-7 transition-all"
+      style={{
+        width: CARD_W,
+        background: isActive ? '#201D18' : '#161410',
+        border: isActive ? '1px solid #38332A' : '1px solid #2A261F',
+        borderTop: isActive ? '2px solid #C49434' : '2px solid transparent',
+        transform: isActive ? 'translateY(-6px)' : 'translateY(0)',
+        boxShadow: isActive ? '0 24px 48px rgba(0,0,0,0.5)' : 'none',
+        transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+    >
+      {/* Step number */}
+      <div style={{
+        fontFamily: 'var(--font-cormorant)',
+        fontSize: '2.75rem',
+        fontWeight: 300,
+        color: isActive ? '#C49434' : '#2A261F',
+        lineHeight: 1,
+        marginBottom: '1rem',
+        transition: 'color 0.35s',
+        userSelect: 'none',
+      }}>
+        {String(index + 1).padStart(2, '0')}
+      </div>
+
+      {/* Title */}
+      <p
+        className={editMode ? 'edit-outline px-2 py-1' : ''}
+        style={{
+          fontFamily: 'var(--font-cormorant)',
+          fontSize: '1.25rem',
+          fontWeight: 500,
+          color: '#E8E1D5',
+          letterSpacing: '0.02em',
+          marginBottom: '0.75rem',
+        }}
+        contentEditable={editMode}
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          if (!editMode) return
+          const items = [...(section.content.timelineItems || defaultTimelineItems)]
+          if (!items[index]) items[index] = { title: '', text: '', monthYear: '' }
+          items[index] = { ...items[index], title: e.currentTarget.textContent || '' }
+          updateSectionContent(section.id, 'timelineItems', items)
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {item.title || (editMode ? 'Tittel...' : 'Fase')}
+      </p>
+
+      {/* Body */}
+      <p
+        className={editMode ? 'edit-outline px-2 py-1 min-h-[80px]' : ''}
+        style={{
+          fontFamily: 'var(--font-dm-sans)',
+          fontSize: '0.85rem',
+          color: '#9E9287',
+          lineHeight: 1.65,
+          fontWeight: 300,
+          marginBottom: '1.25rem',
+        }}
+        contentEditable={editMode}
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          if (!editMode) return
+          const items = [...(section.content.timelineItems || defaultTimelineItems)]
+          if (!items[index]) items[index] = { title: '', text: '', monthYear: '' }
+          items[index] = { ...items[index], text: e.currentTarget.textContent || '' }
+          updateSectionContent(section.id, 'timelineItems', items)
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {item.text || (editMode ? 'Klikk for å redigere tekst...' : '')}
+      </p>
+
+      {/* Date */}
+      <p
+        className={editMode ? 'edit-outline px-2 py-1' : ''}
+        style={{
+          fontFamily: 'var(--font-dm-sans)',
+          fontSize: '0.6rem',
+          letterSpacing: '0.12em',
+          color: isActive ? '#C49434' : '#38332A',
+          textTransform: 'uppercase',
+          fontWeight: 500,
+          transition: 'color 0.35s',
+        }}
+        contentEditable={editMode}
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          if (!editMode) return
+          const items = [...(section.content.timelineItems || defaultTimelineItems)]
+          if (!items[index]) items[index] = { title: '', text: '', monthYear: '' }
+          items[index] = { ...items[index], monthYear: e.currentTarget.textContent || '' }
+          updateSectionContent(section.id, 'timelineItems', items)
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {(item as any).monthYear || (editMode ? 'Måned År' : '')}
+      </p>
+    </div>
+  )
+}
 
 export function TimelineSection({
   section,
@@ -26,225 +151,201 @@ export function TimelineSection({
   timelineSectionProgress,
   timelineSectionRef,
   getSectionTitle,
-  updateSectionContent
+  updateSectionContent,
 }: TimelineSectionProps) {
   const [mobileIndex, setMobileIndex] = useState(0)
-  const timelineItems = section.content.timelineItems || defaultTimelineItems
+  const timelineItems: { title: string; text: string; monthYear: string }[] =
+    section.content.timelineItems || defaultTimelineItems
 
-  const desktopActiveIndex = Math.min(Math.floor(timelineSectionProgress * 4), 3)
-  const activeIndex = editMode ? 0 : desktopActiveIndex
+  // Active card = whichever card is closest to center based on scroll progress
+  // progress 0→1 maps across 3 transitions (4 cards)
+  const activeIndex = Math.min(Math.round(timelineSectionProgress * 3), 3)
 
-  const renderTimelineCard = (index: number, isActive: boolean) => {
-    const item = timelineItems[index] || { title: 'FASE', text: '', monthYear: '' }
+  // Horizontal offset: at progress=0, card[0] is centered; at progress=1, card[3] is centered.
+  // translateX = 50vw - half_card_width - progress * CARD_STEP * 3
+  // We can't do 50vw in JS, so we use CSS calc()
+  const translateX = `calc(50vw - ${CARD_W / 2}px - ${timelineSectionProgress * CARD_STEP * 3}px)`
+
+  // EDIT MODE: simple flat layout, all 4 cards visible
+  if (editMode) {
     return (
-      <div
-        key={index}
-        className="flex-shrink-0 w-[300px] max-w-[calc(100vw-4rem)] md:w-[300px] p-8 rounded-lg shadow-lg transition-all duration-300"
-        style={{
-          backgroundColor: isActive 
-            ? 'var(--color-background-widget-red-hover)'
-            : 'var(--color-background-widget-red)',
-          transform: isActive ? 'scale(1.1)' : 'scale(1)',
-          boxShadow: isActive ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}
-      >
-        <Heading 
-          as="h4" 
-          className={`mb-4 uppercase font-bold ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
-          contentEditable={editMode}
-          suppressContentEditableWarning
-          onBlur={(e) => {
-            if (editMode) {
-              const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
-              updatedItems[index] = { ...updatedItems[index], title: e.currentTarget.textContent || '' }
-              updateSectionContent(section.id, 'timelineItems', updatedItems)
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {item.title || (editMode ? 'Klikk for å redigere tittel...' : 'FASE')}
-        </Heading>
-        <Text 
-          variant="body" 
-          className={`${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
-          contentEditable={editMode}
-          suppressContentEditableWarning
-          onBlur={(e) => {
-            if (editMode) {
-              const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
-              updatedItems[index] = { ...updatedItems[index], text: e.currentTarget.textContent || '' }
-              updateSectionContent(section.id, 'timelineItems', updatedItems)
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {item.text || (editMode ? 'Klikk for å redigere tekst...' : 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.')}
-        </Text>
-        <Text
-          variant="muted"
-          className={`mt-3 text-dark/70 text-sm ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
-          contentEditable={editMode}
-          suppressContentEditableWarning
-          onBlur={(e) => {
-            if (editMode) {
-              const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-              if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
-              updatedItems[index] = { ...updatedItems[index], monthYear: e.currentTarget.textContent || '' }
-              updateSectionContent(section.id, 'timelineItems', updatedItems)
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {(item as { monthYear?: string }).monthYear || (editMode ? 'Måned år (f.eks. April 2026)' : '')}
-        </Text>
+      <div ref={timelineSectionRef} className="w-full py-16 md:py-20">
+        <div className="px-8 md:px-16 mb-12 flex items-center gap-5">
+          <div style={{ width: 32, height: 1, background: '#C49434' }} />
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.16em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}>
+            {getSectionTitle(section.type)}
+          </span>
+        </div>
+        <div className="flex gap-4 px-8 md:px-16 overflow-x-auto pb-4">
+          {[0, 1, 2, 3].map((i) => (
+            <TimelineCard
+              key={i}
+              index={i}
+              item={timelineItems[i] || { title: 'Fase', text: '', monthYear: '' }}
+              isActive={i === 0}
+              editMode={editMode}
+              section={section}
+              updateSectionContent={updateSectionContent}
+            />
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div ref={timelineSectionRef} className="w-full overflow-hidden">
-      <div className="mt-10 text-center">
-        <Heading as="h2" size="md">
-          {getSectionTitle(section.type)}
-        </Heading>
-      </div>
-
-      {/* Mobil: carousel med piler – én fase om gangen (viser under 1024px) */}
-      <div className="lg:hidden relative flex items-center justify-center gap-3 mt-16 px-4">
-        <button
-          type="button"
-          onClick={() => setMobileIndex((i) => Math.max(0, i - 1))}
-          disabled={mobileIndex === 0}
-          aria-label="Forrige fase"
-          className="relative z-20 flex-shrink-0 w-10 h-10 rounded-full bg-black/20 hover:bg-black/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-dark transition"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <div className="relative z-0 flex-1 min-w-0 flex justify-center">
-          {renderTimelineCard(mobileIndex, true)}
+    // Outer tall div — gives the scroll room needed for the animation.
+    // The sticky inner content stays fixed while user scrolls through this space.
+    <div
+      ref={timelineSectionRef}
+      style={{ position: 'relative', height: '280vh' }}
+    >
+      {/* Sticky viewport — stays fixed while parent scrolls */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        height: '100vh',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+      }}>
+        {/* Section label */}
+        <div className="px-8 md:px-16 mb-10 flex items-center gap-5">
+          <div style={{ width: 32, height: 1, background: '#C49434' }} />
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.16em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}>
+            {getSectionTitle(section.type)}
+          </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setMobileIndex((i) => Math.min(timelineItems.length - 1, i + 1))}
-          disabled={mobileIndex === timelineItems.length - 1}
-          aria-label="Neste fase"
-          className="relative z-20 flex-shrink-0 w-10 h-10 rounded-full bg-black/20 hover:bg-black/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-dark transition"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
+        {/* Mobile: carousel */}
+        <div className="lg:hidden relative flex items-center justify-center gap-3 px-4">
+          <button
+            type="button"
+            onClick={() => setMobileIndex(i => Math.max(0, i - 1))}
+            disabled={mobileIndex === 0}
+            aria-label="Forrige fase"
+            className="flex-shrink-0 w-9 h-9 rounded-full border border-[#2A261F] flex items-center justify-center text-[#9E9287] hover:border-[#C49434] hover:text-[#C49434] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0 flex justify-center">
+            <TimelineCard
+              index={mobileIndex}
+              item={timelineItems[mobileIndex] || { title: 'Fase', text: '', monthYear: '' }}
+              isActive
+              editMode={false}
+              section={section}
+              updateSectionContent={updateSectionContent}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileIndex(i => Math.min(timelineItems.length - 1, i + 1))}
+            disabled={mobileIndex === timelineItems.length - 1}
+            aria-label="Neste fase"
+            className="flex-shrink-0 w-9 h-9 rounded-full border border-[#2A261F] flex items-center justify-center text-[#9E9287] hover:border-[#C49434] hover:text-[#C49434] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
 
-      <p className="lg:hidden text-center text-dark/70 text-sm mt-3 mb-2">
-        {mobileIndex + 1} av {timelineItems.length}
-      </p>
-      <p className="lg:hidden text-center text-dark/70 text-xl font-medium mb-6">
-        {(timelineItems[mobileIndex] as { monthYear?: string })?.monthYear || ''}
-      </p>
-      
-      {/* Desktop: scroll-basert tidslinje (viser fra 1024px) */}
-      <div className="hidden lg:block relative overflow-hidden mt-16" style={{ height: '300px' }}>
-        <div 
-          className="flex gap-6 transition-transform duration-100 ease-out"
-          style={{
-            transform: editMode 
-              ? 'translateX(0)' 
-              : `translateX(calc(30vw - 150px - ${timelineSectionProgress * (300 + 24) * 3}px))`
-          }}
+        {/* Mobile step dots */}
+        <div className="lg:hidden flex items-center justify-center gap-2 mt-6">
+          {timelineItems.map((_: unknown, i: number) => (
+            <button
+              key={i}
+              onClick={() => setMobileIndex(i)}
+              style={{
+                width: i === mobileIndex ? 20 : 4,
+                height: 2,
+                background: i === mobileIndex ? '#C49434' : '#2A261F',
+                borderRadius: 1,
+                transition: 'all 0.25s',
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Desktop: horizontal strip, translated smoothly */}
+        <div
+          className="hidden lg:block"
+          style={{ overflow: 'visible' }}
         >
-          {[0, 1, 2, 3].map((index) => {
-            const activeIndex = Math.min(Math.floor(timelineSectionProgress * 4), 3)
-            const isActive = !editMode && activeIndex === index
-            
-            const boxProgress = (timelineSectionProgress * 4) - index
-            const fadeProgress = Math.max(0, Math.min(1, 1 - Math.abs(boxProgress - 0.5) * 2))
-            
-            const desktopItems = section.content.timelineItems || defaultTimelineItems
-            const item = desktopItems[index] || { title: 'FASE', text: '', monthYear: '' }
-            
-            return (
-              <div
-                key={index}
-                className="flex-shrink-0 w-[300px] p-8 rounded-lg shadow-lg transition-all duration-300"
-                style={{
-                  backgroundColor: isActive 
-                    ? 'var(--color-background-widget-red-hover)' // More saturated version of widget-red
-                    : 'var(--color-background-widget-red)',
-                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                  boxShadow: isActive ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              >
-                <Heading 
-                  as="h4" 
-                  className={`mb-4 uppercase font-bold ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
-                  contentEditable={editMode}
-                  suppressContentEditableWarning
-                  onBlur={(e) => {
-                    if (editMode) {
-                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-                      if (!updatedItems[index]) {
-                        updatedItems[index] = { title: '', text: '', monthYear: '' }
-                      }
-                      updatedItems[index] = { ...updatedItems[index], title: e.currentTarget.textContent || '' }
-                      updateSectionContent(section.id, 'timelineItems', updatedItems)
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {item.title || (editMode ? 'Klikk for å redigere tittel...' : 'FASE')}
-                </Heading>
-                <Text 
-                  variant="body" 
-                  className={`${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1 min-h-[100px]' : ''}`}
-                  contentEditable={editMode}
-                  suppressContentEditableWarning
-                  onBlur={(e) => {
-                    if (editMode) {
-                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-                      if (!updatedItems[index]) {
-                        updatedItems[index] = { title: '', text: '', monthYear: '' }
-                      }
-                      updatedItems[index] = { ...updatedItems[index], text: e.currentTarget.textContent || '' }
-                      updateSectionContent(section.id, 'timelineItems', updatedItems)
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {item.text || (editMode ? 'Klikk for å redigere tekst...' : 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.')}
-                </Text>
-                <Text
-                  variant="muted"
-                  className={`mt-3 text-dark/70 text-sm ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
-                  contentEditable={editMode}
-                  suppressContentEditableWarning
-                  onBlur={(e) => {
-                    if (editMode) {
-                      const updatedItems = [...(section.content.timelineItems || defaultTimelineItems)]
-                      if (!updatedItems[index]) updatedItems[index] = { title: '', text: '', monthYear: '' }
-                      updatedItems[index] = { ...updatedItems[index], monthYear: e.currentTarget.textContent || '' }
-                      updateSectionContent(section.id, 'timelineItems', updatedItems)
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {item.monthYear || (editMode ? 'Måned år (f.eks. April 2026)' : '')}
-                </Text>
-              </div>
-            )
-          })}
+          <div
+            style={{
+              display: 'flex',
+              gap: CARD_GAP,
+              // The translateX drives which card is centered
+              transform: `translateX(${translateX})`,
+              // willChange tells the GPU to composite this layer — reduces jank
+              willChange: 'transform',
+              // No CSS transition here! We want it to track scroll 1:1 without lag.
+              // The easing comes from natural scroll momentum.
+            }}
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <TimelineCard
+                key={i}
+                index={i}
+                item={timelineItems[i] || { title: 'Fase', text: '', monthYear: '' }}
+                isActive={activeIndex === i}
+                editMode={false}
+                section={section}
+                updateSectionContent={updateSectionContent}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Progress dots (desktop) */}
+        <div className="hidden lg:flex items-center justify-center gap-3 mt-10">
+          {timelineItems.map((_: unknown, i: number) => (
+            <div
+              key={i}
+              style={{
+                width: activeIndex === i ? 24 : 4,
+                height: 2,
+                background: activeIndex === i ? '#C49434' : '#2A261F',
+                borderRadius: 1,
+                transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Active date label (desktop) */}
+        <div className="hidden lg:flex justify-center mt-4">
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.14em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}>
+            {(timelineItems[activeIndex] as any)?.monthYear || ''}
+          </span>
         </div>
       </div>
-      <p className="hidden lg:block text-center text-dark/70 text-xl font-medium mt-4 mb-10">
-        {(timelineItems[activeIndex] as { monthYear?: string })?.monthYear || ''}
-      </p>
     </div>
   )
 }
-

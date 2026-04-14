@@ -3,86 +3,73 @@
 /* Force Tailwind to include these classes */
 /* text-heading-3xl text-heading-2xl text-heading-xl text-heading-lg text-heading-md text-heading-sm */
 
-/* Hero section fade-in animation */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 1s ease-out 0.2s forwards;
-  opacity: 0;
-}
+/* ═══════════════════════════════════════════════════
+   CINEMATIC WARM DARK — Leafilms 2026
+   ═══════════════════════════════════════════════════ */
 
 :root {
-  /* ═══════════════════════════════════════════════════ */
-  /* DESIGN TOKENS - Hovedfarger */
-  /* ═══════════════════════════════════════════════════ */
-  
-  /* Tekstfarger - de to hovedfargene */
-  --color-white: #BFB5A9;      /* Hvit variant (du kan endre til #ffffff) */
-  --color-dark: #2F2F2F;        /* Mørk tekstfarge */
-  
-  /* Bakgrunnsfarger */
-  --color-background: #D9D9D9;  /* Lys grå bakgrunn */
-  --color-background-surface: #D9D9D9;
-  --color-background-elevated: #D9D9D9;
-  --color-background-widget: #B6CBD7;
-  --color-background-widget-medium: #8FA8B8;
-  --color-background-widget-dark: #434242;
-  --color-background-widget-red: #B0A7A9;
-  --color-background-widget-red-hover: #a16a76; /* Hover-farge for widget-red (mer mettet versjon) */
-  
-  /* Knapp-farger */
-  --color-primary: #ffffff;
-  --color-primary-text: #000000;
-  --color-primary-hover: #f5f5f5;
-  
-  --color-secondary: #27272a;
-  --color-secondary-text: #ffffff;
-  --color-secondary-hover: #3f3f46;
-  
-  --color-danger: #ef4444;
-  --color-danger-hover: #dc2626;
-  
-  /* Status-farger */
-  --color-success: #10b981;
-  --color-success-bg: rgba(16, 185, 129, 0.2);
-  --color-success-text: #10b981;
-  --color-warning: #f59e0b;
-  --color-warning-bg: rgba(245, 158, 11, 0.2);
-  --color-warning-text: #f59e0b;
-  --color-info: #3b82f6;
-  --color-info-bg: rgba(59, 130, 246, 0.2);
-  --color-info-text: #3b82f6;
-  
-  /* Admin-side farger (mørk bakgrunn) */
-  --color-admin-bg: #000000;
-  --color-admin-surface: #18181b;  /* zinc-900 */
-  --color-admin-surface-light: #27272a;  /* zinc-800 */
-  --color-admin-border: #3f3f46;  /* zinc-700 */
-  --color-admin-text: #ffffff;
-  --color-admin-text-muted: #a1a1aa;  /* zinc-400 */
-  --color-admin-text-subtle: #71717a;  /* zinc-500 */
-  
-  /* Rammefarger */
-  --color-border: #3f3f46;
-  --color-border-light: #52525b;
-  --color-border-dark: #27272a;
-  
+  /* Primary text colors */
+  --color-white: #E8E1D5;       /* warm cream — "white" */
+  --color-dark: #E8E1D5;        /* primary text on dark background */
+
+  /* Backgrounds — warm near-black layered system */
+  --color-background: #0C0B09;
+  --color-background-surface: #161410;
+  --color-background-elevated: #201D18;
+  --color-background-widget: #201D18;
+  --color-background-widget-medium: #2A261F;
+  --color-background-widget-dark: #161410;
+  --color-background-widget-red: #1E1B16;
+  --color-background-widget-red-hover: #2A261F;
+
+  /* Buttons */
+  --color-primary: #E8E1D5;
+  --color-primary-text: #0C0B09;
+  --color-primary-hover: #F2EBE0;
+
+  --color-secondary: #201D18;
+  --color-secondary-text: #E8E1D5;
+  --color-secondary-hover: #2A261F;
+
+  --color-danger: #B84040;
+  --color-danger-hover: #CC5050;
+
+  /* Status */
+  --color-success: #4A9A70;
+  --color-success-bg: rgba(74, 154, 112, 0.12);
+  --color-success-text: #5BB880;
+  --color-warning: #C49434;
+  --color-warning-bg: rgba(196, 148, 52, 0.12);
+  --color-warning-text: #D4A848;
+  --color-info: #4878B8;
+  --color-info-bg: rgba(72, 120, 184, 0.12);
+  --color-info-text: #5A90CC;
+
+  /* Accent — amber gold */
+  --color-accent: #C49434;
+  --color-accent-hover: #D4A848;
+
+  /* Admin */
+  --color-admin-bg: #0C0B09;
+  --color-admin-surface: #161410;
+  --color-admin-surface-light: #201D18;
+  --color-admin-border: #2A261F;
+  --color-admin-text: #E8E1D5;
+  --color-admin-text-muted: #9E9287;
+  --color-admin-text-subtle: #62594E;
+
+  /* Borders */
+  --color-border: #2A261F;
+  --color-border-light: #38332A;
+  --color-border-dark: #161410;
+
   /* Fonts */
-  --font-sans: var(--font-poppins);
-  --font-mono: var(--font-poppins); /* Bruker Poppins også for mono som fallback */
+  --font-display: var(--font-cormorant);
+  --font-sans: var(--font-dm-sans);
+  --font-mono: var(--font-dm-sans);
 }
 
 @theme inline {
-  /* Map CSS variabler til Tailwind */
   --color-white: var(--color-white);
   --color-dark: var(--color-dark);
   --color-primary: var(--color-primary);
@@ -124,26 +111,135 @@
   --font-mono: var(--font-mono);
 }
 
+/* ═══════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════ */
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-dark);
-  font-family: var(--font-sans), Arial, sans-serif;
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes fadeIn {
+/* Film grain overlay — subtle cinematic texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(196, 148, 52, 0.3);
+  color: #E8E1D5;
+}
+
+/* ═══════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════ */
+
+@keyframes fade-in-up {
   from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes reveal-line {
+  from {
+    clip-path: inset(0 100% 0 0);
     opacity: 0;
   }
   to {
+    clip-path: inset(0 0% 0 0);
     opacity: 1;
   }
 }
 
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+.animate-fade-in-up {
+  animation: fade-in-up 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+  opacity: 0;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+/* Staggered children */
+.stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.22s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.34s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.46s; }
+
+/* ═══════════════════════════════════════════════════
+   TYPOGRAPHY — CORMORANT GARAMOND DISPLAY
+   ═══════════════════════════════════════════════════ */
+
+.font-display {
+  font-family: var(--font-cormorant), Georgia, serif;
+}
+
+/* ═══════════════════════════════════════════════════
+   EDIT MODE HELPERS
+   ═══════════════════════════════════════════════════ */
+
+.edit-outline {
+  outline: 1.5px dashed rgba(196, 148, 52, 0.5);
+  outline-offset: 2px;
+  border-radius: 2px;
+  cursor: text;
+  transition: outline-color 0.2s;
+}
+
+.edit-outline:hover {
+  outline-color: rgba(196, 148, 52, 0.85);
+}
+
+/* ═══════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #161410;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #38332A;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C49434;
 }

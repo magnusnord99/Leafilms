@@ -116,8 +116,9 @@ const config = {
                 'body-xs': ['0.50rem', { lineHeight: '1.4' }],   // 12px
                 },
       fontFamily: {
-        sans: ['var(--font-poppins)', 'Arial', 'sans-serif'],
-        mono: ['var(--font-poppins)', 'monospace'],
+        sans: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-cormorant)', 'Georgia', 'serif'],
+        mono: ['var(--font-dm-sans)', 'monospace'],
       },
       // ═══════════════════════════════════════════════════
       // SPACING & LAYOUT

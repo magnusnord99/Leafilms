@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
-import { Button, Card, Badge, Heading, Text } from '@/components/ui'
+import { Button, Badge } from '@/components/ui'
 import { Project, Customer } from '@/lib/types'
 
 export default function AdminDashboard() {
@@ -128,171 +128,238 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Laster...</p>
       </div>
     )
   }
 
+  const navLinks = [
+    { href: '/admin/cases', label: 'Case Studies' },
+    { href: '/admin/team', label: 'Team' },
+    { href: '/admin/images', label: 'Bilder' },
+    { href: '/admin/videos', label: 'Videoer' },
+    { href: '/admin/ai-examples', label: 'AI Eksempler' },
+    { href: '/admin/users', label: 'Brukere' },
+  ]
+
+  const sectionLabel = (text: string) => (
+    <span style={{
+      fontFamily: 'var(--font-dm-sans)',
+      fontSize: '0.6rem',
+      letterSpacing: '0.16em',
+      color: '#C49434',
+      textTransform: 'uppercase' as const,
+      fontWeight: 500,
+    }}>
+      {text}
+    </span>
+  )
+
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-12">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+      <div className="max-w-5xl mx-auto">
+
+        {/* Page header */}
+        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
           <div>
-            <Heading as="h1" size="lg" className="mb-2 !text-white">Lea Films Pitch</Heading>
-            <Text variant="body" className="!text-white">Admin Dashboard</Text>
+            <div className="flex items-center gap-4 mb-4">
+              <div style={{ width: 32, height: 1, background: '#C49434' }} />
+              {sectionLabel('Dashboard')}
+            </div>
+            <h1 style={{
+              fontFamily: 'var(--font-cormorant)',
+              fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              color: '#E8E1D5',
+              lineHeight: 1,
+            }}>
+              Leafilms Pitch
+            </h1>
           </div>
-          <div className="flex gap-3">
-            <Link href="/admin/cases">
-              <Button variant="secondary">Case Studies</Button>
-            </Link>
-            <Link href="/admin/team">
-              <Button variant="secondary">Team</Button>
-            </Link>
-            <Link href="/admin/images">
-              <Button variant="secondary">Bildebibliotek</Button>
-            </Link>
-            <Link href="/admin/videos">
-              <Button variant="secondary">Videobibliotek</Button>
-            </Link>
-            <Link href="/admin/ai-examples">
-              <Button variant="secondary">AI Eksempler</Button>
-            </Link>
-            <Link href="/admin/users">
-              <Button variant="secondary">Brukere</Button>
-            </Link>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            {navLinks.map(link => (
+              <Link key={link.href} href={link.href}>
+                <Button variant="secondary" size="sm">{link.label}</Button>
+              </Link>
+            ))}
             <Link href="/admin/projects/new">
-              <Button variant="primary">+ Nytt Prosjekt</Button>
+              <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
             </Link>
           </div>
         </div>
 
-        {/* Recent Projects - Sist åpnet */}
-        <div className="space-y-4 mb-12">
-          <div className="flex items-center justify-between">
-            <Heading as="h2" size="md" className="!text-white">Sist åpnet</Heading>
+        {/* Recent Projects */}
+        <div className="mb-14">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div style={{ width: 20, height: 1, background: '#38332A' }} />
+              {sectionLabel('Sist åpnet')}
+            </div>
             <Link href="/admin/projects">
-              <Button variant="secondary" size="sm">Se alle prosjekter</Button>
+              <Button variant="ghost" size="sm">Se alle →</Button>
             </Link>
           </div>
-          
+
           {recentProjects && recentProjects.length > 0 ? (
-            <div className="grid gap-4">
-              {recentProjects.map((project) => (
-                <Card key={project.id} hover>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <Heading as="h3" size="sm" className="mb-2">{project.title}</Heading>
-                      {project.client_name && (
-                        <Text variant="body" className="mb-2">Kunde: {project.client_name}</Text>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-                          {project.status === 'published' ? '🟢 Publisert' : 
-                           project.status === 'archived' ? '⚫ Arkivert' : 
-                           '🟡 Utkast'}
-                        </Badge>
-                        <Text variant="muted">
-                          Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                        </Text>
-                      </div>
+            <div className="flex flex-col gap-px" style={{ border: '1px solid #2A261F', borderRadius: 3 }}>
+              {recentProjects.map((project, i) => (
+                <div
+                  key={project.id}
+                  className="flex items-center justify-between px-5 py-4 transition-colors"
+                  style={{
+                    background: '#161410',
+                    borderBottom: i < recentProjects.length - 1 ? '1px solid #2A261F' : 'none',
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <p style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                        color: '#E8E1D5',
+                        letterSpacing: '0.03em',
+                      }}>
+                        {project.title}
+                      </p>
+                      <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
+                        {project.status === 'published' ? 'Publisert' :
+                         project.status === 'archived' ? 'Arkivert' : 'Utkast'}
+                      </Badge>
                     </div>
-                    <div className="flex gap-2">
-                      <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Åpne</Button>
-                      </Link>
-                      {shareLinks[project.id] && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            window.open(shareLinks[project.id], '_blank')
-                          }}
-                        >
-                          🔗 Se publisert
-                        </Button>
+                    <div className="flex items-center gap-3">
+                      {project.client_name && (
+                        <span style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
+                          {project.client_name}
+                        </span>
                       )}
-                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-                        <Button variant="secondary" size="sm">📊 Se statistikk</Button>
-                      </Link>
-                      <Button 
-                        variant="secondary" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          handleDelete(project.id, project.title)
-                        }}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                      >
-                        Slett
-                      </Button>
+                      <span style={{ fontSize: '0.65rem', color: '#38332A', fontFamily: 'var(--font-dm-sans)' }}>
+                        {new Date(project.updated_at).toLocaleDateString('nb-NO')}
+                      </span>
                     </div>
                   </div>
-                </Card>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Link href={`/admin/projects/${project.id}/edit`}>
+                      <Button variant="primary" size="sm">Åpne</Button>
+                    </Link>
+                    {shareLinks[project.id] && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => { e.preventDefault(); window.open(shareLinks[project.id], '_blank') }}
+                      >
+                        Se publisert
+                      </Button>
+                    )}
+                    <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                      <Button variant="secondary" size="sm">Statistikk</Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.preventDefault(); handleDelete(project.id, project.title) }}
+                      style={{ color: '#B84040' }}
+                    >
+                      Slett
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
-            <Card className="p-8 text-center">
-              <Text variant="body" className="mb-4">Ingen prosjekter ennå</Text>
+            <div
+              className="p-10 text-center"
+              style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+            >
+              <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
+                Ingen prosjekter ennå
+              </p>
               <Link href="/admin/projects/new">
-                <Button variant="primary">Opprett første prosjekt →</Button>
+                <Button variant="primary">Opprett første prosjekt</Button>
               </Link>
-            </Card>
+            </div>
           )}
         </div>
 
-        {/* Customers List */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Heading as="h2" size="md" className="!text-white">Kunder</Heading>
+        {/* Customers */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div style={{ width: 20, height: 1, background: '#38332A' }} />
+              {sectionLabel('Kunder')}
+            </div>
             <Link href="/admin/customers/new">
               <Button variant="primary" size="sm">+ Ny Kunde</Button>
             </Link>
           </div>
-          
+
           {customers && customers.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {customers.map((customer) => (
                 <Link key={customer.id} href={`/admin/customers/${customer.id}/projects`}>
-                  <Card hover className="bg-background-widget">
+                  <div
+                    className="px-5 py-4 transition-all group"
+                    style={{
+                      background: '#161410',
+                      border: '1px solid #2A261F',
+                      borderRadius: 3,
+                    }}
+                  >
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Heading as="h3" size="sm" className="font-bold">{customer.name}</Heading>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p style={{
+                            fontFamily: 'var(--font-dm-sans)',
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            color: '#E8E1D5',
+                          }}>
+                            {customer.name}
+                          </p>
                           {customer.company && (
-                            <Text variant="muted">• {customer.company}</Text>
+                            <span style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
+                              {customer.company}
+                            </span>
                           )}
                         </div>
-                        <div className="space-y-1 mb-3">
+                        <div className="space-y-0.5 mb-2">
                           {customer.email && (
-                            <Text variant="body" className="text-sm ">📧 {customer.email}</Text>
+                            <p style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
+                              {customer.email}
+                            </p>
                           )}
                           {customer.phone && (
-                            <Text variant="body" className="text-sm">📞 {customer.phone}</Text>
+                            <p style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
+                              {customer.phone}
+                            </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Text variant="muted" className="text-sm">
-                            {projectCounts[customer.id] || 0} prosjekt{projectCounts[customer.id] !== 1 ? 'er' : ''}
-                          </Text>
-                        </div>
+                        <span style={{ fontSize: '0.6rem', color: '#38332A', fontFamily: 'var(--font-dm-sans)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                          {projectCounts[customer.id] || 0} prosjekt{projectCounts[customer.id] !== 1 ? 'er' : ''}
+                        </span>
                       </div>
-                      <div className="flex items-center">
-                        <Text variant="muted">→</Text>
-                      </div>
+                      <svg className="w-3.5 h-3.5 flex-shrink-0 mt-1" fill="none" stroke="#38332A" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
-                  </Card>
+                  </div>
                 </Link>
               ))}
             </div>
           ) : (
-            <Card className="p-12 text-center">
-              <Text variant="body" className="mb-4">Ingen kunder ennå</Text>
+            <div
+              className="p-10 text-center"
+              style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+            >
+              <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
+                Ingen kunder ennå
+              </p>
               <Link href="/admin/customers/new">
-                <Button variant="primary">Opprett første kunde →</Button>
+                <Button variant="primary">Opprett første kunde</Button>
               </Link>
-            </Card>
+            </div>
           )}
         </div>
       </div>

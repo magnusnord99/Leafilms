@@ -49,106 +49,67 @@ export function HeroSection({
   const sectionVideo = sectionVideoData[section.id]?.[0]
   const hasVideo = sectionVideos[section.id]?.[0] && sectionVideo
   const hasImage = sectionImages[section.id]?.[0] && sectionImage
-  
+
   const currentPos = imagePosition[section.id] || {
     x: sectionImage?.background_position_x ?? 50,
     y: sectionImage?.background_position_y ?? 50,
     zoom: sectionImage?.background_zoom ?? null
   }
 
-  // Hent video URL hvis video finnes
-  const videoUrl = hasVideo 
+  const videoUrl = hasVideo
     ? supabase.storage.from('assets').getPublicUrl(sectionVideos[section.id][0].file_path).data.publicUrl
     : null
 
-  // State for fade-in animasjon
   const [isVisible, setIsVisible] = useState(false)
-  
-  // State for scroll-basert størrelse
-  const [scrollScale, setScrollScale] = useState(1)
+  const [scrollProgress, setScrollProgress] = useState(0)
   const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    // Trigger fade-in når komponenten mountes
-    const timer = setTimeout(() => {
-      setIsVisible(true)
-    }, 200)
+    const timer = setTimeout(() => setIsVisible(true), 100)
     return () => clearTimeout(timer)
   }, [])
 
-  // Scroll-effekt for å gjøre teksten mindre når man scroller
   useEffect(() => {
     if (!headerRef.current) return
-
     const handleScroll = () => {
       const header = headerRef.current
       if (!header) return
-
       const rect = header.getBoundingClientRect()
-      const windowHeight = window.innerHeight
-      
-      // Beregn scale basert på hvor mye header har blitt scrollet forbi
-      // Når rect.top er negativ, har vi scrollet forbi toppen
-      if (rect.top < 0 && rect.bottom > 0) {
-        // Header er delvis scrollet forbi
-        const scrolledPast = Math.abs(rect.top)
-        const headerHeight = rect.height
-        // Scale fra 1 til 0.5 basert på hvor mye vi har scrollet
-        const scrollProgress = Math.min(1, scrolledPast / headerHeight)
-        const scale = Math.max(0.5, 1 - (scrollProgress * 0.5))
-        setScrollScale(scale)
-      } else if (rect.top >= 0) {
-        // Header er helt synlig, full størrelse
-        setScrollScale(1)
-      } else {
-        // Header er helt scrollet forbi, minimum størrelse
-        setScrollScale(0.5)
-      }
+      if (rect.bottom <= 0) { setScrollProgress(1); return }
+      if (rect.top >= 0) { setScrollProgress(0); return }
+      setScrollProgress(Math.min(1, Math.abs(rect.top) / rect.height))
     }
-
-    // Initial call
-    handleScroll()
-    
-    // Throttle scroll events for bedre ytelse
     let ticking = false
-    const throttledHandleScroll = () => {
+    const throttled = () => {
       if (!ticking) {
-        window.requestAnimationFrame(() => {
-          handleScroll()
-          ticking = false
-        })
+        requestAnimationFrame(() => { handleScroll(); ticking = false })
         ticking = true
       }
     }
-
-    window.addEventListener('scroll', throttledHandleScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', throttledHandleScroll)
-    }
+    window.addEventListener('scroll', throttled, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener('scroll', throttled)
   }, [])
 
-  // Handler for å åpne video picker (prioriteres alltid)
   const handleBackgroundClick = () => {
     if (editMode) {
-      if (onVideoPickerOpen) {
-        onVideoPickerOpen()
-      } else if (onImageClick) {
-        onImageClick()
-      }
+      onVideoPickerOpen ? onVideoPickerOpen() : onImageClick()
     }
   }
 
+  const textScale = Math.max(0.72, 1 - scrollProgress * 0.28)
+  const textOpacity = Math.max(0, 1 - scrollProgress * 1.6)
+
   return (
-    <header 
+    <header
       ref={headerRef}
       onClick={hasVideo ? undefined : (editMode ? handleBackgroundClick : undefined)}
-      className={`relative min-h-screen flex items-center justify-center px-2 md:px-4 py-20 bg-background overflow-hidden ${
-        editMode && !hasVideo ? 'cursor-pointer hover:bg-background/90 transition-colors' : ''
+      className={`relative min-h-screen flex items-end justify-start overflow-hidden ${
+        editMode && !hasVideo ? 'cursor-pointer' : ''
       }`}
-      style={{}}
+      style={{ background: '#0C0B09' }}
     >
-      {/* Bakgrunnsvideo - prioriteres over bilde */}
+      {/* Background video */}
       {hasVideo && videoUrl && sectionVideo && (
         <video
           autoPlay={sectionVideo.autoplay}
@@ -156,101 +117,87 @@ export function HeroSection({
           muted={sectionVideo.muted}
           playsInline
           className="absolute inset-0 w-full h-full object-cover z-0"
-          style={{
-            objectFit: 'cover',
-            objectPosition: 'center'
-          }}
         >
           <source src={videoUrl} type="video/mp4" />
         </video>
       )}
-      
-      {/* Bilde som fallback hvis ingen video */}
+
+      {/* Background image */}
       {!hasVideo && hasImage && (
-        <div 
+        <div
           className="absolute inset-0 w-full h-full z-0 pointer-events-none"
           style={getBackgroundStyle(section.id, 0)}
         />
       )}
 
-      {/* Overlay for bedre lesbarhet */}
+      {/* Cinematic gradient overlay — heavier at bottom for text legibility */}
       {(hasVideo || hasImage) && (
-        <div className="absolute inset-0 bg-black/30 z-[1]" />
+        <>
+          <div className="absolute inset-0 z-[1]" style={{
+            background: 'linear-gradient(to top, rgba(12,11,9,0.96) 0%, rgba(12,11,9,0.5) 40%, rgba(12,11,9,0.15) 70%, rgba(12,11,9,0.1) 100%)'
+          }} />
+          <div className="absolute inset-0 z-[1]" style={{
+            background: 'linear-gradient(to right, rgba(12,11,9,0.3) 0%, transparent 60%)'
+          }} />
+        </>
       )}
 
-      {/* Redigeringsknapper */}
+      {/* Empty state in edit mode */}
+      {!hasVideo && !hasImage && editMode && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onVideoPickerOpen ? onVideoPickerOpen() : onImageClick()
+          }}
+          className="absolute inset-0 flex items-center justify-center z-10"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          <div className="text-center border border-dashed border-[#38332A] px-10 py-8 rounded-[2px]">
+            <Text variant="muted">Klikk for å legge til bakgrunnsvideo</Text>
+            <Text variant="xs" className="mt-1" style={{ color: '#62594E' }}>Video (eller bilde som alternativ)</Text>
+          </div>
+        </button>
+      )}
+
+      {/* Edit controls */}
       {editMode && (hasImage || hasVideo) && (
-        <div className="absolute top-4 right-4 z-20 flex gap-2">
+        <div className="absolute top-5 right-5 z-20 flex gap-2">
           {hasVideo && onVideoPickerOpen && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onVideoPickerOpen()
-              }}
-              className="bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-              title="Bytt video"
+              onClick={(e) => { e.stopPropagation(); onVideoPickerOpen() }}
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
             >
-              🎬 Bytt video
+              Bytt video
             </button>
           )}
           {hasImage && !hasVideo && onVideoPickerOpen && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onVideoPickerOpen()
-              }}
-              className="bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-              title="Bytt til video"
+              onClick={(e) => { e.stopPropagation(); onVideoPickerOpen() }}
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
             >
-              🎬 Bytt til video
+              Bytt til video
             </button>
           )}
           {hasImage && !hasVideo && (
             <button
               onClick={onEditPositionClick}
-              className="bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-              title="Rediger bilde-posisjon"
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
             >
-              {editingImageSectionId === section.id ? '✕ Lukk' : '✏️ Rediger posisjon'}
+              {editingImageSectionId === section.id ? 'Lukk' : 'Rediger posisjon'}
             </button>
           )}
           {hasImage && !hasVideo && onImagePickerOpen && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onImagePickerOpen()
-              }}
-              className="bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-              title="Bytt bilde"
+              onClick={(e) => { e.stopPropagation(); onImagePickerOpen() }}
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
             >
-              🖼️ Bytt bilde
+              Bytt bilde
             </button>
           )}
         </div>
       )}
 
-      {/* Legg til video/bilde knapp i edit mode */}
-      {editMode && !hasVideo && !hasImage && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            // Prioriter video over bilde
-            if (onVideoPickerOpen) {
-              onVideoPickerOpen()
-            } else {
-              onImageClick()
-            }
-          }}
-          className="absolute inset-0 flex items-center justify-center bg-background/50 hover:bg-background/70 transition-colors z-10"
-        >
-          <div className="text-center">
-            <Text variant="body" className="text-dark mb-2">Klikk for å legge til bakgrunnsvideo</Text>
-            <Text variant="small" className="text-dark/70">Video (eller bilde som alternativ)</Text>
-          </div>
-        </button>
-      )}
-      
-      {/* Zoom/Pan kontroller for Hero (kun for bilder) */}
+      {/* Image position controls */}
       {editMode && editingImageSectionId === section.id && hasImage && !hasVideo && (
         <ImagePositionControls
           sectionId={section.id}
@@ -269,49 +216,95 @@ export function HeroSection({
         />
       )}
 
-      <div 
-        className="max-w-7xl mx-auto text-center relative z-[2]"
+      {/* Hero text — anchored bottom-left, editorial */}
+      <div
+        className="relative z-[2] w-full px-8 md:px-16 pb-16 md:pb-20"
         style={{
-          opacity: isVisible ? 1 : 0,
-          transform: isVisible 
-            ? `translateY(0) scale(${scrollScale})` 
-            : `translateY(20px) scale(${scrollScale})`,
-          transformOrigin: 'center center',
-          transition: isVisible ? 'opacity 2s ease-out, transform 0.1s ease-out' : 'opacity 2s ease-out, transform 0.1s ease-out',
+          opacity: isVisible ? textOpacity : 0,
+          transform: isVisible
+            ? `translateY(0) scale(${textScale})`
+            : `translateY(32px) scale(${textScale})`,
+          transformOrigin: 'bottom left',
+          transition: isVisible
+            ? 'opacity 0.08s ease-out, transform 0.08s ease-out'
+            : 'opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 1.2s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
+        {/* Label line */}
+        <div className="mb-4 flex items-center gap-4">
+          <div className="w-8 h-px bg-[#C49434]" />
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.18em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}>
+            Leafilms
+          </span>
+        </div>
+
+        {/* Main title */}
         <Heading
-          as="h1"
-          size="lg"
-          className={`mb-6 text-white ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-white/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
+          as="h3"
+          size="3xl"
+          className={`mb-4 text-[#E8E1D5] ${editMode ? 'cursor-text' : ''}`}
+          style={{
+            fontFamily: 'var(--font-cormorant), Georgia, serif',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            lineHeight: 0.9,
+            maxWidth: '20ch',
+          }}
           contentEditable={editMode}
           suppressContentEditableWarning
           onBlur={(e) => {
-            if (editMode) {
-              updateSectionContent(section.id, 'client', e.currentTarget.textContent || '')
-            }
+            if (editMode) updateSectionContent(section.id, 'client', e.currentTarget.textContent || '')
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {section.content.client || project.client_name || project.title}
         </Heading>
-        <Heading
-          as="h2"
-          size="sm"
-          className="max-w-3xl mx-auto text-white"
+
+        {/* Subtitle */}
+        <p
+          className={`${editMode ? 'cursor-text' : ''}`}
+          style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.75rem',
+            letterSpacing: '0.14em',
+            color: '#9E9287',
+            textTransform: 'uppercase',
+            fontWeight: 400,
+            maxWidth: '40ch',
+          }}
           contentEditable={editMode}
           suppressContentEditableWarning
           onBlur={(e) => {
-            if (editMode) {
-              updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
-            }
+            if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {section.content.description || 'Innholdsproduksjon'}
-        </Heading>
+        </p>
       </div>
+
+      {/* Scroll indicator */}
+      {!editMode && (
+        <div
+          className="absolute bottom-8 right-10 z-[2] flex flex-col items-center gap-2"
+          style={{ opacity: Math.max(0, 1 - scrollProgress * 3) }}
+        >
+          <div style={{
+            width: 1,
+            height: 48,
+            background: 'linear-gradient(to bottom, transparent, #C49434)',
+            animation: 'fade-in 2s ease-out 1.5s forwards',
+            opacity: 0,
+          }} />
+        </div>
+      )}
     </header>
   )
 }
-

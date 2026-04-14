@@ -21,32 +21,71 @@ export default function AdminLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p>Laster...</p>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: '#0C0B09' }}
+      >
+        <div className="flex items-center gap-3">
+          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
+          <p style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.16em',
+            color: '#62594E',
+            textTransform: 'uppercase',
+          }}>
+            Laster...
+          </p>
+        </div>
       </div>
     )
   }
 
-  if (!user || !isAdmin) {
-    return null
-  }
+  if (!user || !isAdmin) return null
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header with logout */}
-      <header className="border-b border-gray-800 bg-gray-900/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold">LEAFILMS Admin</h1>
+    <div className="min-h-screen" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+      {/* Header */}
+      <header style={{ borderBottom: '1px solid #2A261F', background: 'rgba(12,11,9,0.98)' }}>
+        <div className="max-w-7xl mx-auto px-6 sm:px-8">
+          <div className="flex justify-between items-center h-14">
+            <div className="flex items-center gap-4">
+              {/* Logo mark */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 20, height: 1, background: '#C49434' }} />
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.6rem',
+                  letterSpacing: '0.2em',
+                  color: '#C49434',
+                  textTransform: 'uppercase',
+                  fontWeight: 500,
+                }}>
+                  Leafilms
+                </span>
+              </div>
+              <span style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.12em',
+                color: '#38332A',
+                textTransform: 'uppercase',
+              }}>
+                Admin
+              </span>
             </div>
             <div className="flex items-center gap-4">
               {profile && (
-                <span className="text-sm text-gray-400">
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  color: '#62594E',
+                  letterSpacing: '0.06em',
+                }}>
                   {profile.name || profile.email}
                 </span>
               )}
-              <Button variant="secondary" size="sm" onClick={logout}>
+              <Button variant="ghost" size="sm" onClick={logout}>
                 Logg ut
               </Button>
             </div>
@@ -54,9 +93,7 @@ export default function AdminLayout({
         </div>
       </header>
 
-      {/* Main content */}
       <main>{children}</main>
     </div>
   )
 }
-

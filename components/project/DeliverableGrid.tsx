@@ -109,7 +109,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
         </button>
       )}
     </div>
-    <p className="text-center text-white/70 text-sm mt-4">
+    <p className="text-left text-white/70 text-sm mt-4">
       Trykk på kortene for mer info
     </p>
     </div>

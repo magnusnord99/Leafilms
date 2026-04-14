@@ -44,7 +44,7 @@ export function ContactSection({
         }}
         style={{
           fontFamily: 'var(--font-cormorant)',
-          fontSize: 'clamp(2rem, 4vw, 3.5rem)',
+          fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
           fontWeight: 300,
           fontStyle: 'italic',
           color: '#E8E1D5',

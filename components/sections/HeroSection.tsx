@@ -247,7 +247,7 @@ export function HeroSection({
 
         {/* Main title */}
         <Heading
-          as="h1"
+          as="h3"
           size="3xl"
           className={`mb-4 text-[#E8E1D5] ${editMode ? 'cursor-text' : ''}`}
           style={{
@@ -255,7 +255,7 @@ export function HeroSection({
             fontWeight: 300,
             fontStyle: 'italic',
             lineHeight: 0.9,
-            maxWidth: '14ch',
+            maxWidth: '20ch',
           }}
           contentEditable={editMode}
           suppressContentEditableWarning

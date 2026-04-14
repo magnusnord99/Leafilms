@@ -57,7 +57,7 @@ export function TeamSection({
           className={`max-w-xl mb-12 ${editMode ? 'edit-outline px-3 py-2' : ''}`}
           style={{
             fontFamily: 'var(--font-cormorant)',
-            fontSize: 'clamp(1.4rem, 2.5vw, 2rem)',
+            fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
             fontWeight: 300,
             fontStyle: 'italic',
             color: '#E8E1D5',

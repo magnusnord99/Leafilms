@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 /**
  * POST /api/projects/[id]/duplicate
@@ -16,6 +16,25 @@ export async function POST(
     const { id: projectId } = await params
     if (!projectId) {
       return Response.json({ error: 'Mangler prosjekt-ID' }, { status: 400 })
+    }
+
+    const authClient = await createClient()
+    const {
+      data: { user },
+    } = await authClient.auth.getUser()
+
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: profile } = await authClient
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || profile.role !== 'admin') {
+      return Response.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const supabase = createServiceClient()

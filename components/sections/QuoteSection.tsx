@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Section, Project } from '@/lib/types'
-import { Heading, Text, Button, Badge } from '@/components/ui'
+import Link from 'next/link'
+import { Section, Project, QuoteBuilderData } from '@/lib/types'
+import { Heading, Text, Button } from '@/components/ui'
 import { useQuoteAnalytics } from '@/hooks/useQuoteAnalytics'
 import { supabase } from '@/lib/supabase'
+import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 
 type QuoteLineItem = {
   description: string
@@ -38,7 +41,20 @@ type QuoteSectionProps = {
   project: Project
   editMode: boolean
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
-  shareToken?: string // For analytics tracking in public view
+  shareToken?: string
+}
+
+function isBuilderData(data: any): data is QuoteBuilderData {
+  return data && Array.isArray(data.crew)
+}
+
+function formatNOK(amount: number) {
+  return new Intl.NumberFormat('no-NO', {
+    style: 'currency',
+    currency: 'NOK',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
 }
 
 export function QuoteSection({
@@ -46,672 +62,141 @@ export function QuoteSection({
   project,
   editMode,
   updateSectionContent,
-  shareToken
+  shareToken,
 }: QuoteSectionProps) {
-  const [loading, setLoading] = useState(false)
+  const [quoteId, setQuoteId] = useState<string | null>(null)
+  const [dbQuoteData, setDbQuoteData] = useState<QuoteData | null>(null)
   const [acceptingQuote, setAcceptingQuote] = useState(false)
   const [quoteAccepted, setQuoteAccepted] = useState(false)
-  const [contractId, setContractId] = useState<string | null>(null)
-  const [quoteId, setQuoteId] = useState<string | null>(null)
-  
-  // Eksempel-data for å vise hvordan det ser ut
-  const exampleQuoteData: QuoteData = {
-    version: 'V1',
-    quoteDate: '2025-09-13',
-    projectName: project.title || 'Shoot Nord-Norge',
-    reference: 'Video produksjon',
-    clientContact: project.client_name || 'Magnus Nordmo',
-    customerNumber: '144',
-    ourContact: 'Bea Valand',
-    paymentInfo: '14 days',
-    deliveryDate: '2025-09-17',
-    terms: `Leafilms vil være ansvarlig for planleggingen, produksjonen og leveringen av prosjektet slik det er beskrevet i dette tilbudet.
-Prosjektets omfang, tidslinje og leveranser avtales før produksjonen starter. Eventuelle endringer i omfanget underveis kan medføre ekstra kostnader.
-Reise-, overnattings- og oppholdsutgifter for teamet er inkludert i budsjettet med mindre annet er spesifisert.
-Dersom uforutsette omstendigheter (f.eks. ekstremvær eller andre faktorer utenfor Leafilms' kontroll) hindrer produksjonen i å gjennomføres som planlagt, vil alternative løsninger utarbeides i samråd med kunden. Eventuelle forsinkelser eller omlegginger kan medføre ekstra kostnader.
-Kansellering innen 14 dager før startdato: 50 % av den avtalte prisen vil bli fakturert.
-Kansellering innen 48 timer før startdato: 100 % av den avtalte prisen vil bli fakturert.
-Leafilms beholder full opphavsrett til alt produsert materiale. Kunden gis bruksrettigheter for det avtalte formålet og prosjektet. Videre salg eller distribusjon er ikke tillatt uten skriftlig samtykke fra Leafilms. Leafilms må krediteres i henhold til bransjestandarder der materialet brukes, der det er praktisk mulig.
-Alt materiale, inkludert opptak og prosjektfiler, vil bli levert til kunden som avtalt. Lagring og arkivering av materialet utover leveringsdatoen er kundens ansvar.
-Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved signering av produksjonsavtalen, og den andre halvparten faktureres etter siste produksjonsdag. Vær oppmerksom på at forsinkede betalinger kan medføre ekstra gebyrer.`,
-    lineItems: [
-      { description: 'Kamerautstyr', quantity: '2 dager', amount: 6300.00, discount: 1260.00 },
-      { description: 'Oppstart/planlegging', quantity: '1 dager', amount: 1500.00, discount: 300.00 },
-      { description: 'Opptak', quantity: '2 dager', amount: 36600.00, discount: 7320.00 },
-      { description: 'Post produksjon', quantity: '5 dager', amount: 43000.00, discount: 8600.00 },
-      { description: 'Produksjonsutgifter', quantity: '2 dager', amount: 27100.00 }
-    ],
-    subtotalExclVat: 114500.00,
-    subtotalInclVat: 143125.00,
-    totalDiscount: 17480.00,
-    finalPriceExclVat: 97020.00,
-    finalPriceInclVat: 125645.00,
-    vatRate: 25
-  }
 
-  const [quoteData, setQuoteData] = useState<QuoteData | null>(
-    section.content.quoteData || (editMode ? exampleQuoteData : null)
-  )
-  const [sheetsUrl, setSheetsUrl] = useState(
-    section.content.sheetsUrl || ''
-  )
-  const [language, setLanguage] = useState<'NO' | 'EN'>(
-    section.content.language || 'NO'
-  )
-  const [reise, setReise] = useState<'y' | 'n'>(
-    section.content.reise || 'y'
-  )
-  const [mva, setMva] = useState<'y' | 'n'>(
-    section.content.mva || 'y'
-  )
-  const [discount, setDiscount] = useState<number>(
-    section.content.discount || 0
-  )
-
-  // Hent quoteData og quote_id fra databasen (kun i public view, ikke edit mode)
+  // Fetch quote from DB for display (public view)
   useEffect(() => {
-    if (!editMode && project.id && shareToken) {
-      // Sjekk om quoteData allerede er satt fra section.content
-      const hasQuoteData = section.content.quoteData || quoteData
-      
-      if (!hasQuoteData) {
-        // Hent siste quote for prosjektet hvis quoteData ikke allerede er satt
-        supabase
-          .from('quotes')
-          .select('id, quote_data, version')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle() // Use maybeSingle instead of single to handle no rows gracefully
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('[QuoteSection] Error fetching quote:', {
-                error,
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint,
-                project_id: project.id
-              })
-              return
-            }
-            
-            if (data) {
-              setQuoteId(data.id)
-              // Hvis quoteData ikke er satt i section.content, bruk quote_data fra databasen
-              if (data.quote_data) {
-                setQuoteData(data.quote_data as QuoteData)
-              } else {
-                console.warn('[QuoteSection] Quote found but quote_data is null:', data.id)
-              }
-            } else {
-              console.warn('[QuoteSection] No quote found for project:', project.id)
-              console.log('[QuoteSection] Creating quote automatically for analytics tracking...')
-              
-              // Opprett quote automatisk for å aktivere analytics tracking
-              const quoteDataToCreate = {
-                project_id: project.id,
-                sheet_url: sheetsUrl || '', // sheet_url is required, use empty string if not available
-                version: exampleQuoteData.version || 'V1',
-                status: 'draft' as const,
-                quote_data: exampleQuoteData
-              }
-              
-              supabase
-                .from('quotes')
-                .insert(quoteDataToCreate)
-                .select('id')
-                .single()
-                .then(({ data: newQuote, error: createError }) => {
-                  if (createError) {
-                    console.error('[QuoteSection] Error creating quote:', createError)
-                    // Bruk exampleQuoteData som fallback hvis opprettelse feiler
-                    setQuoteData(exampleQuoteData)
-                  } else if (newQuote) {
-                    console.log('[QuoteSection] ✅ Quote created automatically:', newQuote.id)
-                    setQuoteId(newQuote.id)
-                    setQuoteData(exampleQuoteData)
-                  }
-                })
-            }
-          })
-      } else if (quoteData?.version) {
-        // Hvis quoteData allerede er satt, hent quote_id eller opprett ny quote
-        supabase
-          .from('quotes')
-          .select('id')
-          .eq('project_id', project.id)
-          .eq('version', quoteData.version)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle() // Use maybeSingle instead of single
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('[QuoteSection] Error fetching quote_id:', {
-                error,
-                message: error.message,
-                code: error.code,
-                project_id: project.id,
-                version: quoteData.version
-              })
-              return
-            }
-            
-            if (data) {
-              setQuoteId(data.id)
-            } else {
-              console.log('[QuoteSection] No quote found for version:', quoteData.version)
-              console.log('[QuoteSection] Creating quote automatically for analytics tracking...')
-              
-              // Opprett quote automatisk med quoteData fra section.content
-              const quoteDataToCreate = {
-                project_id: project.id,
-                sheet_url: sheetsUrl || '', // sheet_url is required, use empty string if not available
-                version: quoteData.version || 'V1',
-                status: 'draft' as const,
-                quote_data: quoteData
-              }
-              
-              supabase
-                .from('quotes')
-                .insert(quoteDataToCreate)
-                .select('id')
-                .single()
-                .then(({ data: newQuote, error: createError }) => {
-                  if (createError) {
-                    console.error('[QuoteSection] Error creating quote:', createError)
-                  } else if (newQuote) {
-                    console.log('[QuoteSection] ✅ Quote created automatically:', newQuote.id)
-                    setQuoteId(newQuote.id)
-                  }
-                })
-            }
-          })
-      }
-    }
-  }, [editMode, project.id, shareToken, section.content.quoteData])
+    if (editMode || !project.id) return
 
-  // Initialize quote analytics tracking (kun i public view)
-  // Only track if we have all required data: quoteId, shareToken, and quoteData
-  // Track alle deler av quote-en som faktisk finnes
-  const quoteSectionNames = [
-    'header',
-    'line_items', 
-    'totals',
-    'actions'
-  ].filter(name => {
-    // Sjekk om seksjonen faktisk finnes i DOM
-    if (typeof document !== 'undefined') {
-      return document.querySelector(`[data-quote-section="${name}"]`) !== null
-    }
-    return true // I SSR, antar at alle finnes
-  })
-  const shouldTrackQuote = !editMode && !!quoteId && !!shareToken && !!quoteData
-  
-  // Log tracking status for debugging
-  useEffect(() => {
-    if (!editMode) {
-      console.log('[QuoteSection] Analytics tracking status:', {
-        editMode,
-        hasQuoteId: !!quoteId,
-        hasShareToken: !!shareToken,
-        hasQuoteData: !!quoteData,
-        shouldTrack: shouldTrackQuote,
-        projectId: project.id
-      })
-      
-      if (!quoteId) {
-        console.warn('[QuoteSection] ⚠️ Analytics tracking will NOT work because quoteId is missing!')
-        console.warn('[QuoteSection] 💡 Fix: Save the quote PDF in edit mode to create a quote in the database.')
-      }
-    }
-  }, [editMode, quoteId, shareToken, quoteData, shouldTrackQuote, project.id])
-  
-  useQuoteAnalytics(
-    shouldTrackQuote ? quoteId : '', // Only pass quoteId if we should track
-    project.id,
-    shouldTrackQuote ? shareToken : '', // Only pass shareToken if we should track
-    shouldTrackQuote ? quoteSectionNames : [] // Only track if we have all required data
-  )
-
-  // Hent quote-data fra API hvis URL er satt
-  // NOTE: Dette krever at Python API har /generate-json endpoint
-  const fetchQuoteData = async () => {
-    if (!sheetsUrl) {
-      alert('Google Sheets URL må være satt')
-      return
-    }
-
-    setLoading(true)
-    try {
-      console.log('📤 Sender request til /api/fetch-quote med:', {
-        url: sheetsUrl,
-        language,
-        reise,
-        mva,
-        discount_percent: discount
-      })
-
-      const response = await fetch('/api/fetch-quote', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          url: sheetsUrl,
-          language,
-          reise,
-          mva,
-          discount_percent: discount
-        })
-      })
-      
-      console.log('📥 Response status:', response.status, response.statusText)
-      
-      // Sjekk content-type før vi prøver å parse
-      const contentType = response.headers.get('content-type')
-      const isJson = contentType?.includes('application/json')
-      
-      if (!response.ok) {
-        let errorMessage = 'Kunne ikke hente tilbud'
-        
-        if (isJson) {
-          try {
-            const error = await response.json()
-            errorMessage = error.error || error.message || errorMessage
-            
-            // Spesifikk melding hvis endpoint ikke finnes
-            if (errorMessage.includes('Not Found') || errorMessage.includes('404')) {
-              errorMessage = 'JSON-endpoint ikke tilgjengelig. Bruk "Last ned som PDF" i stedet.'
-            }
-            
-            // Spesifikk melding hvis autentisering feiler
-            if (errorMessage.includes('credentials') || errorMessage.includes('validate') || errorMessage.includes('401') || errorMessage.includes('403')) {
-              errorMessage = 'Autentisering feilet. Sjekk at QUOTE_API_TOKEN i .env.local matcher API_KEY i Cloud Run. Restart Next.js server etter endringer.'
-            }
-          } catch (e) {
-            console.error('Kunne ikke parse error som JSON:', e)
-          }
-        } else {
-          const errorText = await response.text()
-          errorMessage = errorText || errorMessage
-          console.error('Error response (text):', errorText)
-        }
-        
-        throw new Error(errorMessage)
-      }
-      
-      if (!isJson) {
-        throw new Error('Uventet responsformat fra server')
-      }
-      
-      const data = await response.json()
-      console.log('✅ Mottatt data:', data)
-      
-      setQuoteData(data)
-      updateSectionContent(section.id, 'quoteData', data)
-      updateSectionContent(section.id, 'sheetsUrl', sheetsUrl)
-      updateSectionContent(section.id, 'language', language)
-      updateSectionContent(section.id, 'reise', reise)
-      updateSectionContent(section.id, 'mva', mva)
-      updateSectionContent(section.id, 'discount', discount)
-
-      // Automatisk generer og lagre PDF når tilbud hentes
-      await saveQuotePDF(data)
-    } catch (error: any) {
-      console.error('❌ Error fetching quote:', error)
-      alert(error.message || 'Kunne ikke hente tilbud. Sjekk at Google Sheets URL er korrekt.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Lagre tilbud-PDF automatisk i prosjektmappen
-  const saveQuotePDF = async (dataToSave?: typeof quoteData) => {
-    const data = dataToSave || quoteData
-    if (!data || !project.id) {
-      console.log('⚠️ Kan ikke lagre PDF: mangler data eller project.id')
-      return
-    }
-
-    // Sørg for at terms alltid er inkludert i PDF-en (selv om den ikke vises i UI)
-    const dataWithTerms = {
-      ...data,
-      terms: data.terms || exampleQuoteData.terms
-    }
-
-    console.log('💾 Starter lagring av tilbud-PDF for prosjekt:', project.id, project.title)
-    
-    try {
-      const response = await fetch('/api/generate-quote-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          quoteData: dataWithTerms,
-          projectId: project.id,
-          language,
-          reise,
-          mva,
-          discount_percent: discount,
-          saveToStorage: true // Lagre automatisk i Storage
-        })
-      })
-
-      if (response.ok) {
-        const storagePath = response.headers.get('X-Storage-Path')
-        if (storagePath) {
-          console.log('✅ Tilbud-PDF lagret i prosjektmappen:', storagePath)
-          
-          // Opprett/oppdater quote i databasen
-          const { supabase } = await import('@/lib/supabase')
-          const version = data.version || 'V1'
-          
-          // Sjekk om quote allerede finnes (basert på project_id og version)
-          const { data: existingQuotes } = await supabase
-            .from('quotes')
-            .select('id')
-            .eq('project_id', project.id)
-            .eq('version', version)
-
-          const quoteDataToSave = {
-            project_id: project.id,
-            sheet_url: sheetsUrl,
-            version: version,
-            status: 'draft' as const,
-            pdf_path: storagePath,
-            quote_data: dataWithTerms // Inkluder terms i lagret data
-          }
-
-          if (existingQuotes && existingQuotes.length > 0) {
-            // Oppdater eksisterende quote (bruk første match)
-            const { error: updateError } = await supabase
-              .from('quotes')
-              .update(quoteDataToSave)
-              .eq('id', existingQuotes[0].id)
-
-            if (updateError) {
-              console.error('❌ Error updating quote:', updateError)
-            } else {
-              console.log('✅ Quote oppdatert i databasen med PDF path:', storagePath)
-            }
+    supabase
+      .from('quotes')
+      .select('id, quote_data')
+      .eq('project_id', project.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setQuoteId(data.id)
+        if (data.quote_data) {
+          if (isBuilderData(data.quote_data)) {
+            setDbQuoteData(convertBuilderDataToQuoteData(data.quote_data as QuoteBuilderData))
           } else {
-            // Opprett ny quote
-            const { error: insertError } = await supabase
-              .from('quotes')
-              .insert(quoteDataToSave)
-
-            if (insertError) {
-              console.error('❌ Error creating quote:', insertError)
-            } else {
-              console.log('✅ Quote opprettet i databasen med PDF path:', storagePath)
-            }
+            setDbQuoteData(data.quote_data as QuoteData)
           }
-          
-        } else {
-          console.warn('⚠️ Ingen storage path returnert fra API - PDF ble ikke lagret')
         }
-      } else {
-        const errorText = await response.text()
-        console.error('❌ Error generating PDF:', response.status, errorText)
-      }
-    } catch (error: any) {
-      console.error('❌ Error saving quote PDF:', error)
-      console.error('   Error details:', error.message, error.stack)
-      // Ikke vis feil til brukeren - dette er bakgrunnsoperasjon
-    }
-  }
-
-  const handleDownloadPDF = async () => {
-    if (!sheetsUrl && !quoteData) {
-      alert('Google Sheets URL må være satt, eller hent data først')
-      return
-    }
-
-    try {
-      // Sørg for at terms alltid er inkludert i PDF-en (selv om den ikke vises i UI)
-      const quoteDataWithTerms = quoteData ? {
-        ...quoteData,
-        terms: quoteData.terms || exampleQuoteData.terms
-      } : undefined
-
-      // OPTIMAL FLYTE: Hvis vi allerede har data, send det direkte til PDF-generering
-      // Dette unngår å hente data på nytt fra Google Sheets
-      const response = await fetch('/api/generate-quote-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          url: quoteData ? undefined : sheetsUrl, // Kun send URL hvis vi ikke har data
-          quoteData: quoteDataWithTerms, // Send eksisterende data med terms hvis tilgjengelig
-          projectId: project.id, // For å lagre PDF i riktig mappe
-          language,
-          reise,
-          mva,
-          discount_percent: discount,
-          saveToStorage: false // Brukeren laster ned, ikke lagrer automatisk
-        })
       })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Kunne ikke generere PDF')
-      }
-      
-      const blob = await response.blob()
-      
-      // Hent filename fra headers
-      const contentDisposition = response.headers.get('Content-Disposition')
-      const xFilename = response.headers.get('X-Filename')
-      let filename = `Pristilbud_${project.title || 'Prosjekt'}_${new Date().toISOString().split('T')[0]}.pdf`
-      
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
-        if (filenameMatch) {
-          filename = filenameMatch[1]
-        }
-      } else if (xFilename) {
-        filename = xFilename
-      }
-      
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error: any) {
-      console.error('Error generating PDF:', error)
-      alert(error.message || 'Kunne ikke generere PDF. Sjekk at URL-er er korrekte.')
-    }
-  }
+  }, [editMode, project.id])
 
-  // Godta tilbud og opprett kontrakt
+  const quoteData: QuoteData | null = dbQuoteData
+
+  const shouldTrackQuote = !editMode && !!quoteId && !!shareToken && !!quoteData
+  useQuoteAnalytics(
+    shouldTrackQuote ? quoteId : '',
+    project.id,
+    shouldTrackQuote ? shareToken : '',
+    shouldTrackQuote ? ['header', 'line_items', 'totals', 'actions'] : []
+  )
+
   const handleAcceptQuote = async () => {
-    if (!quoteData || !project.id) {
-      alert('Ingen tilbudsdata tilgjengelig')
-      return
-    }
-
+    if (!quoteData || !project.id) return
     setAcceptingQuote(true)
     try {
-      // Sørg for at terms alltid er inkludert
-      const quoteDataWithTerms = {
-        ...quoteData,
-        terms: quoteData.terms || exampleQuoteData.terms,
-        sheetsUrl
-      }
-
       const response = await fetch('/api/accept-quote', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          projectId: project.id,
-          quoteData: quoteDataWithTerms,
-          acceptedBy: project.client_name || 'Kunde'
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id, quoteData, acceptedBy: project.client_name || 'Kunde' }),
       })
-
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Kunne ikke akseptere tilbud')
+        const err = await response.json()
+        throw new Error(err.error || 'Kunne ikke akseptere tilbud')
       }
-
-      const result = await response.json()
       setQuoteAccepted(true)
-      setContractId(result.contract?.id || null)
-      
-      // TODO: Her kan vi legge til signeringswidget (DocuSign, SignRequest, etc.)
-      // For nå viser vi bare en bekreftelsesmelding
-      
     } catch (error: any) {
-      console.error('Error accepting quote:', error)
-      alert('❌ Kunne ikke akseptere tilbud: ' + (error.message || 'Ukjent feil'))
+      alert('Kunne ikke akseptere tilbud: ' + (error.message || 'Ukjent feil'))
     } finally {
       setAcceptingQuote(false)
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('no-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2
-    }).format(amount)
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 2 }).format(amount)
+
+  // ── Edit mode: show summary + link to dedicated quote page ────────────────
+  if (editMode) {
+    // Try to show a live preview if builder data is stored
+    const builderData = section.content?.quoteBuilderData as QuoteBuilderData | undefined
+    const totals = builderData ? calculateQuoteTotals(builderData) : null
+
+    return (
+      <div className="bg-background-widget max-w-full mx-auto py-8 px-4">
+        <div
+          className="max-w-2xl mx-auto rounded-[3px] p-6"
+          style={{ background: '#1A1713', border: '1px solid #2A261F' }}
+        >
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#C49434', marginBottom: 12 }}>
+            Pristilbud
+          </p>
+
+          {totals ? (
+            <div className="space-y-1 mb-6">
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5', fontWeight: 500 }}>
+                {builderData?.projectName || project.title}
+              </p>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#9E9287' }}>
+                Versjon {builderData?.version} · {builderData?.quoteDate}
+              </p>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: '#E8E1D5', fontWeight: 600, marginTop: 12 }}>
+                {formatNOK(totals.finalInclVat)} ink. MVA
+              </p>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#9E9287' }}>
+                {builderData?.crew?.length ?? 0} mannskapsmedlemmer · Rabatt {builderData?.discountPercentage ?? 0}%
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#6B6358', marginBottom: 20 }}>
+              Ingen pristilbud opprettet ennå for dette prosjektet
+            </p>
+          )}
+
+          <Link href={`/admin/projects/${project.id}/quote`}>
+            <button
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                background: '#201D18',
+                border: '1px solid #38332A',
+                color: '#E8E1D5',
+                borderRadius: 2,
+                padding: '8px 16px',
+                cursor: 'pointer',
+              }}
+            >
+              {totals ? 'Rediger pristilbud →' : 'Opprett pristilbud →'}
+            </button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
+  // ── Display mode (public view for client) ─────────────────────────────────
   return (
     <div className="bg-background-widget max-w-full mx-auto py-12 px-4">
-      {/* API Configuration (kun i edit mode) */}
-      {editMode && (
-        <div className="mb-6 p-4 bg-w rounded-lg space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-dark mb-2">
-              Google Sheets URL
-            </label>
-            <input
-              type="url"
-              value={sheetsUrl}
-              onChange={(e) => {
-                setSheetsUrl(e.target.value)
-                updateSectionContent(section.id, 'sheetsUrl', e.target.value)
-              }}
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-dark"
-            />
-            <p className="text-xs text-dark/60 mt-1">
-              Backend API URL er konfigurert i server-side kode (QUOTE_API_URL i .env)
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-dark mb-2">
-                Språk
-              </label>
-              <select
-                value={language}
-                onChange={(e) => {
-                  setLanguage(e.target.value as 'NO' | 'EN')
-                  updateSectionContent(section.id, 'language', e.target.value)
-                }}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-dark"
-              >
-                <option value="NO">Norsk</option>
-                <option value="EN">English</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-dark mb-2">
-                Reise
-              </label>
-              <select
-                value={reise}
-                onChange={(e) => {
-                  setReise(e.target.value as 'y' | 'n')
-                  updateSectionContent(section.id, 'reise', e.target.value)
-                }}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-dark"
-              >
-                <option value="y">Ja</option>
-                <option value="n">Nei</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-dark mb-2">
-                MVA
-              </label>
-              <select
-                value={mva}
-                onChange={(e) => {
-                  setMva(e.target.value as 'y' | 'n')
-                  updateSectionContent(section.id, 'mva', e.target.value)
-                }}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-dark"
-              >
-                <option value="y">Ja</option>
-                <option value="n">Nei</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-dark mb-2">
-                Rabatt (%)
-              </label>
-              <select
-                value={discount}
-                onChange={(e) => {
-                  setDiscount(Number(e.target.value))
-                  updateSectionContent(section.id, 'discount', Number(e.target.value))
-                }}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-dark"
-              >
-                <option value={0}>0%</option>
-                <option value={10}>10%</option>
-                <option value={15}>15%</option>
-                <option value={20}>20%</option>
-                <option value={25}>25%</option>
-                <option value={30}>30%</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Button
-              onClick={fetchQuoteData}
-              disabled={loading || !sheetsUrl}
-              variant="secondary"
-              className="w-full"
-            >
-              {loading ? 'Henter...' : 'Hent tilbud (JSON)'}
-            </Button>
-            <p className="text-xs text-dark/60 text-center">
-              ⚠️ JSON-endpoint (/api/quotes/data) må implementeres i Python API først. Bruk "Last ned som PDF" i mellomtiden.
-            </p>
-          </div>
-
-        </div>
-      )}
-
-      {/* Quote Content */}
       {quoteData ? (
-        <div className="max-w-4xl mx-auto bg-gray-50 rounded-lg shadow-sm border border-border p-8 print:shadow-none print:border-0">
-          {/* Endre bakgrunnsfarge her: bytt ut "bg-white" over til f.eks. "bg-gray-50", "bg-blue-50", eller en custom farge */}
+        <div className="max-w-4xl mx-auto bg-gray-50 rounded-lg shadow-sm border border-border p-8">
           {/* Header */}
           <div className="mb-8 pb-6 border-b border-border" data-quote-section="header">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <Heading as="h4" className="mb-2">
-                  LEA FILMS
-                </Heading>
+                <Heading as="h4" className="mb-2">LEA FILMS</Heading>
                 <Text variant="small" className="text-dark/70">
                   Adresse: Dæliveien 33b, Asker, Norway<br />
                   Telefon: 0047 94989036<br />
@@ -720,23 +205,16 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
                 </Text>
               </div>
               <div className="text-right">
-                <Heading as="h4" className="mb-2">
-                  Tilbud
-                </Heading>
+                <Heading as="h4" className="mb-2">Tilbud</Heading>
                 {quoteData.version && (
-                  <Text variant="small" className="text-dark/70">
-                    Versjon: {quoteData.version}
-                  </Text>
+                  <Text variant="small" className="text-dark/70">Versjon: {quoteData.version}</Text>
                 )}
                 {quoteData.quoteDate && (
-                  <Text variant="small" className="text-dark/70">
-                    Tilbud dato: {quoteData.quoteDate}
-                  </Text>
+                  <Text variant="small" className="text-dark/70">Tilbud dato: {quoteData.quoteDate}</Text>
                 )}
               </div>
             </div>
 
-            {/* Project Info */}
             <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
               {quoteData.projectName && (
                 <div>
@@ -783,31 +261,7 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
             </div>
           </div>
 
-          {/*           {quoteData.terms && (
-            <div className="mb-8">
-              <Heading as="h3" size="md" className="mb-4">
-                Vilkår
-              </Heading>
-              <Text 
-                variant="body" 
-                className="text-dark/80 whitespace-pre-wrap text-sm leading-relaxed"
-                contentEditable={editMode}
-                suppressContentEditableWarning
-                onBlur={(e) => {
-                  if (editMode) {
-                    setQuoteData({ ...quoteData, terms: e.currentTarget.textContent || '' })
-                    updateSectionContent(section.id, 'quoteData', { ...quoteData, terms: e.currentTarget.textContent || '' })
-                  }
-                }}
-              >
-                {quoteData.terms}
-              </Text>
-            </div>
-          )}
-            Terms */}
-
-
-          {/* Line Items Table */}
+          {/* Line items */}
           {quoteData.lineItems && quoteData.lineItems.length > 0 && (
             <div className="mb-8 overflow-x-auto" data-quote-section="line_items">
               <table className="w-full border-collapse">
@@ -816,30 +270,21 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
                     <th className="text-left py-3 px-4 font-semibold text-dark">Beskrivelse</th>
                     <th className="text-right py-3 px-4 font-semibold text-dark">Antall</th>
                     <th className="text-right py-3 px-4 font-semibold text-dark">Sum (NOK)</th>
-                    {quoteData.lineItems.some(item => item.discount) && (
-                      <th className="text-right py-3 px-4 font-semibold text-dark">Rabatt</th>
-                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {quoteData.lineItems.map((item, index) => (
-                    <tr key={index} className="border-b border-border/50">
-                      <td className="py-3 px-4 text-dark">
-                        {item.description}
-                      </td>
-                      <td className="py-3 px-4 text-right text-dark/70">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 px-4 text-right text-dark">
-                        {formatCurrency(item.amount)}
-                      </td>
-                      {quoteData.lineItems?.some(i => i.discount) && (
-                        <td className="py-3 px-4 text-right text-dark/70">
-                          {item.discount ? formatCurrency(-item.discount) : '-'}
+                  {quoteData.lineItems.map((item, idx) => {
+                    const isHeader = item.quantity === '' && item.amount === 0
+                    return (
+                      <tr key={idx} className={isHeader ? 'bg-gray-100' : 'border-b border-border/50'}>
+                        <td className={`py-3 px-4 text-dark ${isHeader ? 'font-semibold text-xs tracking-widest uppercase text-gray-500' : ''}`}>
+                          {item.description}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="py-3 px-4 text-right text-dark/70">{!isHeader ? item.quantity : ''}</td>
+                        <td className="py-3 px-4 text-right text-dark">{!isHeader ? formatCurrency(item.amount) : ''}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -849,78 +294,46 @@ Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved 
           <div className="border-t-2 border-border pt-6 space-y-2" data-quote-section="totals">
             {quoteData.subtotalExclVat !== undefined && (
               <div className="flex justify-between text-dark">
-                <Text variant="body" className="font-semibold">
-                  Produksjon totalt eksl. mva:
-                </Text>
-                <Text variant="body" className="font-semibold">
-                  {formatCurrency(quoteData.subtotalExclVat)}
-                </Text>
-              </div>
-            )}
-            {quoteData.subtotalInclVat !== undefined && (
-              <div className="flex justify-between text-dark">
-                <Text variant="body" className="font-semibold">
-                  Produksjon totalt inkl. mva:
-                </Text>
-                <Text variant="body" className="font-semibold">
-                  {formatCurrency(quoteData.subtotalInclVat)}
-                </Text>
+                <Text variant="body" className="font-semibold">Produksjon totalt eksl. mva:</Text>
+                <Text variant="body" className="font-semibold">{formatCurrency(quoteData.subtotalExclVat)}</Text>
               </div>
             )}
             {quoteData.totalDiscount !== undefined && quoteData.totalDiscount > 0 && (
               <div className="flex justify-between text-red-600">
-                <Text variant="body" className="font-semibold">
-                  {quoteData.lineItems?.some(item => item.discount) ? '20% rabatt:' : 'Rabatt:'}
-                </Text>
-                <Text variant="body" className="font-semibold">
-                  {formatCurrency(-quoteData.totalDiscount)}
-                </Text>
+                <Text variant="body" className="font-semibold">Rabatt:</Text>
+                <Text variant="body" className="font-semibold">{formatCurrency(-quoteData.totalDiscount)}</Text>
               </div>
             )}
             {quoteData.finalPriceExclVat !== undefined && (
               <div className="flex justify-between text-dark pt-2 border-t border-border">
-                <Text variant="body" className="font-semibold text-lg">
-                  Ny pris eksl. MVA:
-                </Text>
-                <Text variant="body" className="font-semibold text-lg">
-                  {formatCurrency(quoteData.finalPriceExclVat)}
-                </Text>
+                <Text variant="body" className="font-semibold text-lg">Ny pris eksl. MVA:</Text>
+                <Text variant="body" className="font-semibold text-lg">{formatCurrency(quoteData.finalPriceExclVat)}</Text>
               </div>
             )}
             {quoteData.finalPriceInclVat !== undefined && (
               <div className="flex justify-between text-dark">
-                <Text variant="body" className="font-semibold text-lg">
-                  Ny pris inkl. MVA:
-                </Text>
-                <Text variant="body" className="font-semibold text-lg">
-                  {formatCurrency(quoteData.finalPriceInclVat)}
-                </Text>
+                <Text variant="body" className="font-semibold text-lg">Ny pris inkl. MVA:</Text>
+                <Text variant="body" className="font-semibold text-lg">{formatCurrency(quoteData.finalPriceInclVat)}</Text>
               </div>
             )}
           </div>
 
-          {/* Download PDF Button */}
-          <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row gap-4" data-quote-section="actions">
-            <Button
-              onClick={handleDownloadPDF}
-              variant="secondary"
-              className="w-full sm:w-auto"
-            >
-              📄 Last ned som PDF
-            </Button>
-            
+          {/* Actions */}
+          <div className="mt-8 pt-6 border-t border-border" data-quote-section="actions">
+            {quoteAccepted ? (
+              <Text variant="body" className="text-green-600 font-semibold">Tilbud akseptert!</Text>
+            ) : (
+              <Button onClick={handleAcceptQuote} disabled={acceptingQuote} variant="primary">
+                {acceptingQuote ? 'Behandler...' : 'Aksepter tilbud'}
+              </Button>
+            )}
           </div>
         </div>
       ) : (
         <div className="bg-background-elevated rounded-lg p-8 text-center">
-          <Text variant="body" className="text-dark/70 mb-4">
-            {editMode 
-              ? 'Sett API URL og klikk "Hent tilbud" for å laste inn tilbudsdata'
-              : 'Ingen tilbudsdata tilgjengelig'}
-          </Text>
+          <Text variant="body" className="text-dark/70">Ingen tilbudsdata tilgjengelig</Text>
         </div>
       )}
     </div>
   )
 }
-

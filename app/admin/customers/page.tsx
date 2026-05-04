@@ -155,6 +155,11 @@ export default function CustomersPage() {
                     }}>
                       {customer.name}
                     </p>
+                    {customer.customer_number && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#C49434', letterSpacing: '0.1em' }}>
+                        #{customer.customer_number}
+                      </span>
+                    )}
                     {customer.company && (
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E' }}>
                         {customer.company}

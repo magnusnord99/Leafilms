@@ -7,6 +7,7 @@ export type Customer = {
   phone: string | null
   address: string | null
   notes: string | null
+  customer_number: number
   created_at: string
   updated_at: string
 }
@@ -28,13 +29,63 @@ export type Project = {
 export type Quote = {
   id: string
   project_id: string
-  sheet_url: string
+  sheet_url: string | null
   version: string
   status: 'draft' | 'sent' | 'accepted' | 'rejected'
   accepted_at: string | null
   accepted_by: string | null
-  pdf_path: string | null // Path til PDF i Storage
+  pdf_path: string | null
   quote_data: Record<string, any> | null
+  created_at: string
+  updated_at: string
+}
+
+export type CrewMember = {
+  id: string
+  role: string
+  name: string
+  dailyRate: number
+  days: number
+}
+
+export type QuoteBuilderItem = {
+  id: string
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
+export type QuoteBuilderData = {
+  version: string
+  quoteDate: string
+  projectName: string
+  reference: string
+  clientContact: string
+  customerNumber: string
+  ourContact: string
+  paymentInfo: string
+  deliveryDate: string
+  terms: string
+  language: 'NO' | 'EN'
+  startupCrew: CrewMember[]
+  shootDays: number
+  crew: CrewMember[]
+  equipment: QuoteBuilderItem[]
+  postProductionCrew: CrewMember[]
+  postProduction: QuoteBuilderItem[]
+  otherCosts: QuoteBuilderItem[]
+  licensing: QuoteBuilderItem[]
+  vatRate: number
+  discountPercentage: number
+  includeVat: boolean
+}
+
+export type PriceCatalogItem = {
+  id: string
+  name: string
+  category: string
+  default_price: number
+  unit: string
   created_at: string
   updated_at: string
 }
@@ -189,6 +240,7 @@ export type TeamMember = {
   phone: string | null
   tags: string[]
   order_index: number
+  daily_rate: number | null
   created_at: string
   updated_at: string
 }

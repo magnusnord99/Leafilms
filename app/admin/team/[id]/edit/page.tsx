@@ -22,7 +22,8 @@ export default function EditTeamMember({ params }: Props) {
     bio: '',
     email: '',
     phone: '',
-    tags: ''
+    tags: '',
+    daily_rate: ''
   })
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null)
@@ -54,7 +55,8 @@ export default function EditTeamMember({ params }: Props) {
           bio: teamMember.bio || '',
           email: teamMember.email || '',
           phone: teamMember.phone || '',
-          tags: teamMember.tags?.join(', ') || ''
+          tags: teamMember.tags?.join(', ') || '',
+          daily_rate: teamMember.daily_rate != null ? String(teamMember.daily_rate) : ''
         })
 
         // Sett eksisterende profilbilde hvis det finnes
@@ -119,7 +121,8 @@ export default function EditTeamMember({ params }: Props) {
         bio: formData.bio || null,
         email: formData.email || null,
         phone: formData.phone || null,
-        tags: tagsArray
+        tags: tagsArray,
+        daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null
       }
 
       // Legg til profilbilde-path hvis nytt bilde er lastet opp
@@ -254,6 +257,15 @@ export default function EditTeamMember({ params }: Props) {
               La stå tomt for å beholde eksisterende bilde
             </Text>
           </div>
+
+          {/* Daily rate */}
+          <Input
+            label="Dagsats (NOK)"
+            type="number"
+            value={formData.daily_rate}
+            onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
+            placeholder="8000"
+          />
 
           {/* Tags */}
           <div>

@@ -12,6 +12,7 @@ const navItems = [
   { href: '/admin/customers', label: 'Kunder' },
   { href: '/admin/cases', label: 'Cases' },
   { href: '/admin/team', label: 'Team' },
+  { href: '/admin/prices', label: 'Priskatalog' },
   { href: '/admin/images', label: 'Bilder' },
   { href: '/admin/videos', label: 'Videoer' },
   { href: '/admin/ai-examples', label: 'AI Eksempler' },

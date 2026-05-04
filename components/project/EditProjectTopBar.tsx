@@ -80,6 +80,10 @@ export function EditProjectTopBar({
       label: 'Statistikk',
       href: `/admin/projects/${project.id}/quote-analytics`,
     },
+    {
+      label: 'Pristilbud',
+      href: `/admin/projects/${project.id}/quote`,
+    },
     onDuplicateVersion && {
       label: duplicating ? 'Oppretter...' : 'Ny versjon',
       action: () => { onDuplicateVersion(); setMenuOpen(false) },

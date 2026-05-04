@@ -14,10 +14,11 @@ export interface DeliverableItem {
 interface DeliverableGridProps {
   items?: DeliverableItem[]
   editMode?: boolean
+  language?: 'no' | 'en'
   onItemsChange?: (items: DeliverableItem[]) => void
 }
 
-export function DeliverableGrid({ items, editMode = false, onItemsChange }: DeliverableGridProps) {
+export function DeliverableGrid({ items, editMode = false, language = 'no', onItemsChange }: DeliverableGridProps) {
   // Default items hvis ingen er gitt
   const defaultItems: DeliverableItem[] = [
     { 
@@ -110,7 +111,7 @@ export function DeliverableGrid({ items, editMode = false, onItemsChange }: Deli
       )}
     </div>
     <p className="text-left text-white/70 text-sm mt-4">
-      Trykk på kortene for mer info
+      {language === 'en' ? 'Click on the cards for more info' : 'Trykk på kortene for mer info'}
     </p>
     </div>
   )

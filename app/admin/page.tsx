@@ -127,20 +127,11 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Laster...</p>
       </div>
     )
   }
-
-  const navLinks = [
-    { href: '/admin/cases', label: 'Case Studies' },
-    { href: '/admin/team', label: 'Team' },
-    { href: '/admin/images', label: 'Bilder' },
-    { href: '/admin/videos', label: 'Videoer' },
-    { href: '/admin/ai-examples', label: 'AI Eksempler' },
-    { href: '/admin/users', label: 'Brukere' },
-  ]
 
   const sectionLabel = (text: string) => (
     <span style={{
@@ -178,12 +169,7 @@ export default function AdminDashboard() {
             </h1>
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center">
-            {navLinks.map(link => (
-              <Link key={link.href} href={link.href}>
-                <Button variant="secondary" size="sm">{link.label}</Button>
-              </Link>
-            ))}
+          <div className="flex gap-2 items-center">
             <Link href="/admin/projects/new">
               <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
             </Link>

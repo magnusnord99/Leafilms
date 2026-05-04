@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import { Project, Section } from '@/lib/types'
 import { Button, Badge } from '@/components/ui'
 
@@ -13,6 +14,7 @@ interface EditProjectTopBarProps {
   publishing: boolean
   showMobilePreview: boolean
   shareLink: string | null
+  translating?: boolean
   onEditModeToggle: () => void
   onMobilePreviewToggle: () => void
   onSave: () => void
@@ -21,6 +23,7 @@ interface EditProjectTopBarProps {
   onAddFullImageSection?: () => void
   onAddProductionScheduleSection?: () => void
   onDuplicateVersion?: () => void
+  onTranslate?: () => void
   duplicating?: boolean
 }
 
@@ -32,6 +35,7 @@ export function EditProjectTopBar({
   publishing,
   showMobilePreview,
   shareLink,
+  translating = false,
   onEditModeToggle,
   onMobilePreviewToggle,
   onSave,
@@ -40,13 +44,76 @@ export function EditProjectTopBar({
   onAddFullImageSection,
   onAddProductionScheduleSection,
   onDuplicateVersion,
+  onTranslate,
   duplicating = false,
 }: EditProjectTopBarProps) {
   const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
+  const hasQuote = sections.find(s => s.type === 'quote')
+
+  const secondaryItems = [
+    shareLink && {
+      label: 'Kopier link',
+      action: (e: React.MouseEvent<HTMLButtonElement>) => {
+        navigator.clipboard.writeText(shareLink!)
+        const btn = e.currentTarget
+        const orig = btn.textContent || 'Kopier link'
+        btn.textContent = 'Kopiert!'
+        setTimeout(() => { btn.textContent = orig }, 2000)
+        setMenuOpen(false)
+      },
+    },
+    {
+      label: 'Statistikk',
+      href: `/admin/projects/${project.id}/quote-analytics`,
+    },
+    onDuplicateVersion && {
+      label: duplicating ? 'Oppretter...' : 'Ny versjon',
+      action: () => { onDuplicateVersion(); setMenuOpen(false) },
+      disabled: duplicating,
+    },
+    editMode && onAddFullImageSection && {
+      label: '+ Bildeseksjon',
+      action: () => { onAddFullImageSection(); setMenuOpen(false) },
+    },
+    editMode && onAddProductionScheduleSection && {
+      label: '+ Produksjonsplan',
+      action: () => { onAddProductionScheduleSection(); setMenuOpen(false) },
+    },
+    editMode && !hasQuote && {
+      label: '+ Pristilbud',
+      action: () => { onAddQuoteSection(); setMenuOpen(false) },
+    },
+    onTranslate && {
+      label: translating
+        ? 'Oversetter...'
+        : project.language === 'en' ? 'NO → EN' : 'EN → NO',
+      action: () => { if (!translating && !saving) { onTranslate!(); setMenuOpen(false) } },
+      disabled: translating || saving,
+    },
+  ].filter(Boolean) as Array<{
+    label: string
+    action?: (e: React.MouseEvent<HTMLButtonElement>) => void
+    href?: string
+    disabled?: boolean
+  }>
 
   return (
     <div
-      className="sticky top-0 z-40 px-5 py-3 flex items-center justify-between gap-3"
+      className="sticky top-14 z-30 px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3"
       style={{
         background: 'rgba(12,11,9,0.96)',
         backdropFilter: 'blur(12px)',
@@ -54,7 +121,7 @@ export function EditProjectTopBar({
       }}
     >
       {/* Left — back + title */}
-      <div className="flex items-center gap-4 min-w-0">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={() => router.push('/admin')}
           className="flex items-center gap-2 transition-colors flex-shrink-0"
@@ -69,10 +136,10 @@ export function EditProjectTopBar({
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
           </svg>
-          Tilbake
+          <span className="hidden sm:inline">Tilbake</span>
         </button>
 
-        <div style={{ width: 1, height: 20, background: '#2A261F' }} />
+        <div style={{ width: 1, height: 20, background: '#2A261F', flexShrink: 0 }} />
 
         <div className="min-w-0">
           <p
@@ -100,68 +167,103 @@ export function EditProjectTopBar({
           )}
         </div>
 
+        <div className="flex-shrink-0">
         <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
           {project.status === 'published' ? 'Publisert' : 'Utkast'}
         </Badge>
+        </div>
       </div>
 
-      {/* Right — actions */}
-      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-        {shareLink && (
-          <Button
-            onClick={(e) => {
-              navigator.clipboard.writeText(shareLink)
-              const btn = e.currentTarget
-              const orig = btn.textContent || 'Kopier link'
-              btn.textContent = 'Kopiert!'
-              setTimeout(() => { btn.textContent = orig }, 2000)
-            }}
-            variant="secondary"
-            size="sm"
-          >
-            Kopier link
-          </Button>
-        )}
-
-        <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-          <Button variant="secondary" size="sm">Statistikk</Button>
-        </Link>
-
-        {onDuplicateVersion && (
-          <Button onClick={onDuplicateVersion} disabled={duplicating} variant="secondary" size="sm">
-            {duplicating ? 'Oppretter...' : 'Ny versjon'}
-          </Button>
-        )}
-
-        {editMode && onAddFullImageSection && (
-          <Button onClick={onAddFullImageSection} variant="secondary" size="sm">
-            + Bildeseksjon
-          </Button>
-        )}
-
-        {editMode && onAddProductionScheduleSection && (
-          <Button onClick={onAddProductionScheduleSection} variant="secondary" size="sm">
-            + Produksjonsplan
-          </Button>
-        )}
-
-        {editMode && !sections.find(s => s.type === 'quote') && (
-          <Button onClick={onAddQuoteSection} variant="secondary" size="sm">
-            + Pristilbud
-          </Button>
-        )}
-
-        <Button onClick={onEditModeToggle} variant={editMode ? 'primary' : 'secondary'} size="sm">
-          {editMode ? 'Redigeringsmodus' : 'Visningsmodus'}
-        </Button>
-
+      {/* Right — primary actions + "Mer" dropdown */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Mobile preview toggle (only on small screens) */}
         <Button
           onClick={onMobilePreviewToggle}
           variant="ghost"
           size="sm"
           className="lg:hidden"
         >
-          {showMobilePreview ? 'Rediger' : 'Forhåndsvis'}
+          {showMobilePreview ? 'Rediger' : 'Vis'}
+        </Button>
+
+        {/* Secondary actions dropdown */}
+        {secondaryItems.length > 0 && (
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <Button
+              onClick={() => setMenuOpen(o => !o)}
+              variant="secondary"
+              size="sm"
+            >
+              Mer {menuOpen ? '▴' : '▾'}
+            </Button>
+            {menuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 'calc(100% + 4px)',
+                  background: '#161410',
+                  border: '1px solid #2A261F',
+                  borderRadius: 3,
+                  minWidth: 180,
+                  zIndex: 50,
+                  overflow: 'hidden',
+                }}
+              >
+                {secondaryItems.map((item, i) =>
+                  item.href ? (
+                    <Link key={i} href={item.href} onClick={() => setMenuOpen(false)}>
+                      <div style={{
+                        padding: '9px 14px',
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.65rem',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: '#9E9287',
+                        cursor: 'pointer',
+                        borderBottom: i < secondaryItems.length - 1 ? '1px solid #2A261F' : 'none',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#201D18')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {item.label}
+                      </div>
+                    </Link>
+                  ) : (
+                    <button
+                      key={i}
+                      onClick={item.action}
+                      disabled={item.disabled}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '9px 14px',
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.65rem',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: item.disabled ? '#38332A' : '#9E9287',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: item.disabled ? 'default' : 'pointer',
+                        borderBottom: i < secondaryItems.length - 1 ? '1px solid #2A261F' : 'none',
+                      }}
+                      onMouseEnter={e => { if (!item.disabled) (e.currentTarget as HTMLElement).style.background = '#201D18' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Primary actions — always visible */}
+        <Button onClick={onEditModeToggle} variant={editMode ? 'primary' : 'secondary'} size="sm">
+          {editMode ? 'Rediger' : 'Vis'}
         </Button>
 
         <Button onClick={onSave} disabled={saving} variant="secondary" size="sm">

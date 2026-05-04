@@ -70,12 +70,57 @@ export function ConceptSection({
     ? getBackgroundStyle(section.id, 0)
     : {}
 
+  const textPanel = (extraClass = '') => (
+    <div
+      className={`${extraClass}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-3 mb-5">
+        <div style={{ width: 24, height: 1, background: '#C49434' }} />
+        <span
+          className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+          style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.78rem',
+            letterSpacing: '0.16em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}
+          contentEditable={editMode}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+          }}
+        >
+          {section.content.sectionLabel || getSectionTitle(section.type)}
+        </span>
+      </div>
+
+      <Text
+        variant="lead"
+        className={`text-[#E8E1D5] whitespace-pre-wrap ${
+          editMode ? 'edit-outline min-h-[80px] px-3 py-2' : ''
+        }`}
+        contentEditable={editMode}
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
+        }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+      >
+        {section.content.text || (editMode ? 'Klikk for å redigere...' : '')}
+      </Text>
+    </div>
+  )
+
   return (
     <div ref={conceptSectionRef} className="w-full">
       <div className="mx-4 md:mx-8 my-0 md:my-4 overflow-hidden rounded-[2px]">
         <div
           onClick={onImageClick}
-          className={`relative min-h-[80vh] flex flex-col items-start justify-end overflow-hidden ${
+          className={`relative h-[60vh] md:min-h-[80vh] flex flex-col items-start md:justify-end overflow-hidden ${
             editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer' : ''
           }`}
           style={{
@@ -86,9 +131,9 @@ export function ConceptSection({
             transition: editMode ? 'none' : 'transform 0.1s ease-out',
           }}
         >
-          {/* Cinematic overlay */}
+          {/* Cinematic overlay — desktop only */}
           {sectionImages[section.id]?.[0] && (
-            <div className="absolute inset-0 z-[1]" style={{
+            <div className="hidden md:block absolute inset-0 z-[1]" style={{
               background: 'linear-gradient(to top, rgba(12,11,9,0.92) 0%, rgba(12,11,9,0.4) 40%, transparent 70%)'
             }} />
           )}
@@ -129,42 +174,12 @@ export function ConceptSection({
             </div>
           )}
 
-          {/* Text panel — bottom left */}
-          <div
-            className="relative z-[2] px-8 md:px-14 pb-12 md:pb-16 pt-8 w-full max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-5">
-              <div style={{ width: 24, height: 1, background: '#C49434' }} />
-              <span style={{
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.6rem',
-                letterSpacing: '0.16em',
-                color: '#C49434',
-                textTransform: 'uppercase',
-                fontWeight: 500,
-              }}>
-                {getSectionTitle(section.type)}
-              </span>
-            </div>
-
-            <Text
-              variant="lead"
-              className={`text-[#E8E1D5] whitespace-pre-wrap ${
-                editMode ? 'edit-outline min-h-[80px] px-3 py-2' : ''
-              }`}
-              contentEditable={editMode}
-              suppressContentEditableWarning
-              onBlur={(e) => {
-                if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
-              }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
-            >
-              {section.content.text || (editMode ? 'Klikk for å redigere...' : '')}
-            </Text>
-          </div>
+          {/* Text panel — desktop only, overlaid bottom left */}
+          {textPanel('hidden md:block relative z-[2] px-14 pb-16 pt-8 w-full max-w-2xl')}
         </div>
+
+        {/* Text panel — mobile only, below image */}
+        {textPanel('block md:hidden px-8 py-10')}
       </div>
     </div>
   )

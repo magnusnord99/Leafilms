@@ -40,3 +40,20 @@ export const ROLE_ACTIONS: Record<string, string> = {
   Stylist: 'styling',
   Makeup: 'makeup og sminke',
 }
+
+export const ROLE_ACTIONS_EN: Record<string, string> = {
+  Regissør: 'directing',
+  Produsent: 'producing and coordinating the production',
+  Videograf: 'filming and videography',
+  Fotograf: 'photography',
+  DOP: 'cinematography and image composition',
+  Kameramann: 'camera operation',
+  Droneoperatør: 'drone operation',
+  Editor: 'editing and cutting',
+  Lydtekniker: 'sound and audio recording',
+  Lysdesigner: 'lighting design',
+  VFX: 'visual effects and VFX',
+  Skuespiller: 'acting',
+  Stylist: 'styling',
+  Makeup: 'makeup and cosmetics',
+}

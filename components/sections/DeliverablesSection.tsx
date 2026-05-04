@@ -9,6 +9,7 @@ import { ImagePositionControls } from '@/components/project'
 type DeliverablesSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   sectionImages: Record<string, Image[]>
   sectionImageData: Record<string, SectionImage[]>
   editingImageSectionId: string | null
@@ -26,6 +27,7 @@ type DeliverablesSectionProps = {
 export function DeliverablesSection({
   section,
   editMode,
+  language = 'no',
   sectionImages,
   sectionImageData,
   editingImageSectionId,
@@ -110,15 +112,23 @@ export function DeliverablesSection({
           {/* Label */}
           <div className="flex items-center gap-4 mb-8">
             <div style={{ width: 28, height: 1, background: '#C49434' }} />
-            <span style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.6rem',
-              letterSpacing: '0.16em',
-              color: '#C49434',
-              textTransform: 'uppercase',
-              fontWeight: 500,
-            }}>
-              {getSectionTitle(section.type)}
+            <span
+              className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.78rem',
+                letterSpacing: '0.16em',
+                color: '#C49434',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              }}
+              contentEditable={editMode}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+              }}
+            >
+              {section.content.sectionLabel || getSectionTitle(section.type)}
             </span>
           </div>
 
@@ -144,6 +154,7 @@ export function DeliverablesSection({
             <DeliverableGrid
               items={section.content.deliverableItems}
               editMode={editMode}
+              language={language}
               onItemsChange={(newItems) => {
                 updateSectionContent(section.id, 'deliverableItems', newItems)
               }}

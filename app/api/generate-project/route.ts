@@ -68,10 +68,11 @@ export async function POST(req: NextRequest) {
   try {
     console.log('[generate-project] Starting project generation...')
     
-    const { 
+    const {
       projectId,
       title,
       clientName,
+      language = 'no',
       contentType,
       projectType,
       mediums,
@@ -159,12 +160,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     const heroSection = sections?.find(s => s.type === 'hero')
     if (heroSection) {
       const heroExamples = examplesByType['hero'] || []
-      const heroText = await generateSectionText(
-        'hero',
-        projectContext,
-        heroExamples,
-        'Skriv en kort, engasjerende hero-tekst (2-3 setninger, maks 50 ord) som introduserer prosjektet. Den skal fange oppmerksomhet og gi en smakebit på hva prosjektet handler om.'
-      )
+      const heroInstruction = language === 'en'
+        ? 'Write a short, engaging hero text (2-3 sentences, max 50 words) that introduces the project. It should capture attention and give a taste of what the project is about.'
+        : 'Skriv en kort, engasjerende hero-tekst (2-3 setninger, maks 50 ord) som introduserer prosjektet. Den skal fange oppmerksomhet og gi en smakebit på hva prosjektet handler om.'
+      const heroText = await generateSectionText('hero', projectContext, heroExamples, heroInstruction, language)
       generatedContent.hero = { text: heroText }
     }
 
@@ -172,12 +171,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     const goalSection = sections?.find(s => s.type === 'goal')
     if (goalSection) {
       const goalExamples = examplesByType['goal'] || []
-      const goalText = await generateSectionText(
-        'goal',
-        projectContext,
-        goalExamples,
-        'Skriv prosjektmålene (1 kort setning, ca 20 ord). Fokuser på hva vi skal oppnå og hva kunden får ut av prosjektet. Vær konkret og målbar.'
-      )
+      const goalInstruction = language === 'en'
+        ? 'Write the project goals (1 short sentence, approx 20 words). Focus on what we will achieve and what the client will get out of the project. Be concrete and measurable.'
+        : 'Skriv prosjektmålene (1 kort setning, ca 20 ord). Fokuser på hva vi skal oppnå og hva kunden får ut av prosjektet. Vær konkret og målbar.'
+      const goalText = await generateSectionText('goal', projectContext, goalExamples, goalInstruction, language)
       generatedContent.goal = { text: goalText }
     }
 
@@ -185,26 +182,24 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     const conceptSection = sections?.find(s => s.type === 'concept')
     if (conceptSection) {
       const conceptExamples = examplesByType['concept'] || []
-      const conceptText = await generateSectionText(
-        'concept',
-        projectContext,
-        conceptExamples,
-        'Skriv det kreative konseptet (1-2 setninger, ca 50-80 ord). Beskriv ideen, den visuelle tilnærmingen og hvordan vi skal fortelle historien. Vær kreativ og engasjerende.'
-      )
+      const conceptInstruction = language === 'en'
+        ? 'Write the creative concept (1-2 sentences, approx 50-80 words). Describe the idea, the visual approach and how we will tell the story. Be creative and engaging.'
+        : 'Skriv det kreative konseptet (1-2 setninger, ca 50-80 ord). Beskriv ideen, den visuelle tilnærmingen og hvordan vi skal fortelle historien. Vær kreativ og engasjerende.'
+      const conceptText = await generateSectionText('concept', projectContext, conceptExamples, conceptInstruction, language)
       generatedContent.concept = { text: conceptText }
     }
 
     // 4. TIDSLINJE-seksjon
     const timelineSection = sections?.find(s => s.type === 'timeline')
     if (timelineSection) {
-      const timelineText = await generateTimelineItems(projectContext, contentType, scope)
+      const timelineText = await generateTimelineItems(projectContext, contentType, scope, language)
       generatedContent.timeline = { timelineItems: timelineText }
     }
 
     // 4.5 LEVERANSER-seksjon (dynamisk basert på kontekst)
     const deliverablesSection = sections?.find(s => s.type === 'deliverables')
     if (deliverablesSection) {
-      const deliverableItems = await generateDeliverables(projectContext, contentType, mediums, scope, context)
+      const deliverableItems = await generateDeliverables(projectContext, contentType, mediums, scope, context, language)
       generatedContent.deliverables = { 
         ...generatedContent.deliverables,
         deliverableItems 
@@ -418,7 +413,8 @@ async function generateSectionText(
   sectionType: string,
   projectContext: string,
   examples: string[],
-  instructions: string
+  instructions: string,
+  language: string = 'no'
 ): Promise<string> {
   const examplesText = examples.length > 0
     ? `\n\nHER ER EKSEMPLER PÅ GODE TEKSTER:\n${examples.map((ex, i) => `${i + 1}. "${ex}"`).join('\n\n')}`
@@ -432,13 +428,14 @@ ${examplesText}
 Skriv teksten nå. Kun teksten, ingen overskrifter eller ekstra formattering.`
 
   const openai = getOpenAIClient()
+  const systemPrompt = language === 'en'
+    ? 'You are an experienced copywriter for Leafilms, a professional film and photo production company. Write in English with a professional yet accessible tone. Avoid clichés and excessive adjectives. Be concrete and engaging.'
+    : 'Du er en erfaren tekstforfatter for Leafilms, et profesjonelt film- og fotoproduksjonsselskap i Norge. Du skriver på norsk med profesjonell men tilgjengelig tone. Unngå klisjeer og overdrevne adjektiver. Vær konkret og engasjerende.'
+
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      {
-        role: 'system',
-        content: 'Du er en erfaren tekstforfatter for Leafilms, et profesjonelt film- og fotoproduksjonsselskap i Norge. Du skriver på norsk med profesjonell men tilgjengelig tone. Unngå klisjeer og overdrevne adjektiver. Vær konkret og engasjerende.'
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt }
     ],
     temperature: 0.7,
@@ -459,9 +456,18 @@ Skriv teksten nå. Kun teksten, ingen overskrifter eller ekstra formattering.`
 async function generateTimelineItems(
   projectContext: string,
   contentType: string,
-  scope: string
+  scope: string,
+  language: string = 'no'
 ): Promise<Array<{ title: string; text: string }>> {
-  const prompt = `${projectContext}
+  const projectTypeLabel = contentType === 'photo'
+    ? (language === 'en' ? 'photo project' : 'fotoprosjekt')
+    : contentType === 'film'
+      ? (language === 'en' ? 'film project' : 'filmprosjekt')
+      : (language === 'en' ? 'film and photo project' : 'film- og fotoprosjekt')
+
+  const prompt = language === 'en'
+    ? `${projectContext}\n\nTASK: Create 4 timeline phases for this project. Each phase should have a short title (1-2 words) and a description (1-2 sentences, max 30 words).\n\nTypical phases:\n1. Pre-production (planning, research, concept development)\n2. Production (filming, photography)\n3. Post-production (editing, finishing)\n4. Delivery (export, handover)\n\nAdapt the content to the project type (${projectTypeLabel}).\n\nRespond in this JSON format:\n[\n  { "title": "PHASE-TITLE", "text": "Short description of the phase." },\n  ...\n]`
+    : `${projectContext}
 
 OPPGAVE: Lag 4 tidslinje-faser for dette prosjektet. Hver fase skal ha en kort tittel (1-2 ord) og en beskrivelse (1-2 setninger, maks 30 ord).
 
@@ -471,7 +477,7 @@ Fasene skal typisk være:
 3. Post-produksjon (redigering, etterarbeid)
 4. Levering (eksport, overlevering)
 
-Tilpass innholdet til prosjekttypen (${contentType === 'photo' ? 'fotoprosjekt' : contentType === 'film' ? 'filmprosjekt' : 'film- og fotoprosjekt'}).
+Tilpass innholdet til prosjekttypen (${projectTypeLabel}).
 
 Svar i dette JSON-formatet:
 [
@@ -480,13 +486,14 @@ Svar i dette JSON-formatet:
 ]`
 
   const openai = getOpenAIClient()
+  const systemPrompt = language === 'en'
+    ? 'You are a project manager for film and photo productions. Respond only with valid JSON.'
+    : 'Du er en prosjektleder for film- og fotoproduksjoner. Svar kun med gyldig JSON.'
+
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      {
-        role: 'system',
-        content: 'Du er en prosjektleder for film- og fotoproduksjoner. Svar kun med gyldig JSON.'
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt }
     ],
     temperature: 0.5,
@@ -505,12 +512,19 @@ Svar i dette JSON-formatet:
   }
 
   // Fallback
-  return [
-    { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards og planlegging av konsept.' },
-    { title: 'PRODUKSJON', text: 'Gjennomføring av opptak og sikring av materiale.' },
-    { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering og ferdigstilling.' },
-    { title: 'LEVERING', text: 'Eksport og overlevering til kunden.' }
-  ]
+  return language === 'en'
+    ? [
+        { title: 'PRE-PRODUCTION', text: 'Concept development, moodboards and production planning.' },
+        { title: 'PRODUCTION', text: 'Filming, photography and securing all material.' },
+        { title: 'POST-PRODUCTION', text: 'Editing, colour grading and finishing.' },
+        { title: 'DELIVERY', text: 'Export and handover to the client.' }
+      ]
+    : [
+        { title: 'PRE-PRODUKSJON', text: 'Idéutvikling, moodboards og planlegging av konsept.' },
+        { title: 'PRODUKSJON', text: 'Gjennomføring av opptak og sikring av materiale.' },
+        { title: 'POST-PRODUKSJON', text: 'Redigering, fargekorrigering og ferdigstilling.' },
+        { title: 'LEVERING', text: 'Eksport og overlevering til kunden.' }
+      ]
 }
 
 // Velg team-medlemmer basert på prosjekttype
@@ -648,10 +662,18 @@ async function generateDeliverables(
   contentType: string,
   mediums: string[],
   scope: string,
-  context: string
+  context: string,
+  language: string = 'no'
 ): Promise<Array<{ id: string; title: string; quantity: string; format: string; description: string }>> {
-  
-  const prompt = `${projectContext}
+  const contentTypeLabel = contentType === 'film'
+    ? (language === 'en' ? 'Film' : 'Film')
+    : contentType === 'photo'
+      ? (language === 'en' ? 'Photo' : 'Foto')
+      : (language === 'en' ? 'Film and Photo' : 'Film og Foto')
+
+  const prompt = language === 'en'
+    ? `${projectContext}\n\nTASK: Based on the project information above, suggest 3-5 concrete deliverables for this project.\n\nEach deliverable should have:\n- title: Short name (e.g. "PRODUCT PHOTOS", "MAIN FILM", "INSTAGRAM REELS", "DOCUMENTATION")\n- quantity: Number only (e.g. "20 pcs", "1 pc", "5 pcs")\n- format: Format/aspect ratio/duration (e.g. "16:9", "9:16", "1:1", "2:30 min", "30 sec")\n- description: A short description (1-2 sentences) of what the deliverable entails\n\nAdapt to:\n- Content type: ${contentTypeLabel}\n- Platforms: ${mediums?.join(', ') || 'Not specified'}\n- Scope: ${scope || 'Not specified'}\n\n${context ? 'Pay special attention to any specific wishes in the context.' : ''}\n\nRespond ONLY with valid JSON:\n[\n  { "id": "1", "title": "TITLE", "quantity": "quantity", "format": "format", "description": "Short description" },\n  ...\n]`
+    : `${projectContext}
 
 OPPGAVE: Basert på prosjektinformasjonen over, foreslå 3-5 konkrete leveranser (deliverables) for dette prosjektet.
 
@@ -662,7 +684,7 @@ Hver leveranse skal ha:
 - description: En kort beskrivelse (1-2 setninger) av hva leveransen innebærer
 
 Tilpass leveransene til:
-- Innholdstype: ${contentType === 'film' ? 'Film' : contentType === 'photo' ? 'Foto' : 'Film og Foto'}
+- Innholdstype: ${contentTypeLabel}
 - Plattformer: ${mediums?.join(', ') || 'Ikke spesifisert'}
 - Omfang: ${scope || 'Ikke spesifisert'}
 
@@ -676,13 +698,14 @@ Svar BARE med gyldig JSON i dette formatet:
 
   try {
     const openai = getOpenAIClient()
+    const systemPrompt = language === 'en'
+      ? 'You are an experienced project manager for film and photo productions. Suggest concrete, realistic deliverables. Respond only with valid JSON.'
+      : 'Du er en erfaren prosjektleder for film- og fotoproduksjoner. Du foreslår konkrete, realistiske leveranser. Svar kun med gyldig JSON.'
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        {
-          role: 'system',
-          content: 'Du er en erfaren prosjektleder for film- og fotoproduksjoner. Du foreslår konkrete, realistiske leveranser. Svar kun med gyldig JSON.'
-        },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
       temperature: 0.6,
@@ -709,6 +732,27 @@ Svar BARE med gyldig JSON i dette formatet:
   }
 
   // Fallback basert på innholdstype
+  if (language === 'en') {
+    if (contentType === 'film') {
+      return [
+        { id: '1', title: 'MAIN FILM', quantity: '1 pc', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading and sound design.' },
+        { id: '2', title: 'CUTDOWNS', quantity: '3 pcs', format: '30 sec', description: 'Shorter versions adapted for different platforms.' },
+        { id: '3', title: 'BEHIND THE SCENES', quantity: '1 pc', format: '1:00 min', description: 'Documentation of the production process.' }
+      ]
+    } else if (contentType === 'photo') {
+      return [
+        { id: '1', title: 'PRODUCT PHOTOS', quantity: '20 pcs', format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '2', title: 'LIFESTYLE PHOTOS', quantity: '10 pcs', format: '16:9', description: 'Images showing the product in use.' },
+        { id: '3', title: 'SOCIAL MEDIA', quantity: '15 pcs', format: '1:1', description: 'Adapted images for Instagram and Facebook.' }
+      ]
+    } else {
+      return [
+        { id: '1', title: 'MAIN FILM', quantity: '1 pc', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading.' },
+        { id: '2', title: 'PRODUCT PHOTOS', quantity: '15 pcs', format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '3', title: 'REELS', quantity: '5 pcs', format: '9:16 - 15 sec', description: 'Short videos for social media.' }
+      ]
+    }
+  }
   if (contentType === 'film') {
     return [
       { id: '1', title: 'HOVEDFILM', quantity: '1 stk', format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.' },

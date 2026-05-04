@@ -121,7 +121,7 @@ function TimelineCard({
         className={editMode ? 'edit-outline px-2 py-1' : ''}
         style={{
           fontFamily: 'var(--font-dm-sans)',
-          fontSize: '0.6rem',
+          fontSize: '0.78rem',
           letterSpacing: '0.12em',
           color: isActive ? '#C49434' : '#38332A',
           textTransform: 'uppercase',
@@ -169,18 +169,26 @@ export function TimelineSection({
   // EDIT MODE: simple flat layout, all 4 cards visible
   if (editMode) {
     return (
-      <div ref={timelineSectionRef} className="w-full py-16 md:py-20">
+      <div ref={timelineSectionRef} className="w-full py-6 md:py-8">
         <div className="px-8 md:px-16 mb-12 flex items-center gap-5">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
-          <span style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#C49434',
-            textTransform: 'uppercase',
-            fontWeight: 500,
-          }}>
-            {getSectionTitle(section.type)}
+          <span
+            className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode}
+            suppressContentEditableWarning
+            onBlur={(e) => {
+              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+            }}
+          >
+            {section.content.sectionLabel || getSectionTitle(section.type)}
           </span>
         </div>
         <div className="flex gap-4 px-8 md:px-16 overflow-x-auto pb-4">
@@ -220,15 +228,23 @@ export function TimelineSection({
         {/* Section label */}
         <div className="px-8 md:px-16 mb-10 flex items-center gap-5">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
-          <span style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#C49434',
-            textTransform: 'uppercase',
-            fontWeight: 500,
-          }}>
-            {getSectionTitle(section.type)}
+          <span
+            className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode}
+            suppressContentEditableWarning
+            onBlur={(e) => {
+              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+            }}
+          >
+            {section.content.sectionLabel || getSectionTitle(section.type)}
           </span>
         </div>
 
@@ -336,7 +352,7 @@ export function TimelineSection({
         <div className="hidden lg:flex justify-center mt-4">
           <span style={{
             fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
+            fontSize: '0.78rem',
             letterSpacing: '0.14em',
             color: '#C49434',
             textTransform: 'uppercase',

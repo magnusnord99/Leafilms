@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { TeamMember } from '@/lib/types'
 import { Heading, Text } from '@/components/ui'
-import { PROJECT_ROLES, ROLE_ACTIONS } from '@/lib/constants'
+import { PROJECT_ROLES, ROLE_ACTIONS, ROLE_ACTIONS_EN } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 type TeamMemberCardProps = {
   teamMember: TeamMember
   editMode: boolean
+  language?: 'no' | 'en'
   projectRole?: string | null // Prosjekt-spesifikk rolle/beskrivelse
   onProjectRoleChange?: (role: string) => void // Callback for å oppdatere prosjekt-spesifikk rolle
 }
@@ -39,10 +40,11 @@ function buildRoleText(selected: Set<string>, custom: string): string {
 }
 
 /** Lager beskrivende setning til visning (forteller hva personen skal gjøre) */
-function buildRoleDescription(selected: Set<string>, custom: string, memberName: string): string {
+function buildRoleDescription(selected: Set<string>, custom: string, memberName: string, language: 'no' | 'en' = 'no'): string {
+  const actionMap = language === 'en' ? ROLE_ACTIONS_EN : ROLE_ACTIONS
   const actions = PROJECT_ROLES
     .filter((r) => selected.has(r))
-    .map((r) => ROLE_ACTIONS[r] || r.toLowerCase())
+    .map((r) => actionMap[r] || r.toLowerCase())
   const customTrimmed = custom.trim()
 
   if (actions.length === 0 && !customTrimmed) return ''
@@ -52,18 +54,26 @@ function buildRoleDescription(selected: Set<string>, custom: string, memberName:
     return customTrimmed
   }
 
-  const actionsFormatted =
-    actions.length === 1
+  const actionsFormatted = language === 'en'
+    ? actions.length === 1
+      ? actions[0]
+      : actions.length === 2
+        ? `${actions[0]} and ${actions[1]}`
+        : `${actions.slice(0, -1).join(', ')} and ${actions[actions.length - 1]}`
+    : actions.length === 1
       ? actions[0]
       : actions.length === 2
         ? `${actions[0]} og ${actions[1]}`
         : `${actions.slice(0, -1).join(', ')} og ${actions[actions.length - 1]}`
 
-  const base = `I dette prosjektet vil ${firstName} stå for ${actionsFormatted}.`
+  const base = language === 'en'
+    ? `In this project, ${firstName} will handle ${actionsFormatted}.`
+    : `I dette prosjektet vil ${firstName} stå for ${actionsFormatted}.`
+
   return customTrimmed ? `${base} ${customTrimmed}` : base
 }
 
-export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRoleChange }: TeamMemberCardProps) {
+export function TeamMemberCard({ teamMember, editMode, language = 'no', projectRole, onProjectRoleChange }: TeamMemberCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
   const [customRole, setCustomRole] = useState('')
@@ -257,7 +267,7 @@ export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRol
               <>
                 {(() => {
                   const { selected, custom } = parseProjectRole(projectRole)
-                  const description = buildRoleDescription(selected, custom, teamMember.name)
+                  const description = buildRoleDescription(selected, custom, teamMember.name, language)
                   return description ? (
                     <Text
                       variant="small"
@@ -271,7 +281,7 @@ export function TeamMemberCard({ teamMember, editMode, projectRole, onProjectRol
                     </Text>
                   ) : (
                     <Text variant="small" className="text-dark/70 italic">
-                      Ingen prosjekt-spesifikk rolle definert
+                      {language === 'en' ? 'No project-specific role defined' : 'Ingen prosjekt-spesifikk rolle definert'}
                     </Text>
                   )
                 })()}

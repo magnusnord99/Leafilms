@@ -98,20 +98,29 @@ export default function ProjectQuoteAnalyticsPage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Laster...</Text>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
         <PageHeader
           projectId={id}
           projectTitle={projectTitle}
           projectStatus={projectStatus}
           onRefresh={fetchProjectAndAnalytics}
+          onReset={async () => {
+            const res = await fetch(`/api/analytics/reset/${id}`, { method: 'DELETE' })
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}))
+              alert(body.error || 'Klarte ikke å nullstille statistikk.')
+              return
+            }
+            fetchProjectAndAnalytics()
+          }}
         />
 
         {analytics ? (

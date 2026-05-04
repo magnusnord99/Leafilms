@@ -238,7 +238,7 @@ export default function EditPresetPage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
           <Text variant="muted">Laster...</Text>
@@ -249,14 +249,14 @@ export default function EditPresetPage({ params }: Props) {
 
   if (!preset) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Bilde-sett ikke funnet</Text>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <Button

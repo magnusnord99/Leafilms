@@ -156,14 +156,14 @@ export default function EditCase({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Laster...</Text>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-12">

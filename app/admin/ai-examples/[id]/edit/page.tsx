@@ -102,7 +102,7 @@ export default function EditAIExample({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Laster...</Text>
       </div>
     )
@@ -110,7 +110,7 @@ export default function EditAIExample({ params }: Props) {
 
   if (!example) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Text variant="body" className="mb-4">Eksempel ikke funnet</Text>
           <Button onClick={() => router.push('/admin/ai-examples')}>
@@ -133,7 +133,7 @@ export default function EditAIExample({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-12">

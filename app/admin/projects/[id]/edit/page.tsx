@@ -56,6 +56,7 @@ export default function EditProject({ params }: Props) {
   const [showPresetPicker, setShowPresetPicker] = useState(false)
   const [collageImagePosition, setCollageImagePosition] = useState<string | null>(null)
   const [duplicating, setDuplicating] = useState(false)
+  const [translating, setTranslating] = useState(false)
 
   // Hooks
   const {
@@ -148,6 +149,35 @@ export default function EditProject({ params }: Props) {
     setShareLink,
     id
   )
+
+  const handleTranslate = async () => {
+    if (!project) return
+    const targetLanguage = project.language === 'en' ? 'no' : 'en'
+    const confirmed = confirm(
+      project.language === 'en'
+        ? 'Oversett hele prosjektet til norsk? Dette vil erstatte alt innhold.'
+        : 'Translate the entire project to English? This will replace all content.'
+    )
+    if (!confirmed) return
+
+    setTranslating(true)
+    try {
+      const res = await fetch('/api/translate-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: id, targetLanguage })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Oversettelse feilet')
+      setProject(prev => prev ? { ...prev, language: targetLanguage } : prev)
+      await refreshData()
+    } catch (err) {
+      console.error('Translate error:', err)
+      alert(err instanceof Error ? err.message : 'Oversettelse feilet')
+    } finally {
+      setTranslating(false)
+    }
+  }
 
   const handleDuplicateVersion = async () => {
     setDuplicating(true)
@@ -249,7 +279,7 @@ export default function EditProject({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-gray-400">Laster prosjekt...</p>
@@ -260,7 +290,7 @@ export default function EditProject({ params }: Props) {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl mb-4">❌ Prosjekt ikke funnet</p>
           <button
@@ -285,6 +315,7 @@ export default function EditProject({ params }: Props) {
         publishing={publishing}
         showMobilePreview={showMobilePreview}
         shareLink={shareLink}
+        translating={translating}
         onEditModeToggle={() => setEditMode(!editMode)}
         onMobilePreviewToggle={() => setShowMobilePreview(!showMobilePreview)}
         onSave={() => handleSave(true)}
@@ -293,6 +324,7 @@ export default function EditProject({ params }: Props) {
         onAddQuoteSection={addQuoteSection}
         onAddProductionScheduleSection={addProductionScheduleSection}
         onDuplicateVersion={handleDuplicateVersion}
+        onTranslate={handleTranslate}
         duplicating={duplicating}
       />
 

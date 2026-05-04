@@ -1,7 +1,7 @@
 'use client'
 
 import { Section, CaseStudy } from '@/lib/types'
-import { Button, Heading, Text } from '@/components/ui'
+import { Button, Text } from '@/components/ui'
 import React, { useRef, useEffect, useState, useMemo } from 'react'
 
 type CasesSectionProps = {
@@ -9,6 +9,7 @@ type CasesSectionProps = {
   editMode: boolean
   allCases: CaseStudy[]
   selectedCaseIds: string[]
+  getSectionTitle?: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   onCasePickerOpen: () => void
   casesSectionProgress?: number
@@ -20,6 +21,7 @@ export function CasesSection({
   editMode,
   allCases,
   selectedCaseIds,
+  getSectionTitle,
   updateSectionContent,
   onCasePickerOpen,
   casesSectionProgress = 0,
@@ -81,37 +83,48 @@ export function CasesSection({
   }, [casesSectionProgress, editMode, sectionRef])
 
   return (
-    <div ref={sectionRef} className="relative -mt-24 mb-30 pt-24">
-      {/* Sentrert tekstboks */}
-      <div className="flex justify-center mb-8 -mt-16">
-        <div className="max-w-2xl w-full p-6 bg-background-widget shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-1px_rgba(0,0,0,0.06)] relative z-20">
-          <Heading 
-            as="h3"
-            className={`mb-4 text-center ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1' : ''}`}
+    <div ref={sectionRef} className="py-16 md:py-20 px-8 md:px-16">
+      {/* Section header */}
+      <div className="mb-10">
+        <div className="flex items-center gap-4 mb-5">
+          <div style={{ width: 32, height: 1, background: '#C49434' }} />
+          <span
+            className={editMode ? 'edit-outline px-2 py-1' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
             contentEditable={editMode}
             suppressContentEditableWarning
             onBlur={(e) => {
-              if (editMode) {
-                updateSectionContent(section.id, 'title', e.currentTarget.textContent || '')
-              }
+              if (editMode) updateSectionContent(section.id, 'title', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.title || 'EKSEMPELARBEID'}
-          </Heading>
-          <Text 
-            variant="body" 
-            className={`text-center ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-black/50 hover:outline-dashed rounded px-2 py-1 min-h-[60px]' : ''}`}
-            contentEditable={editMode}
-            suppressContentEditableWarning
-            onBlur={(e) => {
-              if (editMode) {
-                updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
-              }
-            }}
-          >
-            {section.content.description ||'Se utvalg av våre tidligere prosjekter'}
-          </Text>
+            {section.content.title || (getSectionTitle ? getSectionTitle(section.type) : 'Eksempelarbeid')}
+          </span>
         </div>
+        <p
+          className={editMode ? 'edit-outline px-2 py-1' : ''}
+          style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.3,
+          }}
+          contentEditable={editMode}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
+          }}
+        >
+          {section.content.description || 'Se utvalg av våre tidligere prosjekter'}
+        </p>
       </div>
 
       {editMode && (

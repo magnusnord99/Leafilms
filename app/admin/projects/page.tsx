@@ -3,11 +3,24 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Card, Badge, Heading, Text } from '@/components/ui'
+import { Button, Badge } from '@/components/ui'
 import { Project } from '@/lib/types'
 
 type ProjectWithVersion = Project & { rootId: string; versionNumber: number }
 type ProjectGroup = { rootId: string; baseTitle: string; versions: ProjectWithVersion[] }
+
+const sectionLabel = (text: string) => (
+  <span style={{
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.16em',
+    color: '#C49434',
+    textTransform: 'uppercase' as const,
+    fontWeight: 500,
+  }}>
+    {text}
+  </span>
+)
 
 export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
@@ -27,7 +40,6 @@ export default function ProjectsPage() {
 
       if (projectsError) {
         console.error('Error fetching projects:', projectsError)
-        alert('❌ Kunne ikke hente prosjekter')
       } else {
         const projectsWithVersion = (projectsData || []).map((p: any) => ({
           ...p,
@@ -80,30 +92,21 @@ export default function ProjectsPage() {
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
-      alert('❌ Kunne ikke hente prosjekter')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete(projectId: string, projectTitle: string) {
-    if (!confirm(`Er du sikker på at du vil slette "${projectTitle}"?\n\nDette kan ikke angres.`)) {
-      return
-    }
+    if (!confirm(`Er du sikker på at du vil slette "${projectTitle}"?\n\nDette kan ikke angres.`)) return
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId)
-
+      const { error } = await supabase.from('projects').delete().eq('id', projectId)
       if (error) throw error
-
-      // Prosjekt slettet - refresh data
       fetchProjects()
     } catch (error) {
       console.error('Error deleting project:', error)
-      alert('❌ Kunne ikke slette prosjekt')
+      alert('Kunne ikke slette prosjekt')
     }
   }
 
@@ -116,74 +119,114 @@ export default function ProjectsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          Laster...
+        </p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-12">
+        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
           <div>
-            <Link href="/admin" className="text-white/60 hover:text-white mb-2 inline-block">
-              ← Tilbake til dashboard
-            </Link>
-            <Heading as="h1" size="lg" className="mb-2 !text-white">Prosjekter</Heading>
-            <Text variant="body" className="!text-white">
+            <div className="flex items-center gap-4 mb-4">
+              <div style={{ width: 32, height: 1, background: '#C49434' }} />
+              {sectionLabel('Alle prosjekter')}
+            </div>
+            <h1 style={{
+              fontFamily: 'var(--font-cormorant)',
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              color: '#E8E1D5',
+              lineHeight: 1,
+            }}>
+              Prosjekter
+            </h1>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
               {projectGroups.length} prosjekt{projectGroups.length !== 1 ? 'er' : ''} · {totalProjects} versjon{totalProjects !== 1 ? 'er' : ''} totalt
-            </Text>
+            </p>
           </div>
-          <div className="flex gap-3">
-            <Link href="/admin/projects/new">
-              <Button variant="primary">+ Nytt Prosjekt</Button>
-            </Link>
-          </div>
+          <Link href="/admin/projects/new">
+            <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
+          </Link>
         </div>
 
-        {/* Prosjektmapper med versjoner */}
-        <div className="space-y-6">
-          {projectGroups.map((group) => (
-            <Card key={group.rootId} className="overflow-hidden">
-              {/* Mappe-header */}
-              <div className="p-4 border-b border-white/10 bg-white/5">
-                <div className="flex items-center justify-between">
+        {/* Project groups */}
+        {projectGroups.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            {projectGroups.map((group) => (
+              <div
+                key={group.rootId}
+                style={{ border: '1px solid #2A261F', borderRadius: 3, overflow: 'hidden' }}
+              >
+                {/* Group header */}
+                <div
+                  className="flex items-center justify-between px-5 py-3"
+                  style={{ background: '#161410', borderBottom: '1px solid #2A261F' }}
+                >
                   <div>
-                    <Heading as="h3" size="sm" className="mb-1 !text-white">
-                      📁 {group.baseTitle}
-                    </Heading>
+                    <p style={{
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      color: '#E8E1D5',
+                      letterSpacing: '0.03em',
+                    }}>
+                      {group.baseTitle}
+                    </p>
                     {group.versions[0]?.client_name && (
-                      <Text variant="muted" className="text-sm">
-                        Kunde: {group.versions[0].client_name}
-                      </Text>
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 2 }}>
+                        {group.versions[0].client_name}
+                      </p>
                     )}
                   </div>
-                  <Text variant="muted" className="text-sm">
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.6rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: '#38332A',
+                  }}>
                     {group.versions.length} versjon{group.versions.length !== 1 ? 'er' : ''}
-                  </Text>
+                  </span>
                 </div>
-              </div>
-              {/* Versjoner inni mappen */}
-              <div className="divide-y divide-white/10">
-                {group.versions.map((project) => (
+
+                {/* Versions */}
+                {group.versions.map((project, i) => (
                   <div
                     key={project.id}
-                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/5 transition-colors"
+                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                    style={{
+                      background: '#0E0D0B',
+                      borderBottom: i < group.versions.length - 1 ? '1px solid #2A261F' : 'none',
+                    }}
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
                       <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-                        {project.status === 'published' ? '🟢 Publisert' : project.status === 'archived' ? '⚫ Arkivert' : '🟡 Utkast'}
+                        {project.status === 'published' ? 'Publisert' : project.status === 'archived' ? 'Arkivert' : 'Utkast'}
                       </Badge>
-                      <span className="text-sm font-medium text-white/90 px-2 py-0.5 rounded bg-white/10">
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.6rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        background: 'rgba(196,148,52,0.1)',
+                        color: '#C49434',
+                        padding: '2px 7px',
+                        borderRadius: 2,
+                      }}>
                         {getVersionLabel(project)}
                       </span>
-                      <Text variant="muted" className="text-sm truncate">
-                        Oppdatert: {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                      </Text>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#38332A' }}>
+                        {new Date(project.updated_at).toLocaleDateString('nb-NO')}
+                      </span>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 flex-shrink-0">
                       <Link href={`/admin/projects/${project.id}/edit`}>
                         <Button variant="primary" size="sm">Rediger</Button>
                       </Link>
@@ -191,25 +234,19 @@ export default function ProjectsPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            window.open(shareLinks[project.id], '_blank')
-                          }}
+                          onClick={() => window.open(shareLinks[project.id], '_blank')}
                         >
-                          🔗 Se publisert
+                          Se publisert
                         </Button>
                       )}
                       <Link href={`/admin/projects/${project.id}/quote-analytics`}>
-                        <Button variant="secondary" size="sm">📊 Statistikk</Button>
+                        <Button variant="secondary" size="sm">Statistikk</Button>
                       </Link>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         size="sm"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          handleDelete(project.id, project.title)
-                        }}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                        onClick={() => handleDelete(project.id, project.title)}
+                        style={{ color: '#B84040' }}
                       >
                         Slett
                       </Button>
@@ -217,21 +254,22 @@ export default function ProjectsPage() {
                   </div>
                 ))}
               </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Ingen prosjekter */}
-        {projectGroups.length === 0 && (
-          <Card className="p-12 text-center">
-            <Text variant="body" className="mb-4">Ingen prosjekter ennå</Text>
+            ))}
+          </div>
+        ) : (
+          <div
+            className="p-10 text-center"
+            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+          >
+            <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
+              Ingen prosjekter ennå
+            </p>
             <Link href="/admin/projects/new">
-              <Button variant="primary">Opprett første prosjekt →</Button>
+              <Button variant="primary">Opprett første prosjekt</Button>
             </Link>
-          </Card>
+          </div>
         )}
       </div>
     </div>
   )
 }
-

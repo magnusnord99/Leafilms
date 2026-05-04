@@ -9,9 +9,11 @@ import { ImageGallery } from '@/components/project'
 type TeamSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   allTeamMembers: TeamMember[]
   selectedTeamMemberIds: string[]
   sectionImages: Record<string, Image[]>
+  getSectionTitle?: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
   onTeamPickerOpen: () => void
   onGalleryImageClick: () => void
@@ -20,9 +22,11 @@ type TeamSectionProps = {
 export function TeamSection({
   section,
   editMode,
+  language = 'no',
   allTeamMembers,
   selectedTeamMemberIds,
   sectionImages,
+  getSectionTitle,
   updateSectionContent,
   onTeamPickerOpen,
   onGalleryImageClick
@@ -40,15 +44,23 @@ export function TeamSection({
         {/* Section header */}
         <div className="flex items-center gap-4 mb-8">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
-          <span style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#C49434',
-            textTransform: 'uppercase',
-            fontWeight: 500,
-          }}>
-            Team
+          <span
+            className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode}
+            suppressContentEditableWarning
+            onBlur={(e) => {
+              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+            }}
+          >
+            {section.content.sectionLabel || (getSectionTitle ? getSectionTitle(section.type) : 'Team')}
           </span>
         </div>
 
@@ -96,6 +108,7 @@ export function TeamSection({
                   <TeamMemberCard
                     teamMember={teamMember}
                     editMode={editMode}
+                    language={language}
                     projectRole={projectRole}
                     onProjectRoleChange={handleRoleChange}
                   />

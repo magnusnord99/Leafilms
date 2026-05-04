@@ -5,6 +5,7 @@ import { Section } from '@/lib/types'
 type ContactSectionProps = {
   section: Section
   editMode: boolean
+  getSectionTitle?: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: string | any) => void
 }
 
@@ -13,6 +14,7 @@ const DEFAULT_CONTACT_TEXT = `LEAFILMS\neivind@leafilms.no`
 export function ContactSection({
   section,
   editMode,
+  getSectionTitle,
   updateSectionContent
 }: ContactSectionProps) {
   const displayText = section.content.text || DEFAULT_CONTACT_TEXT
@@ -22,15 +24,23 @@ export function ContactSection({
       {/* Section label */}
       <div className="flex items-center gap-4 mb-10">
         <div style={{ width: 32, height: 1, background: '#C49434' }} />
-        <span style={{
-          fontFamily: 'var(--font-dm-sans)',
-          fontSize: '0.6rem',
-          letterSpacing: '0.16em',
-          color: '#C49434',
-          textTransform: 'uppercase',
-          fontWeight: 500,
-        }}>
-          Kontakt
+        <span
+          className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+          style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.78rem',
+            letterSpacing: '0.16em',
+            color: '#C49434',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}
+          contentEditable={editMode}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+          }}
+        >
+          {section.content.sectionLabel || (getSectionTitle ? getSectionTitle(section.type) : 'Kontakt')}
         </span>
       </div>
 
@@ -44,7 +54,7 @@ export function ContactSection({
         }}
         style={{
           fontFamily: 'var(--font-cormorant)',
-          fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
+          fontSize: 'clamp(1.1rem, 1.6vw, 1.5rem)',
           fontWeight: 300,
           fontStyle: 'italic',
           color: '#E8E1D5',

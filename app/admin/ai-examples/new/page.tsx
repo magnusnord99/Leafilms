@@ -43,7 +43,7 @@ export default function NewAIExample() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-12">

@@ -235,7 +235,7 @@ export function HeroSection({
           <div className="w-8 h-px bg-[#C49434]" />
           <span style={{
             fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
+            fontSize: '0.78rem',
             letterSpacing: '0.18em',
             color: '#C49434',
             textTransform: 'uppercase',
@@ -248,7 +248,7 @@ export function HeroSection({
         {/* Main title */}
         <Heading
           as="h3"
-          size="3xl"
+          size="xl"
           className={`mb-4 text-[#E8E1D5] ${editMode ? 'cursor-text' : ''}`}
           style={{
             fontFamily: 'var(--font-cormorant), Georgia, serif',
@@ -256,6 +256,7 @@ export function HeroSection({
             fontStyle: 'italic',
             lineHeight: 0.9,
             maxWidth: '20ch',
+            fontSize: 'clamp(5rem, 5vw, 5rem)',
           }}
           contentEditable={editMode}
           suppressContentEditableWarning
@@ -272,7 +273,7 @@ export function HeroSection({
           className={`${editMode ? 'cursor-text' : ''}`}
           style={{
             fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.75rem',
+            fontSize: '0.975rem',
             letterSpacing: '0.14em',
             color: '#9E9287',
             textTransform: 'uppercase',

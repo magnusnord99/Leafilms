@@ -1,108 +1,147 @@
 'use client'
 
 import { Section } from '@/lib/types'
-import { Heading, Text } from '@/components/ui'
 
 type ScheduleItem = {
   id: string
   event: string
+  location: string
+  date: string
   startDate: string
   endDate: string
-  topic: string
-  capture: string
-  edit: string
   channels: string
   liveOn: string
+  crew: number
+  manualDays?: number
 }
+
+const DEFAULT_PARTNER_ITEMS: ScheduleItem[] = [
+  {
+    id: 'p1',
+    event: 'Partner 1',
+    location: 'TBA',
+    date: 'TBA',
+    startDate: '',
+    endDate: '',
+    channels: 'Web, Screen',
+    liveOn: 'TBA',
+    crew: 4,
+    manualDays: 2,
+  },
+  {
+    id: 'p2',
+    event: 'Partner 2',
+    location: 'TBA',
+    date: 'TBA',
+    startDate: '',
+    endDate: '',
+    channels: 'Web, Screen',
+    liveOn: 'TBA',
+    crew: 4,
+    manualDays: 2,
+  },
+  {
+    id: 'p3',
+    event: 'Partner 3',
+    location: 'TBA',
+    date: 'TBA',
+    startDate: '',
+    endDate: '',
+    channels: 'Web, Screen',
+    liveOn: 'TBA',
+    crew: 4,
+    manualDays: 2,
+  },
+]
 
 const DEFAULT_SCHEDULE_ITEMS: ScheduleItem[] = [
   {
     id: '1',
-    event: 'Camp June 9-11',
+    event: 'Camp',
+    location: 'Near Oslo',
+    date: 'June 9–11, 2026',
     startDate: '2026-06-09',
-    endDate: '2026-06-11',
-    topic: '',
-    capture: '',
-    edit: '',
+    endDate: '2026-06-10',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'July 1st',
+    crew: 4,
   },
   {
     id: '2',
-    event: 'Altitude Camp September, Europe (TBD)',
-    startDate: '2026-09-01',
-    endDate: '2026-09-14',
-    topic: '',
-    capture: '',
-    edit: '',
+    event: 'Altitude Camp September',
+    location: 'Europe',
+    date: 'September 26',
+    startDate: '2026-09-26',
+    endDate: '2026-09-28',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'October 1st',
+    crew: 4,
   },
   {
     id: '3',
-    event: 'Training Camp October, Spain (TBD)',
+    event: 'Training Camp',
+    location: 'Spain',
+    date: 'October 2026',
     startDate: '2026-10-01',
-    endDate: '2026-10-14',
-    topic: '',
-    capture: '',
-    edit: '',
+    endDate: '2026-10-03',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'November 1st',
+    crew: 2,
   },
   {
     id: '4',
-    event: 'Season Opening November 19th-21th, Norway',
+    event: 'Season Opening',
+    location: 'Norway',
+    date: 'November 19th–21st, 2026',
     startDate: '2026-11-19',
-    endDate: '2026-11-21',
-    topic: '',
-    capture: '',
-    edit: '',
+    endDate: '2026-11-22',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'November 25th',
+    crew: 3,
   },
   {
     id: '5',
-    event: 'Norwegian Championships January 2027',
+    event: 'Norwegian Championships',
+    location: 'Norway',
+    date: 'January 2027',
     startDate: '2027-01-15',
-    endDate: '2027-01-19',
-    topic: '',
-    capture: '',
-    edit: '',
+    endDate: '2027-01-17',
     channels: 'IG, TikTok, YouTube',
-    liveOn: 'January 20th?',
+    liveOn: 'January 20th',
+    crew: 3,
   },
   {
     id: '6',
-    event: 'Marcialonga January 31st 2027, Italy',
+    event: 'Marcialonga',
+    location: 'Italy',
+    date: 'January 31st, 2027',
     startDate: '2027-01-31',
     endDate: '2027-02-02',
-    topic: '',
-    capture: '',
-    edit: '',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'February 7th',
+    crew: 4,
   },
   {
     id: '7',
-    event: 'World Championships Falun Sweden, February 2027',
+    event: 'World Championships',
+    location: 'Falun, Sweden',
+    date: 'February 2027',
     startDate: '2027-02-19',
-    endDate: '2027-03-02',
-    topic: '',
-    capture: '',
-    edit: '',
+    endDate: '2027-02-22',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'March 1st',
+    crew: 4,
   },
   {
     id: '8',
-    event: 'Ski Classics Season Final March 2027',
-    startDate: '2027-03-20',
+    event: 'Ski Classics Season',
+    location: 'Final March 2027',
+    date: 'March 2027',
+    startDate: '2027-03-19',
     endDate: '2027-03-23',
-    topic: '',
-    capture: '',
-    edit: '',
     channels: 'IG, TikTok, YouTube',
     liveOn: 'April 1st',
+    crew: 3,
   },
 ]
 
@@ -113,11 +152,25 @@ function getDays(startDate: string, endDate: string): number {
   return diff + 1
 }
 
+function formatDateRange(startDate: string, endDate: string): string {
+  if (!startDate) return ''
+  const start = new Date(startDate)
+  const end = endDate ? new Date(endDate) : null
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  if (!end || startDate === endDate) {
+    return `${monthNames[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()}`
+  }
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `${monthNames[start.getMonth()]} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`
+  }
+  return `${monthNames[start.getMonth()]} ${start.getDate()} – ${monthNames[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`
+}
+
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
-const COLUMNS = ['EVENT', 'TOPIC', 'CAPTURE', 'EDIT', 'CHANNELS', 'LIVE ON', 'DAYS']
+const COLUMNS = ['WHAT', 'LOCATION', 'DATE', 'CHANNELS', 'LIVE ON', 'PROD. DAYS', 'CREW']
 
 type ProductionScheduleSectionProps = {
   section: Section
@@ -125,85 +178,89 @@ type ProductionScheduleSectionProps = {
   updateSectionContent: (sectionId: string, key: string, value: any) => void
 }
 
-export function ProductionScheduleSection({
-  section,
+type TableBlockProps = {
+  title: string
+  subtitle: string
+  items: ScheduleItem[]
+  editMode: boolean
+  headerFooterTextColor: string
+  editClass: string
+  onUpdateTitle?: (val: string) => void
+  onUpdateSubtitle?: (val: string) => void
+  onUpdateItem: (id: string, field: keyof ScheduleItem, value: string | number) => void
+  onAddRow: () => void
+  onRemoveRow: (id: string) => void
+  showScrollHint?: boolean
+}
+
+function TableBlock({
+  title,
+  subtitle,
+  items,
   editMode,
-  updateSectionContent,
-}: ProductionScheduleSectionProps) {
-  const items: ScheduleItem[] = section.content.scheduleItems ?? DEFAULT_SCHEDULE_ITEMS
-  const sectionTitle: string = section.content.title ?? 'SCHEDULE OF CONTENT PRODUCTION'
-  const sectionSubtitle: string = section.content.subtitle ?? 'Timeline of content production and roll out'
-
-  function updateItem(id: string, field: keyof ScheduleItem, value: string) {
-    const updated = items.map((item) =>
-      item.id === id ? { ...item, [field]: value } : item
-    )
-    updateSectionContent(section.id, 'scheduleItems', updated)
-  }
-
-  function addRow() {
-    const newItem: ScheduleItem = {
-      id: generateId(),
-      event: 'New Event',
-      startDate: '',
-      endDate: '',
-      topic: '',
-      capture: '',
-      edit: '',
-      channels: 'IG, TikTok, YouTube',
-      liveOn: '',
-    }
-    updateSectionContent(section.id, 'scheduleItems', [...items, newItem])
-  }
-
-  function removeRow(id: string) {
-    updateSectionContent(
-      section.id,
-      'scheduleItems',
-      items.filter((item) => item.id !== id)
-    )
-  }
-
-  const editClass = editMode
-    ? 'cursor-text hover:outline hover:outline-2 hover:outline-dark/20 hover:outline-dashed rounded'
-    : ''
+  headerFooterTextColor,
+  editClass,
+  onUpdateTitle,
+  onUpdateSubtitle,
+  onUpdateItem,
+  onAddRow,
+  onRemoveRow,
+  showScrollHint,
+}: TableBlockProps) {
+  const totalDays = items.reduce((sum, item) => {
+    if (item.startDate && item.endDate) return sum + getDays(item.startDate, item.endDate)
+    if (item.manualDays) return sum + item.manualDays
+    return sum
+  }, 0)
 
   return (
-    <section className="py-section px-2 md:px-4 bg-background">
-      <div className="max-w-7xl mx-auto">
-
-        {/* Section header — same pattern as other sections */}
-        <div className="mb-10">
-          <Heading
-            as="h3"
-            className={`mb-2 ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-dark/20 hover:outline-dashed rounded px-1' : ''}`}
-            contentEditable={editMode}
+    <div className="mb-16">
+      {/* Header */}
+      <div className="mb-10">
+        <div className="flex items-center gap-4 mb-5">
+          <div style={{ width: 32, height: 1, background: '#C49434' }} />
+          <span
+            className={editMode && onUpdateTitle ? 'edit-outline px-2 py-1' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode && !!onUpdateTitle}
             suppressContentEditableWarning
             onBlur={(e) => {
-              if (editMode) {
-                updateSectionContent(section.id, 'title', e.currentTarget.textContent || '')
-              }
+              if (editMode && onUpdateTitle) onUpdateTitle(e.currentTarget.textContent || '')
             }}
           >
-            {sectionTitle}
-          </Heading>
-          <Text
-            variant="body"
-            className={`opacity-60 ${editMode ? 'cursor-text hover:outline hover:outline-2 hover:outline-dark/20 hover:outline-dashed rounded px-1' : ''}`}
-            contentEditable={editMode}
-            suppressContentEditableWarning
-            onBlur={(e) => {
-              if (editMode) {
-                updateSectionContent(section.id, 'subtitle', e.currentTarget.textContent || '')
-              }
-            }}
-          >
-            {sectionSubtitle}
-          </Text>
+            {title}
+          </span>
         </div>
+        <p
+          className={editMode && onUpdateSubtitle ? 'edit-outline px-2 py-1' : ''}
+          style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.3,
+          }}
+          contentEditable={editMode && !!onUpdateSubtitle}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode && onUpdateSubtitle) onUpdateSubtitle(e.currentTarget.textContent || '')
+          }}
+        >
+          {subtitle}
+        </p>
+      </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+      {/* Table */}
+      <div className="relative">
+        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           <table className="w-full min-w-[860px] border-collapse">
             <thead>
               <tr style={{ backgroundColor: 'var(--color-background-widget-dark)' }}>
@@ -211,7 +268,7 @@ export function ProductionScheduleSection({
                   <th
                     key={col}
                     className="px-5 py-4 text-left text-xs font-bold uppercase tracking-widest"
-                    style={{ color: 'var(--color-background-widget)' }}
+                    style={{ color: headerFooterTextColor }}
                   >
                     {col}
                   </th>
@@ -224,7 +281,7 @@ export function ProductionScheduleSection({
                 const days =
                   item.startDate && item.endDate
                     ? getDays(item.startDate, item.endDate)
-                    : null
+                    : item.manualDays ?? null
 
                 const rowStyle: React.CSSProperties =
                   index % 2 === 0
@@ -235,52 +292,54 @@ export function ProductionScheduleSection({
 
                 return (
                   <tr key={item.id} style={rowStyle}>
-                    {/* EVENT */}
+                    {/* WHAT */}
                     <td
                       className={`${cellBase} font-semibold w-[200px] ${editClass}`}
                       contentEditable={editMode}
                       suppressContentEditableWarning
                       onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'event', e.currentTarget.textContent || '')
+                        if (editMode) onUpdateItem(item.id, 'event', e.currentTarget.textContent || '')
                       }}
                     >
                       {item.event}
                     </td>
 
-                    {/* TOPIC */}
+                    {/* LOCATION */}
                     <td
                       className={`${cellBase} ${editClass}`}
                       contentEditable={editMode}
                       suppressContentEditableWarning
                       onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'topic', e.currentTarget.textContent || '')
+                        if (editMode) onUpdateItem(item.id, 'location', e.currentTarget.textContent || '')
                       }}
                     >
-                      {item.topic}
+                      {item.location}
                     </td>
 
-                    {/* CAPTURE */}
-                    <td
-                      className={`${cellBase} ${editClass}`}
-                      contentEditable={editMode}
-                      suppressContentEditableWarning
-                      onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'capture', e.currentTarget.textContent || '')
-                      }}
-                    >
-                      {item.capture}
-                    </td>
-
-                    {/* EDIT */}
-                    <td
-                      className={`${cellBase} ${editClass}`}
-                      contentEditable={editMode}
-                      suppressContentEditableWarning
-                      onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'edit', e.currentTarget.textContent || '')
-                      }}
-                    >
-                      {item.edit}
+                    {/* DATE */}
+                    <td className={`${cellBase} min-w-[160px]`}>
+                      {editMode ? (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs opacity-50">Fra</label>
+                          <input
+                            type="date"
+                            className="text-xs rounded px-1.5 py-1 w-full border border-dark/20 bg-background focus:outline-none cursor-pointer"
+                            value={item.startDate}
+                            onChange={(e) => onUpdateItem(item.id, 'startDate', e.target.value)}
+                            onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                          />
+                          <label className="text-xs opacity-50 mt-1">Til</label>
+                          <input
+                            type="date"
+                            className="text-xs rounded px-1.5 py-1 w-full border border-dark/20 bg-background focus:outline-none cursor-pointer"
+                            value={item.endDate}
+                            onChange={(e) => onUpdateItem(item.id, 'endDate', e.target.value)}
+                            onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                          />
+                        </div>
+                      ) : (
+                        formatDateRange(item.startDate, item.endDate) || item.date
+                      )}
                     </td>
 
                     {/* CHANNELS */}
@@ -289,7 +348,7 @@ export function ProductionScheduleSection({
                       contentEditable={editMode}
                       suppressContentEditableWarning
                       onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'channels', e.currentTarget.textContent || '')
+                        if (editMode) onUpdateItem(item.id, 'channels', e.currentTarget.textContent || '')
                       }}
                     >
                       {item.channels}
@@ -301,42 +360,37 @@ export function ProductionScheduleSection({
                       contentEditable={editMode}
                       suppressContentEditableWarning
                       onBlur={(e) => {
-                        if (editMode) updateItem(item.id, 'liveOn', e.currentTarget.textContent || '')
+                        if (editMode) onUpdateItem(item.id, 'liveOn', e.currentTarget.textContent || '')
                       }}
                     >
                       {item.liveOn}
                     </td>
 
-                    {/* DAYS */}
-                    <td className={`${cellBase} whitespace-nowrap min-w-[90px]`}>
+                    {/* PROD. DAYS */}
+                    <td className={`${cellBase} whitespace-nowrap`}>
                       {days !== null && (
                         <span className="font-semibold">{days}d</span>
                       )}
-                      {editMode && (
-                        <div className="mt-2 flex flex-col gap-1">
-                          <input
-                            type="date"
-                            className="text-xs rounded px-1.5 py-1 w-full border border-dark/20 bg-background focus:outline-none"
-                            value={item.startDate}
-                            onChange={(e) => updateItem(item.id, 'startDate', e.target.value)}
-                            title="Start date"
-                          />
-                          <input
-                            type="date"
-                            className="text-xs rounded px-1.5 py-1 w-full border border-dark/20 bg-background focus:outline-none"
-                            value={item.endDate}
-                            onChange={(e) => updateItem(item.id, 'endDate', e.target.value)}
-                            title="End date"
-                          />
-                        </div>
-                      )}
+                    </td>
+
+                    {/* CREW */}
+                    <td
+                      className={`${cellBase} font-semibold ${editClass}`}
+                      contentEditable={editMode}
+                      suppressContentEditableWarning
+                      onBlur={(e) => {
+                        const val = parseInt(e.currentTarget.textContent || '0', 10)
+                        if (editMode) onUpdateItem(item.id, 'crew', isNaN(val) ? 0 : val)
+                      }}
+                    >
+                      {item.crew || ''}
                     </td>
 
                     {/* Remove row button */}
                     {editMode && (
                       <td className="px-3 py-4 text-center align-top">
                         <button
-                          onClick={() => removeRow(item.id)}
+                          onClick={() => onRemoveRow(item.id)}
                           className="opacity-40 hover:opacity-80 text-dark font-bold text-base leading-none transition-opacity"
                           title="Fjern rad"
                         >
@@ -351,38 +405,146 @@ export function ProductionScheduleSection({
             <tfoot>
               <tr style={{ backgroundColor: 'var(--color-background-widget-dark)' }}>
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   className="px-5 py-4 text-xs font-bold uppercase tracking-widest text-right"
-                  style={{ color: 'var(--color-background-widget)' }}
+                  style={{ color: headerFooterTextColor }}
                 >
-                  Totalt
+                  Total days production Leafilms
                 </td>
                 <td
                   className="px-5 py-4 text-xs font-bold uppercase tracking-widest whitespace-nowrap"
-                  style={{ color: 'var(--color-background-widget)' }}
+                  style={{ color: headerFooterTextColor }}
                 >
-                  {items.reduce((sum, item) => {
-                    if (!item.startDate || !item.endDate) return sum
-                    return sum + getDays(item.startDate, item.endDate)
-                  }, 0)}d
+                  {totalDays}d
                 </td>
+                <td className="px-5 py-4" />
                 {editMode && <td />}
               </tr>
             </tfoot>
           </table>
         </div>
-
-        {/* Add row */}
-        {editMode && (
-          <div className="mt-4">
-            <button
-              onClick={addRow}
-              className="text-sm text-dark opacity-50 hover:opacity-100 border border-dark/30 hover:border-dark/60 rounded px-4 py-2 transition-opacity"
+        {/* Scroll hint — mobile only */}
+        {showScrollHint && (
+          <>
+            <div
+              className="md:hidden pointer-events-none absolute top-0 right-0 bottom-0 w-16"
+              style={{ background: 'linear-gradient(to right, transparent, rgba(22,20,16,0.85))' }}
+            />
+            <div
+              className="md:hidden flex items-center justify-end gap-1 mt-2 pr-1"
+              style={{ color: '#C49434', fontSize: '0.78rem', letterSpacing: '0.12em' }}
             >
-              + Legg til rad
-            </button>
-          </div>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', textTransform: 'uppercase', fontWeight: 500 }}>Scroll</span>
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+                <path d="M9 1l4 4-4 4M1 5h12" stroke="#C49434" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </>
         )}
+      </div>
+
+      {/* Add row */}
+      {editMode && (
+        <div className="mt-4">
+          <button
+            onClick={onAddRow}
+            className="text-sm text-dark opacity-50 hover:opacity-100 border border-dark/30 hover:border-dark/60 rounded px-4 py-2 transition-opacity"
+          >
+            + Legg til rad
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ProductionScheduleSection({
+  section,
+  editMode,
+  updateSectionContent,
+}: ProductionScheduleSectionProps) {
+  const items: ScheduleItem[] = section.content.scheduleItems ?? DEFAULT_SCHEDULE_ITEMS
+  const partnerItems: ScheduleItem[] = section.content.partnerItems ?? DEFAULT_PARTNER_ITEMS
+
+  const sectionTitle: string = section.content.title ?? 'SCHEDULE OF CONTENT PRODUCTION'
+  const sectionSubtitle: string = section.content.subtitle ?? 'Timeline of content production and roll out'
+  const partnerTitle: string = section.content.partnerTitle ?? 'SPECIFIC PRODUCTION ON LOCATION FOR TAD PARTNERS'
+  const partnerSubtitle: string = section.content.partnerSubtitle ?? 'Production on location for partner brands'
+
+  const editClass = editMode
+    ? 'cursor-text hover:outline hover:outline-2 hover:outline-dark/20 hover:outline-dashed rounded'
+    : ''
+
+  const headerFooterTextColor = '#E8E1D5'
+
+  function makeUpdater(contentKey: string, currentItems: ScheduleItem[]) {
+    return (id: string, field: keyof ScheduleItem, value: string | number) => {
+      const updated = currentItems.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+      updateSectionContent(section.id, contentKey, updated)
+    }
+  }
+
+  function makeAdder(contentKey: string, currentItems: ScheduleItem[], defaultChannels: string) {
+    return () => {
+      const newItem: ScheduleItem = {
+        id: generateId(),
+        event: 'New Event',
+        location: '',
+        date: '',
+        startDate: '',
+        endDate: '',
+        channels: defaultChannels,
+        liveOn: '',
+        crew: 0,
+      }
+      updateSectionContent(section.id, contentKey, [...currentItems, newItem])
+    }
+  }
+
+  function makeRemover(contentKey: string, currentItems: ScheduleItem[]) {
+    return (id: string) => {
+      updateSectionContent(section.id, contentKey, currentItems.filter((item) => item.id !== id))
+    }
+  }
+
+  return (
+    <section className="py-16 md:py-20 px-8 md:px-16 bg-background">
+      <div className="max-w-7xl mx-auto">
+
+        {/* Partner table — above main schedule */}
+        <TableBlock
+          title={partnerTitle}
+          subtitle={partnerSubtitle}
+          items={partnerItems}
+          editMode={editMode}
+          headerFooterTextColor={headerFooterTextColor}
+          editClass={editClass}
+          onUpdateTitle={(val) => updateSectionContent(section.id, 'partnerTitle', val)}
+          onUpdateSubtitle={(val) => updateSectionContent(section.id, 'partnerSubtitle', val)}
+          onUpdateItem={makeUpdater('partnerItems', partnerItems)}
+          onAddRow={makeAdder('partnerItems', partnerItems, 'Web, Screen')}
+          onRemoveRow={makeRemover('partnerItems', partnerItems)}
+          showScrollHint
+        />
+
+        {/* Main production schedule */}
+        <TableBlock
+          title={sectionTitle}
+          subtitle={sectionSubtitle}
+          items={items}
+          editMode={editMode}
+          headerFooterTextColor={headerFooterTextColor}
+          editClass={editClass}
+          onUpdateTitle={(val) => updateSectionContent(section.id, 'title', val)}
+          onUpdateSubtitle={(val) => updateSectionContent(section.id, 'subtitle', val)}
+          onUpdateItem={makeUpdater('scheduleItems', items)}
+          onAddRow={makeAdder('scheduleItems', items, 'IG, TikTok, YouTube')}
+          onRemoveRow={makeRemover('scheduleItems', items)}
+          showScrollHint
+        />
+
       </div>
     </section>
   )

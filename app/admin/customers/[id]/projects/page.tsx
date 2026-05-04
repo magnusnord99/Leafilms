@@ -81,7 +81,7 @@ export default function CustomerProjectsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Laster...</Text>
       </div>
     )
@@ -89,7 +89,7 @@ export default function CustomerProjectsPage() {
 
   if (!customer) {
     return (
-      <div className="min-h-screen bg-black text-white p-8">
+      <div className="min-h-screen p-8">
         <div className="max-w-6xl mx-auto">
           <Card className="p-12 text-center">
             <Text variant="body" className="mb-4">Kunde ikke funnet</Text>
@@ -103,7 +103,7 @@ export default function CustomerProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">

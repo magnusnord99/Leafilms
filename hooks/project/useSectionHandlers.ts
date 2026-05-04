@@ -66,13 +66,21 @@ export function useSectionHandlers({
   setSelectedPreset,
   setShowPresetPicker
 }: UseSectionHandlersProps) {
-  // Oppdater seksjon i state
+  // Oppdater seksjon i state OG lagre direkte til DB
   const updateSection = (sectionId: string, field: string, value: any) => {
-    setSections(sections.map(s => 
-      s.id === sectionId 
+    setSections(sections.map(s =>
+      s.id === sectionId
         ? { ...s, [field]: value }
         : s
     ))
+    // Lagre umiddelbart til DB slik at refreshData() ikke overskriver endringen
+    supabase
+      .from('sections')
+      .update({ [field]: value, updated_at: new Date().toISOString() })
+      .eq('id', sectionId)
+      .then(({ error }) => {
+        if (error) console.error('Error saving section field:', field, error)
+      })
   }
 
   // Oppdater content-feltet i en seksjon

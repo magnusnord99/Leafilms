@@ -125,7 +125,7 @@ export function SectionRenderer({
   return (
     <section
       key={section.id}
-      className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : section.type === 'timeline' ? 'pt-0 pb-0 px-0' : section.type === 'team' ? 'pt-0 pb-section px-2 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative`}
+      className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'pt-section-lg pb-section px-0 md:px-4' : section.type === 'timeline' ? 'pt-0 pb-0 px-0' : section.type === 'team' ? 'pt-0 pb-section px-2 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative`}
     >
       {/* Edit Controls - Absolute positioned in top-right corner */}
       {editMode && (
@@ -220,6 +220,7 @@ export function SectionRenderer({
           <DeliverablesSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             sectionImages={sectionImages}
             sectionImageData={sectionImageData}
             editingImageSectionId={editingImageSectionId}
@@ -294,6 +295,7 @@ export function SectionRenderer({
           <TeamSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             allTeamMembers={allTeamMembers}
             selectedTeamMemberIds={selectedTeamMemberIds}
             sectionImages={sectionImages}
@@ -332,6 +334,10 @@ export function SectionRenderer({
             editMode={editMode}
             collageImages={collageImages}
             selectedPreset={selectedPreset}
+            sectionImageData={sectionImageData}
+            imagePosition={imagePosition}
+            setImagePosition={setImagePosition}
+            saveBackgroundPosition={saveBackgroundPosition}
             updateSectionContent={updateSectionContent}
             onImageClick={onImageClick}
             onOpenPresetPicker={onOpenPresetPicker}

@@ -68,7 +68,7 @@ export function GoalSection({
   const textOpacity = editMode || isMobile ? 1 : goalSectionProgress
 
   return (
-    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch overflow-hidden">
+    <div ref={goalSectionRef} className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch overflow-hidden mb-24 md:mb-32">
       {/* Image panel */}
       <div
         onClick={onImageClick}
@@ -119,7 +119,6 @@ export function GoalSection({
       <div
         className="w-full md:w-1/2 flex flex-col justify-center px-8 md:px-14 py-14 md:py-20"
         style={{
-          background: '#161410',
           transform: textTransform,
           opacity: textOpacity,
           transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out',
@@ -128,15 +127,23 @@ export function GoalSection({
         {/* Section label */}
         <div className="flex items-center gap-3 mb-6">
           <div style={{ width: 24, height: 1, background: '#C49434' }} />
-          <span style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#C49434',
-            textTransform: 'uppercase',
-            fontWeight: 500,
-          }}>
-            {getSectionTitle(section.type)}
+          <span
+            className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode}
+            suppressContentEditableWarning
+            onBlur={(e) => {
+              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+            }}
+          >
+            {section.content.sectionLabel || getSectionTitle(section.type)}
           </span>
         </div>
 

@@ -60,8 +60,8 @@ export function PublicProjectClient({
   const sectionIds = useMemo(() => sections.map(s => s.id), [sections])
   
   // Check if user is admin - must be called before other hooks that depend on it
-  const { isAdmin } = useAuth()
-  
+  const { isAdmin, loading: authLoading } = useAuth()
+
   // Use scroll animations hook (editMode = false for public view)
   const {
     goalSectionProgress,
@@ -73,29 +73,28 @@ export function PublicProjectClient({
     casesSectionProgress,
     casesSectionRef
   } = useScrollAnimations(false)
-  
-  // Initialize analytics tracking (only if not admin)
-  useProjectAnalytics(project.id, shareToken, sectionIds, isAdmin)
+
+  // Disable tracking while auth is loading (unknown user) or when user is admin
+  useProjectAnalytics(project.id, shareToken, sectionIds, isAdmin || authLoading)
 
   // Hjelpefunksjoner
-  const getSectionTitle = (type: string) => {
-    const titles: Record<string, string> = {
-      hero: 'HERO',
-      goal: 'MÅL',
-      concept: 'KONSEPT',
-      cases: 'TIDLIGERE ARBEID',
-      moodboard: 'MOODBOARD',
-      timeline: 'TIDSLINJE',
-      deliverables: 'LEVERING',
-      contact: 'KONTAKT',
-      team: 'TEAM',
-      example_work: 'EKSEMPELARBEID',
-      quote: 'PRISTILBUD',
-      full_image: 'BILDE',
-      production_schedule: 'PRODUKSJONSPLAN'
+  const sectionTitles = {
+    no: {
+      hero: 'HERO', goal: 'MÅL', concept: 'KONSEPT', cases: 'TIDLIGERE ARBEID',
+      moodboard: 'MOODBOARD', timeline: 'TIDSLINJE', deliverables: 'LEVERING',
+      contact: 'KONTAKT', team: 'TEAM', example_work: 'EKSEMPELARBEID',
+      quote: 'PRISTILBUD', full_image: 'BILDE', production_schedule: 'PRODUKSJONSPLAN'
+    },
+    en: {
+      hero: 'HERO', goal: 'GOAL', concept: 'CONCEPT', cases: 'PREVIOUS WORK',
+      moodboard: 'MOODBOARD', timeline: 'TIMELINE', deliverables: 'DELIVERABLES',
+      contact: 'CONTACT', team: 'TEAM', example_work: 'EXAMPLE WORK',
+      quote: 'QUOTE', full_image: 'IMAGE', production_schedule: 'PRODUCTION SCHEDULE'
     }
-    return titles[type] || type.toUpperCase()
-  }
+  } as const
+  const lang = project.language === 'en' ? 'en' : 'no'
+  const getSectionTitle = (type: string) =>
+    sectionTitles[lang][type as keyof typeof sectionTitles.no] || type.toUpperCase()
 
   const getBackgroundStyle = (sectionId: string, imageIndex = 0): React.CSSProperties => {
     const images = sectionImages[sectionId]
@@ -259,6 +258,7 @@ export function PublicProjectClient({
                     <DeliverablesSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}
@@ -291,6 +291,7 @@ export function PublicProjectClient({
                     <ContactSection
                       section={section}
                       editMode={false}
+                      getSectionTitle={getSectionTitle}
                       updateSectionContent={noop}
                     />
                   )}
@@ -313,6 +314,7 @@ export function PublicProjectClient({
                       editMode={false}
                       selectedCaseIds={selectedCaseIds}
                       allCases={caseStudies}
+                      getSectionTitle={getSectionTitle}
                       updateSectionContent={noop}
                       onCasePickerOpen={noop}
                       casesSectionProgress={casesSectionProgress}
@@ -325,9 +327,11 @@ export function PublicProjectClient({
                     <TeamSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       allTeamMembers={teamMembers}
                       selectedTeamMemberIds={selectedTeamMemberIds}
                       sectionImages={sectionImages}
+                      getSectionTitle={getSectionTitle}
                       updateSectionContent={noop}
                       onTeamPickerOpen={noop}
                       onGalleryImageClick={noop}
@@ -359,6 +363,10 @@ export function PublicProjectClient({
                       editMode={false}
                       collageImages={collageImages}
                       selectedPreset={selectedPreset}
+                      sectionImageData={{}}
+                      imagePosition={{}}
+                      setImagePosition={noop}
+                      saveBackgroundPosition={noopAsync}
                       updateSectionContent={noop}
                       onImageClick={noop}
                       onOpenPresetPicker={noop}

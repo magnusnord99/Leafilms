@@ -22,7 +22,7 @@ export function Select({ label, options, placeholder, className = '', ...props }
         </label>
       )}
       <select
-        className={`w-full bg-admin-surface-light border border-admin-border rounded-lg px-4 py-3 text-admin-text focus:outline-none focus:border-admin-border transition appearance-none cursor-pointer ${className}`}
+        className={`w-full bg-admin-surface-light border border-admin-border rounded-[3px] px-4 py-2.5 text-admin-text focus:outline-none focus:border-[#C49434] transition appearance-none cursor-pointer ${className}`}
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
           backgroundRepeat: 'no-repeat',

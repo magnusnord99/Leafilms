@@ -82,7 +82,7 @@ export default function EditCustomer() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Text variant="body">Laster...</Text>
       </div>
     )
@@ -90,7 +90,7 @@ export default function EditCustomer() {
 
   if (!customer) {
     return (
-      <div className="min-h-screen bg-black text-white p-8">
+      <div className="min-h-screen p-8">
         <div className="max-w-2xl mx-auto">
           <Card className="p-12 text-center">
             <Text variant="body" className="mb-4">Kunde ikke funnet</Text>
@@ -104,7 +104,7 @@ export default function EditCustomer() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
           <Link href={`/admin/customers/${customerId}/projects`}>

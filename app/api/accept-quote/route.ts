@@ -93,6 +93,21 @@ export async function POST(req: NextRequest) {
 
     const projectTitle = project.title || 'Ukjent'
 
+    const { data: existingQuote, error: existingQuoteError } = await supabase
+      .from('quotes')
+      .select('id, project_id, status, accepted_at, accepted_by, quote_data')
+      .eq('id', quoteId)
+      .eq('project_id', projectId)
+      .single()
+
+    if (existingQuoteError || !existingQuote) {
+      console.error('Error fetching quote:', existingQuoteError)
+      return NextResponse.json(
+        { error: 'Kunne ikke hente tilbud' },
+        { status: 404 }
+      )
+    }
+
     // 1. Aksepter det lagrede tilbudet som ble vist for denne delingslenken.
     const { data: quote, error: quoteError } = await supabase
       .from('quotes')
@@ -116,7 +131,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Generer og lagre tilbud-PDF i Storage
     let quotePdfPath: string | null = null
-    const builderData = quote.quote_data
+    const builderData = existingQuote.quote_data
     if (isBuilderData(builderData)) {
       try {
         const pdfBuffer = await generateQuotePDF(builderData, {
@@ -173,9 +188,9 @@ export async function POST(req: NextRequest) {
       await supabase
         .from('quotes')
         .update({
-          status: 'draft',
-          accepted_at: null,
-          accepted_by: null,
+          status: existingQuote.status,
+          accepted_at: existingQuote.accepted_at,
+          accepted_by: existingQuote.accepted_by,
         })
         .eq('id', quote.id)
       return NextResponse.json(

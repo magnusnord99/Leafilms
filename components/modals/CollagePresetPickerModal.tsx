@@ -92,45 +92,45 @@ export function CollagePresetPickerModal({
 
   // Mini-preview av collagen (5 bilder)
   const CollagePreview = ({ images }: { images: CollageImages }) => (
-    <div className="bg-zinc-100 p-2 rounded">
+    <div style={{ background: '#0C0B09', padding: 6, borderRadius: 4 }}>
       {/* Pos 1 - full bredde */}
-      <div className="h-[40px] bg-gray-300 rounded overflow-hidden mb-1">
+      <div style={{ height: 40, background: '#2A261F', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
         {images.pos1 ? (
           <img src={getImageUrl(images.pos1)} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500">1</div>
+          <div className="w-full h-full flex items-center justify-center" style={{ fontSize: 8, color: '#38332A' }}>1</div>
         )}
       </div>
       {/* Midtseksjon */}
-      <div className="grid grid-cols-2 gap-1 h-[80px]">
-        <div className="row-span-2 bg-gray-300 rounded overflow-hidden">
+      <div className="grid grid-cols-2 gap-1" style={{ height: 80 }}>
+        <div style={{ gridRow: 'span 2', background: '#2A261F', borderRadius: 3, overflow: 'hidden' }}>
           {images.pos2 ? (
             <img src={getImageUrl(images.pos2)} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500">2</div>
+            <div className="w-full h-full flex items-center justify-center" style={{ fontSize: 8, color: '#38332A' }}>2</div>
           )}
         </div>
-        <div className="bg-gray-300 rounded overflow-hidden">
+        <div style={{ background: '#2A261F', borderRadius: 3, overflow: 'hidden' }}>
           {images.pos3 ? (
             <img src={getImageUrl(images.pos3)} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500">3</div>
+            <div className="w-full h-full flex items-center justify-center" style={{ fontSize: 8, color: '#38332A' }}>3</div>
           )}
         </div>
-        <div className="bg-gray-300 rounded overflow-hidden">
+        <div style={{ background: '#2A261F', borderRadius: 3, overflow: 'hidden' }}>
           {images.pos4 ? (
             <img src={getImageUrl(images.pos4)} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500">4</div>
+            <div className="w-full h-full flex items-center justify-center" style={{ fontSize: 8, color: '#38332A' }}>4</div>
           )}
         </div>
       </div>
       {/* Pos 5 - full bredde */}
-      <div className="mt-1 h-[30px] bg-gray-300 rounded overflow-hidden">
+      <div style={{ marginTop: 4, height: 30, background: '#2A261F', borderRadius: 3, overflow: 'hidden' }}>
         {images.pos5 ? (
           <img src={getImageUrl(images.pos5)} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500">5</div>
+          <div className="w-full h-full flex items-center justify-center" style={{ fontSize: 8, color: '#38332A' }}>5</div>
         )}
       </div>
     </div>
@@ -139,9 +139,21 @@ export function CollagePresetPickerModal({
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-8 z-50">
       <Card className="max-w-5xl w-full max-h-[85vh] overflow-y-auto">
-        <div className="mb-6">
-          <Heading as="h2" size="md" className="mb-2">Velg bilde-sett</Heading>
-          <Text variant="muted">Velg et forhåndsdefinert sett med 5 bilder for collagen</Text>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <Heading as="h2" size="md" className="mb-2">Velg bilde-sett</Heading>
+            <Text variant="muted">Velg et forhåndsdefinert sett med 5 bilder for collagen</Text>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Lukk"
+            style={{ color: '#62594E', lineHeight: 0, flexShrink: 0, marginLeft: 16 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+            </svg>
+          </button>
         </div>
 
         {loading ? (
@@ -204,7 +216,7 @@ export function CollagePresetPickerModal({
           </div>
         )}
 
-        <div className="flex gap-4 pt-6 border-t border-zinc-200">
+        <div className="flex gap-4 pt-6 border-t border-zinc-800">
           <Button
             type="button"
             onClick={onClose}

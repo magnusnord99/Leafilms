@@ -141,9 +141,14 @@ export function ExampleWorkSection({
         ) : (
           <div
             onClick={() => editMode && onImageClick(position)}
-            className={`bg-gray-300 flex items-center justify-center h-full w-full ${editMode ? 'cursor-pointer hover:bg-gray-400 transition-colors' : ''}`}
+            className={`flex items-center justify-center h-full w-full transition-colors ${editMode ? 'cursor-pointer' : ''}`}
+            style={{ background: editMode ? '#1A1713' : '#0C0B09' }}
           >
-            <Text variant="muted" className="text-gray-500 text-xs">{label}</Text>
+            {editMode && (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#38332A' }}>
+                {label}
+              </p>
+            )}
           </div>
         )}
       </div>

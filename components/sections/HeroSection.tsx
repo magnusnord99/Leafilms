@@ -226,7 +226,7 @@ export function HeroSection({
             : `translateY(32px) scale(${textScale})`,
           transformOrigin: 'bottom left',
           transition: isVisible
-            ? 'opacity 0.08s ease-out, transform 0.08s ease-out'
+            ? 'opacity 0.15s ease-out, transform 0.15s ease-out'
             : 'opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 1.2s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
@@ -297,11 +297,21 @@ export function HeroSection({
           className="absolute bottom-8 right-10 z-[2] flex flex-col items-center gap-2"
           style={{ opacity: Math.max(0, 1 - scrollProgress * 3) }}
         >
+          {/* Animated vertical line */}
           <div style={{
             width: 1,
             height: 48,
             background: 'linear-gradient(to bottom, transparent, #C49434)',
-            animation: 'fade-in 2s ease-out 1.5s forwards',
+            animation: 'scroll-line-in 1.4s cubic-bezier(0.16,1,0.3,1) 2s forwards',
+            opacity: 0,
+          }} />
+          {/* Dot at bottom */}
+          <div style={{
+            width: 3,
+            height: 3,
+            borderRadius: '50%',
+            background: '#C49434',
+            animation: 'fade-in 0.5s ease-out 3.2s forwards',
             opacity: 0,
           }} />
         </div>

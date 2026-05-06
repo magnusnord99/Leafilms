@@ -29,9 +29,21 @@ export function TeamPickerModal({
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-8 z-50">
       <Card className="max-w-5xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="mb-6">
-          <Heading as="h2" size="md" className="mb-2">Velg Team-medlemmer</Heading>
-          <Text variant="muted">Klikk for å velge/fjerne. Vises i "Team"-seksjonen.</Text>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <Heading as="h2" size="md" className="mb-2">Velg Team-medlemmer</Heading>
+            <Text variant="muted">Klikk for å velge/fjerne. Vises i "Team"-seksjonen.</Text>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Lukk"
+            style={{ color: '#62594E', lineHeight: 0, flexShrink: 0, marginLeft: 16 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+            </svg>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

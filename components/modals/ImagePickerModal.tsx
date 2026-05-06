@@ -27,6 +27,7 @@ export function ImagePickerModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
   const [selectedIds, setSelectedIds] = useState<string[]>(selectedImageIds)
+  const [limitWarning, setLimitWarning] = useState(false)
 
   const categories = [
     { value: 'all', label: 'Alle' },
@@ -92,9 +93,11 @@ export function ImagePickerModal({
 
     // For flere bilder, bruk normal toggle-logikk
     if (maxSelection && selectedIds.length >= maxSelection && !selectedIds.includes(imageId)) {
-      alert(`Du kan maksimalt velge ${maxSelection} bilder`)
+      setLimitWarning(true)
+      setTimeout(() => setLimitWarning(false), 2500)
       return
     }
+    setLimitWarning(false)
 
     setSelectedIds(prev => 
       prev.includes(imageId)
@@ -114,13 +117,32 @@ export function ImagePickerModal({
     <div className="fixed inset-0 bg-admin-bg/80 flex items-center justify-center p-8 z-50">
       <Card className="max-w-6xl w-full max-h-[80vh] flex flex-col overflow-hidden">
         <div className="mb-6 flex-shrink-0">
-          <Heading as="h2" size="md" className="mb-2">
-            Velg bilder
-            {maxSelection && ` (maks ${maxSelection})`}
-          </Heading>
-          <Text variant="muted">
-            Klikk for å velge/fjerne bilder
-          </Text>
+          <div className="flex items-start justify-between">
+            <div>
+              <Heading as="h2" size="md" className="mb-2">
+                Velg bilder
+                {maxSelection && ` (maks ${maxSelection})`}
+              </Heading>
+              <Text variant="muted">
+                Klikk for å velge/fjerne bilder
+              </Text>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Lukk"
+              style={{ color: '#62594E', lineHeight: 0, flexShrink: 0, marginLeft: 16 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+              </svg>
+            </button>
+          </div>
+          {limitWarning && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', marginTop: 8 }}>
+              Du kan maksimalt velge {maxSelection} bilde{maxSelection !== 1 ? 'r' : ''}.
+            </p>
+          )}
         </div>
 
         {/* Søk og filtrering */}

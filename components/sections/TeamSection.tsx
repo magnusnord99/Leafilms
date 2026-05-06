@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { Section, TeamMember, Image } from '@/lib/types'
 import { Button, Text } from '@/components/ui'
 import { TeamMemberCard } from './TeamMemberCard'
@@ -34,13 +33,9 @@ export function TeamSection({
   const selectedTeamMembers = allTeamMembers.filter(m => selectedTeamMemberIds.includes(m.id))
   const galleryImages = sectionImages[section.id] || []
 
-  useEffect(() => {
-    // Debug log removed from production render
-  }, [section.id, sectionImages, galleryImages])
-
   return (
     <div className="w-full" style={{ background: '#161410' }}>
-      <div className="py-16 md:py-24 px-8 md:px-16">
+      <div className="max-w-7xl mx-auto py-16 md:py-24 px-8 md:px-16">
         {/* Section header */}
         <div className="flex items-center gap-4 mb-8">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
@@ -104,7 +99,7 @@ export function TeamSection({
                 updateSectionContent(section.id, 'teamMemberRoles', updatedRoles)
               }
               return (
-                <div key={teamMember.id} className="min-h-[280px]">
+                <div key={teamMember.id} className="min-h-[320px]">
                   <TeamMemberCard
                     teamMember={teamMember}
                     editMode={editMode}

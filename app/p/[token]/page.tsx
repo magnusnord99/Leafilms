@@ -85,143 +85,90 @@ export default async function PublicProjectView({ params }: Props) {
     console.error('[PublicProjectView] Error fetching sections:', sectionsError)
   }
 
-  // Debug: Log sections count
-  console.log('[PublicProjectView] Fetched sections:', {
-    count: sections?.length || 0,
-    project_id: share.project_id,
-    error: sectionsError?.message
-  })
-
-  // Hent ALLE seksjoner (inkludert usynlige) for debugging
-  const { data: allSections } = await supabase
-    .from('sections')
-    .select('*')
-    .eq('project_id', share.project_id)
-    .order('order_index', { ascending: true })
-
-  console.log('[PublicProjectView] All sections (including invisible):', {
-    count: allSections?.length || 0,
-    sections: allSections?.map(s => ({ id: s.id, type: s.type, visible: s.visible }))
-  })
-
   const sectionsList = (sections || []) as Section[]
 
-  // Hvis ingen seksjoner, log dette som en advarsel (ikke feil, kan være normalt)
-  if (sectionsList.length === 0) {
-    console.warn('[PublicProjectView] No visible sections found for project:', {
-      project_id: share.project_id,
-      project_title: project.title,
-      all_sections_count: allSections?.length || 0
-    })
-  }
-
-  // Hent alle seksjonsbilder - samme metode som i edit-siden
+  // Hent alle seksjonsbilder og videoer - batch-spørringer i stedet for N+1 loop
   const sectionImages: Record<string, Image[]> = {}
   const sectionImageData: Record<string, SectionImage[]> = {}
   const sectionVideos: Record<string, VideoLibrary[]> = {}
   const sectionVideoData: Record<string, SectionVideo[]> = {}
-  
-  for (const section of sectionsList) {
-    const { data: sectionImagesData, error: sectionImagesError } = await supabase
-      .from('section_images')
-      .select('*')
-      .eq('section_id', section.id)
-    
-    // Sorter manuelt i stedet for .order() (kan gi 400 feil)
-    const sortedSectionImagesData = sectionImagesData?.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
 
-    if (sectionImagesError) {
-      console.error(`[Public] Error fetching section images for section ${section.id} (${section.type}):`, sectionImagesError)
-      continue
+  if (sectionsList.length > 0) {
+    const sectionIds = sectionsList.map(s => s.id)
+
+    // Hent alle section_images og section_video_library for alle seksjoner i én spørring
+    const [
+      { data: allSectionImagesData },
+      { data: allSectionVideosData }
+    ] = await Promise.all([
+      supabase.from('section_images').select('*').in('section_id', sectionIds),
+      supabase.from('section_video_library').select('*').in('section_id', sectionIds)
+    ])
+
+    // Bygg sectionImageData - gruppert per seksjon, sortert på order_index
+    if (allSectionImagesData) {
+      for (const row of allSectionImagesData) {
+        if (!sectionImageData[row.section_id]) sectionImageData[row.section_id] = []
+        sectionImageData[row.section_id].push(row as SectionImage)
+      }
+      for (const sid of Object.keys(sectionImageData)) {
+        sectionImageData[sid].sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+      }
     }
 
-    if (sortedSectionImagesData && sortedSectionImagesData.length > 0) {
-      console.log(`[Public] Found ${sortedSectionImagesData.length} section images for section ${section.id} (${section.type}):`, sortedSectionImagesData.map(si => ({ id: si.id, image_id: si.image_id, order_index: si.order_index })))
-      sectionImageData[section.id] = sortedSectionImagesData as SectionImage[]
-      
-      const imageIds = sortedSectionImagesData.map(si => si.image_id)
-      console.log(`[Public] Fetching images for section ${section.id} (${section.type}):`, imageIds)
-      const { data: imagesData, error: imagesError } = await supabase
+    // Hent alle unike bilde-IDer og last dem i én spørring
+    const allImageIds = [...new Set(
+      Object.values(sectionImageData).flatMap(rows => rows.map(r => r.image_id))
+    )]
+    if (allImageIds.length > 0) {
+      const { data: allImagesData } = await supabase
         .from('images')
         .select('*')
-        .in('id', imageIds)
+        .in('id', allImageIds)
 
-      if (imagesError) {
-        console.error(`[Public] Error fetching images for section ${section.id} (${section.type}):`, imagesError)
-        continue
-      }
-
-      console.log(`[Public] Raw imagesData for section ${section.id} (${section.type}):`, imagesData?.length || 0, 'images found')
-
-      if (imagesData && imagesData.length > 0) {
-        // Sorter bildene i samme rekkefølge som section_images
-        const sortedImages = imageIds
-          .map(id => imagesData.find(img => img.id === id))
-          .filter(Boolean) as Image[]
-        
-        console.log(`[Public] Sorted ${sortedImages.length} images for section ${section.id} (${section.type})`)
-        
-        if (sortedImages.length !== imageIds.length) {
-          console.warn(`[Public] WARNING: Expected ${imageIds.length} images but got ${sortedImages.length} for section ${section.id} (${section.type})`)
-          const missingIds = imageIds.filter(id => !sortedImages.find(img => img.id === id))
-          console.warn(`[Public] Missing image IDs:`, missingIds)
+      if (allImagesData) {
+        const imageMap = new Map(allImagesData.map(img => [img.id, img]))
+        for (const [sid, rows] of Object.entries(sectionImageData)) {
+          const sorted = rows
+            .map(r => imageMap.get(r.image_id))
+            .filter(Boolean) as Image[]
+          if (sorted.length > 0) sectionImages[sid] = sorted
         }
-        
-        sectionImages[section.id] = sortedImages
-        console.log(`[Public] Loaded ${sortedImages.length} images for section ${section.id} (${section.type}):`, sortedImages.map((img, idx) => ({ 
-          index: idx, 
-          id: img.id, 
-          title: img.title, 
-          file_path: img.file_path?.substring(0, 50) + '...',
-          order_index: sortedSectionImagesData[idx]?.order_index 
-        })))
-        console.log(`[Public] Image IDs for section ${section.id} (${section.type}):`, sortedImages.map(img => img.id).join(', '))
-      } else {
-        console.warn(`[Public] No images found for section ${section.id} (${section.type}) despite having ${imageIds.length} section_images`)
-        console.warn(`[Public] Image IDs that were requested:`, imageIds)
       }
-    } else {
-      console.log(`[Public] No section images found for section ${section.id} (${section.type})`)
     }
 
-    // Hent videoer for denne seksjonen
-    const { data: sectionVideosData, error: sectionVideosError } = await supabase
-      .from('section_video_library')
-      .select('*')
-      .eq('section_id', section.id)
-    
-    const sortedSectionVideosData = sectionVideosData?.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    // Bygg sectionVideoData - gruppert per seksjon, sortert på order_index
+    if (allSectionVideosData) {
+      for (const row of allSectionVideosData) {
+        if (!sectionVideoData[row.section_id]) sectionVideoData[row.section_id] = []
+        sectionVideoData[row.section_id].push(row as SectionVideo)
+      }
+      for (const sid of Object.keys(sectionVideoData)) {
+        sectionVideoData[sid].sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+      }
+    }
 
-    if (sectionVideosError) {
-      console.error(`[Public] Error fetching section videos for section ${section.id} (${section.type}):`, sectionVideosError)
-    } else if (sortedSectionVideosData && sortedSectionVideosData.length > 0) {
-      sectionVideoData[section.id] = sortedSectionVideosData as SectionVideo[]
-      
-      const videoIds = sortedSectionVideosData.map(sv => sv.video_id)
-      const { data: videosData, error: videosError } = await supabase
+    // Hent alle unike video-IDer og last dem i én spørring
+    const allVideoIds = [...new Set(
+      Object.values(sectionVideoData).flatMap(rows => rows.map(r => r.video_id))
+    )]
+    if (allVideoIds.length > 0) {
+      const { data: allVideosData } = await supabase
         .from('video_library')
         .select('*')
-        .in('id', videoIds)
+        .in('id', allVideoIds)
 
-      if (!videosError && videosData) {
-        const sortedVideos = videoIds
-          .map(id => videosData.find(vid => vid.id === id))
-          .filter(Boolean) as VideoLibrary[]
-        sectionVideos[section.id] = sortedVideos
+      if (allVideosData) {
+        const videoMap = new Map(allVideosData.map(v => [v.id, v]))
+        for (const [sid, rows] of Object.entries(sectionVideoData)) {
+          const sorted = rows
+            .map(r => videoMap.get(r.video_id))
+            .filter(Boolean) as VideoLibrary[]
+          if (sorted.length > 0) sectionVideos[sid] = sorted
+        }
       }
     }
   }
-  
-  console.log('[Public] Final sectionImages:', Object.keys(sectionImages).reduce((acc, key) => {
-    const section = sectionsList.find(s => s.id === key)
-    acc[`${section?.type || key}`] = sectionImages[key].map((img, idx) => ({ 
-      index: idx, 
-      id: img.id, 
-      title: img.title,
-      file_path: img.file_path?.substring(0, 50) + '...'
-    }))
-    return acc
-  }, {} as Record<string, any[]>))
 
   // Hent team members
   const { data: teamMembersData } = await supabase

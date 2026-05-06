@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { TeamMember } from '@/lib/types'
-import { Heading, Text } from '@/components/ui'
 import { PROJECT_ROLES, ROLE_ACTIONS, ROLE_ACTIONS_EN } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
@@ -112,8 +111,8 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
 
   return (
     <div
-      className="relative w-full h-full min-h-[200px]"
-      style={{ perspective: '1000px' }}
+      className="group relative w-full h-full min-h-[320px]"
+      style={{ perspective: '1200px' }}
     >
       <div
         onClick={() => {
@@ -123,7 +122,7 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
         }}
         className={`
           relative w-full h-full transition-all duration-700
-          ${editMode ? 'cursor-default' : 'cursor-pointer hover:scale-105'}
+          ${editMode ? 'cursor-default' : 'cursor-pointer'}
         `}
         style={{
           transformStyle: 'preserve-3d',
@@ -132,160 +131,225 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
       >
         {/* Front side */}
         <div
-          className={`absolute inset-0 w-full h-full bg-background-widget-red rounded-lg p-4 md:p-6 shadow-lg backface-hidden transition-shadow duration-300 overflow-hidden ${
-            !editMode ? 'hover:shadow-xl' : ''
+          className={`absolute inset-0 w-full h-full overflow-hidden backface-hidden transition-all duration-300 ${
+            !editMode ? 'group-hover:border-[#38332A]' : ''
           }`}
-          style={{ backfaceVisibility: 'hidden' }}
+          style={{
+            backfaceVisibility: 'hidden',
+            background: '#161410',
+            border: '1px solid #2A261F',
+          }}
         >
-          {/* 
-            Grid layout: 2 rader x 2 kolonner
-            - Øverste rad (2fr): Profilbilde (venstre) + Bio tekst (høyre)
-            - Nederste rad (1fr): Navn/rolle (venstre) + E-post/telefon (høyre)
-          */}
-          <div 
-            className="grid grid-cols-2 gap-4 h-full overflow-hidden"
-            style={{ gridTemplateRows: '2fr 1fr' }}
-          >
-            {/* Celle 1: Øverste rad, venstre - Profilbilde */}
-            <div className="flex items-center justify-center">
-              <div className="w-full h-full max-w-[160px] max-h-[160px] bg-white rounded-lg overflow-hidden flex items-center justify-center">
-                {profileImageUrl ? (
-                  <img
-                    src={profileImageUrl}
-                    alt={teamMember.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-                    <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                )}
+          {/* Profile image — full top half */}
+          <div className="w-full overflow-hidden" style={{ height: '60%', background: '#0C0B09' }}>
+            {profileImageUrl ? (
+              <img
+                src={profileImageUrl}
+                alt={teamMember.name}
+                className="w-full h-full object-cover"
+                style={{ filter: 'brightness(0.92) saturate(0.85)' }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center" style={{ background: '#1A1713' }}>
+                <svg className="w-16 h-16" style={{ color: '#38332A' }} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
               </div>
-            </div>
-
-            {/* Celle 2: Øverste rad, høyre - Bio tekst */}
-            <div className="flex items-start overflow-hidden">
-              {teamMember.bio && (
-                <Text
-                  variant="small"
-                  className="text-dark break-words"
-                  style={{ 
-                    fontSize: '0.8rem', // 10px - mindre enn small (12px)
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word'
-                  }}
-                >
-                  {teamMember.bio}
-                </Text>
-              )}
-            </div>
-
-            {/* Celle 3: Nederste rad, venstre - Navn og rolle */}
-            <div className="flex flex-col justify-start overflow-hidden">
-              <Heading as="h1" size="sm" className="text-dark font-bold break-words">
-                {teamMember.name}
-              </Heading>
-              <Text variant="small" className="text-dark break-words">
-                {teamMember.role}
-              </Text>
-            </div>
-
-            {/* Celle 4: Nederste rad, høyre - E-post og telefonnummer */}
-            <div className="flex flex-col justify-start space-y-2 overflow-hidden">
-              {teamMember.email && (
-                <Text variant="small" className="text-dark break-all">
-                  {teamMember.email}
-                </Text>
-              )}
-              {teamMember.phone && (
-                <Text variant="small" className="text-dark break-all">
-                  {teamMember.phone}
-                </Text>
-              )}
-            </div>
+            )}
           </div>
+
+          {/* Info — bottom section */}
+          <div className="px-5 py-4 flex flex-col justify-between overflow-hidden" style={{ height: '40%' }}>
+            <div>
+              <p style={{
+                fontFamily: 'var(--font-cormorant)',
+                fontSize: 'clamp(1.1rem, 1.4vw, 1.3rem)',
+                fontWeight: 400,
+                fontStyle: 'italic',
+                color: '#E8E1D5',
+                lineHeight: 1.2,
+                marginBottom: '0.25rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {teamMember.name}
+              </p>
+              <p style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.72rem',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: '#C49434',
+                fontWeight: 500,
+              }}>
+                {teamMember.role}
+              </p>
+            </div>
+            {teamMember.bio && (
+              <p style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.78rem',
+                color: '#9E9287',
+                lineHeight: 1.5,
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              } as React.CSSProperties}>
+                {teamMember.bio}
+              </p>
+            )}
+          </div>
+
+          {/* Flip hint */}
+          {!editMode && (
+            <div
+              className="absolute bottom-3 right-4"
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: '#38332A',
+              }}
+            >
+              Trykk
+            </div>
+          )}
         </div>
 
         {/* Back side */}
         <div
-          className={`absolute inset-0 w-full h-full bg-background-widget-red-hover rounded-lg p-4 md:p-6 shadow-lg backface-hidden transition-shadow duration-300 overflow-hidden ${
-            !editMode ? 'hover:shadow-xl' : ''
-          }`}
+          className="absolute inset-0 w-full h-full overflow-hidden backface-hidden"
           style={{
             backfaceVisibility: 'hidden',
-            transform: 'rotateY(180deg)'
+            transform: 'rotateY(180deg)',
+            background: '#201D18',
+            border: '1px solid #38332A',
+            borderTop: '2px solid #C49434',
           }}
         >
-          <div className="flex flex-col items-center justify-center h-full text-center px-4 overflow-hidden">
-            <Heading as="h4" className="text-dark font-bold mb-3 break-words">
-              {teamMember.name}
-            </Heading>
-            <Text variant="small" className="text-dark mb-6 break-words">
-              {teamMember.role}
-            </Text>
-            
-            {/* Prosjekt-spesifikk rolle: checkbokser + valgfri egentekst */}
-            {editMode ? (
-              <div
-                className="w-full overflow-y-auto max-h-[200px] space-y-3"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Text variant="xs" className="text-dark/80 mb-2 block text-left">
-                  Velg roller for dette prosjektet:
-                </Text>
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                  {PROJECT_ROLES.map((role) => (
-                    <label
-                      key={role}
-                      className="flex items-center gap-2 cursor-pointer text-dark hover:text-dark/90"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedRoles.has(role)}
-                        onChange={() => toggleRole(role)}
-                        className="w-4 h-4 rounded border-dark/30 text-dark focus:ring-dark/20"
-                      />
-                      <Text variant="small" as="span">
-                        {role}
-                      </Text>
-                    </label>
-                  ))}
-                </div>
-                <div className="pt-2">
-                  <input
-                    type="text"
-                    value={customRole}
-                    onChange={(e) => handleCustomChange(e.target.value)}
-                    placeholder="Annet (valgfritt)"
-                    className="w-full px-3 py-2 text-sm text-dark bg-white/50 border border-dark/20 rounded focus:outline-none focus:ring-2 focus:ring-dark/20"
-                  />
-                </div>
-              </div>
-            ) : (
-              <>
-                {(() => {
-                  const { selected, custom } = parseProjectRole(projectRole)
-                  const description = buildRoleDescription(selected, custom, teamMember.name, language)
-                  return description ? (
-                    <Text
-                      variant="small"
-                      className="text-dark break-words"
-                      style={{ 
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word'
+          <div className="flex flex-col h-full px-5 py-6 overflow-hidden">
+            <div className="mb-4">
+              <p style={{
+                fontFamily: 'var(--font-cormorant)',
+                fontSize: 'clamp(1.1rem, 1.4vw, 1.3rem)',
+                fontWeight: 400,
+                fontStyle: 'italic',
+                color: '#E8E1D5',
+                lineHeight: 1.2,
+                marginBottom: '0.25rem',
+              }}>
+                {teamMember.name}
+              </p>
+              <p style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.7rem',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: '#C49434',
+                fontWeight: 500,
+              }}>
+                {teamMember.role}
+              </p>
+            </div>
+
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {/* Prosjekt-spesifikk rolle: checkbokser + valgfri egentekst */}
+              {editMode ? (
+                <div
+                  className="w-full overflow-y-auto max-h-full space-y-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#62594E', marginBottom: 8 }}>
+                    Velg roller for dette prosjektet:
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                    {PROJECT_ROLES.map((role) => (
+                      <label
+                        key={role}
+                        className="flex items-center gap-2 cursor-pointer"
+                        style={{ color: '#9E9287' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedRoles.has(role)}
+                          onChange={() => toggleRole(role)}
+                          className="w-3 h-3"
+                          style={{ accentColor: '#C49434' }}
+                        />
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem' }}>
+                          {role}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="pt-2">
+                    <input
+                      type="text"
+                      value={customRole}
+                      onChange={(e) => handleCustomChange(e.target.value)}
+                      placeholder="Annet (valgfritt)"
+                      style={{
+                        width: '100%',
+                        padding: '6px 10px',
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.78rem',
+                        color: '#E8E1D5',
+                        background: '#161410',
+                        border: '1px solid #38332A',
+                        borderRadius: 2,
+                        outline: 'none',
                       }}
-                    >
-                      {description}
-                    </Text>
-                  ) : (
-                    <Text variant="small" className="text-dark/70 italic">
-                      {language === 'en' ? 'No project-specific role defined' : 'Ingen prosjekt-spesifikk rolle definert'}
-                    </Text>
-                  )
-                })()}
-              </>
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {(() => {
+                    const { selected, custom } = parseProjectRole(projectRole)
+                    const description = buildRoleDescription(selected, custom, teamMember.name, language)
+                    return description ? (
+                      <p style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.82rem',
+                        color: '#9E9287',
+                        lineHeight: 1.65,
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                      }}>
+                        {description}
+                      </p>
+                    ) : (
+                      <p style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.78rem',
+                        color: '#38332A',
+                        fontStyle: 'italic',
+                      }}>
+                        {language === 'en' ? 'No project-specific role defined' : 'Ingen prosjekt-spesifikk rolle definert'}
+                      </p>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+
+            {/* Contact info at bottom */}
+            {(teamMember.email || teamMember.phone) && (
+              <div style={{ borderTop: '1px solid #2A261F', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
+                {teamMember.email && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#62594E', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {teamMember.email}
+                  </p>
+                )}
+                {teamMember.phone && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#62594E' }}>
+                    {teamMember.phone}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>

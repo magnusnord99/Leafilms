@@ -169,37 +169,60 @@ export function CasesSection({
             const scale = editMode ? 1 : minScale + (easedProgress * (1 - minScale))
             
             return (
-              <div 
-                key={caseId} 
-                className="text-center"
+              <div
+                key={caseId}
                 style={{
                   transform: `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`,
                   opacity: opacity,
                   willChange: editMode ? 'auto' : 'transform, opacity',
-                  transition: editMode ? 'transform 0.3s ease-out, opacity 0.3s ease-out' : 'none'
+                  transition: editMode ? 'transform 0.3s ease-out, opacity 0.3s ease-out' : 'none',
                 }}
               >
-                {vimeoId ? (
-                  <div className="aspect-video bg-zinc-300 rounded-lg mb-3 overflow-hidden">
+                {/* Video / thumbnail container */}
+                <div
+                  className="aspect-video overflow-hidden mb-0"
+                  style={{ background: '#0C0B09' }}
+                >
+                  {vimeoId ? (
                     <iframe
-                      src={`https://player.vimeo.com/video/${vimeoId}?title=0&byline=0&portrait=0`}
+                      src={`https://player.vimeo.com/video/${vimeoId}?title=0&byline=0&portrait=0&color=C49434`}
                       className="w-full h-full"
                       frameBorder="0"
                       allow="autoplay; fullscreen; picture-in-picture"
                       allowFullScreen
                       title={caseStudy.title}
-                    ></iframe>
-                  </div>
-                ) : (
-                  <div className="aspect-video bg-zinc-300 rounded-lg mb-3 flex items-center justify-center">
-                    {caseStudy.thumbnail_path ? (
-                      <img src={caseStudy.thumbnail_path} alt={caseStudy.title} className="w-full h-full object-cover rounded-lg" />
-                    ) : (
-                      <Text variant="muted">🎬</Text>
-                    )}
+                    />
+                  ) : caseStudy.thumbnail_path ? (
+                    <img
+                      src={caseStudy.thumbnail_path}
+                      alt={caseStudy.title}
+                      className="w-full h-full object-cover"
+                      style={{ filter: 'brightness(0.9) saturate(0.85)' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: '#161410' }}>
+                      <svg className="w-10 h-10" style={{ color: '#2A261F' }} fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+
+                {/* Case title */}
+                {caseStudy.title && (
+                  <div className="pt-3 pb-1">
+                    <p style={{
+                      fontFamily: 'var(--font-cormorant)',
+                      fontSize: 'clamp(0.95rem, 1.2vw, 1.1rem)',
+                      fontWeight: 400,
+                      fontStyle: 'italic',
+                      color: '#9E9287',
+                      letterSpacing: '0.01em',
+                    }}>
+                      {caseStudy.title}
+                    </p>
                   </div>
                 )}
-                
               </div>
             )
           })}

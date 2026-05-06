@@ -1,16 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Card, Heading, Text } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { TeamMember } from '@/lib/types'
 
+const sectionLabel = (text: string) => (
+  <span style={{
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.16em',
+    color: '#C49434',
+    textTransform: 'uppercase' as const,
+    fontWeight: 500,
+  }}>
+    {text}
+  </span>
+)
+
 export default function TeamPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTeamMembers()
@@ -34,7 +47,8 @@ export default function TeamPage() {
     if (!confirm(`Er du sikker på at du vil slette "${teamMemberName}"?\n\nDette kan ikke angres.`)) {
       return
     }
-
+    setDeletingId(teamMemberId)
+    setDeleteError(null)
     try {
       const { error } = await supabase
         .from('team_members')
@@ -42,58 +56,93 @@ export default function TeamPage() {
         .eq('id', teamMemberId)
 
       if (error) throw error
-
-      // Team-medlem slettet
       fetchTeamMembers()
     } catch (error) {
       console.error('Error deleting team member:', error)
-      alert('❌ Kunne ikke slette team-medlem')
+      setDeleteError('Kunne ikke slette team-medlem. Prøv igjen.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+        <div className="flex items-center gap-3">
+          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
+          <p style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.16em',
+            color: '#62594E',
+            textTransform: 'uppercase',
+          }}>
+            Laster...
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/admin')}
-            className="mb-4 -ml-2"
-          >
-            ← Tilbake til admin
-          </Button>
-          <div className="flex items-center justify-between">
-            <div>
-              <Heading as="h1" size="lg" className="mb-2">Team-medlemmer</Heading>
-              <Text variant="muted">Administrer team-medlemmer for gjenbruk i prosjekter</Text>
+        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
+          <div>
+            <div className="flex items-center gap-4 mb-4">
+              <div style={{ width: 32, height: 1, background: '#C49434' }} />
+              {sectionLabel('Bibliotek')}
             </div>
-            <Link href="/admin/team/new">
-              <Button variant="primary">+ Nytt Team-medlem</Button>
-            </Link>
+            <h1 style={{
+              fontFamily: 'var(--font-cormorant)',
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              color: '#E8E1D5',
+              lineHeight: 1,
+            }}>
+              Team
+            </h1>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
+              {teamMembers.length} team-medlem{teamMembers.length !== 1 ? 'mer' : ''} · gjenbrukes i prosjekter
+            </p>
           </div>
+          <Link href="/admin/team/new">
+            <Button variant="primary" size="sm">+ Nytt Medlem</Button>
+          </Link>
         </div>
 
+        {/* Error */}
+        {deleteError && (
+          <div
+            className="mb-6 px-5 py-3 flex items-center justify-between"
+            style={{ background: 'rgba(184,64,64,0.12)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E07070' }}>{deleteError}</p>
+            <button onClick={() => setDeleteError(null)} style={{ color: '#62594E', lineHeight: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" d="M2 2l10 10M12 2L2 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Team Members Grid */}
-        {teamMembers && teamMembers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {teamMembers.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {teamMembers.map((teamMember) => {
               const profileImageUrl = teamMember.profile_image_path
                 ? supabase.storage.from('assets').getPublicUrl(teamMember.profile_image_path).data.publicUrl
                 : null
 
               return (
-                <Card key={teamMember.id} className="overflow-hidden p-0">
+                <div
+                  key={teamMember.id}
+                  style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3, overflow: 'hidden' }}
+                >
                   {/* Profile Image */}
-                  <div className="aspect-square bg-zinc-800 flex items-center justify-center">
+                  <div className="aspect-square flex items-center justify-center" style={{ background: '#0E0D0B' }}>
                     {profileImageUrl ? (
                       <img
                         src={profileImageUrl}
@@ -101,45 +150,51 @@ export default function TeamPage() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Text variant="muted" className="text-6xl">👤</Text>
+                      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#38332A" strokeWidth="1">
+                        <circle cx="24" cy="18" r="10" />
+                        <path d="M4 44c0-11 9-18 20-18s20 7 20 18" />
+                      </svg>
                     )}
                   </div>
 
                   {/* Content */}
-                  <div className="p-6">
-                    <Heading as="h3" size="sm" className="mb-1">{teamMember.name}</Heading>
-                    <Text variant="body" className="mb-4 text-gray-400">
+                  <div className="p-5">
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: '#E8E1D5', marginBottom: 2 }}>
+                      {teamMember.name}
+                    </p>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#C49434', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                       {teamMember.role}
-                    </Text>
+                    </p>
+
                     {teamMember.bio && (
-                      <Text variant="body" className="mb-4 line-clamp-3 text-sm">
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {teamMember.bio}
-                      </Text>
+                      </p>
                     )}
-                    
+
                     {/* Contact Info */}
                     {(teamMember.email || teamMember.phone) && (
                       <div className="mb-4 space-y-1">
                         {teamMember.email && (
-                          <Text variant="small" className="text-gray-500">
-                            📧 {teamMember.email}
-                          </Text>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E' }}>
+                            {teamMember.email}
+                          </p>
                         )}
                         {teamMember.phone && (
-                          <Text variant="small" className="text-gray-500">
-                            📞 {teamMember.phone}
-                          </Text>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E' }}>
+                            {teamMember.phone}
+                          </p>
                         )}
                       </div>
                     )}
 
                     {/* Tags */}
                     {teamMember.tags && teamMember.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-1 mb-4">
                         {teamMember.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="text-xs px-2 py-1 bg-zinc-800 rounded text-gray-400"
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.06em', background: '#0E0D0B', padding: '2px 6px', borderRadius: 2 }}
                           >
                             {tag}
                           </span>
@@ -150,30 +205,40 @@ export default function TeamPage() {
                     {/* Actions */}
                     <div className="flex gap-2">
                       <Link href={`/admin/team/${teamMember.id}/edit`} className="flex-1">
-                        <Button variant="secondary" size="sm" className="w-full">
+                        <Button variant="primary" size="sm" className="w-full">
                           Rediger
                         </Button>
                       </Link>
                       <Button
-                        variant="danger"
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(teamMember.id, teamMember.name)}
+                        disabled={deletingId === teamMember.id}
+                        style={{ color: '#B84040' }}
                       >
-                        🗑️
+                        {deletingId === teamMember.id ? '...' : 'Slett'}
                       </Button>
                     </div>
                   </div>
-                </Card>
+                </div>
               )
             })}
           </div>
         ) : (
-          <Card className="p-12 text-center">
-            <Text variant="body" className="mb-4">Ingen team-medlemmer ennå</Text>
+          <div
+            className="p-12 text-center"
+            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+          >
+            <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 8 }}>
+              Ingen team-medlemmer ennå
+            </p>
+            <p style={{ color: '#38332A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', marginBottom: 20 }}>
+              Legg til team-medlemmer her for å gjenbruke dem på tvers av prosjekter.
+            </p>
             <Link href="/admin/team/new">
               <Button variant="primary">Legg til første team-medlem</Button>
             </Link>
-          </Card>
+          </div>
         )}
       </div>
     </div>

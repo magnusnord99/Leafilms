@@ -14,6 +14,8 @@ export default function AdminDashboard() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({})
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
+  const [totalProjects, setTotalProjects] = useState(0)
+  const [publishedCount, setPublishedCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -38,7 +40,10 @@ export default function AdminDashboard() {
         console.error('Error fetching projects:', projectsError)
         console.error('Projects error details:', JSON.stringify(projectsError, null, 2))
       } else {
-        setRecentProjects((projectsData || []) as Project[])
+        const projects = (projectsData || []) as Project[]
+        setRecentProjects(projects)
+        setTotalProjects(projects.length)
+        setPublishedCount(projects.filter(p => p.status === 'published').length)
 
         // Hent share tokens for publiserte prosjekter
         const publishedProjectIds = (projectsData || [])

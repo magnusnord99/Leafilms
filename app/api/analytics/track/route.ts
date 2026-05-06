@@ -23,15 +23,6 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    console.log('[Analytics API] Received request:', {
-      projectId: body.projectId,
-      shareToken: body.shareToken?.substring(0, 10) + '...',
-      sessionId: body.sessionId,
-      totalTimeSeconds: body.totalTimeSeconds,
-      sectionTimesCount: Object.keys(body.sectionTimes || {}).length,
-      sectionTimes: body.sectionTimes, // Log actual section times
-      isFinal: body.isFinal
-    })
     const {
       projectId,
       shareToken,
@@ -52,6 +43,19 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+
+    // Reject analytics from authenticated admin users (server-side guard)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      if (profile?.role === 'admin') {
+        return NextResponse.json({ success: true, skipped: true })
+      }
+    }
 
     // Verify that the share token exists and belongs to the project
     const { data: share, error: shareError } = await supabase
@@ -107,13 +111,6 @@ export async function POST(request: NextRequest) {
         mergedSectionTimes[sectionId] = Math.max(existingTime, newTime)
       })
 
-      console.log('[Analytics API] Merging section_times:', {
-        existing: Object.keys(existingSectionTimes).length,
-        new: Object.keys(sectionTimes || {}).length,
-        merged: Object.keys(mergedSectionTimes).length,
-        sample: Object.entries(mergedSectionTimes).slice(0, 3).map(([id, time]) => ({ id: id.substring(0, 8), time }))
-      })
-
       // Update existing session with merged data
       const updateData: any = {
         section_times: mergedSectionTimes,
@@ -142,7 +139,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('[Analytics API] ✅ Updated session:', data.id)
       return NextResponse.json({ success: true, sessionId: data.id })
     } else {
       // Create new session
@@ -171,7 +167,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('[Analytics API] ✅ Created new session:', data.id)
       return NextResponse.json({ success: true, sessionId: data.id })
     }
   } catch (error: any) {

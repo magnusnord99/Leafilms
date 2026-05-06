@@ -80,7 +80,7 @@ export function GoalSection({
           ...(sectionImages[section.id]?.[0] ? getBackgroundStyle(section.id, 0) : {}),
           transform: imageTransform,
           opacity: imageOpacity,
-          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out',
+          transition: editMode || isMobile ? 'none' : 'transform 0.18s ease-out, opacity 0.18s ease-out',
         }}
       >
         {!sectionImages[section.id]?.[0] && editMode && (
@@ -121,7 +121,7 @@ export function GoalSection({
         style={{
           transform: textTransform,
           opacity: textOpacity,
-          transition: editMode || isMobile ? 'none' : 'transform 0.1s ease-out, opacity 0.1s ease-out',
+          transition: editMode || isMobile ? 'none' : 'transform 0.18s ease-out, opacity 0.18s ease-out',
         }}
       >
         {/* Section label */}

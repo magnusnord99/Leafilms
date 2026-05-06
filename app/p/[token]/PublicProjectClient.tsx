@@ -3,7 +3,7 @@
 import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
-import { useMemo } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import {
   HeroSection,
   ConceptSection,
@@ -93,47 +93,62 @@ export function PublicProjectClient({
     }
   } as const
   const lang = project.language === 'en' ? 'en' : 'no'
-  const getSectionTitle = (type: string) =>
-    sectionTitles[lang][type as keyof typeof sectionTitles.no] || type.toUpperCase()
 
-  const getBackgroundStyle = (sectionId: string, imageIndex = 0): React.CSSProperties => {
+  const getSectionTitle = useCallback((type: string) =>
+    sectionTitles[lang][type as keyof typeof sectionTitles.no] || type.toUpperCase()
+  , [lang]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getBackgroundStyle = useCallback((sectionId: string, imageIndex = 0): React.CSSProperties => {
     const images = sectionImages[sectionId]
     const imageData = sectionImageData[sectionId]
-    
+
     if (!images || !images[imageIndex]) return {}
-    
+
     const image = images[imageIndex]
     const data = imageData?.[imageIndex]
-    
+
     const posX = data?.background_position_x ?? 50
     const posY = data?.background_position_y ?? 50
     const zoom = data?.background_zoom
-    
-    // Håndter zoom: samme logikk som i useSectionImages hook
-    // zoom er lagret som desimal (1.0 = 100%, 1.2 = 120%, etc.)
-    // Hvis null eller 1.0, bruk 'cover' for å fylle hele containeren
-    const backgroundSize = zoom === null || zoom === undefined || zoom === 1.0 
-      ? 'cover' 
+
+    const backgroundSize = zoom === null || zoom === undefined || zoom === 1.0
+      ? 'cover'
       : `${zoom * 100}%`
-    
+
     return {
       backgroundImage: `url(${getImageUrl(image.file_path)})`,
       backgroundSize: backgroundSize,
       backgroundPosition: `${posX}% ${posY}%`,
       backgroundRepeat: 'no-repeat'
     }
-  }
+  }, [sectionImages, sectionImageData])
 
-  // Dummy functions (ikke brukt i view mode)
-  const noop = () => {}
-  const noopAsync = async () => {}
-  const noopEvent = (e: React.MouseEvent) => { e.stopPropagation() }
+  // Stable noop functions (view mode — not used for mutations)
+  const noop = useCallback(() => {}, [])
+  const noopAsync = useCallback(async () => {}, [])
+  const noopEvent = useCallback((e: React.MouseEvent) => { e.stopPropagation() }, [])
 
-  const heroSection = sections.find(s => s.type === 'hero')
+  // Stable empty objects — avoids creating new references on every render
+  const emptyImagePosition = useMemo(() => ({}), [])
+  const emptyRecord = useMemo(() => ({}), [])
+
+  const heroSection = useMemo(() => sections.find(s => s.type === 'hero'), [sections])
+
+  const sortedNonHeroSections = useMemo(() =>
+    sections
+      .filter(s => s.type !== 'hero')
+      .sort((a, b) => {
+        if (a.type === 'contact' && b.type !== 'contact') return 1
+        if (a.type !== 'contact' && b.type === 'contact') return -1
+        return a.order_index - b.order_index
+      }),
+    [sections]
+  )
+
   // selectedTeamMemberIds og selectedCaseIds skal komme fra props, ikke fra section.content
   // (de er allerede filtrert i page.tsx)
-  const selectedTeamMemberIds = teamMembers.map(m => m.id)
-  const selectedCaseIds = caseStudies.map(c => c.id)
+  const selectedTeamMemberIds = useMemo(() => teamMembers.map(m => m.id), [teamMembers])
+  const selectedCaseIds = useMemo(() => caseStudies.map(c => c.id), [caseStudies])
 
   // Safety check - if no project, show error
   if (!project) {
@@ -166,7 +181,7 @@ export function PublicProjectClient({
             sectionVideos={sectionVideos}
             sectionVideoData={sectionVideoData}
             editingImageSectionId={null}
-            imagePosition={{}}
+            imagePosition={emptyImagePosition}
             getBackgroundStyle={getBackgroundStyle}
             updateSectionContent={noop}
             saveBackgroundPosition={noopAsync}
@@ -190,15 +205,7 @@ export function PublicProjectClient({
             </Text>
           </div>
         ) : (
-          sections
-            .filter(s => s.type !== 'hero')
-            .sort((a, b) => {
-              // Sorter kontakt-seksjonen alltid til slutt
-              if (a.type === 'contact' && b.type !== 'contact') return 1
-              if (a.type !== 'contact' && b.type === 'contact') return -1
-              // Ellers bruk order_index
-              return a.order_index - b.order_index
-            })
+          sortedNonHeroSections
             .map((section) => {
               if (!section.visible) return null
             
@@ -217,7 +224,7 @@ export function PublicProjectClient({
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}
-                      imagePosition={{}}
+                      imagePosition={emptyImagePosition}
                       conceptSectionProgress={conceptSectionProgress}
                       conceptSectionRef={conceptSectionRef}
                       getBackgroundStyle={getBackgroundStyle}
@@ -239,7 +246,7 @@ export function PublicProjectClient({
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}
-                      imagePosition={{}}
+                      imagePosition={emptyImagePosition}
                       goalSectionProgress={goalSectionProgress}
                       goalSectionRef={goalSectionRef}
                       getBackgroundStyle={getBackgroundStyle}
@@ -262,7 +269,7 @@ export function PublicProjectClient({
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}
-                      imagePosition={{}}
+                      imagePosition={emptyImagePosition}
                       getBackgroundStyle={getBackgroundStyle}
                       getSectionTitle={getSectionTitle}
                       updateSectionContent={noop}
@@ -346,7 +353,7 @@ export function PublicProjectClient({
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}
-                      imagePosition={{}}
+                      imagePosition={emptyImagePosition}
                       getBackgroundStyle={getBackgroundStyle}
                       saveBackgroundPosition={noopAsync}
                       setImagePosition={noop}
@@ -363,8 +370,8 @@ export function PublicProjectClient({
                       editMode={false}
                       collageImages={collageImages}
                       selectedPreset={selectedPreset}
-                      sectionImageData={{}}
-                      imagePosition={{}}
+                      sectionImageData={emptyRecord}
+                      imagePosition={emptyImagePosition}
                       setImagePosition={noop}
                       saveBackgroundPosition={noopAsync}
                       updateSectionContent={noop}
@@ -389,11 +396,19 @@ export function PublicProjectClient({
       </div>
 
       {/* Footer */}
-      <footer className="py-12 px-8 bg-background-surface border-t border-border">
-        <div className="max-w-5xl mx-auto text-center">
-          <Text variant="muted">
-            © {new Date().getFullYear()} Lea Films. All rights reserved.
-          </Text>
+      <footer className="py-8 px-8" style={{ background: '#0C0B09', borderTop: '1px solid #1A1713' }}>
+        <div className="max-w-5xl mx-auto flex items-center justify-center gap-6">
+          <div style={{ flex: 1, maxWidth: 120, height: 1, background: '#1A1713' }} />
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.55rem',
+            letterSpacing: '0.22em',
+            color: '#38332A',
+            textTransform: 'uppercase',
+          }}>
+            {new Date().getFullYear()} — Leafilms
+          </span>
+          <div style={{ flex: 1, maxWidth: 120, height: 1, background: '#1A1713' }} />
         </div>
       </footer>
     </div>

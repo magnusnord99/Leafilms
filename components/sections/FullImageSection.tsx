@@ -47,24 +47,41 @@ export function FullImageSection({
     <div className="w-full">
       <div
         onClick={onImageClick}
-        className={`relative w-full min-h-[50vh] overflow-hidden ${
+        className={`relative w-full overflow-hidden ${
           editMode && !sectionImages[section.id]?.[0]
-            ? 'cursor-pointer bg-gray-800 hover:bg-gray-700 transition-colors flex items-center justify-center'
+            ? 'cursor-pointer flex items-center justify-center'
             : ''
         }`}
-        style={sectionImages[section.id]?.[0] ? backgroundStyle : undefined}
+        style={{
+          minHeight: editMode ? '40vh' : '65vh',
+          background: '#0C0B09',
+          ...(sectionImages[section.id]?.[0] ? backgroundStyle : {}),
+        }}
       >
+        {/* Subtle vignette overlay for cinematic look */}
+        {sectionImages[section.id]?.[0] && (
+          <div
+            className="absolute inset-0 z-[1] pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at center, transparent 40%, rgba(12,11,9,0.45) 100%)',
+            }}
+          />
+        )}
+
         {editMode && !sectionImages[section.id]?.[0] && (
-          <span className="text-zinc-500 text-lg">Klikk for å velge bilde</span>
+          <div className="border border-dashed border-[#38332A] px-10 py-8 rounded-[2px] text-center">
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+              Klikk for å velge bilde
+            </p>
+          </div>
         )}
 
         {editMode && sectionImages[section.id]?.[0] && (
           <button
             onClick={onEditPositionClick}
-            className="absolute top-4 right-4 z-20 bg-white/90 hover:bg-white text-dark px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 transition"
-            title="Rediger bilde-posisjon"
+            className="absolute top-4 right-4 z-20 bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
           >
-            {editingImageSectionId === section.id ? '✕ Lukk' : '✏️ Rediger posisjon'}
+            {editingImageSectionId === section.id ? 'Lukk' : 'Rediger posisjon'}
           </button>
         )}
 

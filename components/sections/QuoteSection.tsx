@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Section, Project, QuoteBuilderData } from '@/lib/types'
-import { Heading, Text, Button } from '@/components/ui'
+// Heading/Text/Button imported for potential future use in edit mode expansions
 import { useQuoteAnalytics } from '@/hooks/useQuoteAnalytics'
 import { supabase } from '@/lib/supabase'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
@@ -189,73 +189,105 @@ export function QuoteSection({
 
   // ── Display mode (public view for client) ─────────────────────────────────
   return (
-    <div className="bg-background-widget max-w-full mx-auto py-12 px-4">
+    <div className="max-w-full mx-auto py-16 md:py-24 px-4 md:px-8" style={{ background: '#0C0B09' }}>
       {quoteData ? (
-        <div className="max-w-4xl mx-auto bg-gray-50 rounded-lg shadow-sm border border-border p-8">
+        <div
+          className="max-w-4xl mx-auto"
+          style={{ background: '#161410', border: '1px solid #2A261F' }}
+        >
           {/* Header */}
-          <div className="mb-8 pb-6 border-b border-border" data-quote-section="header">
-            <div className="flex justify-between items-start mb-4">
+          <div
+            className="px-8 md:px-12 pt-10 pb-8 mb-0"
+            style={{ borderBottom: '1px solid #2A261F' }}
+            data-quote-section="header"
+          >
+            <div className="flex justify-between items-start mb-8">
               <div>
-                <Heading as="h4" className="mb-2">LEA FILMS</Heading>
-                <Text variant="small" className="text-dark/70">
-                  Adresse: Dæliveien 33b, Asker, Norway<br />
-                  Telefon: 0047 94989036<br />
-                  Email: eivind@leafilms.no<br />
-                  Website: leafilms.no
-                </Text>
+                {/* Section label */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div style={{ width: 24, height: 1, background: '#C49434' }} />
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.18em',
+                    color: '#C49434',
+                    textTransform: 'uppercase',
+                    fontWeight: 500,
+                  }}>
+                    Pristilbud
+                  </span>
+                </div>
+                <p style={{
+                  fontFamily: 'var(--font-cormorant)',
+                  fontSize: 'clamp(1.6rem, 2.5vw, 2.2rem)',
+                  fontWeight: 300,
+                  fontStyle: 'italic',
+                  color: '#E8E1D5',
+                  lineHeight: 1.2,
+                  marginBottom: '0.75rem',
+                }}>
+                  Lea Films
+                </p>
+                <p style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.78rem',
+                  color: '#9E9287',
+                  lineHeight: 1.7,
+                }}>
+                  Dæliveien 33b, Asker<br />
+                  +47 949 89 036<br />
+                  eivind@leafilms.no
+                </p>
               </div>
               <div className="text-right">
-                <Heading as="h4" className="mb-2">Tilbud</Heading>
                 {quoteData.version && (
-                  <Text variant="small" className="text-dark/70">Versjon: {quoteData.version}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', letterSpacing: '0.12em', color: '#62594E', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Versjon {quoteData.version}
+                  </p>
                 )}
                 {quoteData.quoteDate && (
-                  <Text variant="small" className="text-dark/70">Tilbud dato: {quoteData.quoteDate}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>
+                    {quoteData.quoteDate}
+                  </p>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
               {quoteData.projectName && (
                 <div>
-                  <Text variant="small" className="font-semibold">Prosjekt:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.projectName}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Prosjekt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.projectName}</p>
                 </div>
               )}
               {quoteData.reference && (
                 <div>
-                  <Text variant="small" className="font-semibold">Referanse:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.reference}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Referanse</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.reference}</p>
                 </div>
               )}
               {quoteData.clientContact && (
                 <div>
-                  <Text variant="small" className="font-semibold">Deres kontakt:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.clientContact}</Text>
-                </div>
-              )}
-              {quoteData.customerNumber && (
-                <div>
-                  <Text variant="small" className="font-semibold">Kundenummer:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.customerNumber}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Deres kontakt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.clientContact}</p>
                 </div>
               )}
               {quoteData.ourContact && (
                 <div>
-                  <Text variant="small" className="font-semibold">Vår kontakt:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.ourContact}</Text>
-                </div>
-              )}
-              {quoteData.paymentInfo && (
-                <div>
-                  <Text variant="small" className="font-semibold">Betalings info:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.paymentInfo}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Vår kontakt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.ourContact}</p>
                 </div>
               )}
               {quoteData.deliveryDate && (
                 <div>
-                  <Text variant="small" className="font-semibold">Levering dato:</Text>
-                  <Text variant="small" className="text-dark/70">{quoteData.deliveryDate}</Text>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Levering</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.deliveryDate}</p>
+                </div>
+              )}
+              {quoteData.paymentInfo && (
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Betalingsinfo</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.paymentInfo}</p>
                 </div>
               )}
             </div>
@@ -263,25 +295,42 @@ export function QuoteSection({
 
           {/* Line items */}
           {quoteData.lineItems && quoteData.lineItems.length > 0 && (
-            <div className="mb-8 overflow-x-auto" data-quote-section="line_items">
+            <div className="overflow-x-auto" data-quote-section="line_items">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-dark">Beskrivelse</th>
-                    <th className="text-right py-3 px-4 font-semibold text-dark">Antall</th>
-                    <th className="text-right py-3 px-4 font-semibold text-dark">Sum (NOK)</th>
+                  <tr style={{ borderBottom: '1px solid #2A261F' }}>
+                    <th className="text-left py-3 px-8 md:px-12" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Beskrivelse</th>
+                    <th className="text-right py-3 px-4" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Antall</th>
+                    <th className="text-right py-3 px-8 md:px-12" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Sum</th>
                   </tr>
                 </thead>
                 <tbody>
                   {quoteData.lineItems.map((item, idx) => {
                     const isHeader = item.quantity === '' && item.amount === 0
                     return (
-                      <tr key={idx} className={isHeader ? 'bg-gray-100' : 'border-b border-border/50'}>
-                        <td className={`py-3 px-4 text-dark ${isHeader ? 'font-semibold text-xs tracking-widest uppercase text-gray-500' : ''}`}>
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: '1px solid #1E1B16',
+                          background: isHeader ? 'rgba(196,148,52,0.04)' : 'transparent',
+                        }}
+                      >
+                        <td className="py-3 px-8 md:px-12" style={{
+                          fontFamily: isHeader ? 'var(--font-dm-sans)' : 'var(--font-dm-sans)',
+                          fontSize: isHeader ? '0.65rem' : '0.85rem',
+                          letterSpacing: isHeader ? '0.14em' : '0',
+                          textTransform: isHeader ? 'uppercase' : 'none',
+                          color: isHeader ? '#9E9287' : '#E8E1D5',
+                          fontWeight: isHeader ? 500 : 300,
+                        }}>
                           {item.description}
                         </td>
-                        <td className="py-3 px-4 text-right text-dark/70">{!isHeader ? item.quantity : ''}</td>
-                        <td className="py-3 px-4 text-right text-dark">{!isHeader ? formatCurrency(item.amount) : ''}</td>
+                        <td className="py-3 px-4 text-right" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#9E9287' }}>
+                          {!isHeader ? item.quantity : ''}
+                        </td>
+                        <td className="py-3 px-8 md:px-12 text-right" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: isHeader ? 'transparent' : '#E8E1D5' }}>
+                          {!isHeader ? formatCurrency(item.amount) : ''}
+                        </td>
                       </tr>
                     )
                   })}
@@ -291,47 +340,88 @@ export function QuoteSection({
           )}
 
           {/* Totals */}
-          <div className="border-t-2 border-border pt-6 space-y-2" data-quote-section="totals">
+          <div
+            className="px-8 md:px-12 py-8 space-y-3"
+            style={{ borderTop: '1px solid #2A261F' }}
+            data-quote-section="totals"
+          >
             {quoteData.subtotalExclVat !== undefined && (
-              <div className="flex justify-between text-dark">
-                <Text variant="body" className="font-semibold">Produksjon totalt eksl. mva:</Text>
-                <Text variant="body" className="font-semibold">{formatCurrency(quoteData.subtotalExclVat)}</Text>
+              <div className="flex justify-between items-baseline">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Produksjon totalt eksl. mva</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{formatCurrency(quoteData.subtotalExclVat)}</p>
               </div>
             )}
             {quoteData.totalDiscount !== undefined && quoteData.totalDiscount > 0 && (
-              <div className="flex justify-between text-red-600">
-                <Text variant="body" className="font-semibold">Rabatt:</Text>
-                <Text variant="body" className="font-semibold">{formatCurrency(-quoteData.totalDiscount)}</Text>
+              <div className="flex justify-between items-baseline">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Rabatt</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434' }}>−{formatCurrency(quoteData.totalDiscount)}</p>
               </div>
             )}
             {quoteData.finalPriceExclVat !== undefined && (
-              <div className="flex justify-between text-dark pt-2 border-t border-border">
-                <Text variant="body" className="font-semibold text-lg">Ny pris eksl. MVA:</Text>
-                <Text variant="body" className="font-semibold text-lg">{formatCurrency(quoteData.finalPriceExclVat)}</Text>
+              <div className="flex justify-between items-baseline pt-3" style={{ borderTop: '1px solid #2A261F' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris eksl. MVA</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: '#E8E1D5', fontWeight: 500 }}>{formatCurrency(quoteData.finalPriceExclVat)}</p>
               </div>
             )}
             {quoteData.finalPriceInclVat !== undefined && (
-              <div className="flex justify-between text-dark">
-                <Text variant="body" className="font-semibold text-lg">Ny pris inkl. MVA:</Text>
-                <Text variant="body" className="font-semibold text-lg">{formatCurrency(quoteData.finalPriceInclVat)}</Text>
+              <div className="flex justify-between items-baseline">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris inkl. MVA</p>
+                <p style={{
+                  fontFamily: 'var(--font-cormorant)',
+                  fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+                  fontWeight: 400,
+                  fontStyle: 'italic',
+                  color: '#E8E1D5',
+                  letterSpacing: '-0.01em',
+                }}>{formatCurrency(quoteData.finalPriceInclVat)}</p>
               </div>
             )}
           </div>
 
           {/* Actions */}
-          <div className="mt-8 pt-6 border-t border-border" data-quote-section="actions">
+          <div
+            className="px-8 md:px-12 py-8"
+            style={{ borderTop: '1px solid #2A261F' }}
+            data-quote-section="actions"
+          >
             {quoteAccepted ? (
-              <Text variant="body" className="text-green-600 font-semibold">Tilbud akseptert!</Text>
+              <div className="flex items-center gap-3">
+                <div style={{ width: 24, height: 1, background: '#4A9A70' }} />
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5BB880' }}>
+                  Tilbud akseptert
+                </p>
+              </div>
             ) : (
-              <Button onClick={handleAcceptQuote} disabled={acceptingQuote} variant="primary">
+              <button
+                onClick={handleAcceptQuote}
+                disabled={acceptingQuote}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.72rem',
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  background: '#C49434',
+                  color: '#0C0B09',
+                  border: 'none',
+                  padding: '14px 32px',
+                  cursor: acceptingQuote ? 'not-allowed' : 'pointer',
+                  opacity: acceptingQuote ? 0.6 : 1,
+                  fontWeight: 600,
+                  transition: 'background 0.2s, opacity 0.2s',
+                }}
+                onMouseEnter={(e) => { if (!acceptingQuote) (e.currentTarget as HTMLButtonElement).style.background = '#D4A848' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#C49434' }}
+              >
                 {acceptingQuote ? 'Behandler...' : 'Aksepter tilbud'}
-              </Button>
+              </button>
             )}
           </div>
         </div>
       ) : (
-        <div className="bg-background-elevated rounded-lg p-8 text-center">
-          <Text variant="body" className="text-dark/70">Ingen tilbudsdata tilgjengelig</Text>
+        <div className="max-w-4xl mx-auto py-16 text-center" style={{ background: '#161410', border: '1px solid #2A261F' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            Ingen tilbudsdata tilgjengelig
+          </p>
         </div>
       )}
     </div>

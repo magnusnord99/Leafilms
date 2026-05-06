@@ -136,7 +136,16 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
           }}
         >
           {/* Close row */}
-          <div className="px-3 pb-2 flex justify-end">
+          <div className="px-3 pb-2 flex justify-between items-center">
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.55rem',
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: '#38332A',
+            }}>
+              SEKSJONER
+            </span>
             <button
               onClick={() => setIsExpanded(false)}
               style={{
@@ -145,11 +154,14 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 fontFamily: 'var(--font-dm-sans)',
+                lineHeight: 1,
+                padding: '2px 4px',
               }}
             >
-              ✕
+              ×
             </button>
           </div>
+          <div style={{ height: 1, background: '#2A261F', margin: '0 12px 4px' }} />
           <ul>
             {visibleSections.map((section) => {
               const isActive = activeSectionId === section.id
@@ -157,7 +169,7 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
                 <li key={section.id}>
                   <button
                     onClick={() => scrollToSection(section.id)}
-                    className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-all group"
+                    className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-all group hover:bg-[#201D18]"
                     style={{ fontFamily: 'var(--font-dm-sans)' }}
                   >
                     <span style={{
@@ -167,14 +179,16 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
                       transition: 'all 0.2s',
                       flexShrink: 0,
                     }} />
-                    <span style={{
-                      fontSize: '0.6rem',
-                      letterSpacing: '0.1em',
-                      textTransform: 'uppercase',
-                      color: isActive ? '#E8E1D5' : '#62594E',
-                      transition: 'color 0.2s',
-                      whiteSpace: 'nowrap',
-                    }}>
+                    <span
+                      className="group-hover:text-[#9E9287]"
+                      style={{
+                        fontSize: '0.6rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: isActive ? '#E8E1D5' : '#62594E',
+                        transition: 'color 0.2s',
+                        whiteSpace: 'nowrap',
+                      }}>
                       {getSectionTitle(section.type)}
                     </span>
                   </button>

@@ -224,6 +224,7 @@ export function TimelineSection({
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
+        paddingTop: 'env(safe-area-inset-top)',
       }}>
         {/*
           Vertical drift wrapper: as scroll progress increases, the entire content
@@ -236,7 +237,7 @@ export function TimelineSection({
         }}>
 
         {/* Section label */}
-        <div className="px-8 md:px-16 mb-10 flex items-center gap-5">
+        <div className="px-6 md:px-16 mb-8 md:mb-10 flex items-center gap-5">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
           <span
             className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}

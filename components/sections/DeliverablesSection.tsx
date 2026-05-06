@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
-import { Text } from '@/components/ui'
-import { DeliverableGrid } from '@/components/project'
-import { ImagePositionControls } from '@/components/project'
+import { DeliverableGrid, ImagePositionControls } from '@/components/project'
 
 type DeliverablesSectionProps = {
   section: Section
@@ -133,21 +131,28 @@ export function DeliverablesSection({
           </div>
 
           {/* Description */}
-          <Text
-            variant="lead"
-            className={`max-w-lg text-[#E8E1D5] whitespace-pre-wrap mb-10 ${
-              editMode ? 'edit-outline px-3 py-2' : ''
-            }`}
+          <p
+            className={`max-w-lg mb-10 ${editMode ? 'edit-outline px-3 py-2' : ''}`}
             contentEditable={editMode}
             suppressContentEditableWarning
             onBlur={(e) => {
               if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
             }}
             onClick={(e) => e.stopPropagation()}
-            style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+            style={{
+              fontFamily: 'var(--font-cormorant), Georgia, serif',
+              fontSize: 'clamp(1.25rem, 2.2vw, 1.75rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              lineHeight: 1.55,
+              color: '#E8E1D5',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
+            }}
           >
             {section.content.text || 'Vi leverer et bredt spekter av innhold tilpasset ulike plattformer.'}
-          </Text>
+          </p>
 
           {/* Deliverables grid */}
           <div onClick={(e) => e.stopPropagation()} className="min-h-[120px]">

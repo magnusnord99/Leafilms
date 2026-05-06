@@ -472,7 +472,7 @@ export function ProductionScheduleSection({
   const partnerSubtitle: string = section.content.partnerSubtitle ?? 'Production on location for partner brands'
 
   const editClass = editMode
-    ? 'cursor-text hover:outline hover:outline-2 hover:outline-dark/20 hover:outline-dashed rounded'
+    ? 'cursor-text hover:outline hover:outline-1 hover:outline-[#38332A] hover:outline-dashed'
     : ''
 
   const headerFooterTextColor = '#E8E1D5'
@@ -510,7 +510,7 @@ export function ProductionScheduleSection({
   }
 
   return (
-    <section className="py-16 md:py-20 px-8 md:px-16 bg-background">
+    <section className="py-12 md:py-20 px-4 sm:px-8 md:px-16 bg-background">
       <div className="max-w-7xl mx-auto">
 
         {/* Partner table — above main schedule */}

@@ -59,7 +59,7 @@ export function DeliverableCard({
       {/* Flip-animasjon: duration-700 = hastighet, hover:scale-105 = zoom ved hover */}
       <div
         onClick={() => setIsFlipped(!isFlipped)}
-        className="relative w-full h-full transition-all duration-700 cursor-pointer hover:scale-105"
+        className="relative w-full h-full transition-all duration-700 cursor-pointer"
         style={{
           transformStyle: 'preserve-3d',
           transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
@@ -69,8 +69,13 @@ export function DeliverableCard({
             Farge: bg-background-widget-red (se globals.css for andre farger)
             Padding: p-4 (16px) – endre for mer/mindre luft */}
         <div
-          className="absolute inset-0 w-full h-full bg-background-widget-red rounded-lg p-4 shadow-lg overflow-hidden"
-          style={{ backfaceVisibility: 'hidden' }}
+          className="absolute inset-0 w-full h-full p-4 overflow-hidden"
+          style={{
+            backfaceVisibility: 'hidden',
+            background: '#1E1B16',
+            border: '1px solid #2A261F',
+            borderTop: '1px solid #38332A',
+          }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center">
             {/* Type-ikon: video eller bilde */}
@@ -155,10 +160,13 @@ export function DeliverableCard({
             Farge: bg-background-widget-red-hover (mørkere variant)
             Her vises beskrivelsen */}
         <div
-          className="absolute inset-0 w-full h-full bg-background-widget-red-hover rounded-lg p-4 shadow-lg overflow-hidden"
+          className="absolute inset-0 w-full h-full p-4 overflow-hidden"
           style={{
             backfaceVisibility: 'hidden',
-            transform: 'rotateY(180deg)'
+            transform: 'rotateY(180deg)',
+            background: '#2A261F',
+            border: '1px solid #38332A',
+            borderTop: '2px solid #C49434',
           }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center overflow-y-auto [font-size:0.6rem]">
@@ -171,7 +179,15 @@ export function DeliverableCard({
                 onChange={(e) => onChange?.('description', e.target.value)}
                 placeholder="Beskriv leveransen..."
                 onClick={(e) => e.stopPropagation()}
-                className="w-full flex-1 min-h-[80px] text-dark bg-white/50 border border-dark/20 rounded px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-dark/20"
+                className="w-full flex-1 min-h-[80px] resize-none focus:outline-none px-2 py-1"
+                style={{
+                  background: '#161410',
+                  border: '1px solid #38332A',
+                  color: '#E8E1D5',
+                  fontSize: '0.72rem',
+                  fontFamily: 'var(--font-dm-sans)',
+                  borderRadius: 1,
+                }}
               />
             ) : (
               <Text

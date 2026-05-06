@@ -75,7 +75,7 @@ export function DeliverableGrid({ items, editMode = false, language = 'no', onIt
 
   return (
     <div className="w-full">
-    <div className="grid grid-cols-2 md:flex md:flex-row md:flex-nowrap gap-4 mt-8 items-start w-full min-w-fit">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-row md:flex-wrap gap-4 mt-8 items-start w-full">
       {displayItems.map((item) => (
         <DeliverableCard
           key={item.id}
@@ -97,21 +97,35 @@ export function DeliverableGrid({ items, editMode = false, language = 'no', onIt
             e.stopPropagation()
             handleAdd()
           }}
-          className="
-            bg-background-elevated/50 border-2 border-dashed border-gray-400
-            p-4 flex flex-col items-center justify-center
-            transition-all duration-300 cursor-pointer
-            w-full md:w-[100px] min-h-[160px] flex-shrink-0
-            hover:bg-background-elevated hover:border-gray-500
-          "
+          className="p-4 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer w-full md:w-[140px] min-h-[160px] flex-shrink-0"
+          style={{
+            border: '1px dashed #38332A',
+            background: 'transparent',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#C49434' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#38332A' }}
         >
-          <span className="text-2xl text-gray-500">+</span>
-          <span className="text-xs text-gray-500 mt-1">Legg til</span>
+          <span style={{ fontSize: '1.5rem', color: '#38332A', lineHeight: 1 }}>+</span>
+          <span style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.6rem',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: '#62594E',
+            marginTop: '0.5rem',
+          }}>Legg til</span>
         </button>
       )}
     </div>
-    <p className="text-left text-white/70 text-sm mt-4">
-      {language === 'en' ? 'Click on the cards for more info' : 'Trykk på kortene for mer info'}
+    <p style={{
+      fontFamily: 'var(--font-dm-sans)',
+      fontSize: '0.72rem',
+      letterSpacing: '0.1em',
+      color: '#62594E',
+      marginTop: '1rem',
+      textTransform: 'uppercase',
+    }}>
+      {language === 'en' ? 'Tap cards for more info' : 'Trykk på kortene for mer info'}
     </p>
     </div>
   )

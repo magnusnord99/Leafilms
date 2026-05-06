@@ -256,7 +256,7 @@ export function HeroSection({
             fontStyle: 'italic',
             lineHeight: 0.9,
             maxWidth: '20ch',
-            fontSize: 'clamp(5rem, 5vw, 5rem)',
+            fontSize: 'clamp(3.5rem, 8vw, 5rem)',
           }}
           contentEditable={editMode}
           suppressContentEditableWarning

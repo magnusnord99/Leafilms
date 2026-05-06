@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Section, Image, SectionImage } from '@/lib/types'
-import { Heading, Text } from '@/components/ui'
+import { Text } from '@/components/ui'
 import { ImagePositionControls } from '@/components/project'
 
 type GoalSectionProps = {
@@ -147,19 +147,25 @@ export function GoalSection({
           </span>
         </div>
 
-        <Text
-          variant="lead"
-          className={`text-[#E8E1D5] whitespace-pre-wrap leading-relaxed ${
-            editMode ? 'edit-outline min-h-[100px] px-3 py-2' : ''
-          }`}
+        <p
+          className={editMode ? 'edit-outline min-h-[100px] px-3 py-2' : ''}
           contentEditable={editMode}
           suppressContentEditableWarning
           onBlur={(e) => {
             if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
           }}
+          style={{
+            fontFamily: 'var(--font-cormorant), Georgia, serif',
+            fontSize: 'clamp(1.25rem, 2.2vw, 1.75rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            lineHeight: 1.55,
+            color: '#E8E1D5',
+            whiteSpace: 'pre-wrap',
+          }}
         >
           {section.content.text || (editMode ? 'Klikk for å redigere...' : '')}
-        </Text>
+        </p>
       </div>
     </div>
   )

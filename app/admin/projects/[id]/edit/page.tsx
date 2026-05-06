@@ -251,6 +251,19 @@ export default function EditProject({ params }: Props) {
     setShowPresetPicker
   })
 
+  const handleImageSelectForModal = async (imageIds: string[]) => {
+    if (collageImagePosition && imagePickerSectionId) {
+      const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
+      const currentIds = (sectionImages[imagePickerSectionId] || []).map(img => img.id)
+      while (currentIds.length <= posIndex) currentIds.push(currentIds[currentIds.length - 1] || imageIds[0])
+      currentIds[posIndex] = imageIds[0]
+      setCollageImagePosition(null)
+      await handleImageSelect(currentIds)
+    } else {
+      await handleImageSelect(imageIds)
+    }
+  }
+
   const { generating, handleGenerateAI } = useAIGeneration(
     aiSettings,
     updateSectionContent
@@ -489,10 +502,11 @@ export default function EditProject({ params }: Props) {
           setShowImagePicker={setShowImagePicker}
           imagePickerSectionId={imagePickerSectionId}
           setImagePickerSectionId={setImagePickerSectionId}
+          collageImagePosition={collageImagePosition}
           sectionImages={sectionImages}
           sectionVideos={sectionVideos}
           sections={sections}
-          onImageSelect={handleImageSelect}
+          onImageSelect={handleImageSelectForModal}
           onVideoSelect={handleVideoSelect}
           showVideoPicker={showVideoPicker}
           setShowVideoPicker={setShowVideoPicker}

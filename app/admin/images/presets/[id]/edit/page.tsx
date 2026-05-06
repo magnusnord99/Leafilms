@@ -362,6 +362,7 @@ export default function EditPresetPage({ params }: Props) {
         }}
         onSelect={handleImageSelect}
         selectedImageIds={[]}
+        maxSelection={1}
       />
     </div>
   )

@@ -8,6 +8,7 @@ type EditProjectModalsProps = {
   setShowImagePicker: (show: boolean) => void
   imagePickerSectionId: string | null
   setImagePickerSectionId: (id: string | null) => void
+  collageImagePosition?: string | null
   sectionImages: Record<string, Image[]>
   sectionVideos?: Record<string, VideoLibrary[]>
   sections: Section[]
@@ -44,6 +45,7 @@ export function EditProjectModals({
   setShowImagePicker,
   imagePickerSectionId,
   setImagePickerSectionId,
+  collageImagePosition,
   sectionImages,
   sectionVideos = {},
   sections,
@@ -100,10 +102,20 @@ export function EditProjectModals({
           setImagePickerSectionId(null)
         }}
         onSelect={onImageSelect}
-        selectedImageIds={imagePickerSectionId ? sectionImages[imagePickerSectionId]?.map(img => img.id) || [] : []}
+        selectedImageIds={(() => {
+          if (!imagePickerSectionId) return []
+          const images = sectionImages[imagePickerSectionId] || []
+          if (collageImagePosition) {
+            const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
+            const img = images[posIndex]
+            return img ? [img.id] : []
+          }
+          return images.map(img => img.id)
+        })()}
         maxSelection={
-          imagePickerSectionId 
+          imagePickerSectionId
             ? (() => {
+                if (collageImagePosition) return 1
                 const section = sections.find(s => s.id === imagePickerSectionId)
                 // Team og example_work kan ha flere bilder, resten skal ha 1
                 return section?.type === 'team' || section?.type === 'example_work' ? undefined : 1

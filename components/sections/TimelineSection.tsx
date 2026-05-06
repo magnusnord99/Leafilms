@@ -225,6 +225,16 @@ export function TimelineSection({
         flexDirection: 'column',
         justifyContent: 'center',
       }}>
+        {/*
+          Vertical drift wrapper: as scroll progress increases, the entire content
+          slowly drifts upward — giving the feeling of slowly scrolling downward
+          through the section while cards animate horizontally.
+        */}
+        <div style={{
+          transform: `translateY(${-timelineSectionProgress * 10}vh)`,
+          willChange: 'transform',
+        }}>
+
         {/* Section label */}
         <div className="px-8 md:px-16 mb-10 flex items-center gap-5">
           <div style={{ width: 32, height: 1, background: '#C49434' }} />
@@ -361,6 +371,8 @@ export function TimelineSection({
             {(timelineItems[activeIndex] as any)?.monthYear || ''}
           </span>
         </div>
+
+        </div>{/* end vertical drift wrapper */}
       </div>
     </div>
   )

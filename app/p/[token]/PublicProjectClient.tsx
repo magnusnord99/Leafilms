@@ -77,6 +77,25 @@ export function PublicProjectClient({
   // Disable tracking while auth is loading (unknown user) or when user is admin
   useProjectAnalytics(project.id, shareToken, sectionIds, isAdmin || authLoading)
 
+  // Scroll-reveal: apply .is-visible to .section-reveal elements when they enter viewport
+  useEffect(() => {
+    const targets = document.querySelectorAll('.section-reveal')
+    if (!targets.length) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    )
+    targets.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [sections])
+
   // Hjelpefunksjoner
   const sectionTitles = {
     no: {
@@ -209,11 +228,13 @@ export function PublicProjectClient({
             .map((section) => {
               if (!section.visible) return null
             
+            // Sections with their own scroll animations don't need section-reveal
+            const noReveal = section.type === 'concept' || section.type === 'full_image' || section.type === 'hero'
             return (
               <section
                 key={section.id}
                 data-section-id={section.id}
-                className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative`}
+                className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative${noReveal ? '' : ' section-reveal'}`}
               >
                 <div className={section.type === 'team' || section.type === 'concept' || section.type === 'deliverables' || section.type === 'example_work' || section.type === 'full_image' ? 'w-full' : 'max-w-7xl mx-auto'}>
                   {/* Concept Section */}

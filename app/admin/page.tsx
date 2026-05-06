@@ -29,6 +29,17 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
+      // Hent total antall prosjekter for statistikk
+      const { count: projectTotal } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+      const { count: projectPublished } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'published')
+      setTotalProjects(projectTotal ?? 0)
+      setPublishedCount(projectPublished ?? 0)
+
       // Hent 3 siste prosjekter (sortert på updated_at)
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
@@ -42,8 +53,6 @@ export default function AdminDashboard() {
       } else {
         const projects = (projectsData || []) as Project[]
         setRecentProjects(projects)
-        setTotalProjects(projects.length)
-        setPublishedCount(projects.filter(p => p.status === 'published').length)
 
         // Hent share tokens for publiserte prosjekter
         const publishedProjectIds = (projectsData || [])
@@ -121,19 +130,22 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      // Prosjekt slettet - refresh data
       fetchData()
     } catch (error) {
       console.error('Error deleting project:', error)
-      alert('❌ Kunne ikke slette prosjekt')
     }
   }
 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Laster...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+        <div className="flex items-center gap-3">
+          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.16em', color: '#62594E', textTransform: 'uppercase' }}>
+            Laster...
+          </p>
+        </div>
       </div>
     )
   }
@@ -179,6 +191,30 @@ export default function AdminDashboard() {
               <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
             </Link>
           </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-14">
+          {[
+            { label: 'Prosjekter', value: totalProjects, href: '/admin/projects' },
+            { label: 'Publiserte', value: publishedCount, href: '/admin/projects' },
+            { label: 'Kunder', value: customers.length, href: '/admin/customers' },
+            { label: 'Utkast', value: totalProjects - publishedCount, href: '/admin/projects' },
+          ].map((stat) => (
+            <Link key={stat.label} href={stat.href}>
+              <div
+                className="px-5 py-4 transition-colors"
+                style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+              >
+                <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 300, color: '#E8E1D5', lineHeight: 1, marginBottom: 4 }}>
+                  {stat.value}
+                </p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#62594E' }}>
+                  {stat.label}
+                </p>
+              </div>
+            </Link>
+          ))}
         </div>
 
         {/* Recent Projects */}

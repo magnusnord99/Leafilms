@@ -27,6 +27,7 @@ export function VideoPickerModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
   const [selectedIds, setSelectedIds] = useState<string[]>(selectedVideoIds)
+  const [limitWarning, setLimitWarning] = useState(false)
 
   const categories = [
     { value: 'all', label: 'Alle' },
@@ -90,9 +91,11 @@ export function VideoPickerModal({
 
     // For flere videoer, bruk normal toggle-logikk
     if (maxSelection && selectedIds.length >= maxSelection && !selectedIds.includes(videoId)) {
-      alert(`Du kan maksimalt velge ${maxSelection} videoer`)
+      setLimitWarning(true)
+      setTimeout(() => setLimitWarning(false), 2500)
       return
     }
+    setLimitWarning(false)
 
     setSelectedIds(prev => 
       prev.includes(videoId)
@@ -112,11 +115,25 @@ export function VideoPickerModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <Card className="w-full max-w-6xl max-h-[90vh] flex flex-col bg-zinc-900 border-zinc-700">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-700">
-          <Heading as="h2" size="lg" className="text-white">Velg video</Heading>
-          <Button variant="ghost" onClick={onClose} size="sm">
-            ✕
-          </Button>
+        <div className="p-6 border-b border-zinc-700">
+          <div className="flex items-center justify-between">
+            <Heading as="h2" size="lg" className="text-white">Velg video</Heading>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Lukk"
+              style={{ color: '#62594E', lineHeight: 0 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+              </svg>
+            </button>
+          </div>
+          {limitWarning && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', marginTop: 8 }}>
+              Du kan maksimalt velge {maxSelection} video{maxSelection !== 1 ? 'er' : ''}.
+            </p>
+          )}
         </div>
 
         {/* Search and Filters */}

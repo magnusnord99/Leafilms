@@ -253,6 +253,112 @@ body::after {
 }
 
 /* ═══════════════════════════════════════════════════
+   PRINT / PDF STYLES
+   When a client prints or saves as PDF:
+   - White background, dark text for readability
+   - Remove film grain, sticky navs, animations
+   - Ensure table borders print correctly
+   ═══════════════════════════════════════════════════ */
+
+@media print {
+  /* Override dark background with white */
+  html, body {
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Remove film grain overlay */
+  body::after {
+    display: none !important;
+  }
+
+  /* Reset section backgrounds */
+  section, .bg-background, [style*="background: #0C0B09"], [style*="background:#0C0B09"] {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  /* Make text readable */
+  * {
+    color: #111 !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Keep gold accents as a mid-gray in print */
+  [style*="color: #C49434"], [style*="color:#C49434"] {
+    color: #666 !important;
+  }
+
+  /* Remove decorative overlays and gradients */
+  [style*="background: linear-gradient"], [style*="background:linear-gradient"] {
+    background: transparent !important;
+  }
+
+  /* Hide navigation, sticky elements, edit controls */
+  [data-navigation],
+  nav,
+  .section-navigation,
+  footer {
+    display: none !important;
+  }
+
+  /* Ensure section-reveal is visible (don't hide non-animated sections) */
+  .section-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Table print fixes */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    background: #fff !important;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    background: #fff !important;
+    color: #111 !important;
+    padding: 6px 10px !important;
+    font-size: 11pt !important;
+  }
+
+  /* Page breaks */
+  h2, h3 {
+    page-break-after: avoid;
+  }
+
+  /* Avoid cutting cards in half */
+  .flex-shrink-0 {
+    page-break-inside: avoid;
+  }
+
+  /* Hide scroll hints and interactive elements */
+  button, [role="button"] {
+    display: none !important;
+  }
+
+  /* Force white backgrounds on cards */
+  [style*="background: #161410"], [style*="background: #201D18"],
+  [style*="background: #2A261F"], [style*="background: #0C0B09"] {
+    background: #f8f8f6 !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    SCROLLBAR
    ═══════════════════════════════════════════════════ */
 

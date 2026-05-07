@@ -228,15 +228,33 @@ export function PublicProjectClient({
             .map((section) => {
               if (!section.visible) return null
             
-            // Sections with their own scroll animations don't need section-reveal
-            const noReveal = section.type === 'concept' || section.type === 'full_image' || section.type === 'hero'
+            // Sections with their own scroll animations or sticky behavior don't need section-reveal
+            const noReveal = section.type === 'concept' || section.type === 'full_image' || section.type === 'hero' || section.type === 'timeline'
+
+            // Sections that manage their own vertical padding internally (avoid double-padding)
+            const selfPadded = section.type === 'cases' || section.type === 'moodboard' || section.type === 'team'
+              || section.type === 'quote' || section.type === 'contact' || section.type === 'production_schedule'
+
+            // Build outer section className
+            const sectionClass = (() => {
+              if (section.type === 'concept') return 'min-h-screen flex flex-col items-center justify-center px-0'
+              if (section.type === 'full_image') return 'px-0 py-0'
+              if (section.type === 'timeline') return 'px-0'
+              if (section.type === 'deliverables') return 'py-section px-0 md:px-4'
+              if (selfPadded) return 'px-0'
+              return 'py-section px-2 md:px-4'
+            })()
+
+            const bgClass = section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'
+            const revealClass = noReveal ? '' : ' section-reveal'
+
             return (
               <section
                 key={section.id}
                 data-section-id={section.id}
-                className={`${section.type === 'concept' ? 'min-h-screen flex flex-col items-center justify-center px-0' : section.type === 'full_image' ? 'px-0 py-0' : section.type === 'deliverables' ? 'py-section px-0 md:px-4' : 'py-section px-2 md:px-4'} ${section.type === 'cases' || section.type === 'full_image' ? 'bg-transparent' : 'bg-background'} relative${noReveal ? '' : ' section-reveal'}`}
+                className={`${sectionClass} ${bgClass} relative${revealClass}`}
               >
-                <div className={section.type === 'team' || section.type === 'concept' || section.type === 'deliverables' || section.type === 'example_work' || section.type === 'full_image' ? 'w-full' : 'max-w-7xl mx-auto'}>
+                <div className={section.type === 'team' || section.type === 'concept' || section.type === 'deliverables' || section.type === 'example_work' || section.type === 'full_image' || section.type === 'cases' || section.type === 'moodboard' || section.type === 'quote' || section.type === 'contact' || section.type === 'timeline' || section.type === 'production_schedule' ? 'w-full' : 'max-w-7xl mx-auto'}>
                   {/* Concept Section */}
                   {section.type === 'concept' && (
                     <ConceptSection

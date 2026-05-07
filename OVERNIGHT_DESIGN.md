@@ -153,6 +153,53 @@
 
 ---
 
+## Runde 3 — Finpuss og gjenstående (2026-05-07)
+
+### 22. ProductionScheduleSection — manglende seksjonsheader og dobbel-padding
+**Problem:** Tabellene startet uten noen overordnet seksjonstittel — man skjønte ikke kontekst med en gang. Padding var `py-12 md:py-20` (for lav). "Legg til rad"-knapp brukte `rounded` og `text-dark opacity-50 border border-dark/30`.
+**Løsning:**
+- Lagt til stor Cormorant-header over de to tabellene: kursiv, clamp(2.5rem–4rem), label `PRODUKSJONSPLAN`
+- Padding økt til `py-16 md:py-24` (konsistent med resten)
+- "Legg til rad"-knapp: DM Sans uppercase, dashed `#38332A` border, ingen rounded
+- Fjernet ytre `max-w-7xl mx-auto` fra outer wrapper (ProductionScheduleSection håndterer dette selv) → unngår dobbel-containment
+
+### 23. TimelineSection — for flat, ingen narrativ ramme
+**Problem:** Kortene hang fritt uten noen overordnet dramaturgi. Ingen intro-tekst ga kontekst. Progress-indikator var bare tre enkle dots uten sammenheng.
+**Løsning:**
+- Lagt til Cormorant display-overskrift: *"Fra idé til ferdig produksjon"* — redigerbar, clamp(2.25rem–3.75rem), kursiv — vises over kortene og drifter sakte bort under scroll
+- Overskriften er contentEditable i editMode (`sectionHeading`-key)
+- Progress-indikator redesignet: en sammenkoblet linje (`#2A261F` track, `#C49434` fill) med prikk-markører og gull glow på aktiv. Fyller seg progressivt via `width: (activeIndex / (n-1)) * 100%`
+- Aktiv dato vises under progresslinjen med tynnere tracking
+
+### 24. PublicProjectClient — timeline i section-reveal, dobbel padding
+**Problem 1:** `timeline` ble ikke lagt til i `noReveal`-listen → seksjonen startet med `opacity: 0` fra `.section-reveal`, mens den sticky scroll-animasjonen aldri kaller `.is-visible` (siden IntersectionObserver ser `height: 280vh`-containeren, ikke det sticky innholdet). Timeline var usynlig.
+**Løsning:** Lagt til `section.type === 'timeline'` i `noReveal`.
+
+**Problem 2:** Seksjoner som `cases`, `moodboard`, `team`, `quote`, `contact`, `production_schedule` har alle sin egen interne `py-*` padding. Den ytre `<section>` wrapperen brukte `py-section` (6rem) i tillegg → dobbelt så mye vertical white space som ønsket.
+**Løsning:** Introdusert `selfPadded`-flagg. Slike seksjoner får `px-0` (uten py) fra ytre wrapper. Inner-div for disse seksjonene endret fra `max-w-7xl mx-auto` til `w-full`.
+
+### 25. Print/PDF-vennlighet — @media print lagt til
+**Problem:** Ingen print-spesifikke stiler. Siden kunder kan ønske å skrive ut tilbudet eller lagre det som PDF, bør innholdet være lesbart på hvit bakgrunn.
+**Løsning:** Lagt til `@media print` i `globals.css`:
+- Hvit bakgrunn, sort tekst
+- Film grain overlay skjult (`body::after { display: none }`)
+- Tabeller: `border-collapse`, tydelige `1px solid #ddd` rammer, hvite rader
+- `.section-reveal` reset til `opacity: 1, transform: none` (ikke usynlig på utskrift)
+- Sticky navigasjon og `<footer>` skjult
+- `page-break-inside: avoid` på kort og overskrifter
+- Knapper/interaktive elementer skjules
+
+### 26. Meta-tags / OG-tags for deling
+**Problem:** `app/p/[token]/page.tsx` hadde ingen `generateMetadata` → blank tittel og ingen preview ved deling på LinkedIn/e-post.
+**Løsning:** Lagt til `generateMetadata` server-funksjon:
+- Henter prosjektnavn og beskrivelse fra DB for token
+- `og:title`, `og:description`, `og:url`, `og:image` (`/og-default.jpg` fallback)
+- Twitter Card: `summary_large_image`
+- `robots: { index: false, follow: false }` — kundesider er private, skal ikke indekseres
+- Graceful fallback til `"Leafilms"` hvis token er ugyldig
+
+---
+
 ## Design-tokens bekreftet korrekt i bruk
 - Primær accent: `#C49434` (gull) — brukt konsistent for labels, linjer og CTAer
 - Bakgrunn-hierarki: `#0C0B09` → `#161410` → `#201D18` → `#2A261F` — respektert
@@ -177,6 +224,13 @@
 - `components/sections/ExampleWorkSection.tsx` — tomme slots palettfix
 - `app/p/[token]/PublicProjectClient.tsx` — footer, scroll-reveal IO
 - `app/globals.css` — `scroll-line-in` og `.section-reveal` keyframes/klasser
+
+### Runde 3
+- `components/sections/ProductionScheduleSection.tsx` — seksjonsheader, økt padding, palette-korrekte knapper
+- `components/sections/TimelineSection.tsx` — Cormorant display-heading, redesignet progress-indikator med linje
+- `app/p/[token]/PublicProjectClient.tsx` — timeline i noReveal, selfPadded-logikk for konsistent spacing
+- `app/p/[token]/page.tsx` — generateMetadata med OG-tags og Twitter Card
+- `app/globals.css` — @media print styles for PDF/utskrift
 
 ### Runde 2
 - `components/sections/HeroSection.tsx` — clamp-fix for mobil tittelstørrelse

@@ -170,26 +170,47 @@ export function TimelineSection({
   if (editMode) {
     return (
       <div ref={timelineSectionRef} className="w-full py-6 md:py-8">
-        <div className="px-8 md:px-16 mb-12 flex items-center gap-5">
-          <div style={{ width: 32, height: 1, background: '#C49434' }} />
-          <span
-            className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+        <div className="px-8 md:px-16 mb-12">
+          <div className="flex items-center gap-5 mb-5">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span
+              className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.78rem',
+                letterSpacing: '0.16em',
+                color: '#C49434',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              }}
+              contentEditable={editMode}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+              }}
+            >
+              {section.content.sectionLabel || getSectionTitle(section.type)}
+            </span>
+          </div>
+          <h2
+            className="edit-outline px-2 py-1 cursor-text"
             style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.78rem',
-              letterSpacing: '0.16em',
-              color: '#C49434',
-              textTransform: 'uppercase',
-              fontWeight: 500,
+              fontFamily: 'var(--font-cormorant)',
+              fontSize: 'clamp(2.25rem, 4vw, 3.75rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              color: '#E8E1D5',
+              lineHeight: 1.15,
+              maxWidth: '28ch',
             }}
-            contentEditable={editMode}
+            contentEditable
             suppressContentEditableWarning
             onBlur={(e) => {
-              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+              updateSectionContent(section.id, 'sectionHeading', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.sectionLabel || getSectionTitle(section.type)}
-          </span>
+            {section.content.sectionHeading || 'Fra idé til ferdig produksjon'}
+          </h2>
         </div>
         <div className="flex gap-4 px-8 md:px-16 overflow-x-auto pb-4">
           {[0, 1, 2, 3].map((i) => (
@@ -236,27 +257,48 @@ export function TimelineSection({
           willChange: 'transform',
         }}>
 
-        {/* Section label */}
-        <div className="px-6 md:px-16 mb-8 md:mb-10 flex items-center gap-5">
-          <div style={{ width: 32, height: 1, background: '#C49434' }} />
-          <span
+        {/* Section label + heading */}
+        <div className="px-6 md:px-16 mb-10 md:mb-14">
+          <div className="flex items-center gap-5 mb-5">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span
+              className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.78rem',
+                letterSpacing: '0.16em',
+                color: '#C49434',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              }}
+              contentEditable={editMode}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+              }}
+            >
+              {section.content.sectionLabel || getSectionTitle(section.type)}
+            </span>
+          </div>
+          <h2
             className={editMode ? 'edit-outline px-2 py-1 cursor-text' : ''}
             style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.78rem',
-              letterSpacing: '0.16em',
-              color: '#C49434',
-              textTransform: 'uppercase',
-              fontWeight: 500,
+              fontFamily: 'var(--font-cormorant)',
+              fontSize: 'clamp(2.25rem, 4vw, 3.75rem)',
+              fontWeight: 300,
+              fontStyle: 'italic',
+              color: '#E8E1D5',
+              lineHeight: 1.15,
+              maxWidth: '28ch',
             }}
             contentEditable={editMode}
             suppressContentEditableWarning
             onBlur={(e) => {
-              if (editMode) updateSectionContent(section.id, 'sectionLabel', e.currentTarget.textContent || '')
+              if (editMode) updateSectionContent(section.id, 'sectionHeading', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.sectionLabel || getSectionTitle(section.type)}
-          </span>
+            {section.content.sectionHeading || 'Fra idé til ferdig produksjon'}
+          </h2>
         </div>
 
         {/* Mobile: carousel */}
@@ -343,31 +385,61 @@ export function TimelineSection({
           </div>
         </div>
 
-        {/* Progress dots (desktop) */}
-        <div className="hidden lg:flex items-center justify-center gap-3 mt-10">
-          {timelineItems.map((_: unknown, i: number) => (
-            <div
-              key={i}
-              style={{
-                width: activeIndex === i ? 24 : 4,
-                height: 2,
-                background: activeIndex === i ? '#C49434' : '#2A261F',
-                borderRadius: 1,
-                transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-              }}
-            />
-          ))}
-        </div>
+        {/* Progress indicator (desktop) — line + dots */}
+        <div className="hidden lg:flex flex-col items-center mt-10 gap-4">
+          {/* Connected progress line */}
+          <div className="relative flex items-center gap-0" style={{ width: 200 }}>
+            {/* Track */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: 0,
+              right: 0,
+              height: 1,
+              background: '#2A261F',
+              transform: 'translateY(-50%)',
+            }} />
+            {/* Filled portion */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: 0,
+              width: `${(activeIndex / (timelineItems.length - 1)) * 100}%`,
+              height: 1,
+              background: '#C49434',
+              transform: 'translateY(-50%)',
+              transition: 'width 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+            }} />
+            {/* Dot markers */}
+            <div className="relative w-full flex justify-between">
+              {timelineItems.map((_: unknown, i: number) => (
+                <div
+                  key={i}
+                  style={{
+                    width: i === activeIndex ? 8 : 4,
+                    height: i === activeIndex ? 8 : 4,
+                    borderRadius: '50%',
+                    background: i <= activeIndex ? '#C49434' : '#2A261F',
+                    border: i === activeIndex ? '1px solid rgba(196,148,52,0.4)' : 'none',
+                    boxShadow: i === activeIndex ? '0 0 8px rgba(196,148,52,0.5)' : 'none',
+                    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    zIndex: 1,
+                    position: 'relative',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
 
-        {/* Active date label (desktop) */}
-        <div className="hidden lg:flex justify-center mt-4">
+          {/* Active date label */}
           <span style={{
             fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.78rem',
-            letterSpacing: '0.14em',
+            fontSize: '0.72rem',
+            letterSpacing: '0.18em',
             color: '#C49434',
             textTransform: 'uppercase',
             fontWeight: 500,
+            transition: 'opacity 0.3s',
           }}>
             {(timelineItems[activeIndex] as any)?.monthYear || ''}
           </span>

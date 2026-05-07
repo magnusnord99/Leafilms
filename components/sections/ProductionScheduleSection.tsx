@@ -448,9 +448,16 @@ function TableBlock({
         <div className="mt-4">
           <button
             onClick={onAddRow}
-            className="text-sm text-dark opacity-50 hover:opacity-100 border border-dark/30 hover:border-dark/60 rounded px-4 py-2 transition-opacity"
+            className="text-sm opacity-50 hover:opacity-100 transition-opacity px-4 py-2"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.12em',
+              color: '#9E9287',
+              border: '1px dashed #38332A',
+            }}
           >
-            + Legg til rad
+            + LEGG TIL RAD
           </button>
         </div>
       )}
@@ -510,8 +517,36 @@ export function ProductionScheduleSection({
   }
 
   return (
-    <section className="py-12 md:py-20 px-4 sm:px-8 md:px-16 bg-background">
+    <section className="py-16 md:py-24 px-4 sm:px-8 md:px-16 bg-background">
       <div className="max-w-7xl mx-auto">
+
+        {/* Section header */}
+        <div className="mb-16 md:mb-20">
+          <div className="flex items-center gap-4 mb-6">
+            <div style={{ width: 48, height: 1, background: '#C49434' }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.72rem',
+              letterSpacing: '0.22em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              PRODUKSJONSPLAN
+            </span>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(2.5rem, 4.5vw, 4rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.2,
+            maxWidth: '42ch',
+          }}>
+            Oversikt over produksjonsdager og innholdsleveranser
+          </h2>
+        </div>
 
         {/* Partner table — above main schedule */}
         <TableBlock

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase-server'
 import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
 import { PublicProjectClient } from './PublicProjectClient'
@@ -10,6 +11,72 @@ export const revalidate = 0
 
 type Props = {
   params: Promise<{ token: string }>
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { token } = await params
+
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    return { title: 'Leafilms' }
+  }
+
+  const supabase = createPublicClient()
+
+  const { data: share } = await supabase
+    .from('project_shares')
+    .select('project_id')
+    .eq('token', token.trim())
+    .single()
+
+  if (!share?.project_id) return { title: 'Leafilms' }
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('name, description, status')
+    .eq('id', share.project_id)
+    .single()
+
+  if (!project || project.status !== 'published') return { title: 'Leafilms' }
+
+  const title = project.name
+    ? `${project.name} — Leafilms`
+    : 'Prosjektbeskrivelse — Leafilms'
+
+  const description = project.description
+    || 'Cinematisk innholdsproduksjon av høy kvalitet. Se vår prosjektbeskrivelse og pristilbud.'
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
+  const pageUrl = `${siteUrl}/p/${token}`
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: pageUrl,
+      siteName: 'Leafilms',
+      type: 'website',
+      images: [
+        {
+          url: `${siteUrl}/og-default.jpg`,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [`${siteUrl}/og-default.jpg`],
+    },
+    robots: {
+      index: false,
+      follow: false,
+    },
+  }
 }
 
 export default async function PublicProjectView({ params }: Props) {

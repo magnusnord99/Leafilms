@@ -210,10 +210,11 @@ export async function POST(req: NextRequest) {
       contractPdfPath: contractPdfPath,
       message: 'Tilbud akseptert og kontrakt opprettet'
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error accepting quote:', error)
+    const message = error instanceof Error ? error.message : 'Kunne ikke akseptere tilbud'
     return NextResponse.json(
-      { error: error.message || 'Kunne ikke akseptere tilbud' },
+      { error: message },
       { status: 500 }
     )
   }

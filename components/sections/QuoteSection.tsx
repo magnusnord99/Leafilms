@@ -104,13 +104,18 @@ export function QuoteSection({
   )
 
   const handleAcceptQuote = async () => {
-    if (!quoteData || !project.id) return
+    if (!quoteData || !quoteId || !shareToken || !project.id) return
     setAcceptingQuote(true)
     try {
       const response = await fetch('/api/accept-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: project.id, quoteData, acceptedBy: project.client_name || 'Kunde' }),
+        body: JSON.stringify({
+          projectId: project.id,
+          quoteId,
+          shareToken,
+          acceptedBy: project.client_name || 'Kunde',
+        }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -323,7 +328,7 @@ export function QuoteSection({
             {quoteAccepted ? (
               <Text variant="body" className="text-green-600 font-semibold">Tilbud akseptert!</Text>
             ) : (
-              <Button onClick={handleAcceptQuote} disabled={acceptingQuote} variant="primary">
+              <Button onClick={handleAcceptQuote} disabled={acceptingQuote || !quoteId || !shareToken} variant="primary">
                 {acceptingQuote ? 'Behandler...' : 'Aksepter tilbud'}
               </Button>
             )}

@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
-import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -106,11 +105,10 @@ export default function ProjectQuotePage({ params }: Props) {
     }
   }
 
-  async function handleSave(data: QuoteBuilderData) {
+  async function handleSave(data: QuoteBuilderData): Promise<string | null> {
     setSaving(true)
     setSaveMessage(null)
     try {
-      const converted = convertBuilderDataToQuoteData(data)
       const record = {
         project_id: projectId,
         sheet_url: '',
@@ -119,20 +117,27 @@ export default function ProjectQuotePage({ params }: Props) {
         quote_data: data, // Store raw builder data for future editing
       }
 
+      let savedQuoteId: string | null = null
       if (existingQuoteId) {
         await supabase.from('quotes').update({ ...record, quote_data: data }).eq('id', existingQuoteId)
+        savedQuoteId = existingQuoteId
       } else {
         const { data: newQuote } = await supabase.from('quotes').insert(record).select('id').single()
-        if (newQuote) setExistingQuoteId(newQuote.id)
+        if (newQuote) {
+          setExistingQuoteId(newQuote.id)
+          savedQuoteId = newQuote.id
+        }
       }
 
       // Keep a converted copy in quote_data so the public QuoteSection can display it
       // (overwrite with merged object: raw builder data IS quote_data, used for both edit and display)
       setSaveMessage('Lagret!')
       setTimeout(() => setSaveMessage(null), 3000)
+      return savedQuoteId
     } catch (err) {
       console.error('Save error:', err)
       setSaveMessage('Feil ved lagring')
+      return null
     } finally {
       setSaving(false)
     }
@@ -141,8 +146,7 @@ export default function ProjectQuotePage({ params }: Props) {
   async function handleGeneratePDF(data: QuoteBuilderData) {
     setGeneratingPDF(true)
     try {
-      await handleSave(data)
-      const converted = convertBuilderDataToQuoteData(data)
+      const savedQuoteId = await handleSave(data)
 
       const response = await fetch('/api/generate-quote-pdf', {
         method: 'POST',
@@ -162,8 +166,8 @@ export default function ProjectQuotePage({ params }: Props) {
       }
 
       const storagePath = response.headers.get('X-Storage-Path')
-      if (storagePath && existingQuoteId) {
-        await supabase.from('quotes').update({ pdf_path: storagePath }).eq('id', existingQuoteId)
+      if (storagePath && savedQuoteId) {
+        await supabase.from('quotes').update({ pdf_path: storagePath }).eq('id', savedQuoteId)
       }
 
       const blob = await response.blob()

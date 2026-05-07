@@ -79,14 +79,13 @@ export function ImagePickerModal({
     fetchImages()
   }, [selectedCategory, searchQuery])
 
+  const requiresSingleSelection = maxSelection === 1
+  const confirmDisabled = requiresSingleSelection && selectedIds.length === 0
+
   function toggleSelection(imageId: string) {
     // Hvis maxSelection er 1, erstatt alltid det gamle bildet med det nye
     if (maxSelection === 1) {
-      setSelectedIds(prev => 
-        prev.includes(imageId) 
-          ? [] // Deselect hvis man klikker på samme bilde
-          : [imageId] // Erstatt med nytt bilde
-      )
+      setSelectedIds([imageId])
       return
     }
 
@@ -104,6 +103,7 @@ export function ImagePickerModal({
   }
 
   function handleConfirm() {
+    if (confirmDisabled) return
     onSelect(selectedIds)
     onClose()
   }
@@ -229,6 +229,7 @@ export function ImagePickerModal({
             onClick={handleConfirm}
             variant="primary"
             className="flex-1"
+            disabled={confirmDisabled}
           >
             Bekreft ({selectedIds.length} valgt)
           </Button>

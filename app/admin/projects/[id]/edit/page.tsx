@@ -253,6 +253,10 @@ export default function EditProject({ params }: Props) {
 
   const handleImageSelectForModal = async (imageIds: string[]) => {
     if (collageImagePosition && imagePickerSectionId) {
+      if (!imageIds[0]) {
+        setCollageImagePosition(null)
+        return
+      }
       const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
       const currentIds = (sectionImages[imagePickerSectionId] || []).map(img => img.id)
       while (currentIds.length <= posIndex) currentIds.push(currentIds[currentIds.length - 1] || imageIds[0])

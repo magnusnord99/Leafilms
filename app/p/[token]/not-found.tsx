@@ -63,6 +63,7 @@ export default function NotFound() {
         {/* CTA link */}
         <Link
           href="/"
+          className="hover:text-[#C49434] hover:border-[#C49434]"
           style={{
             fontFamily: 'var(--font-dm-sans), system-ui, sans-serif',
             fontSize: '0.72rem',
@@ -73,14 +74,6 @@ export default function NotFound() {
             borderBottom: '1px solid #38332A',
             paddingBottom: '2px',
             transition: 'color 0.2s, border-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.color = '#C49434'
-            ;(e.target as HTMLElement).style.borderColor = '#C49434'
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.color = '#9E9287'
-            ;(e.target as HTMLElement).style.borderColor = '#38332A'
           }}
         >
           Tilbake til forsiden

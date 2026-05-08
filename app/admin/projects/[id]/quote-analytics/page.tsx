@@ -78,16 +78,7 @@ export default function ProjectQuoteAnalyticsPage({ params }: Props) {
       if (error) {
         console.error('Error fetching project analytics:', error)
       } else if (data) {
-        console.log('[Analytics Page] Fetched analytics data:', {
-          total_sessions: data.total_sessions,
-          avg_time_seconds: data.avg_time_seconds,
-          total_time_seconds: data.total_time_seconds,
-          section_stats_count: Object.keys(data.section_stats || {}).length,
-          section_stats: data.section_stats
-        })
         setAnalytics(data as ProjectAnalyticsSummary)
-      } else {
-        console.log('[Analytics Page] No analytics data found for project:', id)
       }
     } catch (error) {
       console.error('Error fetching data:', error)

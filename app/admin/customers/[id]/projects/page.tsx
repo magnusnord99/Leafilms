@@ -50,30 +50,45 @@ export default function CustomerProjectsPage() {
       return
     }
 
-    // Hent tilbud og kontrakter for hvert prosjekt
-    const projectsWithDetails = await Promise.all(
-      (projectsData || []).map(async (project) => {
-        // Hent tilbud
-        const { data: quotesData } = await supabase
-          .from('quotes')
-          .select('*')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false })
+    const projectIds = (projectsData || []).map((p) => p.id)
 
-        // Hent kontrakter
-        const { data: contractsData } = await supabase
-          .from('contracts')
-          .select('*')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false })
+    // Batch-hent tilbud og kontrakter for alle prosjekter i to parallelle kall
+    const [quotesResult, contractsResult] = await Promise.all([
+      projectIds.length > 0
+        ? supabase
+            .from('quotes')
+            .select('id, project_id, version, status, pdf_path, accepted_at, accepted_by, quote_data, created_at, updated_at')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null },
+      projectIds.length > 0
+        ? supabase
+            .from('contracts')
+            .select('id, project_id, status, signed_at, created_at, updated_at')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null },
+    ])
 
-        return {
-          ...project,
-          quotes: (quotesData || []) as Quote[],
-          contracts: (contractsData || []) as Contract[]
-        }
-      })
-    )
+    const quotesByProject = new Map<string, Quote[]>()
+    ;(quotesResult.data || []).forEach((q) => {
+      const list = quotesByProject.get(q.project_id) ?? []
+      list.push(q as Quote)
+      quotesByProject.set(q.project_id, list)
+    })
+
+    const contractsByProject = new Map<string, Contract[]>()
+    ;(contractsResult.data || []).forEach((c) => {
+      const list = contractsByProject.get(c.project_id) ?? []
+      list.push(c as Contract)
+      contractsByProject.set(c.project_id, list)
+    })
+
+    const projectsWithDetails = (projectsData || []).map((project) => ({
+      ...project,
+      quotes: quotesByProject.get(project.id) ?? [],
+      contracts: contractsByProject.get(project.id) ?? [],
+    }))
 
     setProjects(projectsWithDetails)
     setLoading(false)

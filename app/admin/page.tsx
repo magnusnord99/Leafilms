@@ -1,14 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
 import { Button, Badge } from '@/components/ui'
 import { Project, Customer } from '@/lib/types'
 
 export default function AdminDashboard() {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [recentProjects, setRecentProjects] = useState<Project[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -21,44 +19,35 @@ export default function AdminDashboard() {
     fetchData()
   }, [])
 
-  useEffect(() => {
-    if (customers.length > 0) {
-      fetchProjectCounts()
-    }
-  }, [customers])
-
   async function fetchData() {
     try {
-      // Hent total antall prosjekter for statistikk
-      const { count: projectTotal } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-      const { count: projectPublished } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'published')
-      setTotalProjects(projectTotal ?? 0)
-      setPublishedCount(projectPublished ?? 0)
+      // Fire parallelle kall: teller, 3 siste prosjekter, alle kunder
+      const [totalResult, publishedResult, projectsResult, customersResult] = await Promise.all([
+        supabase.from('projects').select('*', { count: 'exact', head: true }),
+        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'published'),
+        supabase
+          .from('projects')
+          .select('id, title, status, client_name, updated_at, parent_project_id, version_number')
+          .order('updated_at', { ascending: false })
+          .limit(3),
+        supabase
+          .from('customers')
+          .select('id, name, company, email, phone, customer_number')
+          .order('name', { ascending: true }),
+      ])
 
-      // Hent 3 siste prosjekter (sortert på updated_at)
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(3)
+      setTotalProjects(totalResult.count ?? 0)
+      setPublishedCount(publishedResult.count ?? 0)
 
+      const { data: projectsData, error: projectsError } = projectsResult
       if (projectsError) {
         console.error('Error fetching projects:', projectsError)
-        console.error('Projects error details:', JSON.stringify(projectsError, null, 2))
       } else {
         const projects = (projectsData || []) as Project[]
         setRecentProjects(projects)
 
         // Hent share tokens for publiserte prosjekter
-        const publishedProjectIds = (projectsData || [])
-          .filter(p => p.status === 'published')
-          .map(p => p.id)
-
+        const publishedProjectIds = projects.filter(p => p.status === 'published').map(p => p.id)
         if (publishedProjectIds.length > 0) {
           const { data: sharesData } = await supabase
             .from('project_shares')
@@ -75,45 +64,33 @@ export default function AdminDashboard() {
         }
       }
 
-      // Hent alle kunder
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name', { ascending: true })
-
+      const { data: customersData, error: customersError } = customersResult
       if (customersError) {
         console.error('Error fetching customers:', customersError)
-        console.error('Customers error details:', JSON.stringify(customersError, null, 2))
       } else {
-        setCustomers((customersData || []) as Customer[])
+        const customerList = (customersData || []) as Customer[]
+        setCustomers(customerList)
+
+        // Hent prosjekttelling per kunde
+        const customerIds = customerList.map(c => c.id)
+        if (customerIds.length > 0) {
+          const { data: countsData } = await supabase
+            .from('projects')
+            .select('customer_id')
+            .in('customer_id', customerIds)
+          if (countsData) {
+            const counts: Record<string, number> = {}
+            countsData.forEach((p) => {
+              if (p.customer_id) counts[p.customer_id] = (counts[p.customer_id] || 0) + 1
+            })
+            setProjectCounts(counts)
+          }
+        }
       }
     } catch (error) {
       console.error('Unexpected error in fetchData:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function fetchProjectCounts() {
-    const customerIds = customers.map(c => c.id)
-    if (customerIds.length === 0) {
-      setLoading(false)
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('projects')
-      .select('customer_id')
-      .in('customer_id', customerIds)
-
-    if (!error && data) {
-      const counts: Record<string, number> = {}
-      data.forEach((project: any) => {
-        if (project.customer_id) {
-          counts[project.customer_id] = (counts[project.customer_id] || 0) + 1
-        }
-      })
-      setProjectCounts(counts)
     }
   }
 

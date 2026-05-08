@@ -39,6 +39,9 @@ export function DeliverablesSection({
   onEditPositionClick,
   onImagePickerOpen
 }: DeliverablesSectionProps) {
+  const defaultDescription = language === 'en'
+    ? 'We deliver a broad range of content tailored to different platforms.'
+    : 'Vi leverer et bredt spekter av innhold tilpasset ulike plattformer.'
   const sectionImage = sectionImageData[section.id]?.[0]
   const currentPos = imagePosition[section.id] || {
     x: sectionImage?.background_position_x ?? 50,
@@ -151,7 +154,7 @@ export function DeliverablesSection({
               whiteSpace: 'pre-wrap',
             }}
           >
-            {section.content.text || 'Vi leverer et bredt spekter av innhold tilpasset ulike plattformer.'}
+            {section.content.text || defaultDescription}
           </p>
 
           {/* Deliverables grid */}

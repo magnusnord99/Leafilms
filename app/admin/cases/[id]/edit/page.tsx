@@ -1,10 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
 import { CaseStudy } from '@/lib/types'
+
+const fieldLabel = (text: string, required?: boolean) => (
+  <label style={{
+    display: 'block',
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase' as const,
+    color: '#9E9287',
+    fontWeight: 500,
+    marginBottom: 6,
+  }}>
+    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+  </label>
+)
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: '#161410',
+  border: '1px solid #2A261F',
+  borderRadius: 3,
+  color: '#E8E1D5',
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.75rem',
+  letterSpacing: '0.03em',
+  outline: 'none',
+}
 
 type Props = {
   params: Promise<{ id: string }>
@@ -16,17 +44,20 @@ export default function EditCase({ params }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     vimeo_url: '',
     tags: ''
   })
+  const initialDataRef = useRef<typeof formData | null>(null)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
   const [existingThumbnail, setExistingThumbnail] = useState<string | null>(null)
 
-  // Resolve params Promise
   useEffect(() => {
     params.then((resolvedParams) => {
       setId(resolvedParams.id)
@@ -39,9 +70,15 @@ export default function EditCase({ params }: Props) {
     }
   }, [id])
 
+  useEffect(() => {
+    if (!initialDataRef.current) return
+    const changed = JSON.stringify(formData) !== JSON.stringify(initialDataRef.current) || !!thumbnailFile
+    setIsDirty(changed)
+  }, [formData, thumbnailFile])
+
   async function fetchCase() {
     if (!id) return
-    
+
     try {
       const { data, error } = await supabase
         .from('case_studies')
@@ -53,20 +90,21 @@ export default function EditCase({ params }: Props) {
 
       if (data) {
         const caseStudy = data as CaseStudy
-        setFormData({
+        const loaded = {
           title: caseStudy.title,
           description: caseStudy.description,
           vimeo_url: caseStudy.vimeo_url,
           tags: caseStudy.tags?.join(', ') || ''
-        })
+        }
+        setFormData(loaded)
+        initialDataRef.current = loaded
         if (caseStudy.thumbnail_path) {
           setExistingThumbnail(caseStudy.thumbnail_path)
         }
       }
-    } catch (error) {
-      console.error('Error fetching case:', error)
-      alert('❌ Kunne ikke hente case')
-      router.push('/admin/cases')
+    } catch (err: any) {
+      console.error('Error fetching case:', err)
+      setError('Kunne ikke hente case: ' + (err.message || 'Ukjent feil'))
     } finally {
       setLoading(false)
     }
@@ -77,20 +115,21 @@ export default function EditCase({ params }: Props) {
     if (file) {
       setThumbnailFile(file)
       setThumbnailPreview(URL.createObjectURL(file))
-      setExistingThumbnail(null) // Clear existing thumbnail when new one is selected
+      setExistingThumbnail(null)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id) return
-    
+
     setSaving(true)
+    setError(null)
+    setSaveSuccess(false)
 
     try {
       let thumbnailPath = existingThumbnail
 
-      // Last opp ny thumbnail hvis valgt
       if (thumbnailFile) {
         setUploading(true)
         const fileExt = thumbnailFile.name.split('.').pop()
@@ -103,7 +142,6 @@ export default function EditCase({ params }: Props) {
 
         if (uploadError) throw uploadError
 
-        // Hent public URL
         const { data: { publicUrl } } = supabase.storage
           .from('assets')
           .getPublicUrl(filePath)
@@ -112,16 +150,13 @@ export default function EditCase({ params }: Props) {
         setUploading(false)
       }
 
-      // Ekstraherer Vimeo ID fra URL
       const vimeoId = extractVimeoId(formData.vimeo_url)
 
-      // Parse tags (komma-separert)
       const tagsArray = formData.tags
         .split(',')
         .map(t => t.trim())
         .filter(t => t.length > 0)
 
-      // Oppdater case study
       const { error } = await supabase
         .from('case_studies')
         .update({
@@ -137,12 +172,14 @@ export default function EditCase({ params }: Props) {
 
       if (error) throw error
 
-      // Case oppdatert
-      router.push('/admin/cases')
-      router.refresh()
-    } catch (error) {
-      console.error('Error updating case:', error)
-      alert('❌ Kunne ikke oppdatere case')
+      initialDataRef.current = { ...formData }
+      setThumbnailFile(null)
+      setIsDirty(false)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      console.error('Error updating case:', err)
+      setError('Kunne ikke oppdatere case: ' + (err.message || 'Ukjent feil'))
     } finally {
       setSaving(false)
       setUploading(false)
@@ -156,132 +193,257 @@ export default function EditCase({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          Laster...
+        </p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/admin/cases')}
-            className="mb-4 -ml-2"
+        <div className="mb-10">
+          <Link
+            href="/admin/cases"
+            className="flex items-center gap-2 mb-8 transition-colors"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#62594E',
+              textDecoration: 'none',
+            }}
           >
-            ← Tilbake
-          </Button>
-          <Heading as="h1" size="lg" className="mb-2">Rediger Case</Heading>
-          <Text variant="muted">Oppdater case study</Text>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+            Tilbake
+          </Link>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              Cases
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.1,
+          }}>
+            Rediger case
+          </h1>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+            Oppdater case study
+          </p>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div
+            className="flex items-start justify-between gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(184,64,64,0.1)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E07070', lineHeight: 1.5 }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              style={{ color: '#E07070', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Success banner */}
+        {saveSuccess && (
+          <div
+            className="flex items-center gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(196,148,52,0.08)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.06em' }}>
+              Endringer lagret
+            </p>
+          </div>
+        )}
+
+        {/* Unsaved changes indicator */}
+        {isDirty && !saveSuccess && (
+          <div
+            className="flex items-center gap-3 mb-6 px-4 py-2"
+            style={{ background: 'rgba(98,89,78,0.15)', border: '1px solid #38332A', borderRadius: 3 }}
+          >
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C49434', flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Ulagrede endringer
+            </p>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Title */}
-          <Input
-            label="Tittel *"
-            type="text"
-            required
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="NETFLIX"
-          />
-
-          {/* Description */}
-          <Textarea
-            label="Beskrivelse *"
-            required
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Netflix skulle lansere kommende nyheter..."
-            rows={4}
-          />
-
-          {/* Vimeo URL */}
-          <Input
-            label="Vimeo URL *"
-            type="url"
-            required
-            value={formData.vimeo_url}
-            onChange={(e) => setFormData({ ...formData, vimeo_url: e.target.value })}
-            placeholder="https://vimeo.com/123456"
-          />
-
-          {/* Thumbnail Upload */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-300">
+            {fieldLabel('Tittel', true)}
+            <input
+              type="text"
+              required
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="NETFLIX"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Beskrivelse', true)}
+            <textarea
+              required
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Netflix skulle lansere kommende nyheter..."
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Vimeo URL', true)}
+            <input
+              type="url"
+              required
+              value={formData.vimeo_url}
+              onChange={(e) => setFormData({ ...formData, vimeo_url: e.target.value })}
+              placeholder="https://vimeo.com/123456"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Thumbnail */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#9E9287',
+              fontWeight: 500,
+              marginBottom: 6,
+            }}>
               Thumbnail-bilde
             </label>
             {existingThumbnail && !thumbnailPreview && (
               <div className="mb-4">
                 <img
                   src={existingThumbnail}
-                  alt="Current thumbnail"
-                  className="w-full aspect-video object-cover rounded-lg"
+                  alt="Nåværende thumbnail"
+                  className="w-full aspect-video object-cover"
+                  style={{ borderRadius: 3, border: '1px solid #2A261F' }}
                 />
-                <Text variant="small" className="mt-2 text-gray-400">
-                  Nåværende thumbnail
-                </Text>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>Nåværende thumbnail</p>
               </div>
             )}
             <input
               type="file"
               accept="image/*"
               onChange={handleThumbnailChange}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-zinc-700 file:text-white hover:file:bg-zinc-600"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: '#161410',
+                border: '1px solid #2A261F',
+                borderRadius: 3,
+                color: '#9E9287',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+              }}
             />
             {thumbnailPreview && (
               <div className="mt-4">
                 <img
                   src={thumbnailPreview}
-                  alt="Preview"
-                  className="w-full aspect-video object-cover rounded-lg"
+                  alt="Ny thumbnail"
+                  className="w-full aspect-video object-cover"
+                  style={{ borderRadius: 3, border: '1px solid #2A261F' }}
                 />
-                <Text variant="small" className="mt-2 text-gray-400">
-                  Ny thumbnail (vil erstatte eksisterende)
-                </Text>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>Ny thumbnail (erstatter eksisterende)</p>
               </div>
             )}
           </div>
 
-          {/* Tags */}
           <div>
-            <Input
-              label="Tags (komma-separert)"
+            {fieldLabel('Tags (komma-separert)')}
+            <input
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="commercial, event, sport"
+              style={inputStyle}
             />
-            <Text variant="muted" className="mt-2">
-              Bruk tags for enklere søk og filtrering senere
-            </Text>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+              Bruk tags for enklere søk og filtrering
+            </p>
           </div>
 
-          {/* Submit */}
-          <div className="flex gap-4">
-            <Button
+          <div className="flex gap-3 pt-4">
+            <button
               type="submit"
               disabled={saving || uploading}
-              variant="primary"
-              className="flex-1"
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: (saving || uploading) ? '#38332A' : '#C49434',
+                color: (saving || uploading) ? '#62594E' : '#0C0B09',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: (saving || uploading) ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s',
+              }}
             >
               {uploading ? 'Laster opp bilde...' : saving ? 'Lagrer...' : 'Lagre endringer'}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => router.push('/admin/cases')}
-              variant="secondary"
-            >
-              Avbryt
-            </Button>
+            </button>
+            <Link href="/admin/cases">
+              <button
+                type="button"
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: '#62594E',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  border: '1px solid #2A261F',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                }}
+              >
+                Avbryt
+              </button>
+            </Link>
           </div>
         </form>
       </div>
     </div>
   )
 }
-

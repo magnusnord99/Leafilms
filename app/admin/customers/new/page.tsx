@@ -4,11 +4,39 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Card, Heading, Text, Input, Textarea } from '@/components/ui'
+
+const fieldLabel = (text: string, required?: boolean) => (
+  <label style={{
+    display: 'block',
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase' as const,
+    color: '#9E9287',
+    fontWeight: 500,
+    marginBottom: 6,
+  }}>
+    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+  </label>
+)
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: '#161410',
+  border: '1px solid #2A261F',
+  borderRadius: 3,
+  color: '#E8E1D5',
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.75rem',
+  letterSpacing: '0.03em',
+  outline: 'none',
+}
 
 export default function NewCustomer() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,6 +49,7 @@ export default function NewCustomer() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
       const { data, error } = await supabase
@@ -32,103 +61,194 @@ export default function NewCustomer() {
       if (error) throw error
 
       router.push(`/admin/customers/${data.id}/projects`)
-    } catch (error: any) {
-      console.error('Error creating customer:', error)
-      alert('❌ Kunne ikke opprette kunde: ' + (error.message || 'Ukjent feil'))
+    } catch (err: any) {
+      console.error('Error creating customer:', err)
+      setError('Kunne ikke opprette kunde: ' + (err.message || 'Ukjent feil'))
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-2xl mx-auto">
-        <div className="mb-8">
-          <Link href="/admin/customers">
-            <Button variant="secondary" size="sm">← Tilbake</Button>
+        {/* Header */}
+        <div className="mb-10">
+          <Link
+            href="/admin/customers"
+            className="flex items-center gap-2 mb-8 transition-colors"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#62594E',
+              textDecoration: 'none',
+            }}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+            Tilbake
           </Link>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              Kunder
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.1,
+          }}>
+            Ny kunde
+          </h1>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+            Legg til en ny kunde i systemet
+          </p>
         </div>
 
-        <Card className="p-8">
-          <Heading as="h1" size="lg" className="mb-6">Ny Kunde</Heading>
+        {/* Error banner */}
+        {error && (
+          <div
+            className="flex items-start justify-between gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(184,64,64,0.1)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E07070', lineHeight: 1.5 }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              style={{ color: '#E07070', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-2">Navn *</label>
-              <Input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                placeholder="Kundens navn"
-              />
-            </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            {fieldLabel('Navn', true)}
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              placeholder="Kundens navn"
+              style={inputStyle}
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">E-post</label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="kunde@example.com"
-              />
-            </div>
+          <div>
+            {fieldLabel('E-post')}
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="kunde@example.com"
+              style={inputStyle}
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Firma</label>
-              <Input
-                type="text"
-                value={formData.company}
-                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                placeholder="Firmanavn"
-              />
-            </div>
+          <div>
+            {fieldLabel('Firma')}
+            <input
+              type="text"
+              value={formData.company}
+              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              placeholder="Firmanavn"
+              style={inputStyle}
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Telefon</label>
-              <Input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+47 123 45 678"
-              />
-            </div>
+          <div>
+            {fieldLabel('Telefon')}
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="+47 123 45 678"
+              style={inputStyle}
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Adresse</label>
-              <Textarea
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Gateadresse, postnummer, by"
-                rows={3}
-              />
-            </div>
+          <div>
+            {fieldLabel('Adresse')}
+            <textarea
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Gateadresse, postnummer, by"
+              rows={3}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Notater</label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Interne notater om kunden..."
-                rows={4}
-              />
-            </div>
+          <div>
+            {fieldLabel('Notater')}
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Interne notater om kunden..."
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={loading || !formData.name}
+          <div className="flex gap-3 pt-4">
+            <button
+              type="submit"
+              disabled={loading || !formData.name}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: loading || !formData.name ? '#38332A' : '#C49434',
+                color: loading || !formData.name ? '#62594E' : '#0C0B09',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: loading || !formData.name ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s',
+              }}
+            >
+              {loading ? 'Oppretter...' : 'Opprett kunde'}
+            </button>
+            <Link href="/admin/customers">
+              <button
+                type="button"
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: '#62594E',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  border: '1px solid #2A261F',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                }}
               >
-                {loading ? 'Oppretter...' : 'Opprett Kunde'}
-              </Button>
-              <Link href="/admin/customers">
-                <Button type="button" variant="secondary">Avbryt</Button>
-              </Link>
-            </div>
-          </form>
-        </Card>
+                Avbryt
+              </button>
+            </Link>
+          </div>
+        </form>
       </div>
     </div>
   )
 }
-

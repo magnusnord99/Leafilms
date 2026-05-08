@@ -45,7 +45,7 @@ export default function ImagesPage() {
     try {
       let query = supabase
         .from('images')
-        .select('*')
+        .select('id, filename, file_path, title, category, subcategory, tags')
         .order('created_at', { ascending: false })
 
       if (selectedCategory !== 'all') {

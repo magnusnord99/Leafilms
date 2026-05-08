@@ -1,10 +1,38 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
 import { TeamMember } from '@/lib/types'
+
+const fieldLabel = (text: string, required?: boolean) => (
+  <label style={{
+    display: 'block',
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase' as const,
+    color: '#9E9287',
+    fontWeight: 500,
+    marginBottom: 6,
+  }}>
+    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+  </label>
+)
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: '#161410',
+  border: '1px solid #2A261F',
+  borderRadius: 3,
+  color: '#E8E1D5',
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.75rem',
+  letterSpacing: '0.03em',
+  outline: 'none',
+}
 
 type Props = {
   params: Promise<{ id: string }>
@@ -16,6 +44,9 @@ export default function EditTeamMember({ params }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     role: '',
@@ -25,6 +56,7 @@ export default function EditTeamMember({ params }: Props) {
     tags: '',
     daily_rate: ''
   })
+  const initialDataRef = useRef<typeof formData | null>(null)
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null)
   const [existingProfileImage, setExistingProfileImage] = useState<string | null>(null)
@@ -35,9 +67,15 @@ export default function EditTeamMember({ params }: Props) {
     }
   }, [id])
 
+  useEffect(() => {
+    if (!initialDataRef.current) return
+    const changed = JSON.stringify(formData) !== JSON.stringify(initialDataRef.current) || !!profileImageFile
+    setIsDirty(changed)
+  }, [formData, profileImageFile])
+
   async function fetchTeamMember() {
     if (!id) return
-    
+
     try {
       const { data, error } = await supabase
         .from('team_members')
@@ -49,7 +87,7 @@ export default function EditTeamMember({ params }: Props) {
 
       if (data) {
         const teamMember = data as TeamMember
-        setFormData({
+        const loaded = {
           name: teamMember.name || '',
           role: teamMember.role || '',
           bio: teamMember.bio || '',
@@ -57,9 +95,10 @@ export default function EditTeamMember({ params }: Props) {
           phone: teamMember.phone || '',
           tags: teamMember.tags?.join(', ') || '',
           daily_rate: teamMember.daily_rate != null ? String(teamMember.daily_rate) : ''
-        })
+        }
+        setFormData(loaded)
+        initialDataRef.current = loaded
 
-        // Sett eksisterende profilbilde hvis det finnes
         if (teamMember.profile_image_path) {
           const imageUrl = supabase.storage
             .from('assets')
@@ -67,10 +106,9 @@ export default function EditTeamMember({ params }: Props) {
           setExistingProfileImage(imageUrl)
         }
       }
-    } catch (error) {
-      console.error('Error fetching team member:', error)
-      alert('❌ Kunne ikke laste team-medlem')
-      router.push('/admin/team')
+    } catch (err: any) {
+      console.error('Error fetching team member:', err)
+      setError('Kunne ikke laste team-medlem: ' + (err.message || 'Ukjent feil'))
     } finally {
       setLoading(false)
     }
@@ -87,11 +125,12 @@ export default function EditTeamMember({ params }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
+    setError(null)
+    setSaveSuccess(false)
 
     try {
       let profileImagePath = null
 
-      // Hvis nytt bilde er valgt, last det opp
       if (profileImageFile) {
         setUploading(true)
         const fileExt = profileImageFile.name.split('.').pop()
@@ -108,13 +147,11 @@ export default function EditTeamMember({ params }: Props) {
         setUploading(false)
       }
 
-      // Parse tags (komma-separert)
       const tagsArray = formData.tags
         .split(',')
         .map(t => t.trim())
         .filter(t => t.length > 0)
 
-      // Oppdater team-medlem
       const updateData: any = {
         name: formData.name,
         role: formData.role,
@@ -125,7 +162,6 @@ export default function EditTeamMember({ params }: Props) {
         daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null
       }
 
-      // Legg til profilbilde-path hvis nytt bilde er lastet opp
       if (profileImagePath) {
         updateData.profile_image_path = profileImagePath
       }
@@ -137,12 +173,14 @@ export default function EditTeamMember({ params }: Props) {
 
       if (error) throw error
 
-      // Team-medlem oppdatert
-      router.push('/admin/team')
-      router.refresh()
-    } catch (error) {
-      console.error('Error updating team member:', error)
-      alert('❌ Kunne ikke oppdatere team-medlem')
+      initialDataRef.current = { ...formData }
+      setProfileImageFile(null)
+      setIsDirty(false)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      console.error('Error updating team member:', err)
+      setError('Kunne ikke oppdatere team-medlem: ' + (err.message || 'Ukjent feil'))
     } finally {
       setSaving(false)
       setUploading(false)
@@ -151,89 +189,188 @@ export default function EditTeamMember({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          Laster...
+        </p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/admin/team')}
-            className="mb-4 -ml-2"
+        <div className="mb-10">
+          <Link
+            href="/admin/team"
+            className="flex items-center gap-2 mb-8 transition-colors"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#62594E',
+              textDecoration: 'none',
+            }}
           >
-            ← Tilbake
-          </Button>
-          <Heading as="h1" size="lg" className="mb-2">Rediger Team-medlem</Heading>
-          <Text variant="muted">Oppdater informasjon om team-medlemmet</Text>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+            Tilbake
+          </Link>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              Team
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.1,
+          }}>
+            Rediger team-medlem
+          </h1>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+            Oppdater informasjon om team-medlemmet
+          </p>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div
+            className="flex items-start justify-between gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(184,64,64,0.1)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E07070', lineHeight: 1.5 }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              style={{ color: '#E07070', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Success banner */}
+        {saveSuccess && (
+          <div
+            className="flex items-center gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(196,148,52,0.08)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.06em' }}>
+              Endringer lagret
+            </p>
+          </div>
+        )}
+
+        {/* Unsaved changes indicator */}
+        {isDirty && !saveSuccess && (
+          <div
+            className="flex items-center gap-3 mb-6 px-4 py-2"
+            style={{ background: 'rgba(98,89,78,0.15)', border: '1px solid #38332A', borderRadius: 3 }}
+          >
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C49434', flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Ulagrede endringer
+            </p>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Name */}
-          <Input
-            label="Navn *"
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Ola Nordmann"
-          />
-
-          {/* Role */}
-          <Input
-            label="Rolle *"
-            type="text"
-            required
-            value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-            placeholder="Director, Producer, Photographer..."
-          />
-
-          {/* Bio */}
-          <Textarea
-            label="Bio"
-            value={formData.bio}
-            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-            placeholder="Beskrivelse av personen og deres bakgrunn..."
-            rows={4}
-          />
-
-          {/* Email */}
-          <Input
-            label="E-post"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            placeholder="ola@leafilms.no"
-          />
-
-          {/* Phone */}
-          <Input
-            label="Telefon"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="+47 123 45 678"
-          />
-
-          {/* Profile Image Upload */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-300">
+            {fieldLabel('Navn', true)}
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Ola Nordmann"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Rolle', true)}
+            <input
+              type="text"
+              required
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              placeholder="Director, Producer, Photographer..."
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Bio')}
+            <textarea
+              value={formData.bio}
+              onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+              placeholder="Beskrivelse av personen og deres bakgrunn..."
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('E-post')}
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="ola@leafilms.no"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Telefon')}
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="+47 123 45 678"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Profile Image */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#9E9287',
+              fontWeight: 500,
+              marginBottom: 6,
+            }}>
               Profilbilde
             </label>
             {existingProfileImage && !profileImagePreview && (
               <div className="mb-4">
-                <Text variant="small" className="mb-2 block">Nåværende bilde:</Text>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginBottom: 8 }}>Nåværende bilde:</p>
                 <img
                   src={existingProfileImage}
-                  alt="Current profile"
-                  className="w-32 h-32 rounded-full object-cover"
+                  alt="Nåværende profilbilde"
+                  className="w-24 h-24 rounded-full object-cover"
+                  style={{ border: '1px solid #2A261F' }}
                 />
               </div>
             )}
@@ -241,63 +378,100 @@ export default function EditTeamMember({ params }: Props) {
               type="file"
               accept="image/*"
               onChange={handleProfileImageChange}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-zinc-700 file:text-white hover:file:bg-zinc-600"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: '#161410',
+                border: '1px solid #2A261F',
+                borderRadius: 3,
+                color: '#9E9287',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+              }}
             />
             {profileImagePreview && (
               <div className="mt-4">
-                <Text variant="small" className="mb-2 block">Nytt bilde:</Text>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginBottom: 8 }}>Nytt bilde:</p>
                 <img
                   src={profileImagePreview}
-                  alt="Preview"
-                  className="w-32 h-32 rounded-full object-cover"
+                  alt="Ny profilbilde forhåndsvisning"
+                  className="w-24 h-24 rounded-full object-cover"
+                  style={{ border: '1px solid #2A261F' }}
                 />
               </div>
             )}
-            <Text variant="muted" className="mt-2">
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
               La stå tomt for å beholde eksisterende bilde
-            </Text>
+            </p>
           </div>
 
-          {/* Daily rate */}
-          <Input
-            label="Dagsats (NOK)"
-            type="number"
-            value={formData.daily_rate}
-            onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
-            placeholder="8000"
-          />
-
-          {/* Tags */}
           <div>
-            <Input
-              label="Tags (komma-separert)"
+            {fieldLabel('Dagsats (NOK)')}
+            <input
+              type="number"
+              value={formData.daily_rate}
+              onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
+              placeholder="8000"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Tags (komma-separert)')}
+            <input
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="director, producer, photographer"
+              style={inputStyle}
             />
-            <Text variant="muted" className="mt-2">
-              Bruk tags for enklere søk og filtrering senere
-            </Text>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+              Bruk tags for enklere søk og filtrering
+            </p>
           </div>
 
-          {/* Submit */}
-          <div className="flex gap-4">
-            <Button
+          <div className="flex gap-3 pt-4">
+            <button
               type="submit"
               disabled={saving || uploading}
-              variant="primary"
-              className="flex-1"
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: (saving || uploading) ? '#38332A' : '#C49434',
+                color: (saving || uploading) ? '#62594E' : '#0C0B09',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: (saving || uploading) ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s',
+              }}
             >
               {uploading ? 'Laster opp bilde...' : saving ? 'Lagrer...' : 'Lagre endringer'}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => router.push('/admin/team')}
-              variant="secondary"
-            >
-              Avbryt
-            </Button>
+            </button>
+            <Link href="/admin/team">
+              <button
+                type="button"
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: '#62594E',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  border: '1px solid #2A261F',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                }}
+              >
+                Avbryt
+              </button>
+            </Link>
           </div>
         </form>
       </div>

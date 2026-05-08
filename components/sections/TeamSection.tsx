@@ -32,6 +32,8 @@ export function TeamSection({
 }: TeamSectionProps) {
   const selectedTeamMembers = allTeamMembers.filter(m => selectedTeamMemberIds.includes(m.id))
   const galleryImages = sectionImages[section.id] || []
+  const teamMemberCardTranslations = section.content?.teamMemberCardTranslations || {}
+  const teamMemberRolesEn = section.content?.teamMemberRolesEn || {}
 
   return (
     <div className="w-full" style={{ background: '#161410' }}>
@@ -90,21 +92,33 @@ export function TeamSection({
 
         {/* Team grid */}
         {selectedTeamMembers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            className="flex flex-wrap justify-center xl:justify-start"
+            style={{ columnGap: '2.5rem', rowGap: '2.5rem' }}
+          >
             {selectedTeamMembers.map((teamMember) => {
               const teamMemberRoles = section.content?.teamMemberRoles || {}
               const projectRole = teamMemberRoles[teamMember.id] || null
+              const translatedCardContent = language === 'en' ? teamMemberCardTranslations[teamMember.id] : null
+              const translatedProjectRole = language === 'en' ? teamMemberRolesEn[teamMember.id] || null : null
               const handleRoleChange = (role: string) => {
                 const updatedRoles = { ...teamMemberRoles, [teamMember.id]: role }
                 updateSectionContent(section.id, 'teamMemberRoles', updatedRoles)
               }
               return (
-                <div key={teamMember.id} className="min-h-[320px]">
+                <div
+                  key={teamMember.id}
+                  className="flex-none"
+                  style={{ width: 240, height: 480 }}
+                >
                   <TeamMemberCard
                     teamMember={teamMember}
                     editMode={editMode}
                     language={language}
                     projectRole={projectRole}
+                    projectRoleEn={translatedProjectRole}
+                    translatedRole={translatedCardContent?.role}
+                    translatedBio={translatedCardContent?.bio}
                     onProjectRoleChange={handleRoleChange}
                   />
                 </div>

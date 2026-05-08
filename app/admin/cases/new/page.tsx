@@ -2,13 +2,42 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
+
+const fieldLabel = (text: string, required?: boolean) => (
+  <label style={{
+    display: 'block',
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: '0.6rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase' as const,
+    color: '#9E9287',
+    fontWeight: 500,
+    marginBottom: 6,
+  }}>
+    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+  </label>
+)
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: '#161410',
+  border: '1px solid #2A261F',
+  borderRadius: 3,
+  color: '#E8E1D5',
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.75rem',
+  letterSpacing: '0.03em',
+  outline: 'none',
+}
 
 export default function NewCase() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -29,11 +58,11 @@ export default function NewCase() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
       let thumbnailPath = null
 
-      // Last opp thumbnail hvis valgt
       if (thumbnailFile) {
         setUploading(true)
         const fileExt = thumbnailFile.name.split('.').pop()
@@ -46,7 +75,6 @@ export default function NewCase() {
 
         if (uploadError) throw uploadError
 
-        // Hent public URL
         const { data: { publicUrl } } = supabase.storage
           .from('assets')
           .getPublicUrl(filePath)
@@ -55,16 +83,13 @@ export default function NewCase() {
         setUploading(false)
       }
 
-      // Ekstraherer Vimeo ID fra URL
       const vimeoId = extractVimeoId(formData.vimeo_url)
 
-      // Parse tags (komma-separert)
       const tagsArray = formData.tags
         .split(',')
         .map(t => t.trim())
         .filter(t => t.length > 0)
 
-      // Opprett case study
       const { error } = await supabase
         .from('case_studies')
         .insert({
@@ -78,12 +103,11 @@ export default function NewCase() {
 
       if (error) throw error
 
-      // Case opprettet
       router.push('/admin/cases')
       router.refresh()
-    } catch (error) {
-      console.error('Error creating case:', error)
-      alert('❌ Kunne ikke opprette case')
+    } catch (err: any) {
+      console.error('Error creating case:', err)
+      setError('Kunne ikke opprette case: ' + (err.message || 'Ukjent feil'))
     } finally {
       setLoading(false)
       setUploading(false)
@@ -96,117 +120,211 @@ export default function NewCase() {
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/admin/cases')}
-            className="mb-4 -ml-2"
+        <div className="mb-10">
+          <Link
+            href="/admin/cases"
+            className="flex items-center gap-2 mb-8 transition-colors"
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#62594E',
+              textDecoration: 'none',
+            }}
           >
-            ← Tilbake
-          </Button>
-          <Heading as="h1" size="lg" className="mb-2">Nytt Case</Heading>
-          <Text variant="muted">Legg til et tidligere arbeid</Text>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+            Tilbake
+          </Link>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              Cases
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.1,
+          }}>
+            Nytt case
+          </h1>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+            Legg til et tidligere arbeid som kan gjenbrukes i prosjekter
+          </p>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div
+            className="flex items-start justify-between gap-3 mb-6 px-4 py-3"
+            style={{ background: 'rgba(184,64,64,0.1)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E07070', lineHeight: 1.5 }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              style={{ color: '#E07070', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Title */}
-          <Input
-            label="Tittel *"
-            type="text"
-            required
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="NETFLIX"
-          />
-
-          {/* Description */}
-          <Textarea
-            label="Beskrivelse *"
-            required
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Netflix skulle lansere kommende nyheter..."
-            rows={4}
-          />
-
-          {/* Vimeo URL */}
-          <Input
-            label="Vimeo URL *"
-            type="url"
-            required
-            value={formData.vimeo_url}
-            onChange={(e) => setFormData({ ...formData, vimeo_url: e.target.value })}
-            placeholder="https://vimeo.com/123456"
-          />
-
-          {/* Thumbnail Upload */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-300">
+            {fieldLabel('Tittel', true)}
+            <input
+              type="text"
+              required
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="NETFLIX"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Beskrivelse', true)}
+            <textarea
+              required
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Netflix skulle lansere kommende nyheter..."
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Vimeo URL', true)}
+            <input
+              type="url"
+              required
+              value={formData.vimeo_url}
+              onChange={(e) => setFormData({ ...formData, vimeo_url: e.target.value })}
+              placeholder="https://vimeo.com/123456"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Thumbnail */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#9E9287',
+              fontWeight: 500,
+              marginBottom: 6,
+            }}>
               Thumbnail-bilde
             </label>
             <input
               type="file"
               accept="image/*"
               onChange={handleThumbnailChange}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-zinc-700 file:text-white hover:file:bg-zinc-600"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: '#161410',
+                border: '1px solid #2A261F',
+                borderRadius: 3,
+                color: '#9E9287',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+              }}
             />
             {thumbnailPreview && (
               <div className="mt-4">
                 <img
                   src={thumbnailPreview}
-                  alt="Preview"
-                  className="w-full aspect-video object-cover rounded-lg"
+                  alt="Forhåndsvisning"
+                  className="w-full aspect-video object-cover"
+                  style={{ borderRadius: 3, border: '1px solid #2A261F' }}
                 />
               </div>
             )}
           </div>
 
-          {/* Tags */}
           <div>
-            <Input
-              label="Tags (komma-separert)"
+            {fieldLabel('Tags (komma-separert)')}
+            <input
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="commercial, event, sport"
+              style={inputStyle}
             />
-            <Text variant="muted" className="mt-2">
-              Bruk tags for enklere søk og filtrering senere
-            </Text>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+              Bruk tags for enklere søk og filtrering
+            </p>
           </div>
 
-          {/* Info */}
-          <Card className="bg-blue-500/5 border-blue-500/20">
-            <Text variant="small" className="text-blue-300">
-              💡 Dette caset kan gjenbrukes i flere prosjekter
-            </Text>
-          </Card>
-
-          {/* Submit */}
-          <div className="flex gap-4">
-            <Button
+          <div className="flex gap-3 pt-4">
+            <button
               type="submit"
-              disabled={loading || uploading}
-              variant="primary"
-              className="flex-1"
+              disabled={loading || uploading || !formData.title || !formData.description || !formData.vimeo_url}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: (loading || uploading || !formData.title || !formData.description || !formData.vimeo_url) ? '#38332A' : '#C49434',
+                color: (loading || uploading || !formData.title || !formData.description || !formData.vimeo_url) ? '#62594E' : '#0C0B09',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: (loading || uploading) ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s',
+              }}
             >
-              {uploading ? 'Laster opp bilde...' : loading ? 'Oppretter...' : 'Opprett Case'}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => router.push('/admin/cases')}
-              variant="secondary"
-            >
-              Avbryt
-            </Button>
+              {uploading ? 'Laster opp bilde...' : loading ? 'Oppretter...' : 'Opprett case'}
+            </button>
+            <Link href="/admin/cases">
+              <button
+                type="button"
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: '#62594E',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  border: '1px solid #2A261F',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                }}
+              >
+                Avbryt
+              </button>
+            </Link>
           </div>
         </form>
       </div>
     </div>
   )
 }
-

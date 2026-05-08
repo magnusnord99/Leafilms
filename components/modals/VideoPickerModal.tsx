@@ -41,7 +41,6 @@ export function VideoPickerModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchVideos()
       setSelectedIds(selectedVideoIds)
     }
   }, [isOpen, selectedVideoIds])
@@ -51,7 +50,7 @@ export function VideoPickerModal({
       setLoading(true)
       let query = supabase
         .from('video_library')
-        .select('*')
+        .select('id, filename, file_path, title, category, thumbnail_path, duration')
         .order('created_at', { ascending: false })
 
       if (selectedCategory !== 'all') {
@@ -75,8 +74,10 @@ export function VideoPickerModal({
   }
 
   useEffect(() => {
-    fetchVideos()
-  }, [selectedCategory, searchQuery])
+    if (isOpen) {
+      fetchVideos()
+    }
+  }, [isOpen, selectedCategory, searchQuery])
 
   function toggleSelection(videoId: string) {
     // Hvis maxSelection er 1, erstatt alltid den gamle videoen med den nye

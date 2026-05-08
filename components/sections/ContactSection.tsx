@@ -47,7 +47,7 @@ export function ContactSection({
       {/* Large cinematic display heading */}
       <p style={{
         fontFamily: 'var(--font-cormorant)',
-        fontSize: 'clamp(3rem, 7vw, 6.5rem)',
+        fontSize: 'clamp(2rem, 4vw, 3.5rem)',
         fontWeight: 300,
         fontStyle: 'italic',
         color: '#E8E1D5',
@@ -55,7 +55,7 @@ export function ContactSection({
         letterSpacing: '-0.02em',
         marginBottom: '2.5rem',
       }}>
-        La oss snakke.
+        Har du noen spørsmål?
       </p>
 
       {/* Contact info */}

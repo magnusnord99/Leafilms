@@ -10,6 +10,9 @@ type TeamMemberCardProps = {
   editMode: boolean
   language?: 'no' | 'en'
   projectRole?: string | null // Prosjekt-spesifikk rolle/beskrivelse
+  projectRoleEn?: string | null
+  translatedRole?: string | null
+  translatedBio?: string | null
   onProjectRoleChange?: (role: string) => void // Callback for å oppdatere prosjekt-spesifikk rolle
 }
 
@@ -72,7 +75,16 @@ function buildRoleDescription(selected: Set<string>, custom: string, memberName:
   return customTrimmed ? `${base} ${customTrimmed}` : base
 }
 
-export function TeamMemberCard({ teamMember, editMode, language = 'no', projectRole, onProjectRoleChange }: TeamMemberCardProps) {
+export function TeamMemberCard({
+  teamMember,
+  editMode,
+  language = 'no',
+  projectRole,
+  projectRoleEn,
+  translatedRole,
+  translatedBio,
+  onProjectRoleChange,
+}: TeamMemberCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
   const [customRole, setCustomRole] = useState('')
@@ -108,10 +120,12 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
   const profileImageUrl = teamMember.profile_image_path
     ? supabase.storage.from('assets').getPublicUrl(teamMember.profile_image_path).data.publicUrl
     : null
+  const displayRole = language === 'en' && translatedRole ? translatedRole : teamMember.role
+  const displayBio = language === 'en' && translatedBio ? translatedBio : teamMember.bio
 
   return (
     <div
-      className="group relative w-full h-full min-h-[320px]"
+      className="group relative w-full h-full"
       style={{ perspective: '1200px' }}
     >
       <div
@@ -140,13 +154,13 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
             border: '1px solid #2A261F',
           }}
         >
-          {/* Profile image — full top half */}
+          {/* Profile image — prioritize portrait framing */}
           <div className="w-full overflow-hidden" style={{ height: '60%', background: '#0C0B09' }}>
             {profileImageUrl ? (
               <img
                 src={profileImageUrl}
                 alt={teamMember.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
                 style={{ filter: 'brightness(0.92) saturate(0.85)' }}
               />
             ) : (
@@ -159,7 +173,7 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
           </div>
 
           {/* Info — bottom section */}
-          <div className="px-5 py-4 flex flex-col justify-between overflow-hidden" style={{ height: '40%' }}>
+          <div className="px-4 py-3 flex flex-col justify-start overflow-hidden" style={{ height: '40%' }}>
             <div>
               <p style={{
                 fontFamily: 'var(--font-cormorant)',
@@ -183,21 +197,22 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
                 color: '#C49434',
                 fontWeight: 500,
               }}>
-                {teamMember.role}
+                {displayRole}
               </p>
             </div>
-            {teamMember.bio && (
+            {displayBio && (
               <p style={{
+                marginTop: '0.75rem',
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.78rem',
                 color: '#9E9287',
                 lineHeight: 1.5,
                 overflow: 'hidden',
                 display: '-webkit-box',
-                WebkitLineClamp: 2,
+                WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
               } as React.CSSProperties}>
-                {teamMember.bio}
+                {displayBio}
               </p>
             )}
           </div>
@@ -214,7 +229,7 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
                 color: '#38332A',
               }}
             >
-              Trykk
+              {language === 'en' ? 'Tap' : 'Trykk'}
             </div>
           )}
         </div>
@@ -251,7 +266,7 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
                 color: '#C49434',
                 fontWeight: 500,
               }}>
-                {teamMember.role}
+                {displayRole}
               </p>
             </div>
 
@@ -308,6 +323,20 @@ export function TeamMemberCard({ teamMember, editMode, language = 'no', projectR
               ) : (
                 <>
                   {(() => {
+                    if (language === 'en' && projectRoleEn?.trim()) {
+                      return (
+                        <p style={{
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.82rem',
+                          color: '#9E9287',
+                          lineHeight: 1.65,
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word',
+                        }}>
+                          {projectRoleEn}
+                        </p>
+                      )
+                    }
                     const { selected, custom } = parseProjectRole(projectRole)
                     const description = buildRoleDescription(selected, custom, teamMember.name, language)
                     return description ? (

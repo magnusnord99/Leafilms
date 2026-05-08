@@ -43,7 +43,6 @@ export function ImagePickerModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchImages()
       setSelectedIds(selectedImageIds)
     }
   }, [isOpen, selectedImageIds])
@@ -53,7 +52,7 @@ export function ImagePickerModal({
       setLoading(true)
       let query = supabase
         .from('images')
-        .select('*')
+        .select('id, filename, file_path, title, category, subcategory, tags')
         .order('created_at', { ascending: false })
 
       if (selectedCategory !== 'all') {
@@ -77,8 +76,10 @@ export function ImagePickerModal({
   }
 
   useEffect(() => {
-    fetchImages()
-  }, [selectedCategory, searchQuery])
+    if (isOpen) {
+      fetchImages()
+    }
+  }, [isOpen, selectedCategory, searchQuery])
 
   function toggleSelection(imageId: string) {
     // Hvis maxSelection er 1, erstatt alltid det gamle bildet med det nye

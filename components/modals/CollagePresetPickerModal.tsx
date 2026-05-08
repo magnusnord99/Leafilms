@@ -48,37 +48,35 @@ export function CollagePresetPickerModal({
   const loadPresets = async () => {
     setLoading(true)
     try {
+      // Single query: fetch presets with all their images in one round-trip
       const { data: presetsData, error: presetsError } = await supabase
         .from('collage_presets')
-        .select('*')
+        .select(`
+          id, name, description, keywords, created_at, updated_at,
+          collage_preset_images (
+            position,
+            images (id, filename, file_path, title)
+          )
+        `)
         .order('id')
 
       if (presetsError) throw presetsError
 
-      const presetsWithImages: PresetWithImages[] = await Promise.all(
-        (presetsData || []).map(async (preset) => {
-          const { data: presetImages } = await supabase
-            .from('collage_preset_images')
-            .select(`
-              position,
-              images (*)
-            `)
-            .eq('preset_id', preset.id)
+      const presetsWithImages: PresetWithImages[] = (presetsData || []).map((preset) => {
+        const images: CollageImages = {
+          pos1: null, pos2: null, pos3: null, pos4: null, pos5: null
+        }
 
-          const images: CollageImages = {
-            pos1: null, pos2: null, pos3: null, pos4: null, pos5: null
+        ;(preset.collage_preset_images as unknown as Array<{ position: string; images: Image | Image[] | null }> || []).forEach((pi) => {
+          const pos = pi.position as keyof CollageImages
+          if (pos in images) {
+            // Supabase join returnerer alltid array; vi tar første element
+            images[pos] = Array.isArray(pi.images) ? (pi.images[0] ?? null) : pi.images
           }
-
-          presetImages?.forEach((pi: any) => {
-            const pos = pi.position as keyof CollageImages
-            if (pos in images) {
-              images[pos] = pi.images
-            }
-          })
-
-          return { ...preset, images }
         })
-      )
+
+        return { ...preset, images }
+      })
 
       setPresets(presetsWithImages)
     } catch (error) {

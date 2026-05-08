@@ -93,15 +93,6 @@ export default function NewVideo() {
       const videoFileName = `${Math.random().toString(36).substring(2)}.${videoExt}`
       const videoPath = `videos/${videoFileName}`
 
-      console.log('📤 Starting video upload...', {
-        fileName: videoFile.name,
-        fileSize: `${(videoFile.size / (1024 * 1024)).toFixed(2)}MB`,
-        fileType: videoFile.type,
-        path: videoPath
-      })
-
-      // For store filer, kan det være nødvendig å bruke chunked upload
-      // Supabase Storage støtter automatisk chunking, men vi kan eksplisitt sette det
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('assets')
         .upload(videoPath, videoFile, {
@@ -113,14 +104,7 @@ export default function NewVideo() {
         })
 
       if (uploadError) {
-        // Log full error object for debugging
-        console.error('❌ Upload error details:', {
-          error: uploadError,
-          message: uploadError.message,
-          name: uploadError.name,
-          errorDetails: JSON.stringify(uploadError, null, 2)
-        })
-        
+        console.error('Video upload error:', uploadError)
         // Gi bedre feilmeldinger for vanlige feil
         const errorMsg = uploadError.message || uploadError.name || JSON.stringify(uploadError) || 'Ukjent feil'
         const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(2)
@@ -145,8 +129,6 @@ export default function NewVideo() {
           `Sjekk browser console for mer detaljer.`
         )
       }
-
-      console.log('✅ Video uploaded successfully:', uploadData)
 
       // Hent video-dimensjoner og varighet (forenklet - i produksjon bør dette gjøres server-side)
       let videoWidth: number | null = null

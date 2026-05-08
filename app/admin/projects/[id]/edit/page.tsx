@@ -1,8 +1,8 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { use, useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Section, CollagePreset } from '@/lib/types'
+import { Section, CollagePreset, Image } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
 import { SectionPreview } from '@/components/preview/SectionPreview'
@@ -46,11 +46,11 @@ export default function EditProject({ params }: Props) {
   
   // Collage state for ExampleWorkSection (5 bilder)
   const [collageImages, setCollageImages] = useState<{
-    pos1: any | null
-    pos2: any | null
-    pos3: any | null
-    pos4: any | null
-    pos5: any | null
+    pos1: Image | null
+    pos2: Image | null
+    pos3: Image | null
+    pos4: Image | null
+    pos5: Image | null
   }>({ pos1: null, pos2: null, pos3: null, pos4: null, pos5: null })
   const [selectedPreset, setSelectedPreset] = useState<CollagePreset | null>(null)
   const [showPresetPicker, setShowPresetPicker] = useState(false)
@@ -88,15 +88,11 @@ export default function EditProject({ params }: Props) {
   // Refresh data hvis prosjektet nettopp ble generert
   useEffect(() => {
     if (searchParams.get('generated') === 'true') {
-      console.log('[EditProject] Project was just generated, refreshing data...')
       // Vent litt for å sikre at alle database-oppdateringer er ferdig
-      // Økt ventetid for å sikre at alle bilder er ferdig lagret
       const timeout = setTimeout(() => {
-        console.log('[EditProject] Refreshing data after generation...')
         refreshData()
-        // Fjern query parameter
         router.replace(`/admin/projects/${id}/edit`)
-      }, 3000) // Økt fra 1000 til 3000ms
+      }, 3000)
       return () => clearTimeout(timeout)
     }
   }, [searchParams, refreshData, router, id])
@@ -290,6 +286,29 @@ export default function EditProject({ params }: Props) {
     return titles[type] || type
   }
 
+  // Memoizerte seksjonslister for å unngå inline filter/sort per render
+  const sortedNonHeroSections = useMemo(
+    () =>
+      sections
+        .filter((s) => s.type !== 'hero')
+        .sort((a, b) => {
+          if (a.type === 'contact' && b.type !== 'contact') return 1
+          if (a.type !== 'contact' && b.type === 'contact') return -1
+          return a.order_index - b.order_index
+        }),
+    [sections]
+  )
+
+  const visibleNonHeroCount = useMemo(
+    () => sections.filter((s) => s.type !== 'hero' && s.visible).length,
+    [sections]
+  )
+
+  const hiddenNonHeroSections = useMemo(
+    () => sections.filter((s) => !s.visible && s.type !== 'hero'),
+    [sections]
+  )
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -385,26 +404,16 @@ export default function EditProject({ params }: Props) {
 
         {/* Sections - Inline Editing */}
         <div className="relative">
-          {sections
-            .filter(s => s.type !== 'hero')
-            .sort((a, b) => {
-              // Sorter kontakt-seksjonen alltid til slutt
-              if (a.type === 'contact' && b.type !== 'contact') return 1
-              if (a.type !== 'contact' && b.type === 'contact') return -1
-              // Ellers bruk order_index
-              return a.order_index - b.order_index
-            })
+          {sortedNonHeroSections
             .map((section, index) => {
               if (!section.visible) return null
-              
-              const visibleSections = sections.filter(s => s.type !== 'hero' && s.visible)
-              
+
               return (
                 <SectionRenderer
                   key={section.id}
                   section={section}
                   index={index}
-                  totalVisible={visibleSections.length}
+                  totalVisible={visibleNonHeroCount}
                   editMode={editMode}
                   sectionImages={sectionImages}
                   sectionImageData={sectionImageData}
@@ -453,15 +462,14 @@ export default function EditProject({ params }: Props) {
         </div>
 
         {/* Skjulte seksjoner (kun i edit mode) */}
-        {editMode && sections.filter(s => !s.visible && s.type !== 'hero').length > 0 && (
+        {editMode && hiddenNonHeroSections.length > 0 && (
           <section className="py-section px-8 border-t border-zinc-300 bg-background">
             <div className="max-w-5xl mx-auto">
               <Heading as="h4" className="mb-6">
                 Skjulte seksjoner
               </Heading>
               <div className="space-y-4">
-                {sections
-                  .filter(s => !s.visible && s.type !== 'hero')
+                {hiddenNonHeroSections
                   .map((section) => (
                     <Card key={section.id} className="bg-zinc-800">
                       <div className="flex items-center justify-between">

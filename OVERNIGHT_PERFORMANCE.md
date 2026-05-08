@@ -74,3 +74,92 @@ Et `setInterval(checkVisibleSections, 3000)` kjørte hvert 3. sekund i tillegg t
 - Lagt til `emptyImagePosition` og `emptyRecord` som `useMemo`-stabiliserte tomme objekter, brukt i stedet for `{}` inline i JSX
 - Memoizert `heroSection`, `sortedNonHeroSections`, `selectedTeamMemberIds`, `selectedCaseIds` med `useMemo`
 - Erstattet inline `.filter().sort()` i JSX med forhåndsberegnet `sortedNonHeroSections`
+
+---
+
+## Runde 2 — Funn
+
+### 11. Duplikat `useEffect` i `ImagePickerModal` og `VideoPickerModal`
+Begge modale komponentene hadde to overlappende `useEffect`-hooks: én for `[isOpen, selectedIds]` (reset + fetch) og én for `[selectedCategory, searchQuery]` (re-fetch). Dette ga dobbelt DB-kall ved åpning, da `isOpen: true` utløste begge. Samme feil som ble fikset i `admin/images/page.tsx` i runde 1.
+
+### 12. N+1 i `CollagePresetPickerModal`
+`loadPresets()` kjørte én Supabase-spørring per preset for å hente bilder via `collage_preset_images`. Skalerer lineært med antall presets.
+
+### 13. N+1 i `app/admin/customers/[id]/projects/page.tsx`
+`fetchData()` kjørte én `quotes`-spørring og én `contracts`-spørring per prosjekt i en `Promise.all`-løkke. For en kunde med 5 prosjekter = 10 DB-kall.
+
+### 14. Sekvensielle count-spørringer + separat `useEffect`-cascade i `app/admin/page.tsx`
+Dashboard-siden hadde to sekvensielle count-spørringer etterfulgt av to separate fetch-kall (prosjekter, kunder). I tillegg trigget en `useEffect([customers])` en ekstra `fetchProjectCounts()`-funksjon etter render, noe som ga en render-cascade.
+
+### 15. `select('*')` på bredt brukte lister
+`admin/images/page.tsx`, `admin/projects/page.tsx` og modaler hentet alle kolonner fra `images`, `projects` og `video_library`, selv om de kun viste noen få felter (tittel, kategori, fil-sti).
+
+### 16. Resterende `console.log`-spam
+- `app/admin/projects/[id]/edit/page.tsx`: 2 debug-logger for "AI-generering refresh"
+- `app/admin/projects/[id]/quote-analytics/page.tsx`: 2 debug-logger med full analytics-payload
+- `app/admin/videos/new/page.tsx`: upload-start og upload-success logger
+
+### 17. `any`-typer i `EditProjectModals` og `edit/page.tsx`
+`allCases: any[]` og `allTeamMembers: any[]` i `EditProjectModalsProps` — typeinformasjon kastes bort, runtime-feil maskeres. `collageImages`-state i `edit/page.tsx` hadde `pos1: any | null` (5 ganger).
+
+### 18. Inline `.filter().sort()` i `edit/page.tsx`
+Admin-editoren hadde samme mønster som `PublicProjectClient.tsx` fikset i runde 1: tre inline seksjonsfilter/sorter i JSX-render pluss `visibleSections` re-beregnet inne i hvert `.map()`-kall.
+
+### 19. Manglende HTTP cache-headers i `next.config.ts`
+Next.js sendte ingen eksplisitte `Cache-Control`-headers for statiske assets eller API-ruter. Nettlesere og CDN-er brukte da default-verdier (oftest `no-cache`).
+
+---
+
+## Endringer gjort (runde 2)
+
+### `components/modals/ImagePickerModal.tsx`
+- Flettet de to `useEffect`-hooks til én: `[isOpen, selectedCategory, searchQuery]` — fetch kun når modal er åpen
+- Smalnet `select('*')` til `select('id, filename, file_path, title, category, subcategory, tags')`
+
+### `components/modals/VideoPickerModal.tsx`
+- Flettet de to `useEffect`-hooks til én: `[isOpen, selectedCategory, searchQuery]`
+- Smalnet `select('*')` til `select('id, filename, file_path, title, category, thumbnail_path, duration')`
+
+### `components/modals/CollagePresetPickerModal.tsx`
+- Erstattet N+1-løkke med ett enkelt Supabase-kall med nested join: `collage_presets` med `collage_preset_images(position, images(id, filename, file_path, title))`
+- Totalt antall DB-kall ved åpning: fra O(n+1) til O(1)
+
+### `app/admin/customers/[id]/projects/page.tsx`
+- Erstattet per-prosjekt `Promise.all`-løkke for quotes og contracts med to parallelle batch-spørringer: `.in('project_id', projectIds)` for `quotes` og `contracts`
+- Totalt DB-kall: fra O(2n + 2) til O(4) uavhengig av antall prosjekter
+
+### `app/admin/page.tsx`
+- Slått sammen fire sekvensielle DB-kall (2×count, prosjekter, kunder) til ett `Promise.all` med fire parallelle kall
+- Fjernet separat `fetchProjectCounts()`-funksjon og `useEffect([customers])`-cascade — prosjekttelling gjøres nå i samme `fetchData()`-runde
+- Smalnet `select('*')` for projects til kun nødvendige felter
+- Fjernet ubrukt `useRouter`-import og `router`-variabel
+
+### `app/admin/projects/page.tsx`
+- Smalnet `select('*')` til `select('id, title, status, client_name, updated_at, parent_project_id, version_number')`
+
+### `app/admin/images/page.tsx`
+- Smalnet `select('*')` til `select('id, filename, file_path, title, category, subcategory, tags')`
+
+### `app/admin/projects/[id]/edit/page.tsx`
+- Fjernet 2 `console.log`-kall for AI-generering refresh
+- Erstattet `pos1: any | null` (×5) i `collageImages`-state med `pos1: Image | null`
+- La til `useMemo` for `sortedNonHeroSections`, `visibleNonHeroCount` og `hiddenNonHeroSections`
+- Erstattet tre inline `.filter()/.sort()` i JSX med de memoizerte verdiene
+
+### `app/admin/projects/[id]/quote-analytics/page.tsx`
+- Fjernet 2 `console.log`-kall med full analytics-payload
+
+### `app/admin/videos/new/page.tsx`
+- Fjernet upload-start og upload-success `console.log`
+- Skalert ned upload-error logging til én `console.error`-linje
+
+### `components/project/EditProjectModals.tsx`
+- Erstattet `allCases: any[]` med `allCases: CaseStudy[]`
+- Erstattet `allTeamMembers: any[]` med `allTeamMembers: TeamMember[]`
+- Erstattet `images: any` i `onPresetSelect`-prop med typet `CollageImages`-type
+
+### `next.config.ts`
+- Lagt til `headers()`-konfigurasjon:
+  - `/_next/static/**`: `Cache-Control: public, max-age=31536000, immutable` (1 år)
+  - `/_next/image`: `Cache-Control: public, max-age=86400, stale-while-revalidate=604800`
+  - `/api/**`: `Cache-Control: no-store` (API-ruter skal aldri caches)

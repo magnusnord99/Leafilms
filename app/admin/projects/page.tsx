@@ -35,7 +35,7 @@ export default function ProjectsPage() {
     try {
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('*')
+        .select('id, title, status, client_name, updated_at, parent_project_id, version_number')
         .order('updated_at', { ascending: false })
 
       if (projectsError) {

@@ -67,6 +67,19 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Kunne ikke hente seksjoner' }, { status: 500 })
     }
 
+    // Fetch all team members once for team card translations
+    const { data: allTeamMembers, error: teamMembersError } = await supabase
+      .from('team_members')
+      .select('id, role, bio')
+
+    if (teamMembersError) {
+      return Response.json({ error: 'Kunne ikke hente team-medlemmer' }, { status: 500 })
+    }
+
+    const teamMemberMap = new Map(
+      (allTeamMembers || []).map((member: { id: string; role: string | null; bio: string | null }) => [member.id, member])
+    )
+
     // Translate each section
     for (const section of sections) {
       const content = { ...(section.content || {}) }
@@ -102,6 +115,52 @@ export async function POST(req: NextRequest) {
           }))
         )
         changed = true
+      }
+
+      if (section.type === 'team') {
+        if (targetLanguage === 'en') {
+          const { data: teamLinks, error: teamLinksError } = await supabase
+            .from('section_team_members')
+            .select('team_member_id')
+            .eq('section_id', section.id)
+
+          if (teamLinksError) {
+            return Response.json({ error: 'Kunne ikke hente valgte team-medlemmer' }, { status: 500 })
+          }
+
+          const teamMemberCardTranslations: Record<string, { role: string; bio: string }> = {}
+          for (const link of teamLinks || []) {
+            const teamMemberId = link.team_member_id
+            const member = teamMemberMap.get(teamMemberId)
+            if (!member) continue
+
+            const role = member.role ? await translateText(member.role, targetLanguage, openai) : ''
+            const bio = member.bio ? await translateText(member.bio, targetLanguage, openai) : ''
+            teamMemberCardTranslations[teamMemberId] = { role, bio }
+          }
+
+          content.teamMemberCardTranslations = teamMemberCardTranslations
+          changed = true
+
+          if (content.teamMemberRoles && typeof content.teamMemberRoles === 'object') {
+            const teamMemberRolesEn: Record<string, string> = {}
+            for (const [memberId, roleText] of Object.entries(content.teamMemberRoles)) {
+              if (typeof roleText !== 'string' || !roleText.trim()) continue
+              teamMemberRolesEn[memberId] = await translateText(roleText, targetLanguage, openai)
+            }
+            content.teamMemberRolesEn = teamMemberRolesEn
+            changed = true
+          }
+        } else {
+          if (content.teamMemberCardTranslations) {
+            delete content.teamMemberCardTranslations
+            changed = true
+          }
+          if (content.teamMemberRolesEn) {
+            delete content.teamMemberRolesEn
+            changed = true
+          }
+        }
       }
 
       if (changed) {

@@ -1,7 +1,15 @@
 'use client'
 
 import { ImagePickerModal, VideoPickerModal, CollagePresetPickerModal, TeamPickerModal, CasePickerModal } from '@/components/modals'
-import { Section, CollagePreset, Image, VideoLibrary } from '@/lib/types'
+import { Section, CollagePreset, CaseStudy, TeamMember, Image, VideoLibrary } from '@/lib/types'
+
+type CollageImages = {
+  pos1: Image | null
+  pos2: Image | null
+  pos3: Image | null
+  pos4: Image | null
+  pos5: Image | null
+}
 
 type EditProjectModalsProps = {
   showImagePicker: boolean
@@ -14,30 +22,30 @@ type EditProjectModalsProps = {
   sections: Section[]
   onImageSelect: (imageIds: string[]) => Promise<void>
   onVideoSelect?: (videoIds: string[]) => Promise<void>
-  
+
   showVideoPicker?: boolean
   setShowVideoPicker?: (show: boolean) => void
   videoPickerSectionId?: string | null
   setVideoPickerSectionId?: (id: string | null) => void
-  
+
   showCasePicker: boolean
   setShowCasePicker: (show: boolean) => void
-  allCases: any[]
+  allCases: CaseStudy[]
   selectedCaseIds: string[]
   onToggleCaseSelection: (caseId: string) => void
   onSaveCaseSelection: () => Promise<void>
-  
+
   showTeamPicker: boolean
   setShowTeamPicker: (show: boolean) => void
-  allTeamMembers: any[]
+  allTeamMembers: TeamMember[]
   selectedTeamMemberIds: string[]
   onToggleTeamSelection: (teamMemberId: string) => void
   onSaveTeamSelection: () => Promise<void>
-  
+
   showPresetPicker: boolean
   setShowPresetPicker: (show: boolean) => void
   selectedPreset: CollagePreset | null
-  onPresetSelect: (preset: CollagePreset & { images: any }) => Promise<void>
+  onPresetSelect: (preset: CollagePreset & { images: CollageImages }) => Promise<void>
 }
 
 export function EditProjectModals({

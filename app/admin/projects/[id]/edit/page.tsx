@@ -255,10 +255,22 @@ export default function EditProject({ params }: Props) {
     if (collageImagePosition && imagePickerSectionId) {
       const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
       const currentIds = (sectionImages[imagePickerSectionId] || []).map(img => img.id)
-      while (currentIds.length <= posIndex) currentIds.push(currentIds[currentIds.length - 1] || imageIds[0])
-      currentIds[posIndex] = imageIds[0]
+      const selectedImageId = imageIds[0]
+      const nextIds = selectedImageId
+        ? (() => {
+            // Move the selected image into the requested slot without creating
+            // duplicate IDs, which would make the save fail after deleting rows.
+            const withoutSelected = currentIds.filter(id => id !== selectedImageId)
+            const insertIndex = Math.min(Math.max(posIndex, 0), withoutSelected.length)
+            return [
+              ...withoutSelected.slice(0, insertIndex),
+              selectedImageId,
+              ...withoutSelected.slice(insertIndex),
+            ]
+          })()
+        : currentIds.filter((_, index) => index !== posIndex)
       setCollageImagePosition(null)
-      await handleImageSelect(currentIds)
+      await handleImageSelect(nextIds)
     } else {
       await handleImageSelect(imageIds)
     }

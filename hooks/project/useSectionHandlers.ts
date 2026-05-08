@@ -313,6 +313,26 @@ export function useSectionHandlers({
       console.log('💾 [handleImageSelect] Saving images for section:', imagePickerSectionId, 'imageIds:', imageIds)
       const result = await saveSectionImages(imagePickerSectionId, imageIds)
       console.log('✅ Save result:', result)
+
+      if (imageIds.length === 0) {
+        setSectionImages(prev => ({
+          ...prev,
+          [imagePickerSectionId]: []
+        }))
+
+        setSectionImageData(prev => ({
+          ...prev,
+          [imagePickerSectionId]: []
+        }))
+
+        if (refreshData) {
+          console.log('🔄 Refreshing data from database...')
+          await refreshData()
+          console.log('✅ Data refreshed successfully')
+        }
+
+        return
+      }
       
       if (!result.images || result.images.length === 0) {
         console.warn('⚠️ No images returned from saveSectionImages')

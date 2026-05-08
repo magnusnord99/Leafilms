@@ -6,6 +6,18 @@ export async function saveSectionImages(
   imageIds: string[]
 ): Promise<{ images: Image[]; sectionImages: SectionImage[] }> {
   console.log('💾 saveSectionImages called with:', { sectionId, imageIds })
+
+  const validImageIds = imageIds.filter(
+    (imageId): imageId is string => typeof imageId === 'string' && imageId.length > 0
+  )
+
+  if (validImageIds.length !== imageIds.length) {
+    throw new Error('Kan ikke lagre bildevalg med ugyldige bilde-IDer')
+  }
+
+  if (new Set(validImageIds).size !== validImageIds.length) {
+    throw new Error('Kan ikke lagre samme bilde flere ganger i samme seksjon')
+  }
   
   // Verifiser at sectionId faktisk finnes først
   const { data: sectionCheck } = await supabase

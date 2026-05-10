@@ -34,9 +34,6 @@ export function ImagePositionControls({
           onChange={(e) => {
             const newZoom = parseFloat(e.target.value)
             const newPos = { ...currentPos, zoom: newZoom === 1.0 ? null : newZoom }
-            // #region agent log
-            fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H9',location:'components/project/ImagePositionControls.tsx:38',message:'zoom slider changed',data:{sectionId,newPos},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             onPositionChange(newPos)
           }}
           className="w-full"
@@ -53,9 +50,6 @@ export function ImagePositionControls({
           onChange={(e) => {
             const newX = parseFloat(e.target.value)
             const newPos = { ...currentPos, x: newX }
-            // #region agent log
-            fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H9',location:'components/project/ImagePositionControls.tsx:55',message:'x slider changed',data:{sectionId,newPos},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             onPositionChange(newPos)
           }}
           className="w-full"
@@ -72,9 +66,6 @@ export function ImagePositionControls({
           onChange={(e) => {
             const newY = parseFloat(e.target.value)
             const newPos = { ...currentPos, y: newY }
-            // #region agent log
-            fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H9',location:'components/project/ImagePositionControls.tsx:72',message:'y slider changed',data:{sectionId,newPos},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             onPositionChange(newPos)
           }}
           className="w-full"

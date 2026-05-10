@@ -182,9 +182,6 @@ export default async function PublicProjectView({ params }: Props) {
         sectionImageData[sid].sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
       }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H2',location:'app/p/[token]/page.tsx:185',message:'public page fetched section_image rows',data:{sectionCount:sectionsList.length,sectionImageSectionCount:Object.keys(sectionImageData).length,totalSectionImageRows:Object.values(sectionImageData).reduce((sum,arr)=>sum+arr.length,0)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     // Hent alle unike bilde-IDer og last dem i én spørring
     const allImageIds = [...new Set(
@@ -309,9 +306,6 @@ export default async function PublicProjectView({ params }: Props) {
     collageImages.pos3 = sectionImagesForExampleWork[2] || null
     collageImages.pos4 = sectionImagesForExampleWork[3] || null
     collageImages.pos5 = sectionImagesForExampleWork[4] || null
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H4',location:'app/p/[token]/page.tsx:309',message:'public example_work mapping snapshot',data:{exampleWorkSectionId:exampleWorkSection.id,imageIds:sectionImagesForExampleWork.map(i=>i.id),imageRowOrder:exampleWorkRows.map(r=>({id:r.id,order_index:r.order_index,x:r.background_position_x,y:r.background_position_y,zoom:r.background_zoom}))},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }
 
   // Hent selected preset (optional)
@@ -344,9 +338,6 @@ export default async function PublicProjectView({ params }: Props) {
       .eq('token', token)
   }
 
-  // #region agent log
-  await fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H5',location:'app/p/[token]/page.tsx:340',message:'public page render payload ready',data:{projectId:project.id,exampleWorkSectionId:exampleWorkSection?.id ?? null,exampleWorkSectionImageDataCount:exampleWorkSection ? ((sectionImageData[exampleWorkSection.id] || []).length) : 0},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   return (
     <PublicProjectClient

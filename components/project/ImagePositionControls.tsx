@@ -12,8 +12,6 @@ type ImagePositionControlsProps = {
 }
 
 export function ImagePositionControls({
-  sectionId,
-  sectionImage,
   currentPos,
   onPositionChange,
   onReset,

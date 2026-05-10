@@ -149,14 +149,8 @@ export function PublicProjectClient({
 
   // Stable empty objects — avoids creating new references on every render
   const emptyImagePosition = useMemo(() => ({}), [])
-  const emptyRecord = useMemo(() => ({}), [])
 
   const heroSection = useMemo(() => sections.find(s => s.type === 'hero'), [sections])
-  const exampleWorkSection = useMemo(() => sections.find(s => s.type === 'example_work'), [sections])
-
-  useEffect(() => {
-    if (!exampleWorkSection) return
-  }, [exampleWorkSection, sectionImageData, collageImages])
 
   const sortedNonHeroSections = useMemo(() =>
     sections

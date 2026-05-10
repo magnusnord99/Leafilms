@@ -46,7 +46,6 @@ export function ExampleWorkSection({
   imagePosition,
   setImagePosition,
   saveBackgroundPosition,
-  updateSectionContent,
   onImageClick,
   onOpenPresetPicker
 }: ExampleWorkSectionProps) {

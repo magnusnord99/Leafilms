@@ -298,7 +298,6 @@ export default async function PublicProjectView({ params }: Props) {
   if (exampleWorkSection) {
     // Hent bildene fra section_images (samme metode som edit-siden)
     const sectionImagesForExampleWork = sectionImages[exampleWorkSection.id] || []
-    const exampleWorkRows = sectionImageData[exampleWorkSection.id] || []
     
     // Map bildene til posisjoner basert på order_index (0 = pos1, 1 = pos2, osv.)
     collageImages.pos1 = sectionImagesForExampleWork[0] || null

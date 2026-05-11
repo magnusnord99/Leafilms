@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
         .from('project_analytics')
         .select('section_times')
         .eq('id', sessionId)
+        .eq('project_id', projectId)
+        .eq('share_token', shareToken)
         .single()
 
       if (fetchError) {
@@ -128,6 +130,8 @@ export async function POST(request: NextRequest) {
         .from('project_analytics')
         .update(updateData)
         .eq('id', sessionId)
+        .eq('project_id', projectId)
+        .eq('share_token', shareToken)
         .select()
         .single()
 

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createServiceClient } from '@/lib/supabase-server'
 
 function getOpenAIClient() {
@@ -48,10 +49,17 @@ async function translateText(text: string, targetLanguage: 'no' | 'en', openai: 
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdmin()
+    if (!admin.ok) return admin.response
+
     const { projectId, targetLanguage } = await req.json()
 
     if (!projectId || !targetLanguage) {
       return Response.json({ error: 'Mangler projectId eller targetLanguage' }, { status: 400 })
+    }
+
+    if (targetLanguage !== 'no' && targetLanguage !== 'en') {
+      return Response.json({ error: 'Ugyldig språk' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
@@ -164,22 +172,32 @@ export async function POST(req: NextRequest) {
       }
 
       if (changed) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('sections')
           .update({ content, updated_at: new Date().toISOString() })
           .eq('id', section.id)
+
+        if (updateError) {
+          console.error('[translate-project] Error updating section:', updateError)
+          return Response.json({ error: 'Kunne ikke lagre oversatt seksjon' }, { status: 500 })
+        }
       }
     }
 
     // Update project language
-    await supabase
+    const { error: projectUpdateError } = await supabase
       .from('projects')
       .update({ language: targetLanguage, updated_at: new Date().toISOString() })
       .eq('id', projectId)
 
+    if (projectUpdateError) {
+      console.error('[translate-project] Error updating project language:', projectUpdateError)
+      return Response.json({ error: 'Kunne ikke lagre prosjektspråk' }, { status: 500 })
+    }
+
     return Response.json({ success: true, language: targetLanguage })
   } catch (error: any) {
     console.error('[translate-project] Error:', error)
-    return Response.json({ error: 'Oversettelse feilet', details: error.message }, { status: 500 })
+    return Response.json({ error: 'Oversettelse feilet' }, { status: 500 })
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createServiceClient } from '@/lib/supabase-server'
 
 /**
@@ -13,6 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await requireAdmin()
+    if (!admin.ok) return admin.response
+
     const { id: projectId } = await params
     if (!projectId) {
       return Response.json({ error: 'Mangler prosjekt-ID' }, { status: 400 })

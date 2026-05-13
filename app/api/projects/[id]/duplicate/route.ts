@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createServiceClient } from '@/lib/supabase-server'
 
 /**
@@ -9,7 +10,7 @@ import { createServiceClient } from '@/lib/supabase-server'
  * Kopierer IKKE: quotes, contracts, project_shares (ny versjon starter som draft)
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -17,6 +18,9 @@ export async function POST(
     if (!projectId) {
       return Response.json({ error: 'Mangler prosjekt-ID' }, { status: 400 })
     }
+
+    const adminAuth = await requireAdmin()
+    if (!adminAuth.ok) return adminAuth.response
 
     const supabase = createServiceClient()
 
@@ -33,10 +37,18 @@ export async function POST(
 
     // 2. Finn neste versjonsnummer
     const rootId = sourceProject.parent_project_id ?? sourceProject.id
-    const { data: siblings } = await supabase
+    const { data: siblings, error: siblingsError } = await supabase
       .from('projects')
       .select('*')
       .or(`id.eq.${rootId},parent_project_id.eq.${rootId}`)
+
+    if (siblingsError) {
+      console.error('Error fetching project versions:', siblingsError)
+      return Response.json(
+        { error: 'Kunne ikke finne eksisterende versjoner', details: siblingsError.message },
+        { status: 500 }
+      )
+    }
 
     const maxVersion = siblings?.reduce(
       (max, p) => Math.max(max, (p as { version_number?: number }).version_number ?? 1),
@@ -114,33 +126,44 @@ export async function POST(
 
       if (sectionInsertError) {
         console.error('Error copying section:', sectionInsertError)
-        continue
+        throw new Error(`Kunne ikke kopiere seksjon: ${sectionInsertError.message}`)
       }
       sectionIdMap[section.id] = newSection.id
     }
 
     // 6. Kopier section_images
     for (const [oldSectionId, newSectionId] of Object.entries(sectionIdMap)) {
-      const { data: sectionImages } = await supabase
+      const { data: sectionImages, error: sectionImagesError } = await supabase
         .from('section_images')
         .select('*')
         .eq('section_id', oldSectionId)
+
+      if (sectionImagesError) {
+        throw new Error(`Kunne ikke hente seksjonsbilder: ${sectionImagesError.message}`)
+      }
 
       if (sectionImages?.length) {
         const inserts = sectionImages.map(({ id, created_at, updated_at, ...img }) => ({
           ...img,
           section_id: newSectionId,
         }))
-        await supabase.from('section_images').insert(inserts)
+        const { error: imageInsertError } = await supabase.from('section_images').insert(inserts)
+        if (imageInsertError) {
+          throw new Error(`Kunne ikke kopiere seksjonsbilder: ${imageInsertError.message}`)
+        }
       }
     }
 
     // 7. Kopier section_team_members
     for (const [oldSectionId, newSectionId] of Object.entries(sectionIdMap)) {
-      const { data: teamMembers } = await supabase
+      const { data: teamMembers, error: teamMembersError } = await supabase
         .from('section_team_members')
         .select('team_member_id, order_index')
         .eq('section_id', oldSectionId)
+
+      if (teamMembersError) {
+        throw new Error(`Kunne ikke hente team-medlemmer: ${teamMembersError.message}`)
+      }
 
       if (teamMembers?.length) {
         const inserts = teamMembers.map((tm) => ({
@@ -148,16 +171,23 @@ export async function POST(
           team_member_id: tm.team_member_id,
           order_index: tm.order_index,
         }))
-        await supabase.from('section_team_members').insert(inserts)
+        const { error: teamInsertError } = await supabase.from('section_team_members').insert(inserts)
+        if (teamInsertError) {
+          throw new Error(`Kunne ikke kopiere team-medlemmer: ${teamInsertError.message}`)
+        }
       }
     }
 
     // 8. Kopier section_case_studies
     for (const [oldSectionId, newSectionId] of Object.entries(sectionIdMap)) {
-      const { data: caseStudies } = await supabase
+      const { data: caseStudies, error: caseStudiesError } = await supabase
         .from('section_case_studies')
         .select('case_study_id, order_index')
         .eq('section_id', oldSectionId)
+
+      if (caseStudiesError) {
+        throw new Error(`Kunne ikke hente cases: ${caseStudiesError.message}`)
+      }
 
       if (caseStudies?.length) {
         const inserts = caseStudies.map((cs) => ({
@@ -165,16 +195,23 @@ export async function POST(
           case_study_id: cs.case_study_id,
           order_index: cs.order_index,
         }))
-        await supabase.from('section_case_studies').insert(inserts)
+        const { error: caseInsertError } = await supabase.from('section_case_studies').insert(inserts)
+        if (caseInsertError) {
+          throw new Error(`Kunne ikke kopiere cases: ${caseInsertError.message}`)
+        }
       }
     }
 
     // 9. Kopier section_video_library
     for (const [oldSectionId, newSectionId] of Object.entries(sectionIdMap)) {
-      const { data: videos } = await supabase
+      const { data: videos, error: videosError } = await supabase
         .from('section_video_library')
         .select('video_id, order_index, position, autoplay, loop, muted')
         .eq('section_id', oldSectionId)
+
+      if (videosError) {
+        throw new Error(`Kunne ikke hente videoer: ${videosError.message}`)
+      }
 
       if (videos?.length) {
         const inserts = videos.map((v) => ({
@@ -186,15 +223,22 @@ export async function POST(
           loop: v.loop,
           muted: v.muted,
         }))
-        await supabase.from('section_video_library').insert(inserts)
+        const { error: videoInsertError } = await supabase.from('section_video_library').insert(inserts)
+        if (videoInsertError) {
+          throw new Error(`Kunne ikke kopiere videoer: ${videoInsertError.message}`)
+        }
       }
     }
 
     // 10. Kopier project_collage_images
-    const { data: collageImages } = await supabase
+    const { data: collageImages, error: collageImagesError } = await supabase
       .from('project_collage_images')
       .select('*')
       .eq('project_id', projectId)
+
+    if (collageImagesError) {
+      throw new Error(`Kunne ikke hente collage-bilder: ${collageImagesError.message}`)
+    }
 
     if (collageImages?.length) {
       const inserts = collageImages
@@ -205,7 +249,10 @@ export async function POST(
           section_id: sectionIdMap[ci.section_id],
         }))
       if (inserts.length) {
-        await supabase.from('project_collage_images').insert(inserts)
+        const { error: collageInsertError } = await supabase.from('project_collage_images').insert(inserts)
+        if (collageInsertError) {
+          throw new Error(`Kunne ikke kopiere collage-bilder: ${collageInsertError.message}`)
+        }
       }
     }
 

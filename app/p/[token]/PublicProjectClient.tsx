@@ -152,14 +152,6 @@ export function PublicProjectClient({
   const emptyRecord = useMemo(() => ({}), [])
 
   const heroSection = useMemo(() => sections.find(s => s.type === 'hero'), [sections])
-  const exampleWorkSection = useMemo(() => sections.find(s => s.type === 'example_work'), [sections])
-
-  useEffect(() => {
-    if (!exampleWorkSection) return
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'pre-fix',hypothesisId:'H1',location:'app/p/[token]/PublicProjectClient.tsx:160',message:'public client example_work data before render',data:{exampleWorkSectionId:exampleWorkSection.id,realSectionImageDataCount:(sectionImageData[exampleWorkSection.id] || []).length,collageImageIds:[collageImages.pos1?.id ?? null,collageImages.pos2?.id ?? null,collageImages.pos3?.id ?? null,collageImages.pos4?.id ?? null,collageImages.pos5?.id ?? null]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [exampleWorkSection, sectionImageData, collageImages])
 
   const sortedNonHeroSections = useMemo(() =>
     sections

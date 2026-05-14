@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/auth/admin'
 
 /**
  * POST /api/projects/[id]/duplicate
@@ -13,6 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const { id: projectId } = await params
     if (!projectId) {
       return Response.json({ error: 'Mangler prosjekt-ID' }, { status: 400 })

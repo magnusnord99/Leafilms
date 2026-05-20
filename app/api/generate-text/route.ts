@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createPublicClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/auth/admin'
 
 // Initialize OpenAI client lazily to avoid build-time errors
 function getOpenAIClient() {
@@ -14,6 +15,9 @@ function getOpenAIClient() {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const { projectType, medium, targetAudience, sectionType } = await req.json()
 
     // Valider input

@@ -14,6 +14,7 @@ import { usePublishing } from '@/hooks/project/usePublishing'
 import { useAIGeneration } from '@/hooks/project/useAIGeneration'
 import { useSectionHandlers } from '@/hooks/project/useSectionHandlers'
 import { useCollageImages } from '@/hooks/project/useCollageImages'
+import { supabase } from '@/lib/supabase'
 import {
   EditProjectTopBar,
   SectionRenderer,
@@ -196,6 +197,7 @@ export default function EditProject({ params }: Props) {
     id,
     sections,
     sectionImages,
+    sectionImageData,
     setCollageImages,
     setSelectedPreset
   })
@@ -250,11 +252,42 @@ export default function EditProject({ params }: Props) {
   const handleImageSelectForModal = async (imageIds: string[]) => {
     if (collageImagePosition && imagePickerSectionId) {
       const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
-      const currentIds = (sectionImages[imagePickerSectionId] || []).map(img => img.id)
-      while (currentIds.length <= posIndex) currentIds.push(currentIds[currentIds.length - 1] || imageIds[0])
-      currentIds[posIndex] = imageIds[0]
-      setCollageImagePosition(null)
-      await handleImageSelect(currentIds)
+      const selectedImageId = imageIds[0]
+      try {
+        if (!selectedImageId) return
+
+        const rows = [...(sectionImageData[imagePickerSectionId] || [])].sort(
+          (a, b) => (a.order_index || 0) - (b.order_index || 0)
+        )
+        const existingRow = rows.find((row) => row.order_index === posIndex)
+
+        const query = existingRow
+          ? supabase
+              .from('section_images')
+              .update({ image_id: selectedImageId, position: 'background' })
+              .eq('id', existingRow.id)
+          : supabase
+              .from('section_images')
+              .insert({
+                section_id: imagePickerSectionId,
+                image_id: selectedImageId,
+                order_index: posIndex,
+                position: 'background',
+              })
+
+        const { error } = await query
+        if (error) throw error
+
+        await refreshData()
+      } catch (error) {
+        console.error('❌ Error saving collage slot image:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Ukjent feil'
+        alert('❌ Kunne ikke lagre collage-bilde: ' + errorMessage)
+      } finally {
+        setCollageImagePosition(null)
+        setShowImagePicker(false)
+        setImagePickerSectionId(null)
+      }
     } else {
       await handleImageSelect(imageIds)
     }

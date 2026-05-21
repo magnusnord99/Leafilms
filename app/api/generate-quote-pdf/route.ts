@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { getQuotePath } from '@/lib/storage/paths'
 import { generateQuotePDF } from './pdf-generator'
+import { requireAdmin } from '@/lib/auth/admin'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest) {
     if (!builderData) {
       return NextResponse.json({ error: 'builderData mangler' }, { status: 400 })
     }
+
+    const admin = await requireAdmin()
+    if (!admin.authorized) return admin.response
 
     const includeVat = mva === 'y'
 

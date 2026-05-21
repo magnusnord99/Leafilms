@@ -104,13 +104,18 @@ export function QuoteSection({
   )
 
   const handleAcceptQuote = async () => {
-    if (!quoteData || !project.id) return
+    if (!quoteData || !quoteId || !project.id || !shareToken) return
     setAcceptingQuote(true)
     try {
       const response = await fetch('/api/accept-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: project.id, quoteData, acceptedBy: project.client_name || 'Kunde' }),
+        body: JSON.stringify({
+          projectId: project.id,
+          quoteId,
+          shareToken,
+          acceptedBy: project.client_name || 'Kunde',
+        }),
       })
       if (!response.ok) {
         const err = await response.json()

@@ -83,22 +83,16 @@ export function useSectionImages(
   }
 
   // Lagre posisjon/zoom for et bakgrunnsbilde
-  const saveBackgroundPosition = async (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null, imageId?: string) => {
+  const saveBackgroundPosition = async (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => {
     try {
       const rows = sectionImageData[sectionId] || []
       // For collage slots, imageIndex is the source of truth for position mapping.
       // Using image_id lookup can target the wrong row when same image is reused.
-      const sectionImage = rows[imageIndex]
+      const sectionImage = rows.find((row) => row.order_index === imageIndex) || rows[imageIndex]
       const sectionImageRowIndex = sectionImage
         ? rows.findIndex((row) => row.id === sectionImage.id)
         : -1
-      // #region agent log
-      fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H6',location:'hooks/project/useSectionImages.ts:61',message:'saveBackgroundPosition called',data:{sectionId,imageIndex,imageId:imageId ?? null,sectionImageId:sectionImage?.id ?? null,positionX,positionY,zoom,hasSectionImage:Boolean(sectionImage)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!sectionImage) {
-        // #region agent log
-        fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H6',location:'hooks/project/useSectionImages.ts:63',message:'saveBackgroundPosition skipped missing sectionImage',data:{sectionId,imageIndex},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return
       }
       const slotKey = `${sectionId}:${imageIndex}`
@@ -109,9 +103,6 @@ export function useSectionImages(
         sectionImageId: sectionImage.id
       }
       await flushLatestSaveForSlot(slotKey)
-      // #region agent log
-      fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H6',location:'hooks/project/useSectionImages.ts:75',message:'saveBackgroundPosition db update success',data:{sectionId,imageIndex,sectionImageId:sectionImage.id,positionX,positionY,zoom},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       setSectionImageData((prev: Record<string, SectionImage[]>) => {
         const updated: Record<string, SectionImage[]> = { ...prev }
@@ -128,9 +119,6 @@ export function useSectionImages(
         return updated
       })
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H6',location:'hooks/project/useSectionImages.ts:92',message:'saveBackgroundPosition failed',data:{sectionId,imageIndex,error:String(error)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       console.error('Error saving background position:', error)
       alert('❌ Kunne ikke lagre posisjon')
     }

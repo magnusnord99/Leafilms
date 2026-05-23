@@ -17,6 +17,7 @@ type EditProjectModalsProps = {
   imagePickerSectionId: string | null
   setImagePickerSectionId: (id: string | null) => void
   collageImagePosition?: string | null
+  setCollageImagePosition?: (position: string | null) => void
   sectionImages: Record<string, Image[]>
   sectionVideos?: Record<string, VideoLibrary[]>
   sections: Section[]
@@ -54,6 +55,7 @@ export function EditProjectModals({
   imagePickerSectionId,
   setImagePickerSectionId,
   collageImagePosition,
+  setCollageImagePosition,
   sectionImages,
   sectionVideos = {},
   sections,
@@ -108,6 +110,7 @@ export function EditProjectModals({
         onClose={() => {
           setShowImagePicker(false)
           setImagePickerSectionId(null)
+          setCollageImagePosition?.(null)
         }}
         onSelect={onImageSelect}
         selectedImageIds={(() => {

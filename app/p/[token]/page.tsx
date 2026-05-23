@@ -304,11 +304,12 @@ export default async function PublicProjectView({ params }: Props) {
     const exampleWorkRows = sectionImageData[exampleWorkSection.id] || []
     
     // Map bildene til posisjoner basert på order_index (0 = pos1, 1 = pos2, osv.)
-    collageImages.pos1 = sectionImagesForExampleWork[0] || null
-    collageImages.pos2 = sectionImagesForExampleWork[1] || null
-    collageImages.pos3 = sectionImagesForExampleWork[2] || null
-    collageImages.pos4 = sectionImagesForExampleWork[3] || null
-    collageImages.pos5 = sectionImagesForExampleWork[4] || null
+    exampleWorkRows.forEach((row, rowIndex) => {
+      const position = `pos${(row.order_index ?? rowIndex) + 1}` as keyof CollageImages
+      if (position in collageImages) {
+        collageImages[position] = sectionImagesForExampleWork[rowIndex] || null
+      }
+    })
     // #region agent log
     fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H4',location:'app/p/[token]/page.tsx:309',message:'public example_work mapping snapshot',data:{exampleWorkSectionId:exampleWorkSection.id,imageIds:sectionImagesForExampleWork.map(i=>i.id),imageRowOrder:exampleWorkRows.map(r=>({id:r.id,order_index:r.order_index,x:r.background_position_x,y:r.background_position_y,zoom:r.background_zoom}))},timestamp:Date.now()})}).catch(()=>{});
     // #endregion

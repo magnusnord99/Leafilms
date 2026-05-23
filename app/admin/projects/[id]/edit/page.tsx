@@ -3,6 +3,7 @@
 import { use, useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Section, CollagePreset, Image } from '@/lib/types'
+import { replaceSectionImageAtIndex } from '@/lib/services/imageService'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
 import { SectionPreview } from '@/components/preview/SectionPreview'
@@ -196,6 +197,7 @@ export default function EditProject({ params }: Props) {
     id,
     sections,
     sectionImages,
+    sectionImageData,
     setCollageImages,
     setSelectedPreset
   })
@@ -250,11 +252,46 @@ export default function EditProject({ params }: Props) {
   const handleImageSelectForModal = async (imageIds: string[]) => {
     if (collageImagePosition && imagePickerSectionId) {
       const posIndex = parseInt(collageImagePosition.replace('pos', '')) - 1
-      const currentIds = (sectionImages[imagePickerSectionId] || []).map(img => img.id)
-      while (currentIds.length <= posIndex) currentIds.push(currentIds[currentIds.length - 1] || imageIds[0])
-      currentIds[posIndex] = imageIds[0]
+      const sectionId = imagePickerSectionId
+      const positionKey = collageImagePosition as keyof typeof collageImages
+      const selectedImageId = imageIds[0]
       setCollageImagePosition(null)
-      await handleImageSelect(currentIds)
+
+      if (!selectedImageId) {
+        setShowImagePicker(false)
+        setImagePickerSectionId(null)
+        return
+      }
+
+      try {
+        const result = await replaceSectionImageAtIndex(sectionId, selectedImageId, posIndex)
+        const rowIndex = result.sectionImages.findIndex(row => row.order_index === posIndex)
+        const selectedImage = rowIndex >= 0 ? result.images[rowIndex] : result.images.find(img => img.id === selectedImageId)
+
+        setSectionImages(prev => ({
+          ...prev,
+          [sectionId]: result.images
+        }))
+        setSectionImageData(prev => ({
+          ...prev,
+          [sectionId]: result.sectionImages
+        }))
+        setCollageImages(prev => ({
+          ...prev,
+          [positionKey]: selectedImage || null
+        }))
+
+        if (refreshData) {
+          await refreshData()
+        }
+      } catch (error) {
+        console.error('❌ Error saving collage image slot:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Ukjent feil'
+        alert('❌ Kunne ikke lagre bilde: ' + errorMessage)
+      } finally {
+        setShowImagePicker(false)
+        setImagePickerSectionId(null)
+      }
     } else {
       await handleImageSelect(imageIds)
     }
@@ -511,6 +548,7 @@ export default function EditProject({ params }: Props) {
           imagePickerSectionId={imagePickerSectionId}
           setImagePickerSectionId={setImagePickerSectionId}
           collageImagePosition={collageImagePosition}
+          setCollageImagePosition={setCollageImagePosition}
           sectionImages={sectionImages}
           sectionVideos={sectionVideos}
           sections={sections}

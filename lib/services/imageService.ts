@@ -121,6 +121,135 @@ export async function saveSectionImages(
   }
 }
 
+async function fetchImagesForSectionRows(sectionImages: SectionImage[]): Promise<Image[]> {
+  const imageIds = sectionImages.map(si => si.image_id)
+  const { data: imagesData, error: imagesError } = await supabase
+    .from('images')
+    .select('*')
+    .in('id', imageIds)
+
+  if (imagesError) {
+    console.error('Error fetching images:', imagesError)
+    throw imagesError
+  }
+
+  return imageIds
+    .map(id => imagesData?.find(img => img.id === id))
+    .filter(Boolean) as Image[]
+}
+
+async function fetchSectionImageRows(sectionId: string): Promise<SectionImage[]> {
+  const { data, error } = await supabase
+    .from('section_images')
+    .select('*')
+    .eq('section_id', sectionId)
+    .order('order_index', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching section image rows:', error)
+    throw error
+  }
+
+  return (data || []) as SectionImage[]
+}
+
+export async function replaceSectionImageAtIndex(
+  sectionId: string,
+  imageId: string,
+  orderIndex: number
+): Promise<{ images: Image[]; sectionImages: SectionImage[] }> {
+  if (!imageId) {
+    throw new Error('Missing image ID')
+  }
+  if (!Number.isInteger(orderIndex) || orderIndex < 0) {
+    throw new Error('Invalid image order index')
+  }
+
+  const { data: existingRows, error: fetchError } = await supabase
+    .from('section_images')
+    .select('id')
+    .eq('section_id', sectionId)
+    .eq('order_index', orderIndex)
+
+  if (fetchError) {
+    console.error('Error fetching existing image slot:', fetchError)
+    throw fetchError
+  }
+
+  if (existingRows && existingRows.length > 0) {
+    const { error: updateError } = await supabase
+      .from('section_images')
+      .update({
+        image_id: imageId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('section_id', sectionId)
+      .eq('order_index', orderIndex)
+
+    if (updateError) {
+      console.error('Error updating image slot:', updateError)
+      throw updateError
+    }
+  } else {
+    const { error: insertError } = await supabase
+      .from('section_images')
+      .insert({
+        section_id: sectionId,
+        image_id: imageId,
+        order_index: orderIndex,
+        position: 'background'
+      })
+
+    if (insertError) {
+      console.error('Error inserting image slot:', insertError)
+      throw insertError
+    }
+  }
+
+  const sectionImages = await fetchSectionImageRows(sectionId)
+  const images = await fetchImagesForSectionRows(sectionImages)
+
+  return { images, sectionImages }
+}
+
+export async function saveSectionImageSlots(
+  sectionId: string,
+  imageIdsByOrder: Array<string | null | undefined>
+): Promise<{ images: Image[]; sectionImages: SectionImage[] }> {
+  const { error: deleteError } = await supabase
+    .from('section_images')
+    .delete()
+    .eq('section_id', sectionId)
+
+  if (deleteError) {
+    console.error('Error deleting existing image slots:', deleteError)
+    throw deleteError
+  }
+
+  const rowsToInsert = imageIdsByOrder.flatMap((imageId, orderIndex) => imageId ? [{
+    section_id: sectionId,
+    image_id: imageId,
+    order_index: orderIndex,
+    position: 'background'
+  }] : [])
+
+  if (rowsToInsert.length > 0) {
+    const { error: insertError } = await supabase
+      .from('section_images')
+      .insert(rowsToInsert)
+
+    if (insertError) {
+      console.error('Error inserting image slots:', insertError)
+      throw insertError
+    }
+  }
+
+  const sectionImages = await fetchSectionImageRows(sectionId)
+  const images = await fetchImagesForSectionRows(sectionImages)
+
+  return { images, sectionImages }
+}
+
 export async function saveBackgroundPosition(
   sectionImageId: string,
   positionX: number,

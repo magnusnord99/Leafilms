@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Section, CollagePreset, Image, VideoLibrary, SectionVideo } from '@/lib/types'
-import { saveSectionImages, saveSectionVideos } from '@/lib/services/imageService'
+import { saveSectionImages, saveSectionImageSlots, saveSectionVideos } from '@/lib/services/imageService'
 
 type UseSectionHandlersProps = {
   project: any
@@ -484,21 +484,19 @@ export function useSectionHandlers({
       // Lagre preset ID i section content
       updateSectionContent(exampleWorkSection.id, 'presetId', preset.id)
       
-      // Konverter collage images til array for lagring
-      const imageArray = [
+      const imageSlots = [
         preset.images.pos1,
         preset.images.pos2,
         preset.images.pos3,
         preset.images.pos4,
         preset.images.pos5
-      ].filter(Boolean) as Image[]
+      ] as Array<Image | null>
 
-      // Lagre bildene i section_images med position
-      if (imageArray.length > 0) {
-        const imageIds = imageArray.map(img => img.id)
+      if (imageSlots.some(Boolean)) {
+        const imageIds = imageSlots.map(img => img?.id ?? null)
         console.log('💾 Saving collage images for preset:', preset.id, 'imageIds:', imageIds)
         
-        const result = await saveSectionImages(exampleWorkSection.id, imageIds)
+        const result = await saveSectionImageSlots(exampleWorkSection.id, imageIds)
         console.log('✅ Collage images saved:', result)
         
         // Oppdater state
@@ -508,7 +506,11 @@ export function useSectionHandlers({
         // Oppdater sectionImages state
         setSectionImages(prev => ({
           ...prev,
-          [exampleWorkSection.id]: imageArray
+          [exampleWorkSection.id]: result.images
+        }))
+        setSectionImageData(prev => ({
+          ...prev,
+          [exampleWorkSection.id]: result.sectionImages
         }))
         
         // Refresh data for å sikre synkronisering

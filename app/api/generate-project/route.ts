@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createServiceClient } from '@/lib/supabase-server'
 
 // Initialize OpenAI client lazily to avoid build-time errors
@@ -67,6 +68,9 @@ const mediumLabels: Record<string, string> = {
 export async function POST(req: NextRequest) {
   try {
     console.log('[generate-project] Starting project generation...')
+
+    const authError = await requireAdmin()
+    if (authError) return authError
     
     const {
       projectId,

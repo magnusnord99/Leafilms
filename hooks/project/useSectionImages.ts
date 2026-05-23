@@ -88,7 +88,7 @@ export function useSectionImages(
       const rows = sectionImageData[sectionId] || []
       // For collage slots, imageIndex is the source of truth for position mapping.
       // Using image_id lookup can target the wrong row when same image is reused.
-      const sectionImage = rows[imageIndex]
+      const sectionImage = rows.find(row => row.order_index === imageIndex) || rows[imageIndex]
       const sectionImageRowIndex = sectionImage
         ? rows.findIndex((row) => row.id === sectionImage.id)
         : -1

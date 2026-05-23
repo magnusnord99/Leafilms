@@ -54,7 +54,7 @@ export function ExampleWorkSection({
 
   const getSectionImageForIndex = (imageIndex: number) => {
     const rows = sectionImageData[section.id] || []
-    return rows[imageIndex]
+    return rows.find(row => row.order_index === imageIndex) || rows[imageIndex]
   }
 
   useEffect(() => {

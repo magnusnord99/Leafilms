@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CollagePreset, Image } from '@/lib/types'
+import { CollagePreset, Image, SectionImage } from '@/lib/types'
 import { Section } from '@/lib/types'
 
 type CollageImages = {
@@ -15,6 +15,7 @@ type UseCollageImagesProps = {
   id: string
   sections: Section[]
   sectionImages: Record<string, Image[]>
+  sectionImageData: Record<string, SectionImage[]>
   setCollageImages: (images: CollageImages) => void
   setSelectedPreset: (preset: CollagePreset | null) => void
 }
@@ -23,6 +24,7 @@ export function useCollageImages({
   id,
   sections,
   sectionImages,
+  sectionImageData,
   setCollageImages,
   setSelectedPreset
 }: UseCollageImagesProps) {
@@ -38,16 +40,22 @@ export function useCollageImages({
       
       // Hent bilder fra section_images (som brukes for alle seksjoner)
       const sectionImagesForExampleWork = sectionImages[exampleWorkSection.id] || []
+      const sectionImageRows = sectionImageData[exampleWorkSection.id] || []
       
       if (sectionImagesForExampleWork.length > 0) {
-        // Konverter array til collage format basert på rekkefølge
         const newCollageImages: CollageImages = {
-          pos1: sectionImagesForExampleWork[0] || null,
-          pos2: sectionImagesForExampleWork[1] || null,
-          pos3: sectionImagesForExampleWork[2] || null,
-          pos4: sectionImagesForExampleWork[3] || null,
-          pos5: sectionImagesForExampleWork[4] || null
+          pos1: null,
+          pos2: null,
+          pos3: null,
+          pos4: null,
+          pos5: null
         }
+        sectionImageRows.forEach((row, rowIndex) => {
+          const position = `pos${(row.order_index ?? rowIndex) + 1}` as keyof CollageImages
+          if (position in newCollageImages) {
+            newCollageImages[position] = sectionImagesForExampleWork[rowIndex] || null
+          }
+        })
         
         console.log('📸 Loading collage images from section_images:', newCollageImages)
         setCollageImages(newCollageImages)
@@ -73,7 +81,7 @@ export function useCollageImages({
     }
 
     loadCollageImages()
-  }, [id, sections, sectionImages, setCollageImages, setSelectedPreset])
+  }, [id, sections, sectionImages, sectionImageData, setCollageImages, setSelectedPreset])
 }
 
 

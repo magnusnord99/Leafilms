@@ -98,12 +98,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update profile with name if provided
-    if (inviteData.user && name) {
-      await adminClient
+    // The auth trigger defaults new users to non-admin; invitations from an
+    // existing admin explicitly promote the invited profile.
+    if (inviteData.user) {
+      const { error: profileError } = await adminClient
         .from('profiles')
-        .update({ name })
-        .eq('id', inviteData.user.id)
+        .upsert({
+          id: inviteData.user.id,
+          email,
+          role: 'admin',
+          name: name || null,
+        }, { onConflict: 'id' })
+
+      if (profileError) {
+        console.error('Error updating invited user profile:', profileError)
+        return NextResponse.json(
+          { error: 'Invitation sent, but admin profile update failed' },
+          { status: 500 }
+        )
+      }
     }
 
     return NextResponse.json({

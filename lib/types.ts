@@ -273,3 +273,31 @@ export type ProjectCollageImage = {
   updated_at: string
 }
 
+export type ProjectMessage = {
+  id: string
+  project_id: string
+  user_id: string
+  user_name: string | null
+  content: string
+  created_at: string
+}
+
+export type MarketLead = {
+  name: string
+  company: string
+  website: string | null
+  reason: string
+  sales_points: string[]
+  cold_email: string
+}
+
+export type MarketAnalysis = {
+  id: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  triggered_by: 'manual' | 'cron' | null
+  results: { customers: MarketLead[]; generated_at: string } | null
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+}
+

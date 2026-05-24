@@ -19,6 +19,7 @@ import {
   SectionRenderer,
   EditProjectModals
 } from '@/components/project'
+import { ProjectChat } from '@/components/project/ProjectChat'
 import { HeroSection } from '@/components/sections'
 
 type Props = {
@@ -503,6 +504,9 @@ export default function EditProject({ params }: Props) {
         </footer>
         </div>
       </div>
+
+        {/* Floating project chat */}
+        <ProjectChat projectId={id} />
 
         {/* Modals */}
         <EditProjectModals

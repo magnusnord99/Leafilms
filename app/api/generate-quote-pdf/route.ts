@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createClient } from '@/lib/supabase-server'
 import { getQuotePath } from '@/lib/storage/paths'
 import { generateQuotePDF } from './pdf-generator'
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdmin()
+    if (!admin.authorized) return admin.response
+
     const body = await req.json()
     const {
       builderData,

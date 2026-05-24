@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Section, Image, SectionImage, CollagePreset } from '@/lib/types'
 import { Button, Text } from '@/components/ui'
 import { ImagePositionControls } from '@/components/project'
@@ -56,18 +56,6 @@ export function ExampleWorkSection({
     const rows = sectionImageData[section.id] || []
     return rows[imageIndex]
   }
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H1',location:'components/sections/ExampleWorkSection.tsx:56',message:'example work received section image data',data:{editMode,sectionId:section.id,sectionImageCount:(sectionImageData[section.id] || []).length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [editMode, section.id, sectionImageData])
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H10',location:'components/sections/ExampleWorkSection.tsx:63',message:'example work editing index changed',data:{sectionId:section.id,editingIndex},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [section.id, editingIndex])
 
   const getCollageImageStyle = (imageIndex: number): React.CSSProperties => {
     const position = POSITION_ORDER[imageIndex]
@@ -128,9 +116,6 @@ export function ExampleWorkSection({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  // #region agent log
-                  fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H8',location:'components/sections/ExampleWorkSection.tsx:120',message:'example work toggle edit clicked',data:{sectionId:section.id,imageIndex,wasEditing:isEditing},timestamp:Date.now()})}).catch(()=>{});
-                  // #endregion
                   setEditingIndex(isEditing ? null : imageIndex)
                 }}
                 className="absolute top-3 right-3 z-20 bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
@@ -145,9 +130,6 @@ export function ExampleWorkSection({
                 currentPos={currentPos}
                 onPositionChange={(newPos) => {
                   const key = `${section.id}_${imageIndex}`
-                  // #region agent log
-                  fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H7',location:'components/sections/ExampleWorkSection.tsx:134',message:'example work onPositionChange fired',data:{sectionId:section.id,imageIndex,newPos},timestamp:Date.now()})}).catch(()=>{});
-                  // #endregion
                   setImagePosition((prev) => ({ ...prev, [key]: newPos }))
                   saveBackgroundPosition(section.id, imageIndex, newPos.x, newPos.y, newPos.zoom, image?.id)
                 }}
@@ -179,14 +161,7 @@ export function ExampleWorkSection({
   }
 
   return (
-    <div
-      className="w-full"
-      onClick={() => {
-        // #region agent log
-        fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'post-fix',hypothesisId:'H11',location:'components/sections/ExampleWorkSection.tsx:176',message:'example work container clicked',data:{sectionId:section.id,editMode,editingIndex},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-      }}
-    >
+    <div className="w-full">
       {/* Velg bilde-sett knapp i edit mode */}
       {editMode && (
         <div className="max-w-6xl mx-auto mb-6 px-4 flex items-center gap-4">

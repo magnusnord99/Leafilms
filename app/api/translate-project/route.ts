@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { requireAdmin } from '@/lib/auth/admin'
 import { createServiceClient } from '@/lib/supabase-server'
 
 function getOpenAIClient() {
@@ -48,6 +49,9 @@ async function translateText(text: string, targetLanguage: 'no' | 'en', openai: 
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdmin()
+    if (!admin.authorized) return admin.response
+
     const { projectId, targetLanguage } = await req.json()
 
     if (!projectId || !targetLanguage) {

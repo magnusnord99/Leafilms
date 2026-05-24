@@ -67,14 +67,13 @@ Søk på nettet etter norske selskaper som trolig trenger film- eller videoprodu
 
 Finn 5 konkrete norske selskaper og returner dem i JSON-formatet spesifisert i systemprompten.`
 
-  const response = await (client.messages.create as Function)({
+  const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
     tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-    betas: ['web-search-2025-03-05'],
-  }) as Anthropic.Message
+  })
 
   const textBlock = response.content.find((b: Anthropic.ContentBlock) => b.type === 'text')
   if (!textBlock || textBlock.type !== 'text') {

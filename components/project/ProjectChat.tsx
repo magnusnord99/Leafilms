@@ -15,12 +15,14 @@ export function ProjectChat({ projectId }: Props) {
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const openRef = useRef(open)
 
   useEffect(() => {
-    if (!open) return
-    setUnread(0)
-    fetchMessages()
+    openRef.current = open
+  }, [open])
 
+  // Realtime-subscription kjører alltid — uavhengig av om chatten er åpen
+  useEffect(() => {
     const channel = supabase
       .channel(`project-messages-${projectId}`)
       .on(
@@ -32,11 +34,16 @@ export function ProjectChat({ projectId }: Props) {
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
-          setMessages((prev) => {
-            const exists = prev.some((m) => m.id === (payload.new as ProjectMessage).id)
-            if (exists) return prev
-            return [...prev, payload.new as ProjectMessage]
-          })
+          const newMessage = payload.new as ProjectMessage
+          if (openRef.current) {
+            setMessages((prev) => {
+              const exists = prev.some((m) => m.id === newMessage.id)
+              if (exists) return prev
+              return [...prev, newMessage]
+            })
+          } else {
+            setUnread((u) => u + 1)
+          }
         }
       )
       .subscribe()
@@ -44,6 +51,13 @@ export function ProjectChat({ projectId }: Props) {
     return () => {
       supabase.removeChannel(channel)
     }
+  }, [projectId])
+
+  // Fetch meldinger og nullstill unread når chatten åpnes
+  useEffect(() => {
+    if (!open) return
+    setUnread(0)
+    fetchMessages()
   }, [open, projectId])
 
   useEffect(() => {

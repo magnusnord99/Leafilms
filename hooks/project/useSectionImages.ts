@@ -83,7 +83,7 @@ export function useSectionImages(
   }
 
   // Lagre posisjon/zoom for et bakgrunnsbilde
-  const saveBackgroundPosition = async (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null, imageId?: string) => {
+  const saveBackgroundPosition = async (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => {
     try {
       const rows = sectionImageData[sectionId] || []
       // For collage slots, imageIndex is the source of truth for position mapping.

@@ -131,13 +131,13 @@ export function ExampleWorkSection({
                 onPositionChange={(newPos) => {
                   const key = `${section.id}_${imageIndex}`
                   setImagePosition((prev) => ({ ...prev, [key]: newPos }))
-                  saveBackgroundPosition(section.id, imageIndex, newPos.x, newPos.y, newPos.zoom, image?.id)
+                  saveBackgroundPosition(section.id, imageIndex, newPos.x, newPos.y, newPos.zoom)
                 }}
                 onReset={() => {
                   const defaultPos = { x: 50, y: 50, zoom: null }
                   const key = `${section.id}_${imageIndex}`
                   setImagePosition((prev) => ({ ...prev, [key]: defaultPos }))
-                  saveBackgroundPosition(section.id, imageIndex, defaultPos.x, defaultPos.y, defaultPos.zoom, image?.id)
+                  saveBackgroundPosition(section.id, imageIndex, defaultPos.x, defaultPos.y, defaultPos.zoom)
                 }}
                 onChangeImage={() => onImageClick(position)}
               />

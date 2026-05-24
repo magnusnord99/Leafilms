@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
 import { Button, Badge } from '@/components/ui'
-import { Project, Customer } from '@/lib/types'
+import { Project, Customer, MarketAnalysis } from '@/lib/types'
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
@@ -14,9 +14,13 @@ export default function AdminDashboard() {
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
   const [totalProjects, setTotalProjects] = useState(0)
   const [publishedCount, setPublishedCount] = useState(0)
+  const [latestAnalysis, setLatestAnalysis] = useState<MarketAnalysis | null>(null)
 
   useEffect(() => {
     fetchData()
+    fetch('/api/market-analysis').then(r => r.json()).then(({ analysis }) => {
+      if (analysis) setLatestAnalysis(analysis)
+    }).catch(() => {})
   }, [])
 
   async function fetchData() {
@@ -366,6 +370,50 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+
+        {/* Markedsanalyse widget */}
+        <div className="mb-14">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div style={{ width: 20, height: 1, background: '#38332A' }} />
+              {sectionLabel('Markedsanalyse')}
+            </div>
+            <Link href="/admin/market-analysis">
+              <Button variant="ghost" size="sm">Gå til analyse →</Button>
+            </Link>
+          </div>
+
+          <div
+            className="px-6 py-5 flex items-center justify-between"
+            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+          >
+            {latestAnalysis?.results ? (
+              <>
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E8E1D5', marginBottom: 4 }}>
+                    <span style={{ color: '#C49434', fontWeight: 500 }}>{latestAnalysis.results.customers.length} leads</span> funnet sist uke
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#3D3829', letterSpacing: '0.06em' }}>
+                    {new Date(latestAnalysis.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+                <Link href="/admin/market-analysis">
+                  <Button variant="ghost" size="sm">Se detaljer</Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#3D3829', letterSpacing: '0.06em' }}>
+                  Ingen analyser kjørt ennå. Kjøres automatisk hver mandag kl 08:00.
+                </p>
+                <Link href="/admin/market-analysis">
+                  <Button variant="primary" size="sm">Kjør nå</Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   )

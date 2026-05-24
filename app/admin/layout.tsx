@@ -17,6 +17,7 @@ const navItems = [
   { href: '/admin/videos', label: 'Videoer' },
   { href: '/admin/ai-examples', label: 'AI Eksempler' },
   { href: '/admin/users', label: 'Brukere' },
+  { href: '/admin/market-analysis', label: 'Markedsanalyse' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

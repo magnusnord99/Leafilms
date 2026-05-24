@@ -3,17 +3,12 @@
 -- so that Supabase CLI can track them correctly
 --
 -- IMPORTANT: This migration should be run via Supabase Dashboard SQL Editor
--- After running this, use: supabase migration repair --status reverted <all-migrations>
--- Then: supabase db pull
--- Finally: supabase db push
---
--- OR use the simpler approach: supabase migration repair --status reverted <migrations>
--- as suggested by the CLI error message
+-- After running this, use: supabase db push --include-all
+-- to sync the migration history
 
 -- Supabase CLI tracks migrations in supabase_migrations.schema_migrations
--- The table structure is: (version TEXT PRIMARY KEY)
--- Where version is typically a hash or timestamp-based identifier
--- NOT just the filename - this is why we need to use migration repair instead
+-- The table structure is: (version TEXT PRIMARY KEY, name TEXT, inserted_at TIMESTAMPTZ)
+-- Where version is the filename (without .sql extension)
 
 -- Ensure the schema_migrations table exists (it should, but just in case)
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;

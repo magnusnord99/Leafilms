@@ -1,7 +1,7 @@
 -- Case Studies (tidligere arbeid / portfolio items)
 -- Kan også brukes som mal for team-medlemmer senere
 
-CREATE TABLE case_studies (
+CREATE TABLE IF NOT EXISTS case_studies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   description TEXT NOT NULL,

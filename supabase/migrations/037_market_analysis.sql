@@ -18,5 +18,6 @@ CREATE POLICY "Admins can read market analyses"
 
 CREATE POLICY "Service role can insert/update"
   ON market_analyses FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);

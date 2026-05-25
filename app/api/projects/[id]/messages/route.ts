@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/auth/admin'
 
 export async function GET(
   _req: NextRequest,
@@ -9,10 +10,8 @@ export async function GET(
     const { id: projectId } = await params
     const supabase = await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
-    }
+    const admin = await requireAdmin(supabase)
+    if (admin.errorResponse) return admin.errorResponse
 
     const serviceClient = createServiceClient()
     const { data, error } = await serviceClient
@@ -41,10 +40,8 @@ export async function POST(
     const { id: projectId } = await params
     const supabase = await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
-    }
+    const admin = await requireAdmin(supabase)
+    if (admin.errorResponse) return admin.errorResponse
 
     const { content } = await req.json()
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -54,17 +51,17 @@ export async function POST(
     const { data: profile } = await supabase
       .from('profiles')
       .select('name, email')
-      .eq('id', user.id)
+      .eq('id', admin.user.id)
       .single()
 
-    const userName = profile?.name || profile?.email || user.email || 'Ukjent'
+    const userName = profile?.name || profile?.email || admin.user.email || 'Ukjent'
 
     const serviceClient = createServiceClient()
     const { data, error } = await serviceClient
       .from('project_messages')
       .insert({
         project_id: projectId,
-        user_id: user.id,
+        user_id: admin.user.id,
         user_name: userName,
         content: content.trim(),
       })

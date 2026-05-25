@@ -14,7 +14,8 @@ ALTER TABLE market_analyses ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admins can read market analyses"
   ON market_analyses FOR SELECT
-  USING (auth.role() = 'authenticated');
+  TO authenticated
+  USING (public.is_admin(auth.uid()));
 
 CREATE POLICY "Service role can insert/update"
   ON market_analyses FOR ALL

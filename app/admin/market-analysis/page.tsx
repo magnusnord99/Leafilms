@@ -61,7 +61,7 @@ export default function MarketAnalysisPage() {
     })
 
   return (
-    <div className="min-h-screen" style={{ background: '#0C0B09', color: '#E8E1D5', padding: '32px 24px' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
 
         {/* Header */}

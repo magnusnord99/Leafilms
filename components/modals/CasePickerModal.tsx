@@ -26,8 +26,8 @@ export function CasePickerModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-8 z-50">
-      <Card className="max-w-5xl w-full max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50">
+      <Card className="max-w-5xl w-full max-h-[95vh] sm:max-h-[80vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
             <Heading as="h2" size="md" className="mb-2">Velg Case Studies (maks 4)</Heading>
@@ -45,7 +45,7 @@ export function CasePickerModal({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           {allCases.map((caseStudy) => {
             const isSelected = selectedCaseIds.includes(caseStudy.id)
             return (

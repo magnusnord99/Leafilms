@@ -137,7 +137,7 @@ export default function ImagesPage() {
   const isFiltered = searchQuery || selectedCategory !== 'all'
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-6 mb-14">

@@ -128,7 +128,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
@@ -200,13 +200,13 @@ export default function ProjectsPage() {
                 {group.versions.map((project, i) => (
                   <div
                     key={project.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3"
                     style={{
                       background: '#0E0D0B',
                       borderBottom: i < group.versions.length - 1 ? '1px solid #2A261F' : 'none',
                     }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
                         {project.status === 'published' ? 'Publisert' : project.status === 'archived' ? 'Arkivert' : 'Utkast'}
                       </Badge>
@@ -226,7 +226,7 @@ export default function ProjectsPage() {
                         {new Date(project.updated_at).toLocaleDateString('nb-NO')}
                       </span>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex flex-wrap gap-2 flex-shrink-0">
                       <Link href={`/admin/projects/${project.id}/edit`}>
                         <Button variant="primary" size="sm">Rediger</Button>
                       </Link>
@@ -236,10 +236,11 @@ export default function ProjectsPage() {
                           size="sm"
                           onClick={() => window.open(shareLinks[project.id], '_blank')}
                         >
-                          Se publisert
+                          <span className="hidden sm:inline">Se publisert</span>
+                          <span className="sm:hidden">Publisert</span>
                         </Button>
                       )}
-                      <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                      <Link href={`/admin/projects/${project.id}/quote-analytics`} className="hidden sm:block">
                         <Button variant="secondary" size="sm">Statistikk</Button>
                       </Link>
                       <Button

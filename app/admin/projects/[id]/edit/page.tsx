@@ -20,6 +20,7 @@ import {
   EditProjectModals
 } from '@/components/project'
 import { ProjectChat } from '@/components/project/ProjectChat'
+import { AdminFeedbackPanel } from '@/components/project/AdminFeedbackPanel'
 import { HeroSection } from '@/components/sections'
 
 type Props = {
@@ -507,6 +508,9 @@ export default function EditProject({ params }: Props) {
 
         {/* Floating project chat */}
         <ProjectChat projectId={id} />
+
+        {/* Floating admin feedback panel */}
+        <AdminFeedbackPanel projectId={id} />
 
         {/* Modals */}
         <EditProjectModals

@@ -179,7 +179,7 @@ export function EditProjectTopBar({
       </div>
 
       {/* Right — primary actions + "Mer" dropdown */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
         {/* Mobile preview toggle (only on small screens) */}
         <Button
           onClick={onMobilePreviewToggle}
@@ -209,7 +209,7 @@ export function EditProjectTopBar({
                   background: '#161410',
                   border: '1px solid #2A261F',
                   borderRadius: 3,
-                  minWidth: 180,
+                  minWidth: 160,
                   zIndex: 50,
                   overflow: 'hidden',
                 }}
@@ -271,7 +271,8 @@ export function EditProjectTopBar({
         </Button>
 
         <Button onClick={onSave} disabled={saving} variant="secondary" size="sm">
-          {saving ? 'Lagrer...' : 'Lagre'}
+          <span className="hidden sm:inline">{saving ? 'Lagrer...' : 'Lagre'}</span>
+          <span className="sm:hidden">{saving ? '...' : 'Lagre'}</span>
         </Button>
 
         <Button
@@ -280,9 +281,14 @@ export function EditProjectTopBar({
           variant={project?.status === 'published' ? 'danger' : 'primary'}
           size="sm"
         >
-          {publishing
-            ? (project?.status === 'published' ? 'Avpubliserer...' : 'Publiserer...')
-            : (project?.status === 'published' ? 'Avpubliser' : 'Publiser')}
+          <span className="hidden sm:inline">
+            {publishing
+              ? (project?.status === 'published' ? 'Avpubliserer...' : 'Publiserer...')
+              : (project?.status === 'published' ? 'Avpubliser' : 'Publiser')}
+          </span>
+          <span className="sm:hidden">
+            {publishing ? '...' : (project?.status === 'published' ? 'Avpubliser' : 'Publiser')}
+          </span>
         </Button>
       </div>
     </div>

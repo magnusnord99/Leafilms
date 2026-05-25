@@ -26,28 +26,28 @@ export function PageHeader({ projectId, projectTitle, projectStatus, onRefresh, 
   }
 
   return (
-    <div className="flex items-center justify-between mb-8">
+    <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
       <div>
         <Link href={`/admin/projects/${projectId}/edit`} className="text-white/60 hover:text-white mb-2 inline-block">
           ← Tilbake til prosjekt
         </Link>
         <Heading as="h1" size="lg" className="mb-2 !text-white">
-          📊 Prosjekt Analytics: {projectTitle || 'Prosjekt'}
+          Prosjekt Analytics: {projectTitle || 'Prosjekt'}
         </Heading>
         {projectStatus && (
           <div className="mt-2">
             <Badge variant={projectStatus === 'published' ? 'published' : 'draft'}>
-              {projectStatus === 'published' ? '🟢 Publisert' : '🟡 Utkast'}
+              {projectStatus === 'published' ? 'Publisert' : 'Utkast'}
             </Badge>
           </div>
         )}
       </div>
-      <div className="flex gap-3">
-        <Button variant="secondary" onClick={onRefresh}>
-          🔄 Oppdater
+      <div className="flex gap-2 flex-shrink-0">
+        <Button variant="secondary" size="sm" onClick={onRefresh}>
+          Oppdater
         </Button>
-        <Button variant="secondary" onClick={handleReset} disabled={resetting}>
-          {resetting ? 'Nullstiller...' : '🗑️ Nullstill statistikk'}
+        <Button variant="secondary" size="sm" onClick={handleReset} disabled={resetting}>
+          {resetting ? 'Nullstiller...' : 'Nullstill statistikk'}
         </Button>
       </div>
     </div>

@@ -138,7 +138,7 @@ export default function PricesPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-6 mb-10">
@@ -266,13 +266,13 @@ export default function PricesPage() {
                   {catItems.map((item, i) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between gap-4 px-4 py-3 group"
+                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                       style={{
                         background: '#0C0B09',
                         borderBottom: i < catItems.length - 1 ? '1px solid #1A1713' : 'none',
                       }}
                     >
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: '#E8E1D5' }}>
                           {item.name}
                         </span>
@@ -280,10 +280,10 @@ export default function PricesPage() {
                           {item.unit}
                         </span>
                       </div>
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434', fontWeight: 500, minWidth: 90, textAlign: 'right' }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434', fontWeight: 500, minWidth: 80, textAlign: 'right' }}>
                         {item.default_price > 0 ? formatNOK(item.default_price) : '—'}
                       </span>
-                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-2 flex-shrink-0">
                         <Button variant="ghost" size="sm" onClick={() => startEdit(item)}>Rediger</Button>
                         <Button variant="danger" size="sm" onClick={() => handleDelete(item.id, item.name)}>Slett</Button>
                       </div>

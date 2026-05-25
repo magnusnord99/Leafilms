@@ -121,14 +121,15 @@ export default function UsersPage() {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <Heading as="h1" size="2xl">Admin-brukere</Heading>
-          <div className="flex gap-4">
+          <div className="flex gap-2 flex-shrink-0">
             <Link href="/admin">
-              <Button variant="secondary">Tilbake</Button>
+              <Button variant="secondary" size="sm">Tilbake</Button>
             </Link>
             <Button
               variant="primary"
+              size="sm"
               onClick={() => setShowInviteForm(!showInviteForm)}
             >
               {showInviteForm ? 'Avbryt' : '+ Ny admin-bruker'}
@@ -200,8 +201,8 @@ export default function UsersPage() {
           ) : (
             users.map((user) => (
               <Card key={user.id} className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <Text variant="body" className="font-semibold">
                       {user.name || user.email}
                     </Text>

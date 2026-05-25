@@ -21,7 +21,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - Next.js App Router — server components by default, `"use client"` kun når nødvendig
 - Tailwind CSS v4 — ingen `@apply` der det ikke er nødvendig
 - Supabase med RLS — **alltid** sett opp RLS på nye tabeller
-- Migrasjoner i `supabase/migrations/` med nummerert prefix — neste er `038_`
+- Migrasjoner i `supabase/migrations/` med nummerert prefix — neste er `040_`
 - Eksisterende services i `lib/services/` — ikke dupliser logikk
 - Types i `lib/types.ts` — hold oppdatert ved endringer
 
@@ -29,8 +29,9 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 
 - `database-migrations/036_project_messages.sql`
 - `database-migrations/037_market_analysis.sql`
+- `database-migrations/039_pitch_feedback.sql`
 
-Disse er skrevet men ikke kjørt mot Supabase ennå.
+Disse er skrevet men ikke kjort mot Supabase enna.
 
 ## Utviklingsfilosofi
 

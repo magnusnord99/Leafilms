@@ -165,9 +165,9 @@ export function ProjectChat({ projectId }: Props) {
           style={{
             position: 'fixed',
             bottom: 84,
-            right: 24,
+            right: 16,
+            left: 16,
             zIndex: 50,
-            width: 320,
             maxHeight: 480,
             display: 'flex',
             flexDirection: 'column',
@@ -177,6 +177,7 @@ export function ProjectChat({ projectId }: Props) {
             boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
             overflow: 'hidden',
           }}
+          className="sm:left-auto sm:w-80"
         >
           {/* Header */}
           <div style={{

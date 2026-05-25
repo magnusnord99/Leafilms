@@ -23,6 +23,7 @@ import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
 import { useAuth } from '@/hooks/useAuth'
 import { SectionNavigation } from '@/components/project'
+import { PitchFeedbackPanel } from '@/components/project/PitchFeedback'
 
 // Helper for å hente bilde-URL
 function getImageUrl(filePath: string): string {
@@ -441,6 +442,9 @@ export function PublicProjectClient({
           })
         )}
       </div>
+
+      {/* Pitch Feedback Panel */}
+      <PitchFeedbackPanel projectId={project.id} shareToken={shareToken} />
 
       {/* Footer */}
       <footer className="py-8 px-8" style={{ background: '#0C0B09', borderTop: '1px solid #1A1713' }}>

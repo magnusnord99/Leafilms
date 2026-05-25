@@ -10,7 +10,7 @@ export function AnalyticsHeader({ analytics }: Props) {
   const engagementScore = calculateEngagementScore(analytics)
 
   return (
-    <div className="flex items-start justify-between pb-4 border-b border-zinc-700">
+    <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-zinc-700">
       <div>
         {analytics.customer_name && (
           <div className="mb-3">

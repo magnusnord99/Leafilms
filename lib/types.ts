@@ -301,3 +301,13 @@ export type MarketAnalysis = {
   completed_at: string | null
 }
 
+export type PitchFeedback = {
+  id: string
+  project_id: string
+  section_id: string | null
+  share_token: string
+  author_name: string
+  content: string
+  created_at: string
+}
+

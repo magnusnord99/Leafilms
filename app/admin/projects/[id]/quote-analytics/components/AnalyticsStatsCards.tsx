@@ -8,7 +8,7 @@ type Props = {
 
 export function AnalyticsStatsCards({ analytics }: Props) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
       <div className="bg-zinc-800/50 rounded-lg p-6 border border-zinc-700">
         <Text variant="muted" className="text-xs mb-2 text-white uppercase tracking-wide">Totale visninger</Text>
         <div className="text-4xl font-bold text-white mb-1">

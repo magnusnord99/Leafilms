@@ -115,8 +115,8 @@ export function ImagePickerModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-admin-bg/80 flex items-center justify-center p-8 z-50">
-      <Card className="max-w-6xl w-full max-h-[80vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-admin-bg/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50">
+      <Card className="max-w-6xl w-full max-h-[90vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
         <div className="mb-6 flex-shrink-0">
           <div className="flex items-start justify-between">
             <div>
@@ -176,7 +176,7 @@ export function ImagePickerModal({
               <Text variant="body">Laster bilder...</Text>
             </div>
           ) : images.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
               {images.map((image) => {
                 const isSelected = selectedIds.includes(image.id)
                 const imageUrl = supabase.storage

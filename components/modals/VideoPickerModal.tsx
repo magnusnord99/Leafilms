@@ -113,8 +113,8 @@ export function VideoPickerModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <Card className="w-full max-w-6xl max-h-[90vh] flex flex-col bg-zinc-900 border-zinc-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4">
+      <Card className="w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] flex flex-col bg-zinc-900 border-zinc-700">
         {/* Header */}
         <div className="p-6 border-b border-zinc-700">
           <div className="flex items-center justify-between">
@@ -174,7 +174,7 @@ export function VideoPickerModal({
               </Text>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {videos.map((video) => {
                 const videoUrl = supabase.storage
                   .from('assets')
@@ -249,18 +249,19 @@ export function VideoPickerModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-zinc-700">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6 border-t border-zinc-700">
           <Text variant="small" className="text-gray-400">
-            {selectedIds.length > 0 
+            {selectedIds.length > 0
               ? `${selectedIds.length} video${selectedIds.length > 1 ? 'er' : ''} valgt`
               : 'Ingen videoer valgt'}
           </Text>
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={onClose}>
+          <div className="flex gap-2 flex-shrink-0">
+            <Button variant="secondary" size="sm" onClick={onClose}>
               Avbryt
             </Button>
             <Button
               variant="primary"
+              size="sm"
               onClick={handleConfirm}
               disabled={selectedIds.length === 0}
             >

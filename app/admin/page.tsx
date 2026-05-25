@@ -145,7 +145,7 @@ export default function AdminDashboard() {
   )
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
       <div className="max-w-5xl mx-auto">
 
         {/* Page header */}
@@ -215,14 +215,14 @@ export default function AdminDashboard() {
               {recentProjects.map((project, i) => (
                 <div
                   key={project.id}
-                  className="flex items-center justify-between px-5 py-4 transition-colors"
+                  className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-5 py-4 transition-colors"
                   style={{
                     background: '#161410',
                     borderBottom: i < recentProjects.length - 1 ? '1px solid #2A261F' : 'none',
                   }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
                       <p style={{
                         fontFamily: 'var(--font-dm-sans)',
                         fontSize: '0.8rem',
@@ -248,7 +248,7 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap gap-2 flex-shrink-0">
                     <Link href={`/admin/projects/${project.id}/edit`}>
                       <Button variant="primary" size="sm">Åpne</Button>
                     </Link>
@@ -258,10 +258,11 @@ export default function AdminDashboard() {
                         size="sm"
                         onClick={(e) => { e.preventDefault(); window.open(shareLinks[project.id], '_blank') }}
                       >
-                        Se publisert
+                        <span className="hidden sm:inline">Se publisert</span>
+                        <span className="sm:hidden">Publisert</span>
                       </Button>
                     )}
-                    <Link href={`/admin/projects/${project.id}/quote-analytics`}>
+                    <Link href={`/admin/projects/${project.id}/quote-analytics`} className="hidden sm:block">
                       <Button variant="secondary" size="sm">Statistikk</Button>
                     </Link>
                     <Button

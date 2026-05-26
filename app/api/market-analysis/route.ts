@@ -1,15 +1,16 @@
 import { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { runMarketAnalysis } from '@/lib/services/market-analysis-agent'
+import { requireAdmin } from '@/lib/auth/admin'
 
 export const maxDuration = 300
 
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
+    const admin = await requireAdmin(supabase)
+    if ('response' in admin) {
+      return admin.response
     }
 
     const serviceClient = createServiceClient()
@@ -34,9 +35,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
+    const admin = await requireAdmin(supabase)
+    if ('response' in admin) {
+      return admin.response
     }
 
     const body = await req.json().catch(() => ({}))

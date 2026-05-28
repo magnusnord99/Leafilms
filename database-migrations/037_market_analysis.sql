@@ -12,9 +12,13 @@ CREATE TABLE IF NOT EXISTS market_analyses (
 
 ALTER TABLE market_analyses ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can read market analyses" ON market_analyses;
+DROP POLICY IF EXISTS "Service role can insert/update" ON market_analyses;
+
 CREATE POLICY "Admins can read market analyses"
   ON market_analyses FOR SELECT
-  USING (auth.role() = 'authenticated');
+  TO authenticated
+  USING ((SELECT public.is_admin(auth.uid())));
 
 CREATE POLICY "Service role can insert/update"
   ON market_analyses FOR ALL

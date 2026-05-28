@@ -13,10 +13,15 @@ CREATE INDEX IF NOT EXISTS idx_project_messages_project_id ON project_messages(p
 
 ALTER TABLE project_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated users can read messages" ON project_messages;
+DROP POLICY IF EXISTS "Users can insert own messages" ON project_messages;
+
 CREATE POLICY "Authenticated users can read messages"
   ON project_messages FOR SELECT
-  USING (auth.role() = 'authenticated');
+  TO authenticated
+  USING ((SELECT public.is_admin(auth.uid())));
 
 CREATE POLICY "Users can insert own messages"
   ON project_messages FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  TO authenticated
+  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_admin(auth.uid())));

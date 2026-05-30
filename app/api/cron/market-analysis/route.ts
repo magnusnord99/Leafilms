@@ -6,9 +6,14 @@ export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret = process.env.CRON_SECRET?.trim()
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error('Cron markedsanalyse blokkert: CRON_SECRET er ikke konfigurert')
+    return Response.json({ error: 'Cron ikke konfigurert' }, { status: 500 })
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -28,19 +33,32 @@ export async function GET(req: NextRequest) {
   try {
     const results = await runMarketAnalysis()
 
-    await serviceClient
+    const { error: updateError } = await serviceClient
       .from('market_analyses')
       .update({ status: 'done', results, completed_at: new Date().toISOString() })
       .eq('id', record.id)
+      .select('id')
+      .single()
+
+    if (updateError) {
+      console.error('Cron: kunne ikke lagre analyseresultat', updateError)
+      return Response.json({ error: 'Kunne ikke lagre analyseresultat' }, { status: 500 })
+    }
 
     console.log(`Cron markedsanalyse fullført. ${results.customers.length} leads funnet.`)
     return Response.json({ ok: true, leads: results.customers.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    await serviceClient
+    const { error: updateError } = await serviceClient
       .from('market_analyses')
       .update({ status: 'error', error_message: message, completed_at: new Date().toISOString() })
       .eq('id', record.id)
+      .select('id')
+      .single()
+
+    if (updateError) {
+      console.error('Cron: kunne ikke lagre feilstatus for markedsanalyse', updateError)
+    }
 
     console.error('Cron markedsanalyse feilet:', message)
     return Response.json({ error: message }, { status: 500 })

@@ -57,18 +57,31 @@ export async function POST(req: NextRequest) {
     try {
       const results = await runMarketAnalysis()
 
-      await serviceClient
+      const { data: updatedRecord, error: updateError } = await serviceClient
         .from('market_analyses')
         .update({ status: 'done', results, completed_at: new Date().toISOString() })
         .eq('id', record.id)
+        .select()
+        .single()
 
-      return Response.json({ analysis: { ...record, status: 'done', results } })
+      if (updateError) {
+        console.error('POST /market-analysis persist error:', updateError)
+        return Response.json({ error: 'Kunne ikke lagre analyseresultat' }, { status: 500 })
+      }
+
+      return Response.json({ analysis: updatedRecord })
     } catch (agentError) {
       const message = agentError instanceof Error ? agentError.message : String(agentError)
-      await serviceClient
+      const { error: updateError } = await serviceClient
         .from('market_analyses')
         .update({ status: 'error', error_message: message, completed_at: new Date().toISOString() })
         .eq('id', record.id)
+        .select('id')
+        .single()
+
+      if (updateError) {
+        console.error('POST /market-analysis status update error:', updateError)
+      }
 
       return Response.json({ error: `Agentfeil: ${message}` }, { status: 500 })
     }

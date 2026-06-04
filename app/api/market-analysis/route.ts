@@ -1,16 +1,14 @@
 import { NextRequest } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/auth/admin'
+import { createServiceClient } from '@/lib/supabase-server'
 import { runMarketAnalysis } from '@/lib/services/market-analysis-agent'
 
 export const maxDuration = 300
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
-    }
+    const admin = await requireAdmin()
+    if (!admin.ok) return admin.response
 
     const serviceClient = createServiceClient()
     const { data, error } = await serviceClient
@@ -33,11 +31,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
-    }
+    const admin = await requireAdmin()
+    if (!admin.ok) return admin.response
 
     const body = await req.json().catch(() => ({}))
     const triggeredBy = body.triggered_by || 'manual'
@@ -57,18 +52,27 @@ export async function POST(req: NextRequest) {
     try {
       const results = await runMarketAnalysis()
 
-      await serviceClient
+      const { error: updateError } = await serviceClient
         .from('market_analyses')
         .update({ status: 'done', results, completed_at: new Date().toISOString() })
         .eq('id', record.id)
 
+      if (updateError) {
+        console.error('POST /market-analysis save error:', updateError)
+        return Response.json({ error: 'Kunne ikke lagre analyse' }, { status: 500 })
+      }
+
       return Response.json({ analysis: { ...record, status: 'done', results } })
     } catch (agentError) {
       const message = agentError instanceof Error ? agentError.message : String(agentError)
-      await serviceClient
+      const { error: updateError } = await serviceClient
         .from('market_analyses')
         .update({ status: 'error', error_message: message, completed_at: new Date().toISOString() })
         .eq('id', record.id)
+
+      if (updateError) {
+        console.error('POST /market-analysis status save error:', updateError)
+      }
 
       return Response.json({ error: `Agentfeil: ${message}` }, { status: 500 })
     }

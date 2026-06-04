@@ -6,18 +6,62 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-const navItems = [
-  { href: '/admin', label: 'Dashboard', exact: true },
-  { href: '/admin/projects', label: 'Prosjekter' },
-  { href: '/admin/customers', label: 'Kunder' },
-  { href: '/admin/cases', label: 'Cases' },
-  { href: '/admin/team', label: 'Team' },
-  { href: '/admin/prices', label: 'Priskatalog' },
-  { href: '/admin/images', label: 'Bilder' },
-  { href: '/admin/videos', label: 'Videoer' },
-  { href: '/admin/ai-examples', label: 'AI Eksempler' },
-  { href: '/admin/users', label: 'Brukere' },
-  { href: '/admin/market-analysis', label: 'Markedsanalyse' },
+const C = {
+  bg:         '#181920',
+  sidebar:    '#111116',
+  surface:    '#1E1E28',
+  border:     '#2D2D3A',
+  text:       '#E2E2E2',
+  text2:      '#9B9BAD',
+  text3:      '#5C5C70',
+  accent:     '#7C5CFC',
+  accentBg:   'rgba(124,92,252,0.08)',
+}
+
+type NavItem = { href: string; label: string; exact?: boolean }
+type NavGroup = { label: string | null; items: NavItem[] }
+
+const navGroups: NavGroup[] = [
+  {
+    label: null,
+    items: [
+      { href: '/admin',       label: 'Dashboard', exact: true },
+      { href: '/admin/tasks', label: 'Mine oppgaver' },
+    ],
+  },
+  {
+    label: 'Salg & CRM',
+    items: [
+      { href: '/admin/leads',     label: 'Leads' },
+      { href: '/admin/pipeline',  label: 'Pipeline' },
+      { href: '/admin/tapte',     label: 'Tapte prosjekter' },
+      { href: '/admin/customers', label: 'Kunder' },
+      { href: '/admin/email',     label: 'E-post' },
+    ],
+  },
+  {
+    label: 'Produksjon',
+    items: [
+      { href: '/admin/projects', label: 'Prosjekter' },
+      { href: '/admin/calendar', label: 'Kalender' },
+      { href: '/admin/preprod',  label: 'Pre-prod' },
+      { href: '/admin/postprod', label: 'Post-prod' },
+    ],
+  },
+  {
+    label: 'Finans',
+    items: [
+      { href: '/admin/okonomi',         label: 'Økonomi' },
+      { href: '/admin/market-analysis', label: 'Markedsanalyse' },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { href: '/admin/team',  label: 'Team' },
+      { href: '/admin/users', label: 'Brukere' },
+    ],
+  },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -28,85 +72,125 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
-      router.push('/login')
-    }
+    if (!loading && (!user || !isAdmin)) router.push('/login')
   }, [loading, user, isAdmin, router])
 
+  useEffect(() => { setMobileOpen(false) }, [pathname])
+
   useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
+    document.body.classList.add('admin-page')
+    return () => { document.body.classList.remove('admin-page') }
+  }, [])
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <div className="flex items-center gap-3">
-          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
-          <p style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#62594E',
-            textTransform: 'uppercase',
-          }}>
-            Laster...
-          </p>
-        </div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.08em' }}>
+          Laster...
+        </p>
       </div>
     )
   }
 
   if (!user || !isAdmin) return null
 
-  const isActive = (item: { href: string; exact?: boolean }) =>
+  const isActive = (item: NavItem) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
-  const renderNav = (isCollapsed: boolean) => (
-    <nav className="flex-1 py-2 overflow-y-auto">
-      {navItems.map((item) => {
-        const active = isActive(item)
-        return (
-          <Link key={item.href} href={item.href}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '10px 16px',
-                background: active ? 'rgba(196,148,52,0.08)' : 'transparent',
-                borderLeft: `2px solid ${active ? '#C49434' : 'transparent'}`,
-                color: active ? '#C49434' : '#62594E',
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.65rem',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                fontWeight: active ? 500 : 400,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-            >
-              {isCollapsed ? item.label.substring(0, 2).toUpperCase() : item.label}
+  const NavLink = ({ item, col }: { item: NavItem; col: boolean }) => {
+    const active = isActive(item)
+    return (
+      <Link href={item.href} style={{ textDecoration: 'none' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: col ? '8px 0' : '8px 16px',
+            justifyContent: col ? 'center' : 'flex-start',
+            background: active ? C.accentBg : 'transparent',
+            borderLeft: `2px solid ${active ? C.accent : 'transparent'}`,
+            color: active ? C.text : C.text3,
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.8rem',
+            fontWeight: active ? 500 : 400,
+            letterSpacing: '0.01em',
+            cursor: 'pointer',
+            transition: 'color 0.12s, background 0.12s',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}
+          onMouseEnter={e => {
+            if (!active) {
+              (e.currentTarget as HTMLDivElement).style.color = C.text2
+              ;(e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'
+            }
+          }}
+          onMouseLeave={e => {
+            if (!active) {
+              (e.currentTarget as HTMLDivElement).style.color = C.text3
+              ;(e.currentTarget as HTMLDivElement).style.background = 'transparent'
+            }
+          }}
+        >
+          {col ? item.label.substring(0, 2) : item.label}
+        </div>
+      </Link>
+    )
+  }
+
+  const renderNav = (col: boolean) => (
+    <nav style={{ flex: 1, paddingTop: 4, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {navGroups.map((group, gi) => (
+        <div key={gi}>
+          {/* Skillelinje mellom grupper (ikke første) */}
+          {gi > 0 && (
+            <div style={{ height: 1, background: C.border, margin: col ? '6px 8px' : '6px 16px' }} />
+          )}
+          {/* Seksjonstittel — bare i utvidet modus */}
+          {!col && group.label && (
+            <div style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: C.text3,
+              padding: '8px 18px 4px',
+              opacity: 0.7,
+            }}>
+              {group.label}
             </div>
-          </Link>
-        )
-      })}
+          )}
+          {group.items.map(item => <NavLink key={item.href} item={item} col={col} />)}
+        </div>
+      ))}
     </nav>
   )
 
   return (
-    <div className="min-h-screen" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
-      {/* Sticky top header */}
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+
+      {/* Top header */}
       <header
-        className="sticky top-0 z-50 h-14 flex items-center justify-between px-4 sm:px-6"
-        style={{ background: 'rgba(12,11,9,0.98)', borderBottom: '1px solid #2A261F' }}
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+          height: 48,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
+          background: C.sidebar,
+          borderBottom: `1px solid ${C.border}`,
+        }}
       >
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Mobile hamburger */}
           <button
-            className="md:hidden flex items-center justify-center"
+            className="md:hidden"
             onClick={() => setMobileOpen(o => !o)}
-            style={{ color: '#62594E', padding: 4, lineHeight: 0 }}
+            style={{ color: C.text3, padding: 4, lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
             aria-label="Meny"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -114,88 +198,78 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </svg>
           </button>
 
-          {/* Mobile logo */}
           <div className="flex md:hidden items-center gap-2">
-            <div style={{ width: 16, height: 1, background: '#C49434' }} />
-            <span style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.6rem',
-              letterSpacing: '0.2em',
-              color: '#C49434',
-              textTransform: 'uppercase',
-              fontWeight: 500,
-            }}>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, color: C.text, letterSpacing: '0.02em' }}>
               Leafilms
             </span>
-            <span style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.6rem',
-              letterSpacing: '0.12em',
-              color: '#38332A',
-              textTransform: 'uppercase',
-            }}>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
               Admin
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile && (
-            <span className="hidden sm:block" style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.65rem',
-              color: '#62594E',
-              letterSpacing: '0.06em',
-            }}>
+            <span className="hidden sm:block" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
               {profile.name || profile.email}
             </span>
           )}
-          <Button variant="ghost" size="sm" onClick={logout}>
+          <button
+            onClick={logout}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.72rem',
+              color: C.text3,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 8px',
+            }}
+          >
             Logg ut
-          </Button>
+          </button>
         </div>
       </header>
 
-      <div className="flex" style={{ minHeight: 'calc(100vh - 56px)' }}>
-        {/* Desktop sidebar — fixed */}
+      <div style={{ display: 'flex', minHeight: 'calc(100vh - 48px)' }}>
+
+        {/* Desktop sidebar */}
         <aside
-          className="hidden md:flex flex-col fixed top-14 left-0 bottom-0 z-40 overflow-hidden"
+          className="hidden md:flex flex-col"
           style={{
-            width: collapsed ? 56 : 208,
-            background: '#0E0D0B',
-            borderRight: '1px solid #2A261F',
-            transition: 'width 0.2s ease',
+            position: 'fixed',
+            top: 48,
+            left: 0,
+            bottom: 0,
+            zIndex: 40,
+            width: collapsed ? 52 : 200,
+            background: C.sidebar,
+            borderRight: `1px solid ${C.border}`,
+            transition: 'width 0.18s ease',
+            overflow: 'hidden',
           }}
         >
-          {/* Sidebar header with logo + collapse toggle */}
+          {/* Sidebar header */}
           <div
-            className="flex items-center flex-shrink-0"
             style={{
-              height: 48,
+              height: 44,
+              display: 'flex',
+              alignItems: 'center',
               padding: '0 12px',
-              borderBottom: '1px solid #2A261F',
+              borderBottom: `1px solid ${C.border}`,
               justifyContent: collapsed ? 'center' : 'space-between',
+              flexShrink: 0,
             }}
           >
             {!collapsed && (
-              <div className="flex items-center gap-2">
-                <div style={{ width: 16, height: 1, background: '#C49434' }} />
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.6rem',
-                  letterSpacing: '0.2em',
-                  color: '#C49434',
-                  textTransform: 'uppercase',
-                  fontWeight: 500,
-                }}>
-                  Leafilms
-                </span>
-              </div>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600, color: C.text, letterSpacing: '0.01em' }}>
+                Leafilms
+              </span>
             )}
             <button
               onClick={() => setCollapsed(c => !c)}
-              style={{ color: '#62594E', lineHeight: 0, padding: 4 }}
-              aria-label={collapsed ? 'Utvid meny' : 'Kollaps meny'}
+              style={{ color: C.text3, lineHeight: 0, padding: 4, background: 'none', border: 'none', cursor: 'pointer' }}
+              aria-label={collapsed ? 'Utvid' : 'Kollaps'}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
                 {collapsed
@@ -205,34 +279,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </button>
           </div>
+
           {renderNav(collapsed)}
         </aside>
 
-        {/* Mobile sidebar overlay */}
+        {/* Mobile overlay */}
         {mobileOpen && (
           <>
             <div
               className="fixed inset-0 z-40 md:hidden"
-              style={{ background: 'rgba(0,0,0,0.55)' }}
+              style={{ background: 'rgba(0,0,0,0.6)' }}
               onClick={() => setMobileOpen(false)}
             />
             <aside
-              className="fixed top-14 left-0 bottom-0 z-50 flex flex-col md:hidden"
-              style={{ width: 208, background: '#0E0D0B', borderRight: '1px solid #2A261F' }}
+              className="fixed top-12 left-0 bottom-0 z-50 flex flex-col md:hidden"
+              style={{ width: 200, background: C.sidebar, borderRight: `1px solid ${C.border}` }}
             >
-              <div
-                className="flex items-center gap-2 flex-shrink-0"
-                style={{ height: 48, padding: '0 16px', borderBottom: '1px solid #2A261F' }}
-              >
-                <div style={{ width: 16, height: 1, background: '#C49434' }} />
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.6rem',
-                  letterSpacing: '0.2em',
-                  color: '#C49434',
-                  textTransform: 'uppercase',
-                  fontWeight: 500,
-                }}>
+              <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600, color: C.text }}>
                   Leafilms
                 </span>
               </div>
@@ -243,8 +307,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Main content */}
         <main
-          className={`flex-1 min-w-0 ${collapsed ? 'md:ml-14' : 'md:ml-52'}`}
-          style={{ transition: 'margin-left 0.2s ease' }}
+          className={collapsed ? 'md:ml-[52px]' : 'md:ml-[200px]'}
+          style={{ flex: 1, minWidth: 0, transition: 'margin-left 0.18s ease' }}
         >
           {children}
         </main>

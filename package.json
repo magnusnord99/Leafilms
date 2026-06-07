@@ -7,6 +7,7 @@
     "dev:mobile": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "lint": "eslint",
     "migrate": "bash scripts/migrate.sh",
     "migrate:single": "bash scripts/migrate-single.sh",

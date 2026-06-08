@@ -8,15 +8,15 @@ import Link from 'next/link'
 import { NotificationBell } from '@/components/admin/NotificationBell'
 
 const C = {
-  bg:         '#181920',
-  sidebar:    '#111116',
-  surface:    '#1E1E28',
-  border:     '#2D2D3A',
-  text:       '#E2E2E2',
-  text2:      '#9B9BAD',
-  text3:      '#5C5C70',
-  accent:     '#7C5CFC',
-  accentBg:   'rgba(124,92,252,0.08)',
+  bg:         '#0C0B09',
+  sidebar:    '#0E0D0B',
+  surface:    '#161410',
+  border:     '#2A261F',
+  text:       '#E8E1D5',
+  text2:      '#9E9287',
+  text3:      '#62594E',
+  accent:     '#C49434',
+  accentBg:   'rgba(196,148,52,0.08)',
 }
 
 type NavItem = { href: string; label: string; exact?: boolean }

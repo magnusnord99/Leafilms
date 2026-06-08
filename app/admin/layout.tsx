@@ -5,6 +5,7 @@ import { Button } from '@/components/ui'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { NotificationBell } from '@/components/admin/NotificationBell'
 
 const C = {
   bg:         '#181920',
@@ -25,8 +26,9 @@ const navGroups: NavGroup[] = [
   {
     label: null,
     items: [
-      { href: '/admin',       label: 'Dashboard', exact: true },
-      { href: '/admin/tasks', label: 'Mine oppgaver' },
+      { href: '/admin',         label: 'Dashboard', exact: true },
+      { href: '/admin/tasks',   label: 'Mine oppgaver' },
+      { href: '/admin/varsler', label: 'Varsler' },
     ],
   },
   {
@@ -209,6 +211,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <NotificationBell />
           {profile && (
             <span className="hidden sm:block" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
               {profile.name || profile.email}

@@ -1,15 +1,16 @@
-import { getLostProjects, getLostStats, LOST_REASON_LABELS, type LostReason } from '@/lib/actions/lost'
+import { getLostProjects, getLostStats } from '@/lib/actions/lost'
+import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES } from '@/lib/types'
 
 const C = {
-  bg:       '#181920',
-  surface:  '#1E1E28',
-  surface2: '#252530',
-  border:   '#2D2D3A',
-  text:     '#E2E2E2',
-  text2:    '#9B9BAD',
-  text3:    '#5C5C70',
-  accent:   '#7C5CFC',
+  bg:       '#0C0B09',
+  surface:  '#161410',
+  surface2: '#1E1B16',
+  border:   '#2A261F',
+  text:     '#E8E1D5',
+  text2:    '#9E9287',
+  text3:    '#62594E',
+  accent:   '#C49434',
   danger:   '#E05555',
 }
 

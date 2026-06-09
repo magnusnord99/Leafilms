@@ -1,18 +1,7 @@
 import { getLostProjects, getLostStats } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES } from '@/lib/types'
-
-const C = {
-  bg:       '#0C0B09',
-  surface:  '#161410',
-  surface2: '#1E1B16',
-  border:   '#2A261F',
-  text:     '#E8E1D5',
-  text2:    '#9E9287',
-  text3:    '#62594E',
-  accent:   '#C49434',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function stageLabel(stage: string) {
   return PIPELINE_STAGES.find(s => s.value === stage)?.label ?? stage

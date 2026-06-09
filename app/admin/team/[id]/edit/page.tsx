@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { TeamMember } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
   <label style={{
@@ -13,21 +14,21 @@ const fieldLabel = (text: string, required?: boolean) => (
     fontSize: '0.6rem',
     letterSpacing: '0.14em',
     textTransform: 'uppercase' as const,
-    color: '#9E9287',
+    color: C.text2,
     fontWeight: 500,
     marginBottom: 6,
   }}>
-    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+    {text}{required && <span style={{ color: C.accent, marginLeft: 4 }}>*</span>}
   </label>
 )
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
-  background: '#161410',
-  border: '1px solid #2A261F',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
   borderRadius: 3,
-  color: '#E8E1D5',
+  color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   fontSize: '0.75rem',
   letterSpacing: '0.03em',
@@ -152,7 +153,18 @@ export default function EditTeamMember({ params }: Props) {
         .map(t => t.trim())
         .filter(t => t.length > 0)
 
-      const updateData: any = {
+      type TeamMemberUpdate = {
+        name: string
+        role: string
+        bio: string | null
+        email: string | null
+        phone: string | null
+        tags: string[]
+        daily_rate: number | null
+        profile_image_path?: string
+      }
+
+      const updateData: TeamMemberUpdate = {
         name: formData.name,
         role: formData.role,
         bio: formData.bio || null,
@@ -189,8 +201,8 @@ export default function EditTeamMember({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           Laster...
         </p>
       </div>
@@ -198,7 +210,7 @@ export default function EditTeamMember({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -210,7 +222,7 @@ export default function EditTeamMember({ params }: Props) {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#62594E',
+              color: C.text3,
               textDecoration: 'none',
             }}
           >
@@ -221,12 +233,12 @@ export default function EditTeamMember({ params }: Props) {
           </Link>
 
           <div className="flex items-center gap-4 mb-4">
-            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <div style={{ width: 32, height: 1, background: C.accent }} />
             <span style={{
               fontFamily: 'var(--font-dm-sans)',
               fontSize: '0.6rem',
               letterSpacing: '0.16em',
-              color: '#C49434',
+              color: C.accent,
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
@@ -238,12 +250,12 @@ export default function EditTeamMember({ params }: Props) {
             fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
             fontWeight: 300,
             fontStyle: 'italic',
-            color: '#E8E1D5',
+            color: C.text,
             lineHeight: 1.1,
           }}>
             Rediger team-medlem
           </h1>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 6, letterSpacing: '0.04em' }}>
             Oppdater informasjon om team-medlemmet
           </p>
         </div>
@@ -269,9 +281,9 @@ export default function EditTeamMember({ params }: Props) {
         {saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-3"
-            style={{ background: 'rgba(196,148,52,0.08)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 3 }}
+            style={{ background: C.accentBg, border: '1px solid rgba(124,92,252,0.25)', borderRadius: 3 }}
           >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent, letterSpacing: '0.06em' }}>
               Endringer lagret
             </p>
           </div>
@@ -281,10 +293,10 @@ export default function EditTeamMember({ params }: Props) {
         {isDirty && !saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-2"
-            style={{ background: 'rgba(98,89,78,0.15)', border: '1px solid #38332A', borderRadius: 3 }}
+            style={{ background: 'rgba(124,92,252,0.08)', border: `1px solid ${C.border}`, borderRadius: 3 }}
           >
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C49434', flexShrink: 0 }} />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Ulagrede endringer
             </p>
           </div>
@@ -357,7 +369,7 @@ export default function EditTeamMember({ params }: Props) {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#9E9287',
+              color: C.text2,
               fontWeight: 500,
               marginBottom: 6,
             }}>
@@ -365,12 +377,12 @@ export default function EditTeamMember({ params }: Props) {
             </label>
             {existingProfileImage && !profileImagePreview && (
               <div className="mb-4">
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginBottom: 8 }}>Nåværende bilde:</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginBottom: 8 }}>Nåværende bilde:</p>
                 <img
                   src={existingProfileImage}
                   alt="Nåværende profilbilde"
                   className="w-24 h-24 rounded-full object-cover"
-                  style={{ border: '1px solid #2A261F' }}
+                  style={{ border: `1px solid ${C.border}` }}
                 />
               </div>
             )}
@@ -381,10 +393,10 @@ export default function EditTeamMember({ params }: Props) {
               style={{
                 width: '100%',
                 padding: '10px 14px',
-                background: '#161410',
-                border: '1px solid #2A261F',
+                background: C.surface,
+                border: `1px solid ${C.border}`,
                 borderRadius: 3,
-                color: '#9E9287',
+                color: C.text2,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.7rem',
                 cursor: 'pointer',
@@ -392,16 +404,16 @@ export default function EditTeamMember({ params }: Props) {
             />
             {profileImagePreview && (
               <div className="mt-4">
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginBottom: 8 }}>Nytt bilde:</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginBottom: 8 }}>Nytt bilde:</p>
                 <img
                   src={profileImagePreview}
                   alt="Ny profilbilde forhåndsvisning"
                   className="w-24 h-24 rounded-full object-cover"
-                  style={{ border: '1px solid #2A261F' }}
+                  style={{ border: `1px solid ${C.border}` }}
                 />
               </div>
             )}
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
               La stå tomt for å beholde eksisterende bilde
             </p>
           </div>
@@ -426,7 +438,7 @@ export default function EditTeamMember({ params }: Props) {
               placeholder="director, producer, photographer"
               style={inputStyle}
             />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
               Bruk tags for enklere søk og filtrering
             </p>
           </div>
@@ -438,8 +450,8 @@ export default function EditTeamMember({ params }: Props) {
               style={{
                 flex: 1,
                 padding: '10px 20px',
-                background: (saving || uploading) ? '#38332A' : '#C49434',
-                color: (saving || uploading) ? '#62594E' : '#0C0B09',
+                background: (saving || uploading) ? C.border : C.accent,
+                color: (saving || uploading) ? C.text3 : C.bg,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.65rem',
                 letterSpacing: '0.14em',
@@ -459,12 +471,12 @@ export default function EditTeamMember({ params }: Props) {
                 style={{
                   padding: '10px 20px',
                   background: 'transparent',
-                  color: '#62594E',
+                  color: C.text3,
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '0.65rem',
                   letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  border: '1px solid #2A261F',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 3,
                   cursor: 'pointer',
                 }}

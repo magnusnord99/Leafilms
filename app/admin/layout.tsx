@@ -6,18 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/admin/NotificationBell'
-
-const C = {
-  bg:         '#0C0B09',
-  sidebar:    '#0E0D0B',
-  surface:    '#161410',
-  border:     '#2A261F',
-  text:       '#E8E1D5',
-  text2:      '#9E9287',
-  text3:      '#62594E',
-  accent:     '#C49434',
-  accentBg:   'rgba(196,148,52,0.08)',
-}
+import { C } from '@/lib/admin-theme'
 
 type NavItem = { href: string; label: string; exact?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }

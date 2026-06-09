@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
+import { C } from '@/lib/admin-theme'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -57,12 +58,19 @@ export default function ProjectQuotePage({ params }: Props) {
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
 
       if (existingQuote?.quote_data && existingQuote.quote_data.crew !== undefined) {
-        // Existing quote with builder data
-        setBuilderData(existingQuote.quote_data as QuoteBuilderData)
+        // Existing quote — backfill deliveryDescription from project if missing
+        const qd = existingQuote.quote_data as QuoteBuilderData
+        if (!qd.deliveryDescription && proj?.delivery_description) {
+          qd.deliveryDescription = proj.delivery_description
+        }
+        setBuilderData(qd)
         setExistingQuoteId(existingQuote.id)
       } else {
         // No existing quote — create initial data pre-populated from project team section
         const initial = createEmptyBuilderData(proj?.title || '')
+        if (proj?.delivery_description) {
+          initial.deliveryDescription = proj.delivery_description
+        }
 
         // Pre-populate customer if project has one
         if (proj?.customer_id) {
@@ -124,6 +132,13 @@ export default function ProjectQuotePage({ params }: Props) {
       } else {
         const { data: newQuote } = await supabase.from('quotes').insert(record).select('id').single()
         if (newQuote) setExistingQuoteId(newQuote.id)
+      }
+
+      // Synkroniser leveransebeskrivelse til prosjektet
+      if (data.deliveryDescription?.trim()) {
+        await supabase.from('projects')
+          .update({ delivery_description: data.deliveryDescription.trim() })
+          .eq('id', projectId)
       }
 
       // Keep a converted copy in quote_data so the public QuoteSection can display it
@@ -194,8 +209,8 @@ export default function ProjectQuotePage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           Laster...
         </p>
       </div>
@@ -203,31 +218,31 @@ export default function ProjectQuotePage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen p-6 md:p-10" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-6 md:p-10" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-4xl mx-auto">
         {/* Top bar */}
         <div
           className="flex items-center justify-between mb-8 pb-4"
-          style={{ borderBottom: '1px solid #2A261F' }}
+          style={{ borderBottom: `1px solid ${C.border}` }}
         >
           <div className="flex items-center gap-4">
             <Link
-              href={`/admin/projects/${projectId}/edit`}
+              href={`/admin/projects/${projectId}`}
               className="flex items-center gap-1.5 transition-colors"
-              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3 }}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
               </svg>
-              Tilbake til prosjekt
+              Tilbake
             </Link>
-            <div style={{ width: 1, height: 16, background: '#2A261F' }} />
+            <div style={{ width: 1, height: 16, background: C.border }} />
             <div>
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, color: '#E8E1D5' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, color: C.text }}>
                 Pristilbud
               </p>
               {project?.title && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', marginTop: 1 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.08em', marginTop: 1 }}>
                   {project.title}
                 </p>
               )}
@@ -235,7 +250,7 @@ export default function ProjectQuotePage({ params }: Props) {
           </div>
 
           {saveMessage && (
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: saveMessage.startsWith('Feil') ? '#B84040' : '#C49434', letterSpacing: '0.1em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: saveMessage.startsWith('Feil') ? '#B84040' : C.accent, letterSpacing: '0.1em' }}>
               {saveMessage}
             </p>
           )}

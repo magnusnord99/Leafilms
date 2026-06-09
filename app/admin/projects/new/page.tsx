@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button, Input, Select, Textarea, Card } from '@/components/ui'
-import { Customer } from '@/lib/types'
+import { Customer, PIPELINE_STAGES, PipelineStage } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 const contentTypeOptions = [
   { value: 'film', label: 'Film' },
@@ -70,23 +71,23 @@ const fieldLabel = (text: string, required?: boolean) => (
     fontSize: '0.6rem',
     letterSpacing: '0.14em',
     textTransform: 'uppercase',
-    color: '#9E9287',
+    color: C.text2,
     fontWeight: 500,
     marginBottom: 8,
   }}>
-    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+    {text}{required && <span style={{ color: C.accent, marginLeft: 4 }}>*</span>}
   </label>
 )
 
 const sectionDivider = (text: string) => (
-  <div style={{ paddingBottom: 16, marginBottom: 24, borderBottom: '1px solid #2A261F' }}>
+  <div style={{ paddingBottom: 16, marginBottom: 24, borderBottom: `1px solid ${C.border}` }}>
     <div className="flex items-center gap-3">
-      <div style={{ width: 20, height: 1, background: '#C49434' }} />
+      <div style={{ width: 20, height: 1, background: C.accent }} />
       <span style={{
         fontFamily: 'var(--font-dm-sans)',
         fontSize: '0.6rem',
         letterSpacing: '0.16em',
-        color: '#C49434',
+        color: C.accent,
         textTransform: 'uppercase',
         fontWeight: 500,
       }}>
@@ -95,6 +96,12 @@ const sectionDivider = (text: string) => (
     </div>
   </div>
 )
+
+const INNHOLDSTYPE_OPTIONS: { value: 'video' | 'photo' | 'mixed'; label: string }[] = [
+  { value: 'video', label: 'Video' },
+  { value: 'photo', label: 'Bilder' },
+  { value: 'mixed', label: 'Begge' },
+]
 
 function NewProjectContent() {
   const router = useRouter()
@@ -109,19 +116,30 @@ function NewProjectContent() {
   const [formData, setFormData] = useState({
     title: '',
     language: 'no' as 'no' | 'en',
+    project_type: '' as 'video' | 'photo' | 'mixed' | '',
     content_type: '',
-    project_type: '',
+    legacy_project_type: '',
     mediums: [] as string[],
     target_audience: '',
     industry: '',
     scope: '',
-    context: ''
+    context: '',
+    pipeline_stage: 'lead' as PipelineStage,
   })
 
   useEffect(() => {
     fetchCustomers()
     const customerId = searchParams.get('customer_id')
     if (customerId) setSelectedCustomerId(customerId)
+    const titleParam = searchParams.get('title')
+    const contextParam = searchParams.get('context')
+    if (titleParam || contextParam) {
+      setFormData(prev => ({
+        ...prev,
+        ...(titleParam ? { title: titleParam } : {}),
+        ...(contextParam ? { context: contextParam } : {}),
+      }))
+    }
   }, [searchParams])
 
   useEffect(() => {
@@ -195,9 +213,11 @@ function NewProjectContent() {
           customer_id: customerId,
           status: 'draft',
           language: formData.language,
+          project_type: formData.project_type || null,
+          pipeline_stage: formData.pipeline_stage,
           metadata: {
             content_type: formData.content_type,
-            project_type: formData.project_type,
+            project_type: formData.legacy_project_type,
             mediums: formData.mediums,
             target_audience: formData.target_audience,
             industry: formData.industry,
@@ -240,8 +260,9 @@ function NewProjectContent() {
             title: formData.title,
             clientName,
             language: formData.language,
-            contentType: formData.content_type,
             projectType: formData.project_type,
+            contentType: formData.content_type,
+            legacyProjectType: formData.legacy_project_type,
             mediums: formData.mediums,
             targetAudience: formData.target_audience,
             industry: formData.industry,
@@ -269,10 +290,10 @@ function NewProjectContent() {
     }
   }
 
-  const isFormValid = formData.title && formData.content_type && formData.project_type && formData.mediums.length > 0 && formData.target_audience
+  const isFormValid = formData.title && formData.project_type && formData.content_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-12">
@@ -284,7 +305,7 @@ function NewProjectContent() {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#62594E',
+              color: C.text3,
             }}
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -294,12 +315,12 @@ function NewProjectContent() {
           </button>
 
           <div className="flex items-center gap-4 mb-4">
-            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <div style={{ width: 32, height: 1, background: C.accent }} />
             <span style={{
               fontFamily: 'var(--font-dm-sans)',
               fontSize: '0.6rem',
               letterSpacing: '0.16em',
-              color: '#C49434',
+              color: C.accent,
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
@@ -311,7 +332,7 @@ function NewProjectContent() {
             fontSize: 'clamp(2rem, 4vw, 3rem)',
             fontWeight: 300,
             fontStyle: 'italic',
-            color: '#E8E1D5',
+            color: C.text,
             lineHeight: 1.1,
           }}>
             Opprett prosjekt
@@ -319,7 +340,7 @@ function NewProjectContent() {
           <p style={{
             fontFamily: 'var(--font-dm-sans)',
             fontSize: '0.75rem',
-            color: '#62594E',
+            color: C.text3,
             marginTop: 10,
             letterSpacing: '0.03em',
           }}>
@@ -345,6 +366,69 @@ function NewProjectContent() {
               </div>
 
               <div>
+                {fieldLabel('Pipeline-steg')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {PIPELINE_STAGES.map((stage) => {
+                    const active = formData.pipeline_stage === stage.value
+                    return (
+                      <button
+                        key={stage.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, pipeline_stage: stage.value })}
+                        style={{
+                          padding: '6px 14px',
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.68rem',
+                          letterSpacing: '0.04em',
+                          borderRadius: 3,
+                          border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                          background: active ? C.accentBg : C.surface,
+                          color: active ? C.accent : C.text3,
+                          cursor: 'pointer',
+                          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                        }}
+                      >
+                        {stage.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
+                  Hvor i prosessen er dere allerede?
+                </p>
+              </div>
+
+              <div>
+                {fieldLabel('Innholdstype', true)}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {INNHOLDSTYPE_OPTIONS.map((opt) => {
+                    const active = formData.project_type === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, project_type: opt.value })}
+                        style={{
+                          padding: '8px 20px',
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.7rem',
+                          letterSpacing: '0.06em',
+                          borderRadius: 3,
+                          border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                          background: active ? C.accentBg : C.surface,
+                          color: active ? C.accent : C.text3,
+                          cursor: 'pointer',
+                          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div>
                 {fieldLabel('Språk', true)}
                 <div className="flex gap-2">
                   {(['no', 'en'] as const).map((lang) => (
@@ -359,7 +443,7 @@ function NewProjectContent() {
                     </Button>
                   ))}
                 </div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6, letterSpacing: '0.06em' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
                   AI genererer innhold på valgt språk
                 </p>
               </div>
@@ -389,10 +473,10 @@ function NewProjectContent() {
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      background: '#161410',
-                      border: '1px solid #2A261F',
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
                       borderRadius: 3,
-                      color: '#E8E1D5',
+                      color: C.text,
                       fontFamily: 'var(--font-dm-sans)',
                       fontSize: '0.75rem',
                       letterSpacing: '0.03em',
@@ -407,7 +491,7 @@ function NewProjectContent() {
                     ))}
                   </datalist>
                 </div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6, letterSpacing: '0.06em' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
                   Velg fra listen eller skriv inn for å opprette ny kunde
                 </p>
               </div>
@@ -434,8 +518,8 @@ function NewProjectContent() {
                   <Select
                     options={projectTypeOptions}
                     placeholder="Velg type..."
-                    value={formData.project_type}
-                    onChange={(e) => setFormData({ ...formData, project_type: e.target.value })}
+                    value={formData.legacy_project_type}
+                    onChange={(e) => setFormData({ ...formData, legacy_project_type: e.target.value })}
                     required
                   />
                 </div>
@@ -443,7 +527,7 @@ function NewProjectContent() {
 
               <div>
                 {fieldLabel('Medium / Plattform', true)}
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginBottom: 10, letterSpacing: '0.06em' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginBottom: 10, letterSpacing: '0.06em' }}>
                   Velg én eller flere
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -507,7 +591,7 @@ function NewProjectContent() {
                 onChange={(e) => setFormData({ ...formData, context: e.target.value })}
                 placeholder={`Lim inn e-postutvekslinger, brief-dokumenter eller møtenotater...\n\n– Hva ønsker kunden å oppnå?\n– Hva er budsjettrammene?\n– Er det spesielle krav eller ønsker?`}
               />
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 8, letterSpacing: '0.06em' }}>
                 Jo mer kontekst, desto bedre AI-generering
               </p>
             </div>
@@ -516,20 +600,20 @@ function NewProjectContent() {
           {/* AI info */}
           <div style={{
             padding: '20px 24px',
-            background: 'rgba(196,148,52,0.05)',
-            border: '1px solid rgba(196,148,52,0.15)',
+            background: C.accentBg,
+            border: '1px solid rgba(124,92,252,0.15)',
             borderRadius: 3,
           }}>
             <div className="flex items-center gap-3 mb-4">
-              <div style={{ width: 16, height: 1, background: '#C49434', opacity: 0.5 }} />
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#C49434', fontWeight: 500 }}>
+              <div style={{ width: 16, height: 1, background: C.accent, opacity: 0.5 }} />
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.accent, fontWeight: 500 }}>
                 AI genererer
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#9E9287', marginBottom: 6 }}>Innhold</p>
-                <ul style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', lineHeight: 1.8 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text2, marginBottom: 6 }}>Innhold</p>
+                <ul style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, lineHeight: 1.8 }}>
                   <li>Hero-tekst og introduksjon</li>
                   <li>Prosjektmål</li>
                   <li>Kreativt konsept</li>
@@ -537,8 +621,8 @@ function NewProjectContent() {
                 </ul>
               </div>
               <div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#9E9287', marginBottom: 6 }}>Velger automatisk</p>
-                <ul style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', lineHeight: 1.8 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text2, marginBottom: 6 }}>Velger automatisk</p>
+                <ul style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, lineHeight: 1.8 }}>
                   <li>Eksempelbilder</li>
                   <li>Team-medlemmer</li>
                   <li>Relevante cases</li>
@@ -553,8 +637,8 @@ function NewProjectContent() {
               <div
                 className="flex items-center gap-3 px-4 py-3"
                 style={{
-                  background: 'rgba(196,148,52,0.08)',
-                  border: '1px solid rgba(196,148,52,0.25)',
+                  background: C.accentBg,
+                  border: '1px solid rgba(124,92,252,0.25)',
                   borderRadius: 3,
                 }}
               >
@@ -563,12 +647,12 @@ function NewProjectContent() {
                   style={{
                     width: 14,
                     height: 14,
-                    border: '1.5px solid rgba(196,148,52,0.3)',
-                    borderTop: '1.5px solid #C49434',
+                    border: '1.5px solid rgba(124,92,252,0.3)',
+                    borderTop: `1.5px solid ${C.accent}`,
                     borderRadius: '50%',
                   }}
                 />
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.04em' }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent, letterSpacing: '0.04em' }}>
                   {generatingStatus}
                 </span>
               </div>
@@ -603,8 +687,8 @@ function NewProjectContent() {
 export default function NewProject() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <div className="animate-spin" style={{ width: 24, height: 24, border: '1.5px solid #2A261F', borderTop: '1.5px solid #C49434', borderRadius: '50%' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <div className="animate-spin" style={{ width: 24, height: 24, border: `1.5px solid ${C.border}`, borderTop: `1.5px solid ${C.accent}`, borderRadius: '50%' }} />
       </div>
     }>
       <NewProjectContent />

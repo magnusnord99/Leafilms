@@ -5,13 +5,14 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui'
 import { CaseStudy } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 const sectionLabel = (text: string) => (
   <span style={{
     fontFamily: 'var(--font-dm-sans)',
     fontSize: '0.6rem',
     letterSpacing: '0.16em',
-    color: '#C49434',
+    color: C.accent,
     textTransform: 'uppercase' as const,
     fontWeight: 500,
   }}>
@@ -67,14 +68,14 @@ export default function CasesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
         <div className="flex items-center gap-3">
-          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
+          <div style={{ width: 1, height: 24, background: C.accent, opacity: 0.5 }} />
           <p style={{
             fontFamily: 'var(--font-dm-sans)',
             fontSize: '0.6rem',
             letterSpacing: '0.16em',
-            color: '#62594E',
+            color: C.text3,
             textTransform: 'uppercase',
           }}>
             Laster...
@@ -85,13 +86,13 @@ export default function CasesPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
           <div>
             <div className="flex items-center gap-4 mb-4">
-              <div style={{ width: 32, height: 1, background: '#C49434' }} />
+              <div style={{ width: 32, height: 1, background: C.accent }} />
               {sectionLabel('Bibliotek')}
             </div>
             <h1 style={{
@@ -99,12 +100,12 @@ export default function CasesPage() {
               fontSize: 'clamp(2rem, 4vw, 3rem)',
               fontWeight: 300,
               fontStyle: 'italic',
-              color: '#E8E1D5',
+              color: C.text,
               lineHeight: 1,
             }}>
               Cases
             </h1>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 8, letterSpacing: '0.06em' }}>
               {cases.length} case{cases.length !== 1 ? 's' : ''} · gjenbrukes i prosjekter
             </p>
           </div>
@@ -120,7 +121,7 @@ export default function CasesPage() {
             style={{ background: 'rgba(184,64,64,0.12)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
           >
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E07070' }}>{deleteError}</p>
-            <button onClick={() => setDeleteError(null)} style={{ color: '#62594E', lineHeight: 0 }}>
+            <button onClick={() => setDeleteError(null)} style={{ color: C.text3, lineHeight: 0 }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path strokeLinecap="round" d="M2 2l10 10M12 2L2 12" />
               </svg>
@@ -134,10 +135,10 @@ export default function CasesPage() {
             {cases.map((caseStudy) => (
               <div
                 key={caseStudy.id}
-                style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3, overflow: 'hidden' }}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}
               >
                 {/* Thumbnail */}
-                <div className="aspect-video flex items-center justify-center" style={{ background: '#0E0D0B' }}>
+                <div className="aspect-video flex items-center justify-center" style={{ background: C.sidebar }}>
                   {caseStudy.thumbnail_path ? (
                     <img
                       src={caseStudy.thumbnail_path}
@@ -145,7 +146,7 @@ export default function CasesPage() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#38332A" strokeWidth="1">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke={C.border} strokeWidth="1">
                       <rect x="2" y="6" width="28" height="20" rx="2" />
                       <path d="M12 11l10 5-10 5V11z" />
                     </svg>
@@ -154,11 +155,11 @@ export default function CasesPage() {
 
                 {/* Content */}
                 <div className="p-5">
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: '#E8E1D5', marginBottom: 6 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: C.text, marginBottom: 6 }}>
                     {caseStudy.title}
                   </p>
                   {caseStudy.description && (
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {caseStudy.description}
                     </p>
                   )}
@@ -169,7 +170,7 @@ export default function CasesPage() {
                       {caseStudy.tags.map((tag) => (
                         <span
                           key={tag}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.06em', background: '#0E0D0B', padding: '2px 6px', borderRadius: 2 }}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.06em', background: C.sidebar, padding: '2px 6px', borderRadius: 2 }}
                         >
                           {tag}
                         </span>
@@ -201,12 +202,12 @@ export default function CasesPage() {
         ) : (
           <div
             className="p-12 text-center"
-            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3 }}
           >
-            <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 8 }}>
+            <p style={{ color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 8 }}>
               Ingen case studies ennå
             </p>
-            <p style={{ color: '#38332A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', marginBottom: 20 }}>
+            <p style={{ color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', marginBottom: 20 }}>
               Legg til tidligere arbeid her for å gjenbruke dem i prosjektpresentasjoner.
             </p>
             <Link href="/admin/cases/new">

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { CaseStudy } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
   <label style={{
@@ -13,21 +14,21 @@ const fieldLabel = (text: string, required?: boolean) => (
     fontSize: '0.6rem',
     letterSpacing: '0.14em',
     textTransform: 'uppercase' as const,
-    color: '#9E9287',
+    color: C.text2,
     fontWeight: 500,
     marginBottom: 6,
   }}>
-    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+    {text}{required && <span style={{ color: C.accent, marginLeft: 4 }}>*</span>}
   </label>
 )
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
-  background: '#161410',
-  border: '1px solid #2A261F',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
   borderRadius: 3,
-  color: '#E8E1D5',
+  color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   fontSize: '0.75rem',
   letterSpacing: '0.03em',
@@ -193,8 +194,8 @@ export default function EditCase({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           Laster...
         </p>
       </div>
@@ -202,7 +203,7 @@ export default function EditCase({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -214,7 +215,7 @@ export default function EditCase({ params }: Props) {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#62594E',
+              color: C.text3,
               textDecoration: 'none',
             }}
           >
@@ -225,12 +226,12 @@ export default function EditCase({ params }: Props) {
           </Link>
 
           <div className="flex items-center gap-4 mb-4">
-            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <div style={{ width: 32, height: 1, background: C.accent }} />
             <span style={{
               fontFamily: 'var(--font-dm-sans)',
               fontSize: '0.6rem',
               letterSpacing: '0.16em',
-              color: '#C49434',
+              color: C.accent,
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
@@ -242,12 +243,12 @@ export default function EditCase({ params }: Props) {
             fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
             fontWeight: 300,
             fontStyle: 'italic',
-            color: '#E8E1D5',
+            color: C.text,
             lineHeight: 1.1,
           }}>
             Rediger case
           </h1>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 6, letterSpacing: '0.04em' }}>
             Oppdater case study
           </p>
         </div>
@@ -273,9 +274,9 @@ export default function EditCase({ params }: Props) {
         {saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-3"
-            style={{ background: 'rgba(196,148,52,0.08)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 3 }}
+            style={{ background: C.accentBg, border: '1px solid rgba(124,92,252,0.25)', borderRadius: 3 }}
           >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent, letterSpacing: '0.06em' }}>
               Endringer lagret
             </p>
           </div>
@@ -285,10 +286,10 @@ export default function EditCase({ params }: Props) {
         {isDirty && !saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-2"
-            style={{ background: 'rgba(98,89,78,0.15)', border: '1px solid #38332A', borderRadius: 3 }}
+            style={{ background: 'rgba(124,92,252,0.08)', border: `1px solid ${C.border}`, borderRadius: 3 }}
           >
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C49434', flexShrink: 0 }} />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Ulagrede endringer
             </p>
           </div>
@@ -340,7 +341,7 @@ export default function EditCase({ params }: Props) {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#9E9287',
+              color: C.text2,
               fontWeight: 500,
               marginBottom: 6,
             }}>
@@ -352,9 +353,9 @@ export default function EditCase({ params }: Props) {
                   src={existingThumbnail}
                   alt="Nåværende thumbnail"
                   className="w-full aspect-video object-cover"
-                  style={{ borderRadius: 3, border: '1px solid #2A261F' }}
+                  style={{ borderRadius: 3, border: `1px solid ${C.border}` }}
                 />
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>Nåværende thumbnail</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>Nåværende thumbnail</p>
               </div>
             )}
             <input
@@ -364,10 +365,10 @@ export default function EditCase({ params }: Props) {
               style={{
                 width: '100%',
                 padding: '10px 14px',
-                background: '#161410',
-                border: '1px solid #2A261F',
+                background: C.surface,
+                border: `1px solid ${C.border}`,
                 borderRadius: 3,
-                color: '#9E9287',
+                color: C.text2,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.7rem',
                 cursor: 'pointer',
@@ -379,9 +380,9 @@ export default function EditCase({ params }: Props) {
                   src={thumbnailPreview}
                   alt="Ny thumbnail"
                   className="w-full aspect-video object-cover"
-                  style={{ borderRadius: 3, border: '1px solid #2A261F' }}
+                  style={{ borderRadius: 3, border: `1px solid ${C.border}` }}
                 />
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>Ny thumbnail (erstatter eksisterende)</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>Ny thumbnail (erstatter eksisterende)</p>
               </div>
             )}
           </div>
@@ -395,7 +396,7 @@ export default function EditCase({ params }: Props) {
               placeholder="commercial, event, sport"
               style={inputStyle}
             />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
               Bruk tags for enklere søk og filtrering
             </p>
           </div>
@@ -407,8 +408,8 @@ export default function EditCase({ params }: Props) {
               style={{
                 flex: 1,
                 padding: '10px 20px',
-                background: (saving || uploading) ? '#38332A' : '#C49434',
-                color: (saving || uploading) ? '#62594E' : '#0C0B09',
+                background: (saving || uploading) ? C.border : C.accent,
+                color: (saving || uploading) ? C.text3 : C.bg,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.65rem',
                 letterSpacing: '0.14em',
@@ -428,12 +429,12 @@ export default function EditCase({ params }: Props) {
                 style={{
                   padding: '10px 20px',
                   background: 'transparent',
-                  color: '#62594E',
+                  color: C.text3,
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '0.65rem',
                   letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  border: '1px solid #2A261F',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 3,
                   cursor: 'pointer',
                 }}

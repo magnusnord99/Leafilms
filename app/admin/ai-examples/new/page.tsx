@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
   <label style={{
@@ -12,21 +13,21 @@ const fieldLabel = (text: string, required?: boolean) => (
     fontSize: '0.6rem',
     letterSpacing: '0.14em',
     textTransform: 'uppercase' as const,
-    color: '#9E9287',
+    color: C.text2,
     fontWeight: 500,
     marginBottom: 6,
   }}>
-    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+    {text}{required && <span style={{ color: C.accent, marginLeft: 4 }}>*</span>}
   </label>
 )
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
-  background: '#161410',
-  border: '1px solid #2A261F',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
   borderRadius: 3,
-  color: '#E8E1D5',
+  color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   fontSize: '0.75rem',
   letterSpacing: '0.03em',
@@ -80,7 +81,7 @@ export default function NewAIExample() {
   const isValid = formData.section_type && formData.project_type && formData.example_text
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -92,7 +93,7 @@ export default function NewAIExample() {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#62594E',
+              color: C.text3,
               textDecoration: 'none',
             }}
           >
@@ -103,12 +104,12 @@ export default function NewAIExample() {
           </Link>
 
           <div className="flex items-center gap-4 mb-4">
-            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <div style={{ width: 32, height: 1, background: C.accent }} />
             <span style={{
               fontFamily: 'var(--font-dm-sans)',
               fontSize: '0.6rem',
               letterSpacing: '0.16em',
-              color: '#C49434',
+              color: C.accent,
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
@@ -120,12 +121,12 @@ export default function NewAIExample() {
             fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
             fontWeight: 300,
             fontStyle: 'italic',
-            color: '#E8E1D5',
+            color: C.text,
             lineHeight: 1.1,
           }}>
             Nytt AI-eksempel
           </h1>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 6, letterSpacing: '0.04em' }}>
             Legg til et teksteksempel som AI bruker som referanse
           </p>
         </div>
@@ -200,7 +201,7 @@ export default function NewAIExample() {
               onChange={(e) => setFormData({ ...formData, quality_score: parseInt(e.target.value) })}
               style={inputStyle}
             />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
               Høyere poengsum = mer sannsynlig å bli valgt av AI
             </p>
           </div>
@@ -209,12 +210,12 @@ export default function NewAIExample() {
           <div
             style={{
               padding: '16px 20px',
-              background: 'rgba(196,148,52,0.05)',
-              border: '1px solid rgba(196,148,52,0.15)',
+              background: C.accentBg,
+              border: '1px solid rgba(124,92,252,0.15)',
               borderRadius: 3,
             }}
           >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#9E9287', lineHeight: 1.6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text2, lineHeight: 1.6 }}>
               Skriv eksempler som er representative for ønsket tone og stil. AI-en vil bruke disse som mal når den genererer ny tekst.
             </p>
           </div>
@@ -226,8 +227,8 @@ export default function NewAIExample() {
               style={{
                 flex: 1,
                 padding: '10px 20px',
-                background: (loading || !isValid) ? '#38332A' : '#C49434',
-                color: (loading || !isValid) ? '#62594E' : '#0C0B09',
+                background: (loading || !isValid) ? C.border : C.accent,
+                color: (loading || !isValid) ? C.text3 : C.bg,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.65rem',
                 letterSpacing: '0.14em',
@@ -247,12 +248,12 @@ export default function NewAIExample() {
                 style={{
                   padding: '10px 20px',
                   background: 'transparent',
-                  color: '#62594E',
+                  color: C.text3,
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '0.65rem',
                   letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  border: '1px solid #2A261F',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 3,
                   cursor: 'pointer',
                 }}

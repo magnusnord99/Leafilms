@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Section, CollagePreset, Image } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
@@ -21,6 +22,7 @@ import {
 } from '@/components/project'
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { HeroSection } from '@/components/sections'
+import { C } from '@/lib/admin-theme'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -339,6 +341,21 @@ export default function EditProject({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-background text-dark">
+      {/* Tilbake til hub */}
+      <div style={{ padding: '16px 24px 0' }}>
+        <Link href={`/admin/projects/${id}`} style={{ textDecoration: 'none' }}>
+          <span
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#5C5C70', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = '#9B9BAD' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = '#5C5C70' }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2L4 6l3.5 4" />
+            </svg>
+            {project?.title ?? 'Prosjekt'}
+          </span>
+        </Link>
+      </div>
       {/* Top Bar */}
       <EditProjectTopBar
         project={project}
@@ -360,6 +377,64 @@ export default function EditProject({ params }: Props) {
         onTranslate={handleTranslate}
         duplicating={duplicating}
       />
+
+      {/* Ressurslenker */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '8px 20px',
+          borderBottom: `1px solid ${C.border}`,
+          background: C.sidebar,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.55rem',
+            letterSpacing: '0.16em',
+            color: C.accent,
+            textTransform: 'uppercase',
+            fontWeight: 500,
+            flexShrink: 0,
+          }}
+        >
+          Ressurser
+        </span>
+        <span style={{ color: C.border, fontSize: '0.55rem' }}>·</span>
+        {[
+          { label: 'Cases',       href: '/admin/cases' },
+          { label: 'Bilder',      href: '/admin/images' },
+          { label: 'Videoer',     href: '/admin/videos' },
+          { label: 'Priskatalog', href: '/admin/prices' },
+          { label: 'AI Eksempler',href: '/admin/ai-examples' },
+        ].map((link, i, arr) => (
+          <span key={link.href} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.06em',
+                color: C.text3,
+                textDecoration: 'none',
+                transition: 'color 0.15s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = C.text }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = C.text3 }}
+            >
+              {link.label}
+            </a>
+            {i < arr.length - 1 && (
+              <span style={{ color: C.border, fontSize: '0.55rem' }}>·</span>
+            )}
+          </span>
+        ))}
+      </div>
 
       {/* Inline Editing Layout */}
       <div className="min-h-screen bg-background">

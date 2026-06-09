@@ -3,18 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import { markAsRead, markAllAsRead, type Notification } from '@/lib/actions/notifications'
-
-const C = {
-  bg:       '#0C0B09',
-  surface:  '#161410',
-  surface2: '#1E1B16',
-  border:   '#2A261F',
-  text:     '#E8E1D5',
-  text2:    '#9E9287',
-  text3:    '#62594E',
-  accent:   '#C49434',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -95,7 +84,7 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                   gap: 12,
                   padding: '14px 18px',
                   borderBottom: i < notifications.length - 1 ? `1px solid ${C.border}` : 'none',
-                  background: n.read ? 'transparent' : 'rgba(196,148,52,0.04)',
+                  background: n.read ? 'transparent' : 'rgba(124,92,252,0.04)',
                   borderLeft: n.read ? `3px solid transparent` : `3px solid ${C.accent}`,
                   cursor: 'pointer',
                   textAlign: 'left',

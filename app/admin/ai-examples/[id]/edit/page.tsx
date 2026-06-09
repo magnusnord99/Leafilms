@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AIExample } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
   <label style={{
@@ -13,21 +14,21 @@ const fieldLabel = (text: string, required?: boolean) => (
     fontSize: '0.6rem',
     letterSpacing: '0.14em',
     textTransform: 'uppercase' as const,
-    color: '#9E9287',
+    color: C.text2,
     fontWeight: 500,
     marginBottom: 6,
   }}>
-    {text}{required && <span style={{ color: '#C49434', marginLeft: 4 }}>*</span>}
+    {text}{required && <span style={{ color: C.accent, marginLeft: 4 }}>*</span>}
   </label>
 )
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
-  background: '#161410',
-  border: '1px solid #2A261F',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
   borderRadius: 3,
-  color: '#E8E1D5',
+  color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   fontSize: '0.75rem',
   letterSpacing: '0.03em',
@@ -145,8 +146,8 @@ export default function EditAIExample({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           Laster...
         </p>
       </div>
@@ -155,9 +156,9 @@ export default function EditAIExample({ params }: Props) {
 
   if (!example) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
         <div className="text-center">
-          <p style={{ fontFamily: 'var(--font-dm-sans)', color: '#9E9287', marginBottom: 16 }}>Eksempel ikke funnet</p>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', color: C.text2, marginBottom: 16 }}>Eksempel ikke funnet</p>
           <Link href="/admin/ai-examples">
             <button
               style={{
@@ -165,7 +166,7 @@ export default function EditAIExample({ params }: Props) {
                 fontSize: '0.6rem',
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                color: '#C49434',
+                color: C.accent,
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -191,7 +192,7 @@ export default function EditAIExample({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
+    <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -203,7 +204,7 @@ export default function EditAIExample({ params }: Props) {
               fontSize: '0.6rem',
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: '#62594E',
+              color: C.text3,
               textDecoration: 'none',
             }}
           >
@@ -214,12 +215,12 @@ export default function EditAIExample({ params }: Props) {
           </Link>
 
           <div className="flex items-center gap-4 mb-4">
-            <div style={{ width: 32, height: 1, background: '#C49434' }} />
+            <div style={{ width: 32, height: 1, background: C.accent }} />
             <span style={{
               fontFamily: 'var(--font-dm-sans)',
               fontSize: '0.6rem',
               letterSpacing: '0.16em',
-              color: '#C49434',
+              color: C.accent,
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
@@ -231,12 +232,12 @@ export default function EditAIExample({ params }: Props) {
             fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
             fontWeight: 300,
             fontStyle: 'italic',
-            color: '#E8E1D5',
+            color: C.text,
             lineHeight: 1.1,
           }}>
             Rediger eksempel
           </h1>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', marginTop: 6, letterSpacing: '0.04em' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 6, letterSpacing: '0.04em' }}>
             {sectionLabels[example.section_type] || example.section_type} — {projectLabels[example.project_type] || example.project_type}
           </p>
         </div>
@@ -262,9 +263,9 @@ export default function EditAIExample({ params }: Props) {
         {saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-3"
-            style={{ background: 'rgba(196,148,52,0.08)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 3 }}
+            style={{ background: C.accentBg, border: '1px solid rgba(124,92,252,0.25)', borderRadius: 3 }}
           >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent, letterSpacing: '0.06em' }}>
               Endringer lagret
             </p>
           </div>
@@ -274,10 +275,10 @@ export default function EditAIExample({ params }: Props) {
         {isDirty && !saveSuccess && (
           <div
             className="flex items-center gap-3 mb-6 px-4 py-2"
-            style={{ background: 'rgba(98,89,78,0.15)', border: '1px solid #38332A', borderRadius: 3 }}
+            style={{ background: 'rgba(124,92,252,0.08)', border: `1px solid ${C.border}`, borderRadius: 3 }}
           >
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C49434', flexShrink: 0 }} />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Ulagrede endringer
             </p>
           </div>
@@ -307,7 +308,7 @@ export default function EditAIExample({ params }: Props) {
               onChange={(e) => setFormData({ ...formData, quality_score: parseInt(e.target.value) })}
               style={inputStyle}
             />
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', marginTop: 6 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
               Høyere poengsum = mer sannsynlig å bli valgt av AI
             </p>
           </div>
@@ -316,13 +317,13 @@ export default function EditAIExample({ params }: Props) {
           <div
             style={{
               padding: '16px 20px',
-              background: '#161410',
-              border: '1px solid #2A261F',
+              background: C.surface,
+              border: `1px solid ${C.border}`,
               borderRadius: 3,
             }}
           >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#9E9287', marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Statistikk</p>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text2, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Statistikk</p>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
               Brukt {example.usage_count} ganger · Opprettet {new Date(example.created_at).toLocaleDateString('nb-NO')}
             </p>
           </div>
@@ -334,8 +335,8 @@ export default function EditAIExample({ params }: Props) {
               style={{
                 flex: 1,
                 padding: '10px 20px',
-                background: saving ? '#38332A' : '#C49434',
-                color: saving ? '#62594E' : '#0C0B09',
+                background: saving ? C.border : C.accent,
+                color: saving ? C.text3 : C.bg,
                 fontFamily: 'var(--font-dm-sans)',
                 fontSize: '0.65rem',
                 letterSpacing: '0.14em',
@@ -355,12 +356,12 @@ export default function EditAIExample({ params }: Props) {
                 style={{
                   padding: '10px 20px',
                   background: 'transparent',
-                  color: '#62594E',
+                  color: C.text3,
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '0.65rem',
                   letterSpacing: '0.14em',
                   textTransform: 'uppercase',
-                  border: '1px solid #2A261F',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 3,
                   cursor: 'pointer',
                 }}
@@ -374,7 +375,7 @@ export default function EditAIExample({ params }: Props) {
         {/* Delete zone */}
         <div
           className="mt-10 pt-8"
-          style={{ borderTop: '1px solid #2A261F' }}
+          style={{ borderTop: `1px solid ${C.border}` }}
         >
           {!showDeleteConfirm ? (
             <button
@@ -416,8 +417,8 @@ export default function EditAIExample({ params }: Props) {
                   style={{
                     flex: 1,
                     padding: '8px 16px',
-                    background: deleting ? '#38332A' : 'rgba(184,64,64,0.8)',
-                    color: deleting ? '#62594E' : '#fff',
+                    background: deleting ? C.border : 'rgba(184,64,64,0.8)',
+                    color: deleting ? C.text3 : '#fff',
                     fontFamily: 'var(--font-dm-sans)',
                     fontSize: '0.6rem',
                     letterSpacing: '0.12em',
@@ -435,12 +436,12 @@ export default function EditAIExample({ params }: Props) {
                   style={{
                     padding: '8px 16px',
                     background: 'transparent',
-                    color: '#62594E',
+                    color: C.text3,
                     fontFamily: 'var(--font-dm-sans)',
                     fontSize: '0.6rem',
                     letterSpacing: '0.12em',
                     textTransform: 'uppercase',
-                    border: '1px solid #2A261F',
+                    border: `1px solid ${C.border}`,
                     borderRadius: 3,
                     cursor: 'pointer',
                   }}

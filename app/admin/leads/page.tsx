@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getAllLeads, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
+import { getLeadsWithMeta, deleteLead, LeadListItem, LeadStatus } from '@/lib/actions/leads'
 import { C } from '@/lib/admin-theme'
 
 const success = '#4CAF7D'
@@ -27,14 +27,14 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<LeadRecord[]>([])
+  const [leads, setLeads] = useState<LeadListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<LeadStatus | 'all'>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
 
   useEffect(() => {
-    getAllLeads().then(data => {
+    getLeadsWithMeta().then(data => {
       setLeads(data)
       setLoading(false)
     })
@@ -192,6 +192,26 @@ export default function LeadsPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* Ansvarlig + åpne oppgaver */}
+                      {lead.assigned_profile && (
+                        <span
+                          title={`Ansvarlig: ${lead.assigned_profile.name ?? lead.assigned_profile.email}`}
+                          style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: C.accent, color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700,
+                          }}
+                        >
+                          {(lead.assigned_profile.name ?? lead.assigned_profile.email)[0].toUpperCase()}
+                        </span>
+                      )}
+                      {lead.open_tasks > 0 && (
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
+                          {lead.open_tasks} oppgave{lead.open_tasks !== 1 ? 'r' : ''}
+                        </span>
+                      )}
 
                       {/* Sales points count */}
                       {(lead.sales_points ?? []).length > 0 && (

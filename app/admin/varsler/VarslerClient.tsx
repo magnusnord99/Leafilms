@@ -25,7 +25,9 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
     if (!n.read) {
       startTransition(async () => { await markAsRead(n.id) })
     }
-    if (n.type === 'project_message') {
+    if (n.type === 'lead_assigned') {
+      router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
+    } else if (n.type === 'task_assigned' || n.type === 'project_message') {
       router.push(`/admin/projects/${n.project_id}`)
     } else {
       router.push(`/admin/postprod/${n.project_id}`)
@@ -93,7 +95,11 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
               >
                 {/* Ikon */}
                 <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                  {n.type === 'project_message' ? (
+                  {n.type === 'task_assigned' || n.type === 'lead_assigned' ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                    </svg>
+                  ) : n.type === 'project_message' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
@@ -112,11 +118,15 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                       {n.sender_name}
                     </span>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
-                      {n.type === 'project_message' ? 'i prosjekt-chatten' : 'i en oppgave'}
+                      {n.type === 'project_message' ? 'i prosjekt-chatten'
+                        : n.type === 'task_assigned' ? 'tildelte deg en oppgave'
+                        : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
+                        : n.type === 'selection_submitted' ? 'sendte inn bildevalg'
+                        : 'i en oppgave'}
                     </span>
                   </div>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, fontStyle: 'italic', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    "{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}"
+                    &ldquo;{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}&rdquo;
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {n.projects?.title && (
@@ -127,6 +137,11 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                     {n.tasks?.title && (
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
                         · {n.tasks.title}
+                      </span>
+                    )}
+                    {n.leads?.name && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
+                        {n.leads.company || n.leads.name}
                       </span>
                     )}
                   </div>

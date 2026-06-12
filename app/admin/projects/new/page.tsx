@@ -3,15 +3,9 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Button, Input, Select, Textarea, Card } from '@/components/ui'
 import { Customer, PIPELINE_STAGES, PipelineStage } from '@/lib/types'
+import { seedTasksFromTemplates } from '@/lib/actions/pipeline'
 import { C } from '@/lib/admin-theme'
-
-const contentTypeOptions = [
-  { value: 'film', label: 'Film' },
-  { value: 'photo', label: 'Bilder' },
-  { value: 'both', label: 'Film og Bilder' }
-]
 
 const projectTypeOptions = [
   { value: 'commercial', label: 'Reklame/Markedsføring' },
@@ -64,6 +58,35 @@ const scopeOptions = [
   { value: 'large', label: 'Stort (1+ uke produksjon)' }
 ]
 
+const INNHOLDSTYPE_OPTIONS: { value: 'video' | 'photo' | 'mixed'; label: string }[] = [
+  { value: 'video', label: 'Video' },
+  { value: 'photo', label: 'Bilder' },
+  { value: 'mixed', label: 'Begge' },
+]
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
+  borderRadius: 3,
+  color: C.text,
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.75rem',
+  letterSpacing: '0.03em',
+  outline: 'none',
+}
+
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  appearance: 'none',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%235C5C70'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 12px center',
+  backgroundSize: '16px',
+  cursor: 'pointer',
+}
+
 const fieldLabel = (text: string, required?: boolean) => (
   <label style={{
     display: 'block',
@@ -97,11 +120,26 @@ const sectionDivider = (text: string) => (
   </div>
 )
 
-const INNHOLDSTYPE_OPTIONS: { value: 'video' | 'photo' | 'mixed'; label: string }[] = [
-  { value: 'video', label: 'Video' },
-  { value: 'photo', label: 'Bilder' },
-  { value: 'mixed', label: 'Begge' },
-]
+const chipBtn = (active: boolean, onClick: () => void, label: string) => (
+  <button
+    type="button"
+    onClick={onClick}
+    style={{
+      padding: '6px 14px',
+      fontFamily: 'var(--font-dm-sans)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.04em',
+      borderRadius: 3,
+      border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+      background: active ? C.accentBg : C.surface,
+      color: active ? C.accent : C.text3,
+      cursor: 'pointer',
+      transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+    }}
+  >
+    {label}
+  </button>
+)
 
 function NewProjectContent() {
   const router = useRouter()
@@ -113,11 +151,11 @@ function NewProjectContent() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     searchParams.get('customer_id') || null
   )
+  const [newCustomerInfo, setNewCustomerInfo] = useState({ company: '', email: '', phone: '' })
   const [formData, setFormData] = useState({
     title: '',
     language: 'no' as 'no' | 'en',
     project_type: '' as 'video' | 'photo' | 'mixed' | '',
-    content_type: '',
     legacy_project_type: '',
     mediums: [] as string[],
     target_audience: '',
@@ -126,6 +164,8 @@ function NewProjectContent() {
     context: '',
     pipeline_stage: 'lead' as PipelineStage,
   })
+
+  const isNewCustomer = customerInput.trim().length > 0 && !selectedCustomerId
 
   useEffect(() => {
     fetchCustomers()
@@ -185,7 +225,12 @@ function NewProjectContent() {
         } else {
           const { data: newCustomer, error: customerError } = await supabase
             .from('customers')
-            .insert({ name: customerInput.trim(), company: customerInput.trim() })
+            .insert({
+              name: customerInput.trim(),
+              company: newCustomerInfo.company || customerInput.trim(),
+              email: newCustomerInfo.email || null,
+              phone: newCustomerInfo.phone || null,
+            })
             .select()
             .single()
 
@@ -216,7 +261,6 @@ function NewProjectContent() {
           project_type: formData.project_type || null,
           pipeline_stage: formData.pipeline_stage,
           metadata: {
-            content_type: formData.content_type,
             project_type: formData.legacy_project_type,
             mediums: formData.mediums,
             target_audience: formData.target_audience,
@@ -229,6 +273,10 @@ function NewProjectContent() {
         .single()
 
       if (projectError) throw projectError
+
+      // Seed oppgaver fra task_templates for steget prosjektet starter i —
+      // ellers får prosjektet ingen tasks før første stegbytte
+      await seedTasksFromTemplates(project.id, formData.pipeline_stage)
 
       const sections = [
         { type: 'hero', order_index: 1, visible: true },
@@ -260,9 +308,8 @@ function NewProjectContent() {
             title: formData.title,
             clientName,
             language: formData.language,
-            projectType: formData.project_type,
-            contentType: formData.content_type,
-            legacyProjectType: formData.legacy_project_type,
+            contentType: formData.project_type,
+            projectType: formData.legacy_project_type,
             mediums: formData.mediums,
             targetAudience: formData.target_audience,
             industry: formData.industry,
@@ -290,7 +337,7 @@ function NewProjectContent() {
     }
   }
 
-  const isFormValid = formData.title && formData.project_type && formData.content_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
+  const isFormValid = formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
 
   return (
     <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
@@ -306,6 +353,10 @@ function NewProjectContent() {
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
               color: C.text3,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
             }}
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,45 +404,29 @@ function NewProjectContent() {
           <div>
             {sectionDivider('Grunnleggende informasjon')}
             <div className="space-y-6">
+
               <div>
                 {fieldLabel('Prosjekttittel', true)}
-                <Input
+                <input
                   type="text"
-                  id="title"
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Nike Produktlansering 2025"
+                  style={inputStyle}
                 />
               </div>
 
               <div>
                 {fieldLabel('Pipeline-steg')}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {PIPELINE_STAGES.map((stage) => {
-                    const active = formData.pipeline_stage === stage.value
-                    return (
-                      <button
-                        key={stage.value}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, pipeline_stage: stage.value })}
-                        style={{
-                          padding: '6px 14px',
-                          fontFamily: 'var(--font-dm-sans)',
-                          fontSize: '0.68rem',
-                          letterSpacing: '0.04em',
-                          borderRadius: 3,
-                          border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                          background: active ? C.accentBg : C.surface,
-                          color: active ? C.accent : C.text3,
-                          cursor: 'pointer',
-                          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-                        }}
-                      >
-                        {stage.label}
-                      </button>
+                  {PIPELINE_STAGES.map((stage) =>
+                    chipBtn(
+                      formData.pipeline_stage === stage.value,
+                      () => setFormData({ ...formData, pipeline_stage: stage.value }),
+                      stage.label
                     )
-                  })}
+                  )}
                 </div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
                   Hvor i prosessen er dere allerede?
@@ -401,47 +436,40 @@ function NewProjectContent() {
               <div>
                 {fieldLabel('Innholdstype', true)}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {INNHOLDSTYPE_OPTIONS.map((opt) => {
-                    const active = formData.project_type === opt.value
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, project_type: opt.value })}
-                        style={{
-                          padding: '8px 20px',
-                          fontFamily: 'var(--font-dm-sans)',
-                          fontSize: '0.7rem',
-                          letterSpacing: '0.06em',
-                          borderRadius: 3,
-                          border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                          background: active ? C.accentBg : C.surface,
-                          color: active ? C.accent : C.text3,
-                          cursor: 'pointer',
-                          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    )
-                  })}
+                  {INNHOLDSTYPE_OPTIONS.map((opt) =>
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, project_type: opt.value })}
+                      style={{
+                        padding: '8px 20px',
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.7rem',
+                        letterSpacing: '0.06em',
+                        borderRadius: 3,
+                        border: formData.project_type === opt.value ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                        background: formData.project_type === opt.value ? C.accentBg : C.surface,
+                        color: formData.project_type === opt.value ? C.accent : C.text3,
+                        cursor: 'pointer',
+                        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div>
                 {fieldLabel('Språk', true)}
                 <div className="flex gap-2">
-                  {(['no', 'en'] as const).map((lang) => (
-                    <Button
-                      key={lang}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, language: lang })}
-                      variant={formData.language === lang ? 'primary' : 'secondary'}
-                      size="sm"
-                    >
-                      {lang === 'no' ? 'Norsk' : 'English'}
-                    </Button>
-                  ))}
+                  {(['no', 'en'] as const).map((lang) =>
+                    chipBtn(
+                      formData.language === lang,
+                      () => setFormData({ ...formData, language: lang }),
+                      lang === 'no' ? 'Norsk' : 'English'
+                    )
+                  )}
                 </div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
                   AI genererer innhold på valgt språk
@@ -453,12 +481,12 @@ function NewProjectContent() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
-                    id="customer"
                     list="customers-list"
                     value={customerInput}
                     onChange={(e) => {
                       setCustomerInput(e.target.value)
                       setSelectedCustomerId(null)
+                      setNewCustomerInfo({ company: '', email: '', phone: '' })
                     }}
                     onBlur={(e) => {
                       const match = customers.find(
@@ -467,21 +495,11 @@ function NewProjectContent() {
                       if (match) {
                         setSelectedCustomerId(match.id)
                         setCustomerInput(match.name)
+                        setNewCustomerInfo({ company: '', email: '', phone: '' })
                       }
                     }}
                     placeholder="Skriv navn eller velg fra listen..."
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 3,
-                      color: C.text,
-                      fontFamily: 'var(--font-dm-sans)',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.03em',
-                      outline: 'none',
-                    }}
+                    style={inputStyle}
                   />
                   <datalist id="customers-list">
                     {customers.map((customer) => (
@@ -494,6 +512,64 @@ function NewProjectContent() {
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
                   Velg fra listen eller skriv inn for å opprette ny kunde
                 </p>
+
+                {/* New customer info expansion */}
+                {isNewCustomer && (
+                  <div style={{
+                    marginTop: 12,
+                    padding: '16px 20px',
+                    background: C.surface2,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 3,
+                  }}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div style={{ width: 12, height: 1, background: C.border }} />
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.58rem',
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        color: C.text3,
+                      }}>
+                        Ny kunde — fyll inn mer info (valgfritt)
+                      </span>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          {fieldLabel('Firma')}
+                          <input
+                            type="text"
+                            value={newCustomerInfo.company}
+                            onChange={(e) => setNewCustomerInfo({ ...newCustomerInfo, company: e.target.value })}
+                            placeholder="Firmanavn"
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div>
+                          {fieldLabel('E-post')}
+                          <input
+                            type="email"
+                            value={newCustomerInfo.email}
+                            onChange={(e) => setNewCustomerInfo({ ...newCustomerInfo, email: e.target.value })}
+                            placeholder="kontakt@bedrift.no"
+                            style={inputStyle}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ flex: '1 1 160px' }}>
+                        {fieldLabel('Telefon')}
+                        <input
+                          type="tel"
+                          value={newCustomerInfo.phone}
+                          onChange={(e) => setNewCustomerInfo({ ...newCustomerInfo, phone: e.target.value })}
+                          placeholder="+47 123 45 678"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -502,27 +578,20 @@ function NewProjectContent() {
           <div>
             {sectionDivider('Prosjektdetaljer')}
             <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  {fieldLabel('Innholdstype', true)}
-                  <Select
-                    options={contentTypeOptions}
-                    placeholder="Film eller bilder?"
-                    value={formData.content_type}
-                    onChange={(e) => setFormData({ ...formData, content_type: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  {fieldLabel('Prosjekttype', true)}
-                  <Select
-                    options={projectTypeOptions}
-                    placeholder="Velg type..."
-                    value={formData.legacy_project_type}
-                    onChange={(e) => setFormData({ ...formData, legacy_project_type: e.target.value })}
-                    required
-                  />
-                </div>
+
+              <div>
+                {fieldLabel('Prosjekttype', true)}
+                <select
+                  value={formData.legacy_project_type}
+                  onChange={(e) => setFormData({ ...formData, legacy_project_type: e.target.value })}
+                  required
+                  style={selectStyle}
+                >
+                  <option value="" disabled>Velg type...</option>
+                  {projectTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -531,50 +600,58 @@ function NewProjectContent() {
                   Velg én eller flere
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {mediumOptions.map((option) => (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      onClick={() => toggleMedium(option.value)}
-                      variant={formData.mediums.includes(option.value) ? 'primary' : 'secondary'}
-                      size="sm"
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                  {mediumOptions.map((option) =>
+                    chipBtn(
+                      formData.mediums.includes(option.value),
+                      () => toggleMedium(option.value),
+                      option.label
+                    )
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   {fieldLabel('Målgruppe', true)}
-                  <Select
-                    options={targetAudienceOptions}
-                    placeholder="Velg målgruppe..."
+                  <select
                     value={formData.target_audience}
                     onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
                     required
-                  />
+                    style={selectStyle}
+                  >
+                    <option value="" disabled>Velg målgruppe...</option>
+                    {targetAudienceOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   {fieldLabel('Bransje')}
-                  <Select
-                    options={industryOptions}
-                    placeholder="Velg bransje..."
+                  <select
                     value={formData.industry}
                     onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                  />
+                    style={selectStyle}
+                  >
+                    <option value="">Velg bransje...</option>
+                    {industryOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div>
                 {fieldLabel('Omfang')}
-                <Select
-                  options={scopeOptions}
-                  placeholder="Velg omfang..."
+                <select
                   value={formData.scope}
                   onChange={(e) => setFormData({ ...formData, scope: e.target.value })}
-                />
+                  style={selectStyle}
+                >
+                  <option value="">Velg omfang...</option>
+                  {scopeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -584,12 +661,12 @@ function NewProjectContent() {
             {sectionDivider('Kontekst og bakgrunn')}
             <div>
               {fieldLabel('E-postutvekslinger / Brief / Notater')}
-              <Textarea
-                id="context"
+              <textarea
                 rows={8}
                 value={formData.context}
                 onChange={(e) => setFormData({ ...formData, context: e.target.value })}
                 placeholder={`Lim inn e-postutvekslinger, brief-dokumenter eller møtenotater...\n\n– Hva ønsker kunden å oppnå?\n– Hva er budsjettrammene?\n– Er det spesielle krav eller ønsker?`}
+                style={{ ...inputStyle, resize: 'vertical' }}
               />
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 8, letterSpacing: '0.06em' }}>
                 Jo mer kontekst, desto bedre AI-generering
@@ -601,7 +678,7 @@ function NewProjectContent() {
           <div style={{
             padding: '20px 24px',
             background: C.accentBg,
-            border: '1px solid rgba(124,92,252,0.15)',
+            border: `1px solid ${C.border}`,
             borderRadius: 3,
           }}>
             <div className="flex items-center gap-3 mb-4">
@@ -638,7 +715,7 @@ function NewProjectContent() {
                 className="flex items-center gap-3 px-4 py-3"
                 style={{
                   background: C.accentBg,
-                  border: '1px solid rgba(124,92,252,0.25)',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 3,
                 }}
               >
@@ -647,7 +724,7 @@ function NewProjectContent() {
                   style={{
                     width: 14,
                     height: 14,
-                    border: '1.5px solid rgba(124,92,252,0.3)',
+                    border: `1.5px solid ${C.border}`,
                     borderTop: `1.5px solid ${C.accent}`,
                     borderRadius: '50%',
                   }}
@@ -658,24 +735,47 @@ function NewProjectContent() {
               </div>
             )}
             <div className="flex gap-3">
-              <Button
+              <button
                 type="submit"
                 disabled={loading || !isFormValid}
-                variant="primary"
-                className="flex-1"
+                style={{
+                  flex: 1,
+                  padding: '11px 20px',
+                  background: loading || !isFormValid ? C.border : C.accent,
+                  color: loading || !isFormValid ? C.text3 : '#fff',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: 3,
+                  cursor: loading || !isFormValid ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.15s',
+                }}
               >
-                {loading
-                  ? (generatingStatus || 'Oppretter prosjekt...')
-                  : 'Opprett Prosjekt med AI'}
-              </Button>
-              <Button
+                {loading ? (generatingStatus || 'Oppretter prosjekt...') : 'Opprett Prosjekt med AI'}
+              </button>
+              <button
                 type="button"
                 onClick={() => router.push('/admin')}
-                variant="secondary"
                 disabled={loading}
+                style={{
+                  padding: '11px 20px',
+                  background: 'transparent',
+                  color: C.text3,
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 3,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.5 : 1,
+                }}
               >
                 Avbryt
-              </Button>
+              </button>
             </div>
           </div>
         </form>

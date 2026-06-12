@@ -2,8 +2,14 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
-import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote } from '@/lib/types'
+import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
+import { PIPELINE_STAGES } from '@/lib/types'
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
+type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
+type TaskTemplateRow = { title: string; description: string | null; sort_order: number }
 
 /**
  * Henter alle prosjekter med pipeline_stage og customer-info,
@@ -31,7 +37,7 @@ export async function getProjectsForPipeline(): Promise<ProjectWithPipeline[]> {
       return []
     }
 
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).map((row: ProjectRow) => ({
       ...row,
       customer: row.customers ?? null,
       customers: undefined,
@@ -105,15 +111,45 @@ export async function getTasksForProject(
       return []
     }
 
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).map((row: TaskRow) => ({
       ...row,
       assignees: (row.task_assignees ?? [])
-        .map((ta: any) => ta.profile)
+        .map((ta) => ta.profile)
         .filter(Boolean),
     })) as Task[]
   } catch (err) {
     console.error('getTasksForProject unexpected error:', err)
     return []
+  }
+}
+
+/**
+ * Henter prosjektets nåværende pipeline-steg + oppgavene for det steget.
+ * Brukes av oppgavepanelet på lead-sidene.
+ */
+export async function getProjectStageTasks(projectId: string): Promise<{
+  stage: PipelineStage
+  tasks: Task[]
+} | null> {
+  try {
+    const supabase = await createClient()
+    const { data: proj, error } = await supabase
+      .from('projects')
+      .select('pipeline_stage')
+      .eq('id', projectId)
+      .single()
+
+    if (error || !proj) {
+      console.error('getProjectStageTasks error:', error)
+      return null
+    }
+
+    const stage = proj.pipeline_stage as PipelineStage
+    const tasks = await getTasksForProject(projectId, stage)
+    return { stage, tasks }
+  } catch (err) {
+    console.error('getProjectStageTasks unexpected error:', err)
+    return null
   }
 }
 
@@ -194,7 +230,7 @@ export async function seedTasksFromTemplates(
     }
 
     // Opprett tasks basert på templates
-    const tasksToInsert = templates.map((t: any) => ({
+    const tasksToInsert = templates.map((t: TaskTemplateRow) => ({
       project_id: projectId,
       pipeline_stage: stage,
       title: t.title,
@@ -223,7 +259,7 @@ export async function seedTasksFromTemplates(
  * Seeder to uavhengige post_prod-flyter for mixed-prosjekter:
  * én for video (sub_type='video') og én for foto (sub_type='photo').
  */
-async function seedMixedPostProdTasks(supabase: any, projectId: string): Promise<void> {
+async function seedMixedPostProdTasks(supabase: SupabaseServerClient, projectId: string): Promise<void> {
   const [{ data: videoTemplates }, { data: photoTemplates }] = await Promise.all([
     supabase
       .from('task_templates')
@@ -240,7 +276,7 @@ async function seedMixedPostProdTasks(supabase: any, projectId: string): Promise
   ])
 
   const toInsert = [
-    ...(videoTemplates ?? []).map((t: any) => ({
+    ...(videoTemplates ?? []).map((t: TaskTemplateRow) => ({
       project_id: projectId,
       pipeline_stage: 'post_prod',
       title: t.title,
@@ -252,7 +288,7 @@ async function seedMixedPostProdTasks(supabase: any, projectId: string): Promise
       priority: null,
       created_by: null,
     })),
-    ...(photoTemplates ?? []).map((t: any) => ({
+    ...(photoTemplates ?? []).map((t: TaskTemplateRow) => ({
       project_id: projectId,
       pipeline_stage: 'post_prod',
       title: t.title,
@@ -329,24 +365,42 @@ export async function updateTaskStatus(
       return
     }
 
-    // Sjekk om alle post_prod-tasks er ferdige → flytt til levering
-    if (status === 'done' && task?.pipeline_stage === 'post_prod') {
-      const [{ count: total }, { count: done }] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('project_id', task.project_id)
-          .eq('pipeline_stage', 'post_prod'),
-        supabase
-          .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('project_id', task.project_id)
-          .eq('pipeline_stage', 'post_prod')
-          .eq('status', 'done'),
-      ])
+    // Auto-advance: når alle tasks i current stage er ferdige → flytt til neste stage
+    if (status === 'done' && task) {
+      const stage = task.pipeline_stage as PipelineStage
+      const stageOrder = PIPELINE_STAGES.map(s => s.value)
+      const currentIdx = stageOrder.indexOf(stage)
+      const nextStage = currentIdx >= 0 && currentIdx < stageOrder.length - 1
+        ? stageOrder[currentIdx + 1]
+        : null
 
-      if (total && done && total === done) {
-        await updatePipelineStage(task.project_id, 'levering')
+      if (nextStage) {
+        // Bekreft at prosjektet fortsatt er i denne stage (ikke allerede fremflyttet)
+        const { data: proj } = await supabase
+          .from('projects')
+          .select('pipeline_stage')
+          .eq('id', task.project_id)
+          .single()
+
+        if (proj?.pipeline_stage === stage) {
+          const [{ count: total }, { count: done }] = await Promise.all([
+            supabase
+              .from('tasks')
+              .select('id', { count: 'exact', head: true })
+              .eq('project_id', task.project_id)
+              .eq('pipeline_stage', stage),
+            supabase
+              .from('tasks')
+              .select('id', { count: 'exact', head: true })
+              .eq('project_id', task.project_id)
+              .eq('pipeline_stage', stage)
+              .eq('status', 'done'),
+          ])
+
+          if (total && done && total === done) {
+            await updatePipelineStage(task.project_id, nextStage as PipelineStage)
+          }
+        }
       }
     }
 
@@ -420,7 +474,7 @@ export async function reseedPostProdTasks(
     }
 
     // Opprett tasks
-    const tasksToInsert = templates.map((t: any) => ({
+    const tasksToInsert = templates.map((t: TaskTemplateRow) => ({
       project_id: projectId,
       pipeline_stage: 'post_prod',
       title: t.title,
@@ -466,7 +520,7 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 
     if (error || !data || data.length === 0) return []
 
-    const ids = data.map((p: any) => p.id)
+    const ids = data.map((p: { id: string }) => p.id)
 
     const { data: tasks } = await supabase
       .from('tasks')
@@ -481,7 +535,7 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
       if (t.status === 'done') taskMap[t.project_id].done++
     }
 
-    return data.map((row: any) => ({
+    return data.map((row: ProjectRow) => ({
       ...row,
       customer: row.customers ?? null,
       customers: undefined,
@@ -662,7 +716,7 @@ export async function analyzeProjectNotes(
   projectId: string,
   notes: string,
   projectTitle: string
-): Promise<Record<string, any> | null> {
+): Promise<Record<string, unknown> | null> {
   try {
     if (!process.env.ANTHROPIC_API_KEY) return null
     const supabase = await createClient()
@@ -792,7 +846,7 @@ Returner KUN e-postteksten, ingen subject-linje.`
     }
 
     // Steg 4: Oppdater pipeline_data med meeting_link og sent_at
-    const existingPipelineData = (project.pipeline_data as Record<string, any>) ?? {}
+    const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
 
     const { error: updateError } = await supabase
       .from('projects')
@@ -1069,6 +1123,23 @@ export async function toggleTaskAssignee(taskId: string, profileId: string): Pro
       await supabase
         .from('task_assignees')
         .insert({ task_id: taskId, profile_id: profileId })
+
+      const { data: taskInfo } = await supabase
+        .from('tasks')
+        .select('title, project_id, project:projects ( title )')
+        .eq('id', taskId)
+        .single()
+
+      if (taskInfo) {
+        const projectTitle = (taskInfo.project as unknown as { title: string } | null)?.title
+        await notifyAssignment({
+          recipientId: profileId,
+          type: 'task_assigned',
+          projectId: taskInfo.project_id,
+          taskId,
+          preview: projectTitle ? `${taskInfo.title} — ${projectTitle}` : taskInfo.title,
+        })
+      }
       return true
     }
   } catch (err) {
@@ -1110,14 +1181,14 @@ export async function getMyTasks(): Promise<(Task & {
       return []
     }
 
-    return (data ?? [])
-      .map((row: any) => {
+    return ((data ?? []) as unknown as { task: (TaskRow & { project?: unknown }) | null }[])
+      .map((row) => {
         const t = row.task
         if (!t) return null
         return {
           ...t,
           assignees: (t.task_assignees ?? [])
-            .map((ta: any) => ta.profile)
+            .map((ta) => ta.profile)
             .filter(Boolean),
           project: t.project ?? null,
         }
@@ -1179,10 +1250,10 @@ export async function generateEmailDraft(
     return { subject: `Angående prosjekt`, body: '' }
   }
 
-  const customer = (project as any).customers ?? null
+  const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
   const customerName: string = customer?.name ?? 'Kunde'
   const customerCompany: string = customer?.company ?? ''
-  const pipelineData = (project.pipeline_data as Record<string, any>) ?? {}
+  const pipelineData = (project.pipeline_data as PipelineData) ?? {}
 
   const fallbackSubjects = {
     meeting: `Møteinvitasjon — ${project.title}`,
@@ -1305,7 +1376,7 @@ export async function updatePostProdDelivery(
   }
 }
 
-export async function getProjectDeliverablesSection(projectId: string): Promise<{ items: any[] } | null> {
+export async function getProjectDeliverablesSection(projectId: string): Promise<{ items: NonNullable<SectionContent['deliverableItems']> } | null> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -1315,7 +1386,7 @@ export async function getProjectDeliverablesSection(projectId: string): Promise<
       .eq('type', 'deliverables')
       .maybeSingle()
     if (error || !data) return null
-    return { items: (data.content as any)?.deliverableItems ?? [] }
+    return { items: (data.content as SectionContent | null)?.deliverableItems ?? [] }
   } catch {
     return null
   }
@@ -1352,7 +1423,7 @@ export async function getTasksForProjects(
       const t = {
         ...row,
         assignees: (row.task_assignees ?? [])
-          .map((ta: any) => ta.profile)
+          .map((ta: AssigneeJoin) => ta.profile)
           .filter(Boolean),
       } as Task
       if (!grouped[t.project_id]) grouped[t.project_id] = []
@@ -1387,7 +1458,7 @@ export async function getPostProdAssignedTasks(): Promise<{
 
     if (!projects || projects.length === 0) return []
 
-    const projectIds = projects.map((p: any) => p.id)
+    const projectIds = projects.map((p: { id: string }) => p.id)
 
     // Hent tasks for disse prosjektene
     const { data: tasks, error: tasksError } = await supabase
@@ -1408,13 +1479,13 @@ export async function getPostProdAssignedTasks(): Promise<{
     }
 
     const projectMap = new Map(
-      projects.map((p: any) => [p.id, { title: p.title, customerName: p.customers?.name ?? null }])
+      (projects as unknown as { id: string; title: string; customers?: { name: string | null } | null }[]).map((p) => [p.id, { title: p.title, customerName: p.customers?.name ?? null }])
     )
 
     return (tasks ?? [])
-      .map((row: any) => {
+      .map((row: TaskRow) => {
         const assignees = (row.task_assignees ?? [])
-          .map((ta: any) => ta.profile)
+          .map((ta) => ta.profile)
           .filter(Boolean)
         if (assignees.length === 0) return null
         const proj = projectMap.get(row.project_id)
@@ -1434,5 +1505,169 @@ export async function getPostProdAssignedTasks(): Promise<{
   } catch (err) {
     console.error('getPostProdAssignedTasks unexpected error:', err)
     return []
+  }
+}
+
+/**
+ * Sender tilbudet til kunden via e-post og flytter prosjektet til 'kontrakt'-steget.
+ * Brukes når alle 3 substeg (pitch, tilbud, kontrakt) er klare.
+ */
+export async function sendTilbudToKunde(
+  projectId: string,
+  pitchToken: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('title, pipeline_data, customers(id, name, email, company)')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !project) {
+      return { ok: false, error: 'Fant ikke prosjektet' }
+    }
+
+    const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
+    const customerEmail: string | null = customer?.email ?? null
+    const customerName: string = customer?.name ?? 'Kunde'
+    const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
+
+    const pitchUrl = pitchToken
+      ? `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.leafilms.no'}/p/${pitchToken}`
+      : null
+
+    // Send e-post
+    if (process.env.RESEND_API_KEY && customerEmail) {
+      const subject = `Prosjektbeskrivelse og tilbud — ${project.title}`
+      const body = pitchUrl
+        ? `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi har satt sammen en prosjektbeskrivelse og pristilbud til deg. Du finner alt her:\n\n${pitchUrl}\n\nDu kan også lese gjennom og signere produksjonsavtalen direkte på siden.\n\nTa gjerne kontakt hvis du har spørsmål!\n\nMed vennlig hilsen,\nLeafilms-teamet`
+        : `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi sender deg hermed pristilbud for ${project.title}. Ta kontakt for å diskutere detaljer.\n\nMed vennlig hilsen,\nLeafilms-teamet`
+
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Leafilms <post@leafilms.no>',
+            to: [customerEmail],
+            subject,
+            text: body,
+          }),
+        })
+        if (!res.ok) {
+          const resBody = await res.text()
+          console.error('sendTilbudToKunde Resend feil:', res.status, resBody)
+        }
+      } catch (emailErr) {
+        console.error('sendTilbudToKunde e-post unntak:', emailErr)
+      }
+    }
+
+    // Flytt til kontrakt-steget
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({
+        pipeline_stage: 'kontrakt',
+        pipeline_data: {
+          ...existingPipelineData,
+          tilbud_sent_at: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId)
+
+    if (updateError) {
+      console.error('sendTilbudToKunde update error:', updateError)
+      return { ok: false, error: 'Kunne ikke oppdatere pipeline-steg' }
+    }
+
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+
+    return { ok: true }
+  } catch (err) {
+    console.error('sendTilbudToKunde unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+/**
+ * Henter kontrakt-signeringsstatus for et prosjekt.
+ * Returnerer om kontrakten er publisert og/eller signert.
+ */
+export async function getContractStatus(projectId: string): Promise<{
+  isPublished: boolean
+  isSigned: boolean
+  signedAt: string | null
+  signerName: string | null
+}> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('contracts')
+      .select('published_at, status, signed_at, signature_data')
+      .eq('project_id', projectId)
+      .maybeSingle()
+
+    return {
+      isPublished: !!data?.published_at,
+      isSigned: data?.status === 'signed',
+      signedAt: data?.signed_at ?? null,
+      signerName: (data?.signature_data as { signerName?: string } | null)?.signerName ?? null,
+    }
+  } catch {
+    return { isPublished: false, isSigned: false, signedAt: null, signerName: null }
+  }
+}
+
+/**
+ * Manuell fremflytting fra 'kontrakt'-steget uten signert kontrakt.
+ * Setter et varsel-flagg i pipeline_data og avanserer til neste steg.
+ */
+export async function advanceFromKontraktUnsigned(
+  projectId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('pipeline_data')
+      .eq('id', projectId)
+      .single()
+
+    const existingPipelineData = (project?.pipeline_data as PipelineData) ?? {}
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        pipeline_stage: 'pre_prod',
+        pipeline_data: {
+          ...existingPipelineData,
+          contract_unsigned_proceed: true,
+          contract_unsigned_proceed_at: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId)
+
+    if (error) {
+      return { ok: false, error: 'Kunne ikke oppdatere pipeline-steg' }
+    }
+
+    await seedTasksFromTemplates(projectId, 'pre_prod')
+
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+
+    return { ok: true }
+  } catch (err) {
+    console.error('advanceFromKontraktUnsigned unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
   }
 }

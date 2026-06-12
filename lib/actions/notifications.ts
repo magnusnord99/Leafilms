@@ -5,15 +5,17 @@ import { createClient } from '@/lib/supabase-server'
 
 export type Notification = {
   id: string
-  type: 'project_message' | 'task_message'
-  project_id: string
+  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned'
+  project_id: string | null
   task_id: string | null
+  lead_id: string | null
   message_preview: string
   sender_name: string
   read: boolean
   created_at: string
   projects: { title: string } | null
   tasks: { title: string } | null
+  leads: { name: string; company: string | null } | null
 }
 
 export async function getNotifications(): Promise<Notification[]> {
@@ -24,7 +26,7 @@ export async function getNotifications(): Promise<Notification[]> {
 
     const { data, error } = await supabase
       .from('notifications')
-      .select('*, projects(title), tasks(title)')
+      .select('*, projects(title), tasks(title), leads(name, company)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50)

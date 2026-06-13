@@ -45,22 +45,10 @@ export async function POST(req: NextRequest) {
       )
     }
     
-    console.log('🔐 Using API token:', apiToken.substring(0, 10) + '...')
-    console.log('🔗 Backend URL:', backendUrl)
-    console.log('📤 Sender request til Python API med:', {
-      url,
-      language,
-      reise,
-      mva,
-      discount_percent
-    })
-
     // Prøv først det nye endpointet /api/quotes/data
     // Hvis det ikke finnes (404), fallback til å bruke /generate-pdf og parse PDF
     const jsonUrl = `${backendUrl}/api/quotes/data`
-    
-    console.log('🌐 Prøver nytt endpoint:', jsonUrl)
-    
+
     // Python API-et bruker Authorization: Bearer (bekreftet via curl-test)
     const headers: HeadersInit = {
       'Authorization': `Bearer ${apiToken}`,
@@ -82,7 +70,6 @@ export async function POST(req: NextRequest) {
       
       // Hvis 404, betyr det at det nye endpointet ikke finnes ennå
       if (response.status === 404) {
-        console.log('⚠️ /api/quotes/data finnes ikke ennå - bruker fallback')
         return NextResponse.json(
           { 
             error: 'JSON-endpoint ikke tilgjengelig ennå. Python API-et må oppdateres med /api/quotes/data endpoint. Bruk "Last ned som PDF" i mellomtiden.',
@@ -91,15 +78,13 @@ export async function POST(req: NextRequest) {
           { status: 404 }
         )
       }
-    } catch (fetchError: any) {
+    } catch (fetchError) {
       console.error('❌ Fetch error:', fetchError)
       return NextResponse.json(
-        { error: `Kunne ikke koble til backend API: ${fetchError.message}` },
+        { error: `Kunne ikke koble til backend API: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}` },
         { status: 500 }
       )
     }
-
-    console.log('📥 Python API response status:', response.status, response.statusText)
 
     if (!response.ok) {
       let errorMessage = `API feilet: ${response.statusText}`
@@ -155,7 +140,14 @@ Hvis curl fungerer, men Next.js ikke fungerer, er token-en i .env.local feil.`
       )
     }
 
-    let data: any
+    type QuoteApiResponse = {
+      details?: Record<string, string | undefined>
+      grouped_sums?: [string, number][]
+      total_days?: number
+      total_excl_mva?: number
+      total_incl_mva?: number
+    }
+    let data: QuoteApiResponse
     try {
       const contentType = response.headers.get('content-type')
       if (!contentType?.includes('application/json')) {
@@ -169,11 +161,10 @@ Hvis curl fungerer, men Next.js ikke fungerer, er token-en i .env.local feil.`
       }
       
       data = await response.json()
-      console.log('✅ Mottatt data fra Python API:', JSON.stringify(data).substring(0, 200))
-    } catch (parseError: any) {
+    } catch (parseError) {
       console.error('❌ Kunne ikke parse JSON:', parseError)
       return NextResponse.json(
-        { error: `Kunne ikke parse respons: ${parseError.message}` },
+        { error: `Kunne ikke parse respons: ${parseError instanceof Error ? parseError.message : String(parseError)}` },
         { status: 500 }
       )
     }
@@ -233,13 +224,11 @@ Hvis curl fungerer, men Next.js ikke fungerer, er token-en i .env.local feil.`
       transformedData.finalPriceInclVat = transformedData.finalPriceExclVat * 1.25
     }
 
-    console.log('✅ Transformert data:', JSON.stringify(transformedData).substring(0, 200))
-
     return NextResponse.json(transformedData)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching quote:', error)
     return NextResponse.json(
-      { error: error.message || 'Kunne ikke hente tilbud' },
+      { error: error instanceof Error ? error.message : 'Kunne ikke hente tilbud' },
       { status: 500 }
     )
   }

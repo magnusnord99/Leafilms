@@ -80,7 +80,7 @@ const inputStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
   appearance: 'none',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%235C5C70'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%238484A0'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 12px center',
   backgroundSize: '16px',
@@ -242,41 +242,70 @@ function NewProjectContent() {
         }
       }
 
-      const baseSlug = formData.title
-        .toLowerCase()
-        .replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'aa')
-        .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-      const uniqueSuffix = Date.now().toString(36).slice(-6)
-      const slug = `${baseSlug}-${uniqueSuffix}`
+      const metadata = {
+        project_type: formData.legacy_project_type,
+        mediums: formData.mediums,
+        target_audience: formData.target_audience,
+        industry: formData.industry,
+        scope: formData.scope,
+        context: formData.context
+      }
 
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .insert({
-          title: formData.title,
-          slug,
-          client_name: clientName,
-          customer_id: customerId,
-          status: 'draft',
-          language: formData.language,
-          project_type: formData.project_type || null,
-          pipeline_stage: formData.pipeline_stage,
-          metadata: {
-            project_type: formData.legacy_project_type,
-            mediums: formData.mediums,
-            target_audience: formData.target_audience,
-            industry: formData.industry,
-            scope: formData.scope,
-            context: formData.context
-          }
-        })
-        .select()
-        .single()
+      // Fra prosjekt-huben: gjenbruk eksisterende prosjekt i stedet for å
+      // opprette et duplikat (pipeline_stage, status og slug beholdes urørt)
+      const existingProjectId = searchParams.get('project_id')
 
-      if (projectError) throw projectError
+      let project: { id: string }
+      if (existingProjectId) {
+        const { data: updated, error: updateError } = await supabase
+          .from('projects')
+          .update({
+            title: formData.title,
+            client_name: clientName,
+            customer_id: customerId,
+            language: formData.language,
+            project_type: formData.project_type || null,
+            metadata,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingProjectId)
+          .select()
+          .single()
 
-      // Seed oppgaver fra task_templates for steget prosjektet starter i —
-      // ellers får prosjektet ingen tasks før første stegbytte
-      await seedTasksFromTemplates(project.id, formData.pipeline_stage)
+        if (updateError || !updated) throw updateError ?? new Error('Fant ikke prosjektet')
+        project = updated
+      } else {
+        const baseSlug = formData.title
+          .toLowerCase()
+          .replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'aa')
+          .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+        const uniqueSuffix = Date.now().toString(36).slice(-6)
+        const slug = `${baseSlug}-${uniqueSuffix}`
+
+        const { data: inserted, error: projectError } = await supabase
+          .from('projects')
+          .insert({
+            title: formData.title,
+            slug,
+            client_name: clientName,
+            customer_id: customerId,
+            status: 'draft',
+            language: formData.language,
+            project_type: formData.project_type || null,
+            pipeline_stage: formData.pipeline_stage,
+            metadata
+          })
+          .select()
+          .single()
+
+        if (projectError) throw projectError
+        project = inserted
+
+        // Seed oppgaver fra task_templates for steget prosjektet starter i —
+        // ellers får prosjektet ingen tasks før første stegbytte.
+        // (Eksisterende prosjekter har allerede tasks for sitt steg.)
+        await seedTasksFromTemplates(project.id, formData.pipeline_stage)
+      }
 
       const sections = [
         { type: 'hero', order_index: 1, visible: true },
@@ -291,11 +320,19 @@ function NewProjectContent() {
         { type: 'contact', order_index: 10, visible: true }
       ]
 
-      const { error: sectionsError } = await supabase
+      // Ikke dupliser seksjoner hvis prosjektet allerede har noen
+      const { count: existingSectionCount } = await supabase
         .from('sections')
-        .insert(sections.map(s => ({ project_id: project.id, ...s })))
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', project.id)
 
-      if (sectionsError) throw sectionsError
+      if ((existingSectionCount ?? 0) === 0) {
+        const { error: sectionsError } = await supabase
+          .from('sections')
+          .insert(sections.map(s => ({ project_id: project.id, ...s })))
+
+        if (sectionsError) throw sectionsError
+      }
 
       setGeneratingStatus('Genererer innhold med AI...')
 

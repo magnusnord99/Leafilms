@@ -6,6 +6,21 @@ import { useEffect, useRef, useState } from 'react'
 import { Project, Section } from '@/lib/types'
 import { Button, Badge } from '@/components/ui'
 
+const SEND_BTN: React.CSSProperties = {
+  fontFamily: 'var(--font-dm-sans)',
+  fontSize: '0.72rem',
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  padding: '6px 14px',
+  borderRadius: 6,
+  border: 'none',
+  cursor: 'pointer',
+  background: '#4CAF7D',
+  color: '#fff',
+  transition: 'opacity 0.15s, transform 0.1s',
+  flexShrink: 0,
+}
+
 interface EditProjectTopBarProps {
   project: Project
   sections: Section[]
@@ -77,6 +92,10 @@ export function EditProjectTopBar({
       },
     },
     {
+      label: 'E-post →',
+      href: `/admin/projects/${project.id}/email`,
+    },
+    {
       label: 'Statistikk',
       href: `/admin/projects/${project.id}/quote-analytics`,
     },
@@ -127,7 +146,7 @@ export function EditProjectTopBar({
       {/* Left — back + title */}
       <div className="flex items-center gap-3 min-w-0">
         <button
-          onClick={() => router.push('/admin')}
+          onClick={() => router.push(`/admin/projects/${project.id}`)}
           className="flex items-center gap-2 transition-colors flex-shrink-0"
           style={{
             fontFamily: 'var(--font-dm-sans)',
@@ -274,6 +293,18 @@ export function EditProjectTopBar({
           <span className="hidden sm:inline">{saving ? 'Lagrer...' : 'Lagre'}</span>
           <span className="sm:hidden">{saving ? '...' : 'Lagre'}</span>
         </Button>
+
+        {project?.status === 'published' && (
+          <Link href={`/admin/projects/${project.id}/email`}>
+            <button
+              style={SEND_BTN}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.85'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
+            >
+              Send til kunde →
+            </button>
+          </Link>
+        )}
 
         <Button
           onClick={onPublish}

@@ -1,26 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Button, Card, Badge, Heading, Text } from '@/components/ui'
 import { Customer, Project, Quote, Contract } from '@/lib/types'
 
 export default function CustomerProjectsPage() {
-  const router = useRouter()
   const params = useParams()
   const customerId = params.id as string
 
   const [loading, setLoading] = useState(true)
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [projects, setProjects] = useState<(Project & { quotes: Quote[], contracts: Contract[] })[]>([])
-
-  useEffect(() => {
-    if (customerId) {
-      fetchData()
-    }
-  }, [customerId])
 
   async function fetchData() {
     // Hent kunde
@@ -93,6 +86,12 @@ export default function CustomerProjectsPage() {
     setProjects(projectsWithDetails)
     setLoading(false)
   }
+
+  useEffect(() => {
+    if (customerId) {
+      fetchData()
+    }
+  }, [customerId])
 
   if (loading) {
     return (
@@ -242,7 +241,7 @@ export default function CustomerProjectsPage() {
                                         // Refresh data
                                         fetchData()
                                       }
-                                    } catch (error: any) {
+                                    } catch (error) {
                                       console.error('Error deleting quote:', error)
                                       alert('Kunne ikke slette tilbud. Prøv igjen.')
                                     }

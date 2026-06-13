@@ -1,15 +1,7 @@
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CollagePreset, Image } from '@/lib/types'
+import { CollagePreset, Image, CollageImages } from '@/lib/types'
 import { Section } from '@/lib/types'
-
-type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
-}
 
 type UseCollageImagesProps = {
   id: string
@@ -49,7 +41,6 @@ export function useCollageImages({
           pos5: sectionImagesForExampleWork[4] || null
         }
         
-        console.log('📸 Loading collage images from section_images:', newCollageImages)
         setCollageImages(newCollageImages)
 
         // Hvis vi har en preset-referanse, hent den også
@@ -61,7 +52,6 @@ export function useCollageImages({
             .single()
           
           if (presetData) {
-            console.log('📸 Loading preset:', presetData)
             setSelectedPreset(presetData)
           }
         }

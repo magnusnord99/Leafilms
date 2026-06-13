@@ -1,52 +1,65 @@
-# Session State
+# Session State — Leafilms Pitch App
 
-## Project
-- **Name:** Leafilms Pitch
-- **Branch:** main
-- **Stack:** Next.js 16 App Router, Supabase (PostgreSQL + Auth), TypeScript, Tailwind CSS 4
+**Dato:** 2026-06-10
+**Branch:** main
 
-## Hva vi jobbet med denne sesjonen
-Satt opp et fast AI-utviklingsteam med persistent kontekst, og startet kartlegging av tilbudssystemet (quotes).
+---
+
+## Hva vi jobbet med
+
+Bugfix: "Tekstlengde i Leveranser" — en kollega fant at tekst i Leveranser-seksjonen vises som forkortet uten feilmelding.
+
+---
 
 ## Fullført denne sesjonen
 
-### 1. Persistent team opprettet
-Minnefiler lagret i `~/.claude/projects/.../memory/`:
-- `project_context.md` — full prosjektkontekst, stack, features, roadmap, lean-filosofi
-- `team_manifest.md` — teamstruktur: Kai (frontend), Nova (backend), Lena (tech lead)
-- `MEMORY.md` — oppdatert indeks
+### Bug fikset i `components/project/DeliverableCard.tsx`
 
-Teamet er persistent på tvers av sesjoner. Agenter spawnes med disse filene som kontekst.
+**Bug 1 (linje 112)** — `line-clamp-2` var aktiv på tittelfeltet selv i redigeringsmodus.
+- `line-clamp-2` setter `overflow: hidden` internt via Tailwind
+- I edit-modus: tekst utover 2 linjer ble visuelt skjult mens man skrev → så ut som en makslengde
+- I view-modus: tittelen er alltid avkortet til 2 linjer i pitchen
+- **Fix**: `${editMode ? '' : 'line-clamp-2'}` — clamp kun i view-modus
 
-### 2. Quotes-systemet kartlagt
-Eksisterende i DB:
-- `quotes`-tabell: `project_id`, `sheet_url` (Google Sheets, gammel metode), `version`, `status` (draft/sent/accepted/rejected), `quote_data` (JSONB), `pdf_path`
-- `contracts`-tabell: `quote_id`, `project_id`, `pdf_path`, `status` (pending/sent/signed/cancelled), `signed_at`, `signed_by`, `signature_data`
-- `quote_analytics`-tabell: sporer kundens lesetid per seksjon
-- Admin-side `/admin/quotes/analytics` eksisterer
+**Bug 2 (linje 174)** — Baksiden av kortet brukte `justify-center` + `overflow-y-auto`.
+- CSS-quirk: med `justify-content: center` og overflow starter scroll-regionen i midten av innholdet
+- Begynnelsen av lange beskrivelser var utilgjengelig å scrolle til
+- **Fix**: Byttet til `justify-start` + `pt-2`
 
-Nåværende quotes er koblet til Google Sheets — dette skal fases ut til fordel for native editor.
+---
 
-## I gang / Ikke startet
-- Scope for **iterasjon 1 av tilbudssystemet** ikke definert ennå
-- Ingen ny kode skrevet for quotes
+## BLOKKERT — Fra forrige sesjon (ikke relatert til denne bugfixen)
 
-## Viktige beslutninger og kontekst
-- Magnus jobber lean: liten, solid iterasjon > stort scope. Ikke rush.
-- Målet er å erstatte ClickUp — alt-i-ett plattform for Leafilms
-- `pdfkit` er allerede installert i prosjektet
-- Neste migrasjon skal nummereres `038_`
-- Design: cinematic warm dark, Cormorant Garamond + DM Sans
-- Det finnes uapplied migrasjoner fra forrige sesjon (se nedenfor)
+Migrasjonen `supabase/migrations/057_discount_factors.sql` er skrevet men ikke kjørt mot Supabase.
 
-## Uapplied migrasjoner fra forrige sesjon (BLOKKERT)
-Disse SQL-filene er skrevet men ikke kjørt mot Supabase:
-- `database-migrations/036_project_messages.sql`
-- `database-migrations/037_market_analysis.sql`
+**Løsning:** Gå til Supabase Dashboard → SQL Editor → lim inn innholdet fra `057_discount_factors.sql`
 
-Se forrige session-state for fullstendig SQL å kjøre i Supabase SQL Editor.
+---
 
-## Neste konkrete steg
-1. **Avklar med Magnus:** vil han starte med (a) admin-UI for å lage/redigere tilbud med linjeposter og priser, eller (b) sende eksisterende tilbud til kunde via e-post + unik lenke?
-2. **Anbefaling:** start med admin-UI for å lage et tilbud — dette er fundamentet alt annet bygger på.
-3. Bruk teamet: Nova håndterer DB/API, Kai bygger UI.
+## Neste steg
+
+1. **Verifiser bugfixen** visuelt i nettleser: test en Leveranser-seksjon med lang tittel og lang kortbeskrivelse
+2. **Commit endringen**:
+   ```
+   fix: fjern line-clamp i edit-modus og fiks scroll-bug på DeliverableCard
+   ```
+3. **Vurder** om `delivery_description` i `/admin/projects/[id]/page.tsx` (linje 553) bør fikses — vises med `text-overflow: ellipsis; white-space: nowrap`, kan se ut som data er avkortet (ikke kritisk)
+4. Kjør migrasjonen for flerdagsrabatt (`057_discount_factors.sql`) om ikke gjort
+
+---
+
+## Tekniske detaljer å huske
+
+- `discountPercentage` er beholdt i `QuoteBuilderData` for bakoverkompatibilitet med eksisterende lagrede tilbud
+- Faktorer lagres som desimaler (0.15 = 15%) i DB, men vises/redigeres som prosenter (15) i UI
+
+---
+
+## Design tokens (admin warm dark palette)
+```
+bg:       #0C0B09   surface:  #141210
+surface2: #1A1713   border:   #38332A
+text:     #E8E1D5   text2:    #9E9287
+text3:    #6B6358   accent:   #C49434
+danger:   #B84040
+```

@@ -16,7 +16,7 @@ type ConceptSectionProps = {
   conceptSectionRef: React.RefObject<HTMLDivElement | null>
   getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
   getSectionTitle: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
   setImagePosition: React.Dispatch<React.SetStateAction<Record<string, { x: number; y: number; zoom: number | null }>>>
   onImageClick: () => void

@@ -66,7 +66,7 @@ export default function EditImagePage({ params }: Props) {
     } catch (error) {
       console.error('Error fetching image:', error)
       alert('Kunne ikke hente bilde')
-      router.push('/admin/images')
+      router.push('/admin/pitches/images')
     } finally {
       setLoading(false)
     }
@@ -96,7 +96,7 @@ export default function EditImagePage({ params }: Props) {
 
       if (error) throw error
 
-      router.push('/admin/images')
+      router.push('/admin/pitches/images')
       router.refresh()
     } catch (error) {
       console.error('Error saving image:', error)
@@ -125,7 +125,7 @@ export default function EditImagePage({ params }: Props) {
         <div className="mb-12">
           <Button
             variant="ghost"
-            onClick={() => router.push('/admin/images')}
+            onClick={() => router.push('/admin/pitches/images')}
             className="mb-4 -ml-2"
           >
             ← Tilbake
@@ -224,7 +224,7 @@ export default function EditImagePage({ params }: Props) {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => router.push('/admin/images')}
+              onClick={() => router.push('/admin/pitches/images')}
             >
               Avbryt
             </Button>

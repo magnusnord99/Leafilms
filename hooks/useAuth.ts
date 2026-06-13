@@ -93,14 +93,14 @@ export function useAuth() {
       const { data, error } = await Promise.race([
         profilePromise,
         timeoutPromise
-      ]) as { data: any, error: any }
+      ]) as { data: unknown; error: unknown }
 
       if (error) {
         throw error
       }
 
       setProfile(data as Profile)
-    } catch (error: any) {
+    } catch (error) {
       // Only log errors in development
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching profile:', error)

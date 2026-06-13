@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
       // Translate deliverable items
       if (section.type === 'deliverables' && Array.isArray(content.deliverableItems)) {
         content.deliverableItems = await Promise.all(
-          content.deliverableItems.map(async (item: { id: string; title: string; quantity: string; format: string; description: string }) => ({
+          content.deliverableItems.map(async (item: { id: string; title: string; quantity: number; format: string; description: string }) => ({
             ...item,
             title: item.title ? await translateText(item.title, targetLanguage, openai) : item.title,
             description: item.description ? await translateText(item.description, targetLanguage, openai) : item.description,
@@ -178,8 +178,8 @@ export async function POST(req: NextRequest) {
       .eq('id', projectId)
 
     return Response.json({ success: true, language: targetLanguage })
-  } catch (error: any) {
+  } catch (error) {
     console.error('[translate-project] Error:', error)
-    return Response.json({ error: 'Oversettelse feilet', details: error.message }, { status: 500 })
+    return Response.json({ error: 'Oversettelse feilet', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

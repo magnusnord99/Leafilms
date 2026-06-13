@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import { Button, Input, Card, Heading, Text } from '@/components/ui'
 
 function LoginContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,7 +15,9 @@ function LoginContent() {
   const [resendingEmail, setResendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
 
-  const redirect = searchParams.get('redirect') || '/admin'
+  // Tillat kun interne stier — hindrer open redirect via ?redirect=https://evil.com
+  const rawRedirect = searchParams.get('redirect') || '/admin'
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/admin'
   const errorParam = searchParams.get('error')
 
   useEffect(() => {
@@ -76,18 +77,15 @@ function LoginContent() {
         return
       }
 
-      const redirectUrl = redirect.startsWith('http') 
-        ? redirect 
-        : `${window.location.origin}${redirect}`
-      
       // Use window.location.href for hard redirect
-      window.location.href = redirectUrl
-    } catch (err: any) {
+      window.location.href = `${window.location.origin}${redirect}`
+    } catch (err) {
       // Check if error is about email confirmation
-      if (err.message?.includes('Email not confirmed') || err.message?.includes('email_not_confirmed')) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('Email not confirmed') || msg.includes('email_not_confirmed')) {
         setError('Email-adressen din er ikke bekreftet. Sjekk inboxen din for bekreftelseslink, eller send en ny link.')
       } else {
-        setError(err.message || 'Noe gikk galt ved innlogging')
+        setError(err instanceof Error ? err.message : 'Noe gikk galt ved innlogging')
       }
       setLoading(false)
     }
@@ -112,8 +110,8 @@ function LoginContent() {
       if (error) throw error
 
       setEmailSent(true)
-    } catch (err: any) {
-      setError(err.message || 'Kunne ikke sende bekreftelseslink')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kunne ikke sende bekreftelseslink')
       setResendingEmail(false)
     }
   }
@@ -131,8 +129,8 @@ function LoginContent() {
       })
 
       if (error) throw error
-    } catch (err: any) {
-      setError(err.message || 'Noe gikk galt ved Google-innlogging')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Noe gikk galt ved Google-innlogging')
       setIsGoogleLoading(false)
     }
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { Section, Image } from '@/lib/types'
+import { Section, Image, SectionImage, CaseStudy, TeamMember, CollagePreset, Project } from '@/lib/types'
 import {
   ConceptSection,
   GoalSection,
@@ -22,7 +22,7 @@ type SectionRendererProps = {
   totalVisible: number
   editMode: boolean
   sectionImages: Record<string, Image[]>
-  sectionImageData: Record<string, any[]>
+  sectionImageData: Record<string, SectionImage[]>
   editingImageSectionId: string | null
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
   goalSectionProgress: number
@@ -35,33 +35,33 @@ type SectionRendererProps = {
   casesSectionRef: React.RefObject<HTMLDivElement | null>
   getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
   getSectionTitle: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
   setImagePosition: React.Dispatch<React.SetStateAction<Record<string, { x: number; y: number; zoom: number | null }>>>
   setEditingImageSectionId: (id: string | null) => void
   setImagePickerSectionId: (id: string | null) => void
   setShowImagePicker: (show: boolean) => void
   handleMoveSection: (sectionId: string, direction: 'up' | 'down') => void
-  updateSection: (sectionId: string, field: string, value: any) => void
+  updateSection: (sectionId: string, field: string, value: unknown) => void
   handleGenerateAI: (sectionId: string, sectionType: string) => void
   generating: string | null
-  allCases: any[]
+  allCases: CaseStudy[]
   selectedCaseIds: string[]
   onCasePickerOpen: () => void
-  allTeamMembers: any[]
+  allTeamMembers: TeamMember[]
   selectedTeamMemberIds: string[]
   onTeamPickerOpen: () => void
   collageImages: {
-    pos1: any | null
-    pos2: any | null
-    pos3: any | null
-    pos4: any | null
-    pos5: any | null
+    pos1: Image | null
+    pos2: Image | null
+    pos3: Image | null
+    pos4: Image | null
+    pos5: Image | null
   }
-  selectedPreset: any
+  selectedPreset: CollagePreset | null
   onImageClick: (position?: string) => void
   onOpenPresetPicker: () => void
-  project: any
+  project: Project
 }
 
 export function SectionRenderer({

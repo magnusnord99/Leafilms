@@ -97,7 +97,6 @@ export async function POST(req: NextRequest) {
         const storagePath = pdfResponse.headers.get('X-Storage-Path')
         if (storagePath) {
           quotePdfPath = storagePath
-          console.log('✅ Tilbud-PDF lagret:', storagePath)
         }
       } else {
         const errorText = await pdfResponse.text()
@@ -148,10 +147,10 @@ export async function POST(req: NextRequest) {
       contractPdfPath: contractPdfPath,
       message: 'Tilbud akseptert og kontrakt opprettet'
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error accepting quote:', error)
     return NextResponse.json(
-      { error: error.message || 'Kunne ikke akseptere tilbud' },
+      { error: error instanceof Error ? error.message : 'Kunne ikke akseptere tilbud' },
       { status: 500 }
     )
   }

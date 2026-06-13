@@ -17,7 +17,7 @@ type HeroSectionProps = {
   editingImageSectionId: string | null
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
   getBackgroundStyle: (sectionId: string, imageIndex?: number) => React.CSSProperties
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null) => Promise<void>
   setImagePosition: React.Dispatch<React.SetStateAction<Record<string, { x: number; y: number; zoom: number | null }>>>
   onImageClick: () => void
@@ -63,6 +63,42 @@ export function HeroSection({
   const [isVisible, setIsVisible] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
   const headerRef = useRef<HTMLElement>(null)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const container = videoContainerRef.current
+    if (!container || !videoUrl) return
+
+    container.innerHTML = ''
+
+    const video = document.createElement('video')
+    video.setAttribute('autoplay', '')
+    video.setAttribute('loop', '')
+    video.setAttribute('muted', '')
+    video.setAttribute('playsinline', '')
+    video.setAttribute('webkit-playsinline', '')
+    video.muted = true
+    video.autoplay = true
+    video.loop = true
+    video.className = 'absolute inset-0 w-full h-full object-cover z-0'
+    video.style.pointerEvents = 'none'
+
+    const source = document.createElement('source')
+    source.src = videoUrl
+    source.type = 'video/mp4'
+    video.appendChild(source)
+    container.appendChild(video)
+
+    video.play().catch(() => {})
+
+    const tryPlay = () => video.play().catch(() => {})
+    document.addEventListener('touchstart', tryPlay, { once: true })
+
+    return () => {
+      document.removeEventListener('touchstart', tryPlay)
+      container.innerHTML = ''
+    }
+  }, [videoUrl])
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 100)
@@ -93,7 +129,8 @@ export function HeroSection({
 
   const handleBackgroundClick = () => {
     if (editMode) {
-      onVideoPickerOpen ? onVideoPickerOpen() : onImageClick()
+      if (onVideoPickerOpen) onVideoPickerOpen()
+      else onImageClick()
     }
   }
 
@@ -109,17 +146,9 @@ export function HeroSection({
       }`}
       style={{ background: '#0C0B09' }}
     >
-      {/* Background video */}
+      {/* Background video — imperativt opprettet for å garantere muted-attributt på iOS */}
       {hasVideo && videoUrl && sectionVideo && (
-        <video
-          autoPlay={sectionVideo.autoplay}
-          loop={sectionVideo.loop}
-          muted={sectionVideo.muted}
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-        >
-          <source src={videoUrl} type="video/mp4" />
-        </video>
+        <div ref={videoContainerRef} className="absolute inset-0 w-full h-full z-0" />
       )}
 
       {/* Background image */}
@@ -147,7 +176,8 @@ export function HeroSection({
         <button
           onClick={(e) => {
             e.stopPropagation()
-            onVideoPickerOpen ? onVideoPickerOpen() : onImageClick()
+            if (onVideoPickerOpen) onVideoPickerOpen()
+            else onImageClick()
           }}
           className="absolute inset-0 flex items-center justify-center z-10"
           style={{ background: 'rgba(255,255,255,0.03)' }}

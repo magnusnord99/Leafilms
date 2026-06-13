@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, use, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { TeamMember } from '@/lib/types'
@@ -40,7 +39,6 @@ type Props = {
 }
 
 export default function EditTeamMember({ params }: Props) {
-  const router = useRouter()
   const { id } = use(params)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -107,9 +105,9 @@ export default function EditTeamMember({ params }: Props) {
           setExistingProfileImage(imageUrl)
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching team member:', err)
-      setError('Kunne ikke laste team-medlem: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke laste team-medlem: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
     }
@@ -190,9 +188,9 @@ export default function EditTeamMember({ params }: Props) {
       setIsDirty(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating team member:', err)
-      setError('Kunne ikke oppdatere team-medlem: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke oppdatere team-medlem: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setSaving(false)
       setUploading(false)

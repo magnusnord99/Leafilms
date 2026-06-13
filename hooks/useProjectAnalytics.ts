@@ -29,11 +29,17 @@ interface AnalyticsData {
  */
 export function useProjectAnalytics(projectId: string, shareToken: string, sectionIds: string[], isAdmin: boolean = false) {
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const sessionStartTime = useRef<number>(Date.now())
+  const sessionStartTime = useRef<number>(0)
   const sectionTimers = useRef<Map<string, SectionTime>>(new Map())
   const visibilityChanges = useRef<number>(0)
   const isActive = useRef<boolean>(true)
-  const lastActiveTime = useRef<number>(Date.now())
+  const lastActiveTime = useRef<number>(0)
+
+  // Initialiser tids-refs ved mount (Date.now() er ikke tillatt under render)
+  useEffect(() => {
+    if (sessionStartTime.current === 0) sessionStartTime.current = Date.now()
+    if (lastActiveTime.current === 0) lastActiveTime.current = Date.now()
+  }, [])
   const observerRef = useRef<IntersectionObserver | null>(null)
   const sendIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -410,9 +416,6 @@ export function useProjectAnalytics(projectId: string, shareToken: string, secti
     }
   }, [projectId, shareToken, sessionId, isAdmin])
 
-  return {
-    sessionId,
-    totalTimeSeconds: Math.floor((Date.now() - sessionStartTime.current) / 1000)
-  }
+  return { sessionId }
 }
 

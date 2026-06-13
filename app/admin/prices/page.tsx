@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Button, Input } from '@/components/ui'
-import { PriceCatalogItem } from '@/lib/types'
+import { Button } from '@/components/ui'
+import { PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
 const CATEGORIES = [
@@ -63,7 +63,13 @@ export default function PricesPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  useEffect(() => { fetchItems() }, [])
+  // Flerdagsrabatt
+  const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
+  const [discountOpen, setDiscountOpen] = useState(false)
+  const [discountSaving, setDiscountSaving] = useState<number | null>(null)
+  const [discountEdits, setDiscountEdits] = useState<Record<number, { crew: string; equipment: string }>>({})
+  const [newDayForm, setNewDayForm] = useState<{ day: string; crew: string; equipment: string }>({ day: '', crew: '0', equipment: '0' })
+  const [addingDay, setAddingDay] = useState(false)
 
   async function fetchItems() {
     const { data } = await supabase
@@ -73,6 +79,46 @@ export default function PricesPage() {
       .order('name')
     setItems((data || []) as PriceCatalogItem[])
     setLoading(false)
+  }
+
+  async function fetchDiscountFactors() {
+    const { data } = await supabase.from('discount_factors').select('*').order('shoot_day')
+    setDiscountFactors((data || []) as DiscountFactor[])
+  }
+
+  useEffect(() => { fetchItems(); fetchDiscountFactors() }, [])
+
+  async function saveDiscountFactor(shootDay: number) {
+    const edit = discountEdits[shootDay]
+    if (!edit) return
+    setDiscountSaving(shootDay)
+    await supabase.from('discount_factors').upsert({
+      shoot_day: shootDay,
+      crew_factor: Number(edit.crew) / 100,
+      equipment_factor: Number(edit.equipment) / 100,
+    })
+    setDiscountSaving(null)
+    setDiscountEdits(prev => { const n = { ...prev }; delete n[shootDay]; return n })
+    fetchDiscountFactors()
+  }
+
+  async function addDiscountDay() {
+    const day = Number(newDayForm.day)
+    if (!day || day < 1) return
+    setAddingDay(true)
+    await supabase.from('discount_factors').upsert({
+      shoot_day: day,
+      crew_factor: Number(newDayForm.crew) / 100,
+      equipment_factor: Number(newDayForm.equipment) / 100,
+    })
+    setAddingDay(false)
+    setNewDayForm({ day: '', crew: '0', equipment: '0' })
+    fetchDiscountFactors()
+  }
+
+  async function deleteDiscountDay(shootDay: number) {
+    await supabase.from('discount_factors').delete().eq('shoot_day', shootDay)
+    fetchDiscountFactors()
   }
 
   async function handleSave() {
@@ -168,6 +214,124 @@ export default function PricesPage() {
           <Button variant="primary" size="sm" onClick={() => { cancelForm(); setShowAddForm(true) }}>
             + Nytt element
           </Button>
+        </div>
+
+        {/* ── Flerdagsrabatt ── */}
+        <div className="mb-10" style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-4 py-3 transition"
+            style={{ background: C.surface, border: 'none', cursor: 'pointer' }}
+            onClick={() => setDiscountOpen(o => !o)}
+          >
+            <div className="flex items-center gap-3">
+              <span style={label12}>Flerdagsrabatt</span>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
+                Rabattfaktorer for mannskap og utstyr basert på antall opptaksdager
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
+              {discountOpen ? '▲' : '▼'}
+            </span>
+          </button>
+
+          {discountOpen && (
+            <div style={{ background: C.bg, padding: 20 }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem' }}>
+                  <thead>
+                    <tr>
+                      {['Dag', 'Mannskap-rabatt (%)', 'Utstyr-rabatt (%)', ''].map((h, i) => (
+                        <th key={h} style={{ textAlign: i === 0 ? 'center' : i === 3 ? 'center' : 'left', paddingBottom: 10, paddingRight: 16, fontSize: '0.6rem', color: C.text3, fontWeight: 400, letterSpacing: '0.12em', textTransform: 'uppercase', borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discountFactors.map(f => {
+                      const isEditing = discountEdits[f.shoot_day] !== undefined
+                      const crewVal = isEditing ? discountEdits[f.shoot_day].crew : String(Math.round(Number(f.crew_factor) * 100))
+                      const eqVal = isEditing ? discountEdits[f.shoot_day].equipment : String(Math.round(Number(f.equipment_factor) * 100))
+                      return (
+                        <tr key={f.shoot_day} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '8px 16px 8px 0', textAlign: 'center', color: C.accent, fontWeight: 600 }}>{f.shoot_day}</td>
+                          <td style={{ padding: '8px 16px 8px 0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                style={{ ...fieldStyle, width: 80 }}
+                                type="number" min={0} max={100}
+                                value={crewVal}
+                                onChange={e => setDiscountEdits(prev => ({ ...prev, [f.shoot_day]: { crew: e.target.value, equipment: prev[f.shoot_day]?.equipment ?? eqVal } }))}
+                              />
+                              <span style={{ color: C.text3, fontSize: '0.7rem' }}>%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 16px 8px 0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                style={{ ...fieldStyle, width: 80 }}
+                                type="number" min={0} max={100}
+                                value={eqVal}
+                                onChange={e => setDiscountEdits(prev => ({ ...prev, [f.shoot_day]: { crew: prev[f.shoot_day]?.crew ?? crewVal, equipment: e.target.value } }))}
+                              />
+                              <span style={{ color: C.text3, fontSize: '0.7rem' }}>%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 0', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                              {isEditing && (
+                                <Button variant="primary" size="sm" onClick={() => saveDiscountFactor(f.shoot_day)} disabled={discountSaving === f.shoot_day}>
+                                  {discountSaving === f.shoot_day ? '...' : 'Lagre'}
+                                </Button>
+                              )}
+                              <Button variant="danger" size="sm" onClick={() => deleteDiscountDay(f.shoot_day)}>Slett</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {/* Add new day row */}
+                    <tr style={{ borderTop: `1px solid ${C.border}`, background: C.surface }}>
+                      <td style={{ padding: '10px 16px 10px 0', textAlign: 'center' }}>
+                        <input
+                          style={{ ...fieldStyle, width: 60, textAlign: 'center' }}
+                          type="number" min={1} placeholder="Dag"
+                          value={newDayForm.day}
+                          onChange={e => setNewDayForm(f => ({ ...f, day: e.target.value }))}
+                        />
+                      </td>
+                      <td style={{ padding: '10px 16px 10px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input
+                            style={{ ...fieldStyle, width: 80 }}
+                            type="number" min={0} max={100} placeholder="0"
+                            value={newDayForm.crew}
+                            onChange={e => setNewDayForm(f => ({ ...f, crew: e.target.value }))}
+                          />
+                          <span style={{ color: C.text3, fontSize: '0.7rem' }}>%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 16px 10px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input
+                            style={{ ...fieldStyle, width: 80 }}
+                            type="number" min={0} max={100} placeholder="0"
+                            value={newDayForm.equipment}
+                            onChange={e => setNewDayForm(f => ({ ...f, equipment: e.target.value }))}
+                          />
+                          <span style={{ color: C.text3, fontSize: '0.7rem' }}>%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 0', textAlign: 'center' }}>
+                        <Button variant="primary" size="sm" onClick={addDiscountDay} disabled={!newDayForm.day || addingDay}>
+                          {addingDay ? '...' : '+ Legg til'}
+                        </Button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Add/edit form */}

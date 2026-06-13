@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
       .update({ status: 'done', results, completed_at: new Date().toISOString() })
       .eq('id', record.id)
 
-    console.log(`Cron markedsanalyse fullført. ${results.customers.length} leads funnet.`)
     return Response.json({ ok: true, leads: results.customers.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

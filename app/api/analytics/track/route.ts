@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Update existing session with merged data
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         section_times: mergedSectionTimes,
         total_time_seconds: totalTimeSeconds,
         visibility_changes: visibilityChanges,
@@ -169,10 +169,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, sessionId: data.id })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Analytics tracking error:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }

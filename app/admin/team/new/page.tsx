@@ -105,9 +105,9 @@ export default function NewTeamMember() {
 
       router.push('/admin/team')
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating team member:', err)
-      setError('Kunne ikke opprette team-medlem: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke opprette team-medlem: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
       setUploading(false)

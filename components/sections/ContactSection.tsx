@@ -6,7 +6,7 @@ type ContactSectionProps = {
   section: Section
   editMode: boolean
   getSectionTitle?: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
 const DEFAULT_CONTACT_TEXT = `LEAFILMS\neivind@leafilms.no`

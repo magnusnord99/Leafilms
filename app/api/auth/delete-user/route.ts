@@ -73,10 +73,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: 'Bruker slettet' })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in delete user route:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }

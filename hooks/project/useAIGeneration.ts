@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Section } from '@/lib/types'
 
 export function useAIGeneration(
   aiSettings: { projectType: string; medium: string; targetAudience: string },
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 ) {
   const [generating, setGenerating] = useState<string | null>(null)
 

@@ -37,7 +37,7 @@ const inputStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
   cursor: 'pointer',
-  appearance: 'none' as any,
+  appearance: 'none' as React.CSSProperties['appearance'],
 }
 
 export default function NewAIExample() {
@@ -70,9 +70,9 @@ export default function NewAIExample() {
 
       router.push('/admin/ai-examples')
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating example:', err)
-      setError('Kunne ikke opprette eksempel: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke opprette eksempel: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
     }

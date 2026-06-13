@@ -1,0 +1,33 @@
+<h2>Hvordan skal workflowen struktureres?</h2>
+<p class="subtitle">Nåværende pipeline: Lead → Møte → Sende tilbud → Kontrakt. Du vil ha pitch → tilbud → kontrakt som en fastere sekvens inni her.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Behold stegene, legg til en intern sjekkliste</h3>
+      <p>Pipeline-stegene forblir som i dag. Inni "Sende tilbud"-steget i prosjekthubben vises en fastlåst stepper: <strong>1. Pitch → 2. Tilbud → 3. Kontrakt</strong>. Man kan ikke gå videre til neste understeg uten at forrige er ferdig. Tasks per understeg kan assignes til teammedlemmer.</p>
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:4px;font-size:0.75rem;color:#9B9BAD;font-family:monospace">
+        Pipeline: Lead → Møte → [Sende tilbud] → Kontrakt<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Stepper inni steget:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;① Pitch ② Tilbud ③ Kontrakt
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Del opp i tre separate pipeline-steg</h3>
+      <p>Erstatt "Sende tilbud" med tre egne steg i pipeline: <strong>Pitch → Tilbud → Kontrakt</strong>. Hvert steg har sine egne tasks, sin egen kolonne i pipeline-oversikten, og flyttes manuelt fremover.</p>
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:4px;font-size:0.75rem;color:#9B9BAD;font-family:monospace">
+        Pipeline: Lead → Møte → Pitch → Tilbud → Kontrakt → ...<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Tre egne kolonner
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px">Alternativ A er enklere å bygge og endrer ikke databaseskjema. Alternativ B gir mer synlighet i pipeline-oversikten men krever migrasjon og mer plass i UI-et.</p>

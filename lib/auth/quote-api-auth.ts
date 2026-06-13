@@ -12,7 +12,7 @@ const QUOTE_API_TOKEN = process.env.QUOTE_API_TOKEN // API key for server-side a
  * 1. API key fra environment variable (QUOTE_API_TOKEN) - server-side, alltid tilgjengelig
  * 2. User token fra session (hvis brukeren har logget inn via Google OAuth) - kan implementeres senere
  */
-export async function getQuoteApiToken(session?: any): Promise<string | null> {
+export async function getQuoteApiToken(session?: unknown): Promise<string | null> {
   // Prioritet 1: API key fra environment variable (server-side, alltid tilgjengelig)
   if (QUOTE_API_TOKEN) {
     return QUOTE_API_TOKEN
@@ -20,8 +20,9 @@ export async function getQuoteApiToken(session?: any): Promise<string | null> {
 
   // Prioritet 2: User token fra session (hvis brukeren har logget inn)
   // Kan implementeres senere hvis Python API støtter user tokens
-  if (session?.quoteApiToken) {
-    return session.quoteApiToken
+  const sessionToken = (session as { quoteApiToken?: string } | null | undefined)?.quoteApiToken
+  if (sessionToken) {
+    return sessionToken
   }
 
   // Ingen token tilgjengelig
@@ -33,6 +34,7 @@ export async function getQuoteApiToken(session?: any): Promise<string | null> {
  * Kalles fra innloggingsflyten
  */
 export async function authenticateWithQuoteApi(userEmail: string): Promise<string | null> {
+  void userEmail // Tas i bruk når Python-APIet støtter user tokens
   if (!QUOTE_API_URL) {
     console.error('QUOTE_API_URL ikke satt')
     return null

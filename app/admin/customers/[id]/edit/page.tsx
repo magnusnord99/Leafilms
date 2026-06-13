@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Customer } from '@/lib/types'
@@ -36,7 +36,6 @@ const inputStyle: React.CSSProperties = {
 }
 
 export default function EditCustomer() {
-  const router = useRouter()
   const params = useParams()
   const customerId = params.id as string
 
@@ -89,9 +88,9 @@ export default function EditCustomer() {
       }
       setFormData(loaded)
       initialDataRef.current = loaded
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching customer:', err)
-      setError('Kunne ikke hente kundeinformasjon: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke hente kundeinformasjon: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
     }
@@ -118,9 +117,9 @@ export default function EditCustomer() {
       setIsDirty(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating customer:', err)
-      setError('Kunne ikke oppdatere kunde: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke oppdatere kunde: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setSaving(false)
     }

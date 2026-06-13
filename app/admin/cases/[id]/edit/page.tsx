@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { CaseStudy } from '@/lib/types'
@@ -40,7 +39,6 @@ type Props = {
 }
 
 export default function EditCase({ params }: Props) {
-  const router = useRouter()
   const [id, setId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -103,9 +101,9 @@ export default function EditCase({ params }: Props) {
           setExistingThumbnail(caseStudy.thumbnail_path)
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching case:', err)
-      setError('Kunne ikke hente case: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke hente case: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
     }
@@ -178,9 +176,9 @@ export default function EditCase({ params }: Props) {
       setIsDirty(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating case:', err)
-      setError('Kunne ikke oppdatere case: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke oppdatere case: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setSaving(false)
       setUploading(false)
@@ -208,7 +206,7 @@ export default function EditCase({ params }: Props) {
         {/* Header */}
         <div className="mb-10">
           <Link
-            href="/admin/cases"
+            href="/admin/pitches/cases"
             className="flex items-center gap-2 mb-8 transition-colors"
             style={{
               fontFamily: 'var(--font-dm-sans)',
@@ -423,7 +421,7 @@ export default function EditCase({ params }: Props) {
             >
               {uploading ? 'Laster opp bilde...' : saving ? 'Lagrer...' : 'Lagre endringer'}
             </button>
-            <Link href="/admin/cases">
+            <Link href="/admin/pitches/cases">
               <button
                 type="button"
                 style={{

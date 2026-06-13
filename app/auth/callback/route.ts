@@ -7,11 +7,9 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const token = requestUrl.searchParams.get('token')
   const type = requestUrl.searchParams.get('type')
-  const redirect = requestUrl.searchParams.get('redirect') || '/admin'
-
-  // Log for debugging (always log in production for troubleshooting)
-  console.log('Auth callback - URL:', requestUrl.toString())
-  console.log('Auth callback - Params:', { code: code ? 'present' : 'missing', token: token ? 'present' : 'missing', type, redirect })
+  // Tillat kun interne stier — hindrer open redirect via ?redirect=https://evil.com
+  const rawRedirect = requestUrl.searchParams.get('redirect') || '/admin'
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/admin'
 
   const supabase = await createClient()
 

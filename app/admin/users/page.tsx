@@ -1,10 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-import { Button, Card, Heading, Text, Input } from '@/components/ui'
+import { createClient } from '@/lib/supabase-client'
+
+const C = {
+  bg:      '#181920',
+  surface: '#21212D',
+  surface2:'#2A2A38',
+  border:  '#3C3C52',
+  text:    '#EEEEF2',
+  text2:   '#B4B4CC',
+  text3:   '#8484A0',
+  accent:  '#7C5CFC',
+  success: '#4CAF7D',
+  danger:  '#E05555',
+}
 
 interface UserProfile {
   id: string
@@ -15,7 +26,6 @@ interface UserProfile {
 }
 
 export default function UsersPage() {
-  const router = useRouter()
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [inviting, setInviting] = useState(false)
@@ -25,26 +35,14 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
+  useEffect(() => { fetchUsers() }, [])
 
   async function fetchUsers() {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'admin')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setUsers((data || []) as UserProfile[])
-    } catch (err: any) {
-      console.error('Error fetching users:', err)
-      setError('Kunne ikke hente brukere')
-    } finally {
-      setLoading(false)
-    }
+    const supabase = createClient()
+    const { data, error } = await supabase.from('profiles').select('*').eq('role', 'admin').order('created_at', { ascending: false })
+    if (!error) setUsers((data || []) as UserProfile[])
+    else setError('Kunne ikke hente brukere')
+    setLoading(false)
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -52,178 +50,143 @@ export default function UsersPage() {
     setInviting(true)
     setError(null)
     setSuccess(null)
-
     try {
-      const response = await fetch('/api/auth/invite', {
+      const res = await fetch('/api/auth/invite', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: inviteEmail,
-          name: inviteName || null,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail, name: inviteName || null }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Kunne ikke sende invitasjon')
-      }
-
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Kunne ikke sende invitasjon')
       setSuccess(`Invitasjon sendt til ${inviteEmail}`)
       setInviteEmail('')
       setInviteName('')
       setShowInviteForm(false)
-      fetchUsers() // Refresh list
-    } catch (err: any) {
-      setError(err.message || 'Kunne ikke sende invitasjon')
+      fetchUsers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kunne ikke sende invitasjon')
     } finally {
       setInviting(false)
     }
   }
 
   async function handleDelete(userId: string, userEmail: string) {
-    if (
-      !confirm(
-        `Er du sikker på at du vil slette brukeren "${userEmail}"?\n\nDette kan ikke angres.`
-      )
-    ) {
-      return
-    }
-
+    if (!confirm(`Slett brukeren "${userEmail}"? Dette kan ikke angres.`)) return
     try {
-      const response = await fetch(`/api/auth/delete-user?userId=${userId}`, {
-        method: 'DELETE',
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Kunne ikke slette bruker')
-      }
-
-      fetchUsers() // Refresh list
-    } catch (err: any) {
-      console.error('Error deleting user:', err)
-      alert(err.message || 'Kunne ikke slette bruker')
+      const res = await fetch(`/api/auth/delete-user?userId=${userId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Kunne ikke slette bruker')
+      fetchUsers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke slette bruker')
     }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+    width: '100%', padding: '10px 14px', boxSizing: 'border-box',
+    background: C.surface2, border: `1px solid ${C.border}`,
+    borderRadius: 8, color: C.text, outline: 'none',
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
-          <Heading as="h1" size="2xl">Admin-brukere</Heading>
-          <div className="flex gap-2 flex-shrink-0">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '32px 24px' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
+              Admin-brukere
+            </h1>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
+              {users.length} bruker{users.length !== 1 ? 'e' : ''} med admin-tilgang
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
             <Link href="/admin">
-              <Button variant="secondary" size="sm">Tilbake</Button>
+              <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', padding: '7px 14px', borderRadius: 7, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+                ← Dashboard
+              </button>
             </Link>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setShowInviteForm(!showInviteForm)}
+            <button
+              onClick={() => setShowInviteForm(v => !v)}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '7px 16px', borderRadius: 7, cursor: 'pointer', background: showInviteForm ? C.surface2 : C.accent, color: showInviteForm ? C.text2 : '#fff', border: showInviteForm ? `1px solid ${C.border}` : 'none' }}
             >
-              {showInviteForm ? 'Avbryt' : '+ Ny admin-bruker'}
-            </Button>
+              {showInviteForm ? 'Avbryt' : '+ Ny admin'}
+            </button>
           </div>
         </div>
 
+        {/* Inviteringsform */}
         {showInviteForm && (
-          <Card className="mb-8 p-6">
-            <Heading as="h2" size="xl" className="mb-4">
-              Send invitasjon
-            </Heading>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '20px 24px', marginBottom: 24 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 16 }}>Send invitasjon</p>
             {error && (
-              <div className="mb-4 p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
-                <Text variant="body" className="text-red-400">
-                  {error}
-                </Text>
+              <div style={{ padding: '10px 14px', marginBottom: 12, background: 'rgba(224,85,85,0.08)', border: `1px solid rgba(224,85,85,0.25)`, borderRadius: 7 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger }}>{error}</p>
               </div>
             )}
-            {success && (
-              <div className="mb-4 p-4 bg-green-900/20 border border-green-500/50 rounded-lg">
-                <Text variant="body" className="text-green-400">
-                  {success}
-                </Text>
-              </div>
-            )}
-            <form onSubmit={handleInvite} className="space-y-4">
-              <div>
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  required
-                  disabled={inviting}
-                />
-              </div>
-              <div>
-                <Input
-                  type="text"
-                  placeholder="Navn (valgfritt)"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  disabled={inviting}
-                />
-              </div>
-              <Button
+            <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input type="email" placeholder="E-post" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required disabled={inviting} style={inputStyle} />
+              <input type="text" placeholder="Navn (valgfritt)" value={inviteName} onChange={e => setInviteName(e.target.value)} disabled={inviting} style={inputStyle} />
+              <button
                 type="submit"
-                variant="primary"
                 disabled={inviting}
-                className="w-full"
+                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, padding: '10px', borderRadius: 8, cursor: inviting ? 'default' : 'pointer', background: C.accent, color: '#fff', border: 'none', opacity: inviting ? 0.6 : 1 }}
               >
                 {inviting ? 'Sender invitasjon...' : 'Send invitasjon'}
-              </Button>
+              </button>
             </form>
-            <Text variant="body" className="text-gray-400 mt-4 text-sm">
-              Brukeren vil motta en email med link for å sette passord.
-            </Text>
-          </Card>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 10 }}>
+              Brukeren mottar en e-post med lenke for å sette passord.
+            </p>
+          </div>
         )}
 
-        <div className="space-y-4">
+        {/* Suksessmelding */}
+        {success && (
+          <div style={{ padding: '10px 16px', marginBottom: 16, background: 'rgba(76,175,125,0.08)', border: `1px solid rgba(76,175,125,0.25)`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.success }}>{success}</p>
+            <button onClick={() => setSuccess(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3 }}>✕</button>
+          </div>
+        )}
+
+        {/* Brukerliste */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {users.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Text variant="body" className="text-gray-400">
-                Ingen admin-brukere funnet
-              </Text>
-            </Card>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '40px 24px', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>Ingen admin-brukere funnet</p>
+            </div>
           ) : (
-            users.map((user) => (
-              <Card key={user.id} className="p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <Text variant="body" className="font-semibold">
-                      {user.name || user.email}
-                    </Text>
-                    {user.name && (
-                      <Text variant="body" className="text-gray-400 text-sm">
-                        {user.email}
-                      </Text>
-                    )}
-                    <Text variant="body" className="text-gray-500 text-xs mt-1">
-                      Opprettet: {new Date(user.created_at).toLocaleDateString('no-NO')}
-                    </Text>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDelete(user.id, user.email)}
-                  >
-                    Slett
-                  </Button>
+            users.map(user => (
+              <div key={user.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, marginBottom: 2 }}>
+                    {user.name || user.email}
+                  </p>
+                  {user.name && (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>{user.email}</p>
+                  )}
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 2 }}>
+                    Opprettet {new Date(user.created_at).toLocaleDateString('nb-NO')}
+                  </p>
                 </div>
-              </Card>
+                <button
+                  onClick={() => handleDelete(user.id, user.email)}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 14px', borderRadius: 7, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: `1px solid rgba(224,85,85,0.25)`, flexShrink: 0 }}
+                >
+                  Slett
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -231,4 +194,3 @@ export default function UsersPage() {
     </div>
   )
 }
-

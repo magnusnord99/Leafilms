@@ -1,4 +1,31 @@
 // Database types
+
+export type ProjectType = 'video' | 'photo' | 'mixed'
+
+export type PipelineStage =
+  | 'lead' | 'møte' | 'tilbud_sendt' | 'kontrakt'
+  | 'pre_prod' | 'produksjon' | 'post_prod'
+  | 'levering' | 'fakturert' | 'videresalg'
+
+export const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
+  { value: 'lead', label: 'Lead' },
+  { value: 'møte', label: 'Møte' },
+  { value: 'tilbud_sendt', label: 'Sende tilbud' },
+  { value: 'kontrakt', label: 'Kontrakt' },
+  { value: 'pre_prod', label: 'Pre-produksjon' },
+  { value: 'produksjon', label: 'Produksjon' },
+  { value: 'post_prod', label: 'Post-produksjon' },
+  { value: 'levering', label: 'Levering' },
+  { value: 'fakturert', label: 'Fakturert' },
+  { value: 'videresalg', label: 'Videresalg' },
+]
+
+export type PipelineData = {
+  meeting_link?: string
+  meeting_link_sent_at?: string
+  [key: string]: unknown
+}
+
 export type Customer = {
   id: string
   name: string
@@ -22,6 +49,15 @@ export type Project = {
   language: 'no' | 'en'
   parent_project_id?: string | null // Referanse til V1 (null for første versjon)
   version_number?: number // 1, 2, 3...
+  project_type?: ProjectType | null
+  pipeline_stage?: PipelineStage
+  delivery_description?: string | null
+  delivery_video?: string | null
+  delivery_photo?: string | null
+  post_prod_days?: number | null
+  meeting_notes?: string | null
+  meeting_summary?: Record<string, unknown> | null
+  pipeline_data?: PipelineData | null
   created_at: string
   updated_at: string
 }
@@ -35,7 +71,7 @@ export type Quote = {
   accepted_at: string | null
   accepted_by: string | null
   pdf_path: string | null
-  quote_data: Record<string, any> | null
+  quote_data: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -65,6 +101,7 @@ export type QuoteBuilderData = {
   ourContact: string
   paymentInfo: string
   deliveryDate: string
+  deliveryDescription: string
   terms: string
   language: 'NO' | 'EN'
   startupCrew: CrewMember[]
@@ -77,7 +114,17 @@ export type QuoteBuilderData = {
   licensing: QuoteBuilderItem[]
   vatRate: number
   discountPercentage: number
+  crewDiscountFactor?: number
+  equipmentDiscountFactor?: number
   includeVat: boolean
+}
+
+export type DiscountFactor = {
+  shoot_day: number
+  crew_factor: number
+  equipment_factor: number
+  created_at: string
+  updated_at: string
 }
 
 export type PriceCatalogItem = {
@@ -98,16 +145,61 @@ export type Contract = {
   status: 'pending' | 'sent' | 'signed' | 'cancelled'
   signed_at: string | null
   signed_by: string | null
-  signature_data: Record<string, any> | null
+  signature_data: Record<string, unknown> | null
   created_at: string
   updated_at: string
+}
+
+// Innholdsfelter for seksjoner (lagres som JSONB i `sections.content`).
+// Kjente felter er typet — ukjente felter er tillatt via index-signaturen.
+export type SectionContent = {
+  title?: string
+  subtitle?: string
+  text?: string
+  description?: string
+  client?: string
+  sectionLabel?: string
+  sectionHeading?: string
+  presetId?: number | string | null
+  selectedTeamIds?: string[]
+  selectedCaseIds?: string[]
+  timelineItems?: { title: string; text: string; monthYear?: string }[]
+  deliverableItems?: {
+    id: string
+    title?: string
+    quantity?: number
+    format?: string
+    aspectRatio?: string
+    description?: string
+  }[]
+  scheduleItems?: ScheduleItem[]
+  partnerItems?: ScheduleItem[]
+  partnerTitle?: string
+  partnerSubtitle?: string
+  teamMemberRoles?: Record<string, string>
+  teamMemberRolesEn?: Record<string, string>
+  teamMemberCardTranslations?: Record<string, { role?: string; bio?: string }>
+  [key: string]: unknown
+}
+
+export type ScheduleItem = {
+  id: string
+  event: string
+  location: string
+  date: string
+  startDate: string
+  endDate: string
+  channels: string
+  liveOn: string
+  crew: number
+  manualDays?: number
 }
 
 export type Section = {
   id: string
   project_id: string
   type: 'hero' | 'goal' | 'concept' | 'cases' | 'moodboard' | 'timeline' | 'deliverables' | 'contact' | 'team' | 'example_work' | 'quote' | 'full_image' | 'production_schedule'
-  content: Record<string, any>
+  content: SectionContent
   visible: boolean
   order_index: number
   created_at: string
@@ -245,6 +337,15 @@ export type TeamMember = {
   updated_at: string
 }
 
+// Bildesett-posisjoner for "Eksempelarbeid"-collagen
+export type CollageImages = {
+  pos1: Image | null
+  pos2: Image | null
+  pos3: Image | null
+  pos4: Image | null
+  pos5: Image | null
+}
+
 export type CollagePreset = {
   id: number
   name: string
@@ -310,4 +411,62 @@ export type PitchFeedback = {
   content: string
   created_at: string
 }
+
+export type Task = {
+  id: string
+  project_id: string
+  pipeline_stage: PipelineStage
+  title: string
+  description: string | null
+  notes: string | null
+  task_data: Record<string, string> | null
+  sub_type: 'video' | 'photo' | null
+  due_date: string | null
+  status: 'todo' | 'in_progress' | 'done'
+  priority: 'low' | 'medium' | 'high' | null
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  assignees: { id: string; name: string | null; email: string }[]
+}
+
+export type TaskMessage = {
+  id: string
+  task_id: string
+  user_id: string
+  message: string
+  created_at: string
+  user?: { id: string; name: string | null; email: string } | null
+}
+
+export type TaskTemplate = {
+  id: string
+  pipeline_stage: PipelineStage
+  title: string
+  description: string | null
+  sort_order: number
+  project_type?: ProjectType | null
+  created_at: string
+}
+
+export type ProjectWithPipeline = Project & {
+  pipeline_stage: PipelineStage
+  project_type?: ProjectType | null
+  pipeline_data?: PipelineData | null
+  customer?: {
+    id: string
+    name: string
+    company: string | null
+    email?: string | null
+    phone?: string | null
+  } | null
+  tasks?: Task[]
+}
+
+// Hjelpetyper for Supabase-joinrader (klienten har ikke genererte DB-typer)
+export type AssigneeJoin = { profile: { id: string; name: string | null; email: string } | null }
+export type TaskRow = Task & { task_assignees?: AssigneeJoin[] }
+export type ProjectRow = ProjectWithPipeline & { customers?: ProjectWithPipeline['customer'] }
+
 

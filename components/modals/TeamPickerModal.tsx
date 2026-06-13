@@ -32,7 +32,7 @@ export function TeamPickerModal({
         <div className="flex items-start justify-between mb-6">
           <div>
             <Heading as="h2" size="md" className="mb-2">Velg Team-medlemmer</Heading>
-            <Text variant="muted">Klikk for å velge/fjerne. Vises i "Team"-seksjonen.</Text>
+            <Text variant="muted">Klikk for å velge/fjerne. Vises i &ldquo;Team&rdquo;-seksjonen.</Text>
           </div>
           <button
             type="button"

@@ -1,24 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition, useCallback } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes } from '@/lib/actions/pipeline'
-import { getProjectContractData, publishContract } from '@/lib/actions/contracts'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, sendTilbudToKunde } from '@/lib/actions/pipeline'
+import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
 import { updateProjectShootDates } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
+import { getAdminGallery } from '@/lib/actions/selections'
+import type { SelectionGallery as GalleryData, SelectionImage } from '@/lib/actions/selections'
+import SelectionGallery from './SelectionGallery'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
 import type { Quote } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
-  surface:  '#1E1E28',
-  surface2: '#252530',
-  border:   '#2D2D3A',
-  text:     '#E2E2E2',
-  text2:    '#9B9BAD',
-  text3:    '#5C5C70',
+  surface:  '#21212D',
+  surface2: '#2A2A38',
+  border:   '#3C3C52',
+  text:     '#EEEEF2',
+  text2:    '#B4B4CC',
+  text3:    '#8484A0',
   accent:   '#7C5CFC',
   accentBg: 'rgba(124,92,252,0.08)',
   success:  '#4CAF7D',
@@ -192,6 +195,286 @@ const SMART_CONDITIONS: Record<string, (hs: boolean, q: Quote | null) => boolean
   'Publiser og send tilbud til kunde':    (_,  q) => q?.status === 'sent' || q?.status === 'accepted',
 }
 
+function StepIndicator({ done, active, num }: { done: boolean; active: boolean; num: number }) {
+  return (
+    <div style={{
+      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: done ? 'rgba(76,175,125,0.12)' : active ? C.accentBg : C.surface2,
+      border: `1.5px solid ${done ? 'rgba(76,175,125,0.35)' : active ? C.accent : C.border}`,
+    }}>
+      {done ? (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 5L4 7.5L8.5 2.5" stroke="#4CAF7D" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : (
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700, color: active ? C.accent : C.text3 }}>
+          {num}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function SubCheck({ label, done }: { label: string; done: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{
+        width: 14, height: 14, borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: done ? 'rgba(76,175,125,0.12)' : C.surface2,
+        border: `1px solid ${done ? 'rgba(76,175,125,0.35)' : C.border}`,
+        flexShrink: 0,
+      }}>
+        {done && (
+          <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+            <path d="M1.5 5L4 7.5L8.5 2.5" stroke="#4CAF7D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </div>
+      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: done ? '#4CAF7D' : C.text3 }}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function TilbudStepper({
+  projectId,
+  hasSections,
+  quote,
+  notesValue,
+  customerId,
+  projectTitle,
+  isContractPublished,
+  onSend,
+  sending,
+}: {
+  projectId: string
+  hasSections: boolean
+  quote: Quote | null
+  notesValue: string
+  customerId: string | null
+  projectTitle: string
+  isContractPublished: boolean
+  onSend: () => void
+  sending: boolean
+}) {
+  const step1Done = hasSections
+  const step2QuoteDone = quote != null
+  const step2ContractDone = isContractPublished
+  const step2Done = step2QuoteDone && step2ContractDone
+  const allDone = step1Done && step2Done
+
+  const step1Href = step1Done
+    ? `/admin/projects/${projectId}/edit`
+    : `/admin/projects/new?project_id=${projectId}&customer_id=${customerId ?? ''}&title=${encodeURIComponent(projectTitle)}&context=${encodeURIComponent(notesValue.trim())}`
+  const step1BtnLabel = step1Done ? 'Rediger →' : 'Opprett med AI →'
+
+  // Pek til første ufullstendige av de to
+  const step2Href = step2QuoteDone
+    ? `/admin/projects/${projectId}?tab=kontrakt`
+    : `/admin/projects/${projectId}/quote`
+  const step2BtnLabel = step2Done ? 'Rediger →' : step2QuoteDone ? 'Åpne kontrakt →' : 'Åpne tilbud →'
+
+
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+      {/* Steg 1 — Pitch */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 16px', borderRadius: 8, background: C.surface,
+        border: `1px solid ${step1Done ? 'rgba(76,175,125,0.2)' : C.accent + '60'}`,
+        transition: 'border-color 0.15s',
+      }}>
+        <StepIndicator done={step1Done} active={!step1Done} num={1} />
+        <span style={{
+          fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, flex: 1,
+          color: step1Done ? C.text3 : C.text,
+          textDecoration: step1Done ? 'line-through' : 'none',
+        }}>
+          Sett opp pitch
+        </span>
+        <Link href={step1Href} style={{ textDecoration: 'none', flexShrink: 0 }}>
+          <button style={{
+            fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+            padding: '5px 12px', borderRadius: 5, cursor: 'pointer', border: 'none',
+            background: step1Done ? C.surface2 : C.accent,
+            color: step1Done ? C.text2 : '#fff',
+          }}>
+            {step1BtnLabel}
+          </button>
+        </Link>
+      </div>
+
+      {/* Steg 2 — Tilbud + Kontrakt (kombinert) */}
+      <div style={{
+        padding: '14px 16px', borderRadius: 8, background: C.surface,
+        border: `1px solid ${step2Done ? 'rgba(76,175,125,0.2)' : step1Done ? C.accent + '60' : C.border}`,
+        opacity: step1Done ? 1 : 0.4,
+        transition: 'border-color 0.15s, opacity 0.15s',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <StepIndicator done={step2Done} active={step1Done && !step2Done} num={2} />
+          <div style={{ flex: 1 }}>
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500,
+              color: step2Done ? C.text3 : C.text,
+              textDecoration: step2Done ? 'line-through' : 'none',
+            }}>
+              Sett opp tilbud og kontrakt
+            </span>
+            <div style={{ display: 'flex', gap: 14, marginTop: 5 }}>
+              <SubCheck label="Tilbud" done={step2QuoteDone} />
+              <SubCheck label="Kontrakt" done={step2ContractDone} />
+            </div>
+          </div>
+          {step1Done && (
+            <Link href={step2Href} style={{ textDecoration: 'none', flexShrink: 0 }}>
+              <button style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+                padding: '5px 12px', borderRadius: 5, cursor: 'pointer', border: 'none',
+                background: step1Done && !step2Done ? C.accent : C.surface2,
+                color: step1Done && !step2Done ? '#fff' : C.text2,
+              }}>
+                {step2BtnLabel}
+              </button>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Send-knapp */}
+      <div style={{ marginTop: 10 }}>
+        <button
+          onClick={onSend}
+          disabled={!allDone || sending}
+          style={{
+            fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+            padding: '12px 20px', borderRadius: 8, cursor: allDone && !sending ? 'pointer' : 'not-allowed',
+            border: 'none', width: '100%',
+            background: allDone ? C.accent : C.surface2,
+            color: allDone ? '#fff' : C.text3,
+            opacity: sending ? 0.7 : 1,
+            transition: 'background 0.15s, box-shadow 0.15s',
+            boxShadow: allDone ? '0 0 24px rgba(124,92,252,0.3)' : 'none',
+          }}
+        >
+          {sending ? 'Sender...' : 'Send e-post til kunde →'}
+        </button>
+        {!allDone && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textAlign: 'center', marginTop: 8 }}>
+            Fullfør begge stegene for å sende tilbudet
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function KontraktStageView({
+  project,
+  pitchToken,
+}: {
+  project: { id: string; title: string; pipeline_data?: Record<string, unknown> | null }
+  pitchToken: string | null
+}) {
+  const [contractStatus, setContractStatus] = useState<{
+    isSigned: boolean; signedAt: string | null; signerName: string | null
+  }>({ isSigned: false, signedAt: null, signerName: null })
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    getContractStatus(project.id).then(s => {
+      setContractStatus({ isSigned: s.isSigned, signedAt: s.signedAt, signerName: s.signerName })
+      setLoading(false)
+    })
+  }, [project.id])
+
+  function copyPitchLink() {
+    if (!pitchToken) return
+    const url = `${window.location.origin}/p/${pitchToken}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (loading) {
+    return <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
+  }
+
+  if (contractStatus.isSigned) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: '16px 18px', borderRadius: 8, background: 'rgba(76,175,125,0.06)', border: '1px solid rgba(76,175,125,0.25)' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: '#4CAF7D', marginBottom: 4 }}>
+            Kontrakt signert
+          </p>
+          {contractStatus.signerName && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
+              Signert av {contractStatus.signerName}
+              {contractStatus.signedAt && ` · ${new Date(contractStatus.signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+            </p>
+          )}
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginTop: 8 }}>
+            Prosjektet flyttes automatisk til Pre-produksjon.
+          </p>
+        </div>
+        <Link href={`/admin/projects/${project.id}?tab=kontrakt`} style={{ textDecoration: 'none' }}>
+          <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', border: 'none', background: C.surface2, color: C.text2 }}>
+            Se signert kontrakt →
+          </button>
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ padding: '20px 18px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+        <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.accentBg, border: `1.5px solid rgba(124,92,252,0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.5" strokeLinecap="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+        </div>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 6 }}>
+          Venter på signering
+        </p>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, lineHeight: 1.6 }}>
+          Kunden må signere kontrakten. Prosjektet avanserer automatisk til Pre-produksjon etter signering.
+        </p>
+      </div>
+
+      {pitchToken && (
+        <div style={{ padding: '12px 14px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.text2, marginBottom: 2 }}>Pitch- og kontraktslenke</p>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {typeof window !== 'undefined' ? `${window.location.origin}/p/${pitchToken}` : `/p/${pitchToken}`}
+            </p>
+          </div>
+          <button onClick={copyPitchLink} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '5px 12px', borderRadius: 5, cursor: 'pointer', border: 'none', background: copied ? 'rgba(76,175,125,0.1)' : C.accentBg, color: copied ? '#4CAF7D' : C.accent, flexShrink: 0 }}>
+            {copied ? '✓ Kopiert' : 'Kopier'}
+          </button>
+        </div>
+      )}
+
+      <Link href={`/admin/projects/${project.id}?tab=kontrakt`} style={{ textDecoration: 'none' }}>
+        <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '7px 14px', borderRadius: 6, cursor: 'pointer', border: `1px solid ${C.border}`, background: 'none', color: C.text2, width: '100%' }}>
+          Rediger kontrakt →
+        </button>
+      </Link>
+    </div>
+  )
+}
+
 function effectiveDone(task: Task, hasSections: boolean, quote: Quote | null): boolean {
   const cond = SMART_CONDITIONS[task.title]
   return cond ? cond(hasSections, quote) || task.status === 'done' : task.status === 'done'
@@ -237,7 +520,7 @@ function TaskChecklist({
                 onClick={() => !isAutoChecked && onToggle(task.id, task.status)}
                 disabled={isToggling || isAutoChecked}
                 title={isAutoChecked ? 'Auto-fullført basert på prosjektstatus' : undefined}
-                style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${isDone ? C.success : C.text3}`, background: isDone ? 'rgba(76,175,125,0.15)' : 'transparent', cursor: isAutoChecked ? 'default' : 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 0.15s' } as any}
+                style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${isDone ? C.success : C.text3}`, background: isDone ? 'rgba(76,175,125,0.15)' : 'transparent', cursor: isAutoChecked ? 'default' : 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 0.15s' }}
               >
                 {isDone && (
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -265,7 +548,6 @@ function TaskChecklist({
   )
 }
 
-const accentBg = 'rgba(124,92,252,0.08)'
 
 export default function ProjectHubPage() {
   const params = useParams()
@@ -292,7 +574,14 @@ export default function ProjectHubPage() {
   const [shootEnd, setShootEnd] = useState('')
   const [savingShoot, setSavingShoot] = useState(false)
 
-  const [contractChecks, setContractChecks] = useState<boolean[]>([false, false, false, false])
+  const [stepperContractPublished, setStepperContractPublished] = useState(false)
+  const [sendingTilbud, setSendingTilbud] = useState(false)
+  const [selectionGalleryData, setSelectionGalleryData] = useState<{
+    gallery: GalleryData
+    images: SelectionImage[]
+    selectedCount: number
+    signedUrls: Record<string, string>
+  } | null>(null)
 
   const [contractText, setContractText] = useState('')
   const [contractIsPublished, setContractIsPublished] = useState(false)
@@ -310,10 +599,16 @@ export default function ProjectHubPage() {
   const [notesValue, setNotesValue] = useState('')
   const [notesSaved, setNotesSaved] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
-  const [summary, setSummary] = useState<Record<string, any> | null>(null)
+  type MeetingSummary = {
+    beskrivelse?: string
+    krav?: string[]
+    budsjett?: string | null
+    tidslinje?: string | null
+    kontaktperson?: string | null
+    notater?: string[]
+  }
+  const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => { if (projectId) fetchHub() }, [projectId])
 
   async function fetchHub() {
     setLoading(true)
@@ -326,13 +621,43 @@ export default function ProjectHubPage() {
     else {
       setHubData(data)
       setDeliveryValue(data.project.delivery_description ?? '')
-      setShootStart((data.project as any).shoot_start ?? '')
-      setShootEnd((data.project as any).shoot_end ?? '')
+      const projDates = data.project as unknown as { shoot_start?: string | null; shoot_end?: string | null }
+      setShootStart(projDates.shoot_start ?? '')
+      setShootEnd(projDates.shoot_end ?? '')
       setNotesValue(data.project.meeting_notes ?? '')
       setSummary(data.project.meeting_summary ?? null)
+      // Hent kontrakt-status for stepper (tilbud_sendt) og kontrakt-steg
+      if (data.project.pipeline_stage === 'tilbud_sendt' || data.project.pipeline_stage === 'kontrakt') {
+        const cs = await getContractStatus(projectId)
+        setStepperContractPublished(cs.isPublished)
+      }
+      // Hent seleksjonsgalleri for post_prod
+      if (data.project.pipeline_stage === 'post_prod') {
+        try {
+          const galleryData = await getAdminGallery(projectId)
+          setSelectionGalleryData(galleryData)
+        } catch {
+          // Tabell finnes ikke enda (migrasjon ikke kjørt) — vis tom tilstand
+          setSelectionGalleryData(null)
+        }
+      }
     }
     setProfiles(allProfiles)
     setLoading(false)
+  }
+
+  useEffect(() => { if (projectId) fetchHub() }, [projectId])
+
+  async function handleSendTilbud() {
+    if (!hubData) return
+    setSendingTilbud(true)
+    const result = await sendTilbudToKunde(projectId, hubData.pitchToken)
+    setSendingTilbud(false)
+    if (result.ok) {
+      await fetchHub()
+    } else {
+      alert(result.error ?? 'Noe gikk galt')
+    }
   }
 
   function handleNotesChange(value: string) {
@@ -544,6 +869,8 @@ export default function ProjectHubPage() {
         {/* Tab content */}
         {activeTab === 'oversikt' && (
           <div>
+            {/* Leveranse, datoer, kontakt og notater — skjult for tilbud_sendt */}
+            {project.pipeline_stage !== 'tilbud_sendt' && <>
             {/* Leveranse */}
             <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: deliveryEdit ? 10 : 0 }}>
@@ -697,11 +1024,11 @@ export default function ProjectHubPage() {
                       </p>
                     )}
                     <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {summary.krav?.length > 0 && (
+                      {(summary.krav?.length ?? 0) > 0 && (
                         <div>
                           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Krav / ønsker</span>
                           <ul style={{ margin: '6px 0 0 0', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {summary.krav.map((k: string, i: number) => (
+                            {summary.krav!.map((k: string, i: number) => (
                               <li key={i} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{k}</li>
                             ))}
                           </ul>
@@ -727,11 +1054,11 @@ export default function ProjectHubPage() {
                           </div>
                         )}
                       </div>
-                      {summary.notater?.length > 0 && (
+                      {(summary.notater?.length ?? 0) > 0 && (
                         <div>
                           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Andre notater</span>
                           <ul style={{ margin: '6px 0 0 0', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {summary.notater.map((n: string, i: number) => (
+                            {summary.notater!.map((n: string, i: number) => (
                               <li key={i} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{n}</li>
                             ))}
                           </ul>
@@ -742,19 +1069,68 @@ export default function ProjectHubPage() {
                 )}
               </div>
             </div>
+            </> /* slutt på seksjoner skjult for tilbud_sendt */}
 
-            <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-              Oppgaver — {currentStageLabel}
-            </h3>
-            <TaskChecklist
-              tasks={tasks}
-              profiles={profiles}
-              onToggle={handleTaskToggle}
-              onAssigneeToggle={handleAssigneeToggle}
-              togglingId={togglingTaskId}
-              hasSections={hasSections}
-              quote={quote}
-            />
+            {project.pipeline_stage === 'tilbud_sendt' ? (
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
+                  Sende tilbud
+                </h3>
+                <TilbudStepper
+                  projectId={projectId}
+                  hasSections={hasSections}
+                  quote={quote}
+                  notesValue={notesValue}
+                  customerId={project.customer_id ?? null}
+                  projectTitle={project.title}
+                  isContractPublished={stepperContractPublished}
+                  onSend={handleSendTilbud}
+                  sending={sendingTilbud}
+                />
+              </div>
+            ) : project.pipeline_stage === 'kontrakt' ? (
+              <div style={{ marginTop: 8 }}>
+                {(project.pipeline_data as { contract_unsigned_proceed?: boolean } | null)?.contract_unsigned_proceed && (
+                  <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 6, background: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.3)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#F0A500' }}>
+                      Advarsel: prosjektet ble manuelt flyttet uten signert kontrakt.
+                    </p>
+                  </div>
+                )}
+                <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 18 }}>
+                  Kontrakt
+                </h3>
+                <KontraktStageView project={project} pitchToken={pitchToken} />
+              </div>
+            ) : (
+              <>
+                <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                  Oppgaver — {currentStageLabel}
+                </h3>
+                <TaskChecklist
+                  tasks={tasks}
+                  profiles={profiles}
+                  onToggle={handleTaskToggle}
+                  onAssigneeToggle={handleAssigneeToggle}
+                  togglingId={togglingTaskId}
+                  hasSections={hasSections}
+                  quote={quote}
+                />
+                {project.pipeline_stage === 'post_prod' && (
+                  <div style={{ marginTop: 20 }}>
+                    <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                      Kundeseleksjon
+                    </h3>
+                    <SelectionGallery
+                      projectId={projectId}
+                      initialData={selectionGalleryData}
+                      deliveryPhoto={(project as unknown as { delivery_photo?: string | null }).delivery_photo}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -821,7 +1197,7 @@ export default function ProjectHubPage() {
                 </div>
                 <button
                   onClick={() => navigator.clipboard.writeText(`${window.location.origin}/p/${pitchToken}`)}
-                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: `1px solid rgba(124,92,252,0.25)`, flexShrink: 0 } as any}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: `1px solid rgba(124,92,252,0.25)`, flexShrink: 0 }}
                 >
                   Kopier link
                 </button>
@@ -884,27 +1260,51 @@ export default function ProjectHubPage() {
               )}
             </div>
 
-            {/* Publish-knapp */}
+            {/* Publish / fjern-knapper */}
             {!contractSignature && (
-              <button
-                onClick={async () => {
-                  setPublishingContract(true)
-                  await publishContract(projectId, contractText)
-                  setContractIsPublished(true)
-                  setContractSaved(true)
-                  setPublishingContract(false)
-                }}
-                disabled={publishingContract || loadingContract || !contractText.trim()}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
-                  padding: '12px', borderRadius: 8, cursor: 'pointer',
-                  background: contractText.trim() && !publishingContract ? C.accent : C.surface2,
-                  color: contractText.trim() && !publishingContract ? '#fff' : C.text3,
-                  border: 'none', transition: 'background 0.15s',
-                }}
-              >
-                {publishingContract ? 'Publiserer...' : contractIsPublished ? 'Oppdater kontrakt' : 'Publiser kontrakt til kunde'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={async () => {
+                    setPublishingContract(true)
+                    await publishContract(projectId, contractText)
+                    setContractIsPublished(true)
+                    setStepperContractPublished(true)
+                    setContractSaved(true)
+                    setPublishingContract(false)
+                  }}
+                  disabled={publishingContract || loadingContract || !contractText.trim()}
+                  style={{
+                    flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+                    padding: '12px', borderRadius: 8, cursor: 'pointer',
+                    background: contractText.trim() && !publishingContract ? C.accent : C.surface2,
+                    color: contractText.trim() && !publishingContract ? '#fff' : C.text3,
+                    border: 'none', transition: 'background 0.15s',
+                  }}
+                >
+                  {publishingContract ? 'Publiserer...' : contractIsPublished ? 'Oppdater kontrakt' : 'Publiser kontrakt til kunde'}
+                </button>
+                {contractIsPublished && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Fjerne publiseringen av kontrakten?')) return
+                      await unpublishContract(projectId)
+                      setContractIsPublished(false)
+                      setStepperContractPublished(false)
+                      setContractSaved(false)
+                    }}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                      padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
+                      background: 'none', color: C.danger, border: `1px solid ${C.danger}`,
+                      opacity: 0.7, transition: 'opacity 0.12s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.7' }}
+                  >
+                    Fjern
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Lenke til mal-redigering */}

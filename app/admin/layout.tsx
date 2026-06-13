@@ -1,7 +1,6 @@
 'use client'
 
 import { useAuth } from '@/hooks/useAuth'
-import { Button } from '@/components/ui'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -25,6 +24,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin/leads',     label: 'Leads' },
       { href: '/admin/pipeline',  label: 'Pipeline' },
+      { href: '/admin/pitches',   label: 'Pitcher' },
       { href: '/admin/tapte',     label: 'Tapte prosjekter' },
       { href: '/admin/customers', label: 'Kunder' },
       { href: '/admin/email',     label: 'E-post' },
@@ -66,7 +66,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!loading && (!user || !isAdmin)) router.push('/login')
   }, [loading, user, isAdmin, router])
 
-  useEffect(() => { setMobileOpen(false) }, [pathname])
+  // Lukk mobilmenyen ved navigasjon (state-justering under render, jf. react.dev)
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
+    setMobileOpen(false)
+  }
 
   useEffect(() => {
     document.body.classList.add('admin-page')

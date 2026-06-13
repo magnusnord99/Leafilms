@@ -17,7 +17,7 @@ export default function NewImage() {
     tags: ''
   })
   const [imageFiles, setImageFiles] = useState<File[]>([])
-  const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: any; analyzing: boolean; analysisError?: string }>>([])
+  const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: Record<string, unknown>; analyzing: boolean; analysisError?: string }>>([])
   const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number | null>(null)
 
   // Kategorier med underkategorier
@@ -142,7 +142,7 @@ export default function NewImage() {
   }
 
   async function analyzeImage(file: File, _previewUrl: string, previewIndex: number) {
-    const updateAnalyzing = (analyzing: boolean, analysis?: any, error?: string) => {
+    const updateAnalyzing = (analyzing: boolean, analysis?: Record<string, unknown>, error?: string) => {
       setImagePreviews(prev => {
         const updated = [...prev]
         if (updated[previewIndex]) {
@@ -313,7 +313,7 @@ export default function NewImage() {
       // Vis resultat
       if (successCount > 0) {
         alert(`✅ ${successCount} bilde${successCount > 1 ? 'r' : ''} lastet opp${errorCount > 0 ? `\n❌ ${errorCount} bilde${errorCount > 1 ? 'r' : ''} feilet` : ''}`)
-        router.push('/admin/images')
+        router.push('/admin/pitches/images')
         router.refresh()
       } else {
         alert(`❌ Kunne ikke laste opp bildene`)
@@ -335,7 +335,7 @@ export default function NewImage() {
         <div className="mb-12">
           <Button
             variant="ghost"
-            onClick={() => router.push('/admin/images')}
+            onClick={() => router.push('/admin/pitches/images')}
             className="mb-4 -ml-2"
           >
             ← Tilbake
@@ -525,7 +525,7 @@ export default function NewImage() {
             </Button>
             <Button
               type="button"
-              onClick={() => router.push('/admin/images')}
+              onClick={() => router.push('/admin/pitches/images')}
               variant="secondary"
             >
               Avbryt

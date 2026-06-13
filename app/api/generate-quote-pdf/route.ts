@@ -82,10 +82,10 @@ export async function POST(req: NextRequest) {
         ...(storagePath ? { 'X-Storage-Path': storagePath } : {}),
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('PDF generation error:', error)
     return NextResponse.json(
-      { error: error.message || 'Kunne ikke generere PDF' },
+      { error: error instanceof Error ? error.message : 'Kunne ikke generere PDF' },
       { status: 500 }
     )
   }

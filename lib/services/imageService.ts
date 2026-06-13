@@ -5,8 +5,6 @@ export async function saveSectionImages(
   sectionId: string,
   imageIds: string[]
 ): Promise<{ images: Image[]; sectionImages: SectionImage[] }> {
-  console.log('💾 saveSectionImages called with:', { sectionId, imageIds })
-  
   // Verifiser at sectionId faktisk finnes først
   const { data: sectionCheck } = await supabase
     .from('sections')
@@ -18,21 +16,8 @@ export async function saveSectionImages(
     console.error('❌ Section not found:', sectionId)
     throw new Error(`Section ${sectionId} not found`)
   }
-  console.log('✅ Section found:', sectionCheck)
-  
   // Slett eksisterende bilder for denne seksjonen
-  const { data: existingImages, error: fetchError } = await supabase
-    .from('section_images')
-    .select('id, image_id, order_index')
-    .eq('section_id', sectionId)
-  
-  if (fetchError) {
-    console.error('Error fetching existing images:', fetchError)
-  } else {
-    console.log('📋 Existing images before delete:', existingImages)
-  }
-  
-  const { error: deleteError, count: deleteCount } = await supabase
+  const { error: deleteError } = await supabase
     .from('section_images')
     .delete()
     .eq('section_id', sectionId)
@@ -42,7 +27,6 @@ export async function saveSectionImages(
     console.error('❌ Error deleting existing images:', deleteError)
     throw deleteError
   }
-  console.log(`✅ Deleted ${deleteCount || existingImages?.length || 0} existing images for section ${sectionId}`)
 
   // Legg til nye bilder
   if (imageIds.length > 0) {
@@ -53,7 +37,6 @@ export async function saveSectionImages(
       position: 'background'
     }))
 
-    console.log('Inserting section images:', sectionImagesToInsert)
     const { error: insertError, data: insertData } = await supabase
       .from('section_images')
       .insert(sectionImagesToInsert)
@@ -64,27 +47,10 @@ export async function saveSectionImages(
       console.error('Insert error details:', JSON.stringify(insertError, null, 2))
       throw new Error(`Failed to insert images: ${insertError.message || JSON.stringify(insertError)}`)
     }
-    console.log('✅ Inserted section images:', insertData)
-    
+
     if (!insertData || insertData.length === 0) {
       console.error('❌ CRITICAL: No images were inserted!')
       throw new Error('Failed to insert images - no data returned')
-    }
-
-    // Verifiser at bildene faktisk ble lagret
-    const { data: verifyData, error: verifyError } = await supabase
-      .from('section_images')
-      .select('*')
-      .eq('section_id', sectionId)
-      .order('order_index', { ascending: true })
-    
-    if (verifyError) {
-      console.error('❌ Error verifying inserted images:', verifyError)
-    } else {
-      console.log('✅ Verified inserted images in database:', verifyData)
-      if (!verifyData || verifyData.length !== imageIds.length) {
-        console.error(`❌ CRITICAL: Expected ${imageIds.length} images, but found ${verifyData?.length || 0} in database!`)
-      }
     }
 
     // Bruk data fra insert i stedet for å hente på nytt
@@ -107,13 +73,11 @@ export async function saveSectionImages(
       .map(id => imagesData?.find(img => img.id === id))
       .filter(Boolean) as Image[]
 
-    console.log('Returning images and sectionImages:', { images, sectionImages: insertedSectionImages })
     return {
       images,
       sectionImages: insertedSectionImages
     }
   } else {
-    console.log('No images to insert, returning empty arrays')
     return {
       images: [],
       sectionImages: []
@@ -148,8 +112,8 @@ export async function saveBackgroundPosition(
       }
       throw error
     }
-  } catch (error: any) {
-    if (error?.message?.includes('does not exist')) {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('does not exist')) {
       console.warn('Background position columns not found. Run migration 009_background_image_position.sql')
       return
     }
@@ -161,8 +125,6 @@ export async function saveSectionVideos(
   sectionId: string,
   videoIds: string[]
 ): Promise<{ videos: VideoLibrary[]; sectionVideos: SectionVideo[] }> {
-  console.log('💾 saveSectionVideos called with:', { sectionId, videoIds })
-  
   // Verifiser at sectionId faktisk finnes først
   const { data: sectionCheck } = await supabase
     .from('sections')
@@ -174,21 +136,8 @@ export async function saveSectionVideos(
     console.error('❌ Section not found:', sectionId)
     throw new Error(`Section ${sectionId} not found`)
   }
-  console.log('✅ Section found:', sectionCheck)
-  
   // Slett eksisterende videoer for denne seksjonen
-  const { data: existingVideos, error: fetchError } = await supabase
-        .from('section_video_library')
-    .select('id, video_id, order_index')
-    .eq('section_id', sectionId)
-  
-  if (fetchError) {
-    console.error('Error fetching existing videos:', fetchError)
-  } else {
-    console.log('📋 Existing videos before delete:', existingVideos)
-  }
-  
-  const { error: deleteError, count: deleteCount } = await supabase
+  const { error: deleteError } = await supabase
         .from('section_video_library')
     .delete()
     .eq('section_id', sectionId)
@@ -198,7 +147,6 @@ export async function saveSectionVideos(
     console.error('❌ Error deleting existing videos:', deleteError)
     throw deleteError
   }
-  console.log(`✅ Deleted ${deleteCount || existingVideos?.length || 0} existing videos for section ${sectionId}`)
 
   // Legg til nye videoer
   if (videoIds.length > 0) {
@@ -212,7 +160,6 @@ export async function saveSectionVideos(
       muted: true
     }))
 
-    console.log('Inserting section videos:', sectionVideosToInsert)
     const { error: insertError, data: insertData } = await supabase
         .from('section_video_library')
       .insert(sectionVideosToInsert)
@@ -222,8 +169,7 @@ export async function saveSectionVideos(
       console.error('Error inserting videos:', insertError)
       throw new Error(`Failed to insert videos: ${insertError.message || JSON.stringify(insertError)}`)
     }
-    console.log('✅ Inserted section videos:', insertData)
-    
+
     if (!insertData || insertData.length === 0) {
       console.error('❌ CRITICAL: No videos were inserted!')
       throw new Error('Failed to insert videos - no data returned')
@@ -248,13 +194,11 @@ export async function saveSectionVideos(
       .map(id => videosData?.find(vid => vid.id === id))
       .filter(Boolean) as VideoLibrary[]
 
-    console.log('Returning videos and sectionVideos:', { videos, sectionVideos: insertedSectionVideos })
     return {
       videos,
       sectionVideos: insertedSectionVideos
     }
   } else {
-    console.log('No videos to insert, returning empty arrays')
     return {
       videos: [],
       sectionVideos: []

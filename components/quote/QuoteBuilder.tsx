@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, TeamMember, Customer, PriceCatalogItem } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
+import { C } from '@/lib/admin-theme'
 
 const DEFAULT_TERMS = `Leafilms vil være ansvarlig for planleggingen, produksjonen og leveringen av prosjektet slik det er beskrevet i dette tilbudet.
 Prosjektets omfang, tidslinje og leveranser avtales før produksjonen starter. Eventuelle endringer i omfanget underveis kan medføre ekstra kostnader.
@@ -26,6 +27,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     ourContact: 'Bea Valand',
     paymentInfo: '14 dager',
     deliveryDate: '',
+    deliveryDescription: '',
     terms: DEFAULT_TERMS,
     language: 'NO',
     startupCrew: [],
@@ -38,6 +40,8 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     licensing: [],
     vatRate: 25,
     discountPercentage: 0,
+    crewDiscountFactor: 0,
+    equipmentDiscountFactor: 0,
     includeVat: true,
   }
 }
@@ -48,10 +52,58 @@ function formatNOK(amount: number) {
   return new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
 }
 
-const cellInput = 'bg-transparent border-0 border-b border-[#38332A] focus:outline-none focus:border-[#C49434] px-1 py-1 text-sm text-[#E8E1D5] w-full transition placeholder-[#6B6358]'
-const sectionHeader = 'flex items-center justify-between mb-3 pb-2 border-b border-[#38332A]'
-const labelClass = 'block text-xs text-[#9E9287] mb-1'
-const fieldInput = 'w-full bg-[#1A1713] border border-[#38332A] rounded-[3px] px-3 py-2 text-sm text-[#E8E1D5] placeholder-[#6B6358] focus:outline-none focus:border-[#C49434] transition'
+const inputBase: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  borderBottom: `1px solid ${C.border}`,
+  outline: 'none',
+  padding: '4px',
+  fontSize: '0.8rem',
+  color: C.text,
+  width: '100%',
+  fontFamily: 'var(--font-dm-sans)',
+  transition: 'border-color 0.15s',
+}
+
+const fieldStyle: React.CSSProperties = {
+  width: '100%',
+  background: C.surface,
+  border: `1px solid ${C.border}`,
+  borderRadius: 3,
+  padding: '8px 12px',
+  fontSize: '0.8rem',
+  color: C.text,
+  fontFamily: 'var(--font-dm-sans)',
+  outline: 'none',
+  transition: 'border-color 0.15s',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '0.62rem',
+  color: C.text2,
+  marginBottom: 4,
+  fontFamily: 'var(--font-dm-sans)',
+  letterSpacing: '0.05em',
+}
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: '0.58rem',
+  fontWeight: 600,
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  color: C.accent,
+  fontFamily: 'var(--font-dm-sans)',
+}
+
+const sectionHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 12,
+  paddingBottom: 8,
+  borderBottom: `1px solid ${C.border}`,
+}
 
 // ─── Shared: Price catalog picker ─────────────────────────────────────────────
 function CatalogPicker({
@@ -71,20 +123,29 @@ function CatalogPicker({
     .filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="relative inline-block">
+    <div style={{ position: 'relative', display: 'inline-block' }}>
       <Button size="sm" variant="ghost" type="button" onClick={() => setOpen(o => !o)}>
         Fra katalog {open ? '▲' : '▼'}
       </Button>
       {open && (
-        <div
-          className="absolute z-50 top-full left-0 mt-1 rounded-[3px] overflow-hidden"
-          style={{ background: '#1A1713', border: '1px solid #38332A', minWidth: 260, maxHeight: 280 }}
-        >
+        <div style={{
+          position: 'absolute',
+          zIndex: 50,
+          top: '100%',
+          left: 0,
+          marginTop: 4,
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 3,
+          minWidth: 260,
+          maxHeight: 280,
+          overflow: 'hidden',
+        }}>
           {catalog.length > 0 && (
-            <div className="p-2">
+            <div style={{ padding: 8 }}>
               <input
                 autoFocus
-                className="w-full bg-[#141210] border border-[#38332A] rounded-[3px] px-3 py-1.5 text-sm text-[#E8E1D5] placeholder-[#6B6358] focus:outline-none focus:border-[#C49434]"
+                style={{ ...fieldStyle, background: C.bg, padding: '6px 12px', fontSize: '0.78rem' }}
                 placeholder="Søk..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -93,22 +154,37 @@ function CatalogPicker({
           )}
           <div style={{ overflowY: 'auto', maxHeight: 220 }}>
             {catalog.length === 0 ? (
-              <p className="px-4 py-3 text-xs text-[#6B6358]">
+              <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>
                 Ingen elementer i katalogen ennå.{' '}
-                <a href="/admin/prices" className="text-[#C49434] underline" target="_blank">Legg til i Admin → Priskatalog</a>
+                <a href="/admin/prices" style={{ color: C.accent }} target="_blank">Legg til i Admin → Priskatalog</a>
               </p>
             ) : filtered.length === 0 ? (
-              <p className="px-4 py-3 text-xs text-[#6B6358]">Ingen treff</p>
+              <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>
             ) : (
               filtered.map(item => (
                 <button
                   key={item.id}
                   type="button"
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-[#201D18] transition text-left"
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    fontSize: '0.8rem',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'var(--font-dm-sans)',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
                   onClick={() => { onSelect(item); setOpen(false); setSearch('') }}
                 >
-                  <span className="text-[#E8E1D5]">{item.name}</span>
-                  <span className="text-[#C49434] text-xs ml-3 whitespace-nowrap">
+                  <span style={{ color: C.text }}>{item.name}</span>
+                  <span style={{ color: C.accent, fontSize: '0.72rem', marginLeft: 12, whiteSpace: 'nowrap' }}>
                     {item.default_price > 0 ? formatNOK(item.default_price) : '—'} / {item.unit}
                   </span>
                 </button>
@@ -133,37 +209,53 @@ function CustomerSelector({
   )
   const selected = customers.find(c => c.id === selectedCustomerId)
   return (
-    <div className="relative">
-      <label className={labelClass}>Kunde</label>
+    <div style={{ position: 'relative' }}>
+      <label style={labelStyle}>Kunde</label>
       <button type="button"
-        className={`${fieldInput} text-left flex items-center justify-between`}
+        style={{ ...fieldStyle, textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
         onClick={() => setOpen(o => !o)}>
-        <span className={selected ? 'text-[#E8E1D5]' : 'text-[#6B6358]'}>
+        <span style={{ color: selected ? C.text : C.text3 }}>
           {selected ? `${selected.name}${selected.customer_number ? ` — #${selected.customer_number}` : ''}` : 'Velg kunde...'}
         </span>
-        <span className="text-[#9E9287] text-xs ml-2">{open ? '▲' : '▼'}</span>
+        <span style={{ color: C.text2, fontSize: '0.72rem', marginLeft: 8 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-[3px] overflow-hidden"
-          style={{ background: '#1A1713', border: '1px solid #38332A', maxHeight: 260 }}>
-          <div className="p-2">
+        <div style={{
+          position: 'absolute',
+          zIndex: 50,
+          top: '100%',
+          left: 0,
+          right: 0,
+          marginTop: 4,
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 3,
+          maxHeight: 260,
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: 8 }}>
             <input autoFocus
-              className="w-full bg-[#141210] border border-[#38332A] rounded-[3px] px-3 py-1.5 text-sm text-[#E8E1D5] placeholder-[#6B6358] focus:outline-none focus:border-[#C49434]"
+              style={{ ...fieldStyle, background: C.bg, padding: '6px 12px', fontSize: '0.78rem' }}
               placeholder="Søk..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ overflowY: 'auto', maxHeight: 200 }}>
-            <button type="button" className="w-full text-left px-4 py-2.5 text-sm text-[#9E9287] hover:bg-[#201D18] transition"
+            <button type="button"
+              style={{ width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: '0.8rem', color: C.text2, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', transition: 'background 0.1s' }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
               onClick={() => { onSelect(null); setOpen(false); setSearch('') }}>Ingen kunde valgt</button>
             {filtered.map(c => (
               <button key={c.id} type="button"
-                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#201D18] transition ${c.id === selectedCustomerId ? 'text-[#C49434]' : 'text-[#E8E1D5]'}`}
+                style={{ width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: '0.8rem', color: c.id === selectedCustomerId ? C.accent : C.text, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', transition: 'background 0.1s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
                 onClick={() => { onSelect(c); setOpen(false); setSearch('') }}>
                 <span>{c.name}</span>
-                {c.customer_number && <span className="text-[#C49434] ml-2 text-xs">#{c.customer_number}</span>}
-                {c.company && <span className="text-[#9E9287] ml-2 text-xs">{c.company}</span>}
+                {c.customer_number && <span style={{ color: C.accent, marginLeft: 8, fontSize: '0.72rem' }}>#{c.customer_number}</span>}
+                {c.company && <span style={{ color: C.text2, marginLeft: 8, fontSize: '0.72rem' }}>{c.company}</span>}
               </button>
             ))}
-            {filtered.length === 0 && <p className="px-4 py-3 text-xs text-[#6B6358]">Ingen treff</p>}
+            {filtered.length === 0 && <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>}
           </div>
         </div>
       )}
@@ -193,9 +285,9 @@ function CrewSection({
 
   return (
     <div>
-      <div className={sectionHeader}>
-        <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">{label}</span>
-        <div className="flex gap-2 flex-wrap">
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>{label}</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {teamMembers.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => setLibraryOpen(o => !o)} type="button">
               Fra teambibliotek {libraryOpen ? '▲' : '▼'}
@@ -206,23 +298,25 @@ function CrewSection({
       </div>
 
       {libraryOpen && (
-        <div className="mb-4 rounded-[3px] overflow-hidden" style={{ background: '#1A1713', border: '1px solid #38332A' }}>
-          <p className="px-4 pt-3 pb-1 text-xs text-[#9E9287] tracking-widest uppercase">Teambibliotek</p>
+        <div style={{ marginBottom: 16, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
+          <p style={{ padding: '12px 16px 4px', fontSize: '0.58rem', color: C.text2, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'var(--font-dm-sans)' }}>Teambibliotek</p>
           {teamMembers.map(member => {
             const added = alreadyAdded.has(member.name)
             return (
               <button key={member.id} type="button" disabled={added}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition ${added ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#201D18]'}`}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', fontSize: '0.8rem', background: 'transparent', border: 'none', cursor: added ? 'not-allowed' : 'pointer', opacity: added ? 0.4 : 1, fontFamily: 'var(--font-dm-sans)', transition: 'background 0.1s' }}
+                onMouseEnter={e => { if (!added) (e.currentTarget as HTMLButtonElement).style.background = C.surface2 }}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
                 onClick={() => { if (!added) { addFromLibrary(member); setLibraryOpen(false) } }}>
-                <div className="text-left">
-                  <span className="text-[#E8E1D5]">{member.name}</span>
-                  <span className="text-[#9E9287] ml-2 text-xs">{member.role}</span>
+                <div style={{ textAlign: 'left' }}>
+                  <span style={{ color: C.text }}>{member.name}</span>
+                  <span style={{ color: C.text2, marginLeft: 8, fontSize: '0.72rem' }}>{member.role}</span>
                 </div>
-                <div className="text-right">
+                <div style={{ textAlign: 'right' }}>
                   {member.daily_rate
-                    ? <span className="text-[#C49434] text-xs">{formatNOK(member.daily_rate)}/dag</span>
-                    : <span className="text-[#6B6358] text-xs">ingen dagsats</span>}
-                  {added && <span className="text-[#6B6358] text-xs ml-2">lagt til</span>}
+                    ? <span style={{ color: C.accent, fontSize: '0.72rem' }}>{formatNOK(member.daily_rate)}/dag</span>
+                    : <span style={{ color: C.text3, fontSize: '0.72rem' }}>ingen dagsats</span>}
+                  {added && <span style={{ color: C.text3, fontSize: '0.72rem', marginLeft: 8 }}>lagt til</span>}
                 </div>
               </button>
             )
@@ -231,34 +325,37 @@ function CrewSection({
       )}
 
       {crew.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="text-[#9E9287] text-xs">
-                <th className="text-left pb-2 pl-1 font-normal">Rolle</th>
-                <th className="text-left pb-2 pl-1 font-normal">Navn</th>
-                <th className="text-right pb-2 pr-1 font-normal">Dagsats</th>
-                <th className="text-right pb-2 pr-1 font-normal">Dager</th>
-                <th className="text-right pb-2 pr-1 font-normal">Total</th>
-                <th className="w-6" />
+              <tr>
+                {['Rolle', 'Navn', 'Dagsats', 'Dager', 'Total', ''].map((h, i) => (
+                  <th key={h} style={{ textAlign: i >= 2 && i < 5 ? 'right' : i === 5 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 5 ? 24 : 'auto' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {crew.map(m => (
                 <tr key={m.id} className="group">
-                  <td className="py-1 pr-2"><input className={cellInput} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
-                  <td className="py-1 pr-2"><input className={cellInput} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
-                  <td className="py-1 pr-2"><input className={`${cellInput} text-right`} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
-                  <td className="py-1 pr-2"><input className={`${cellInput} text-right`} type="number" min={1} value={m.days || ''} onChange={e => update(m.id, 'days', Number(e.target.value))} /></td>
-                  <td className="py-1 pr-2 text-right text-[#E8E1D5] whitespace-nowrap">{formatNOK(m.dailyRate * m.days)}</td>
-                  <td className="py-1"><button type="button" onClick={() => remove(m.id)} className="text-[#6B6358] hover:text-[#B84040] opacity-0 group-hover:opacity-100 transition" title="Fjern">×</button></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" min={1} value={m.days || ''} onChange={e => update(m.id, 'days', Number(e.target.value))} /></td>
+                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
+                  <td style={{ padding: 4 }}>
+                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                      className="group-hover:opacity-100"
+                      title="Fjern">×</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      {crew.length === 0 && !libraryOpen && <p className="text-[#6B6358] text-xs py-2">Ingen lagt til ennå</p>}
+      {crew.length === 0 && !libraryOpen && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen lagt til ennå</p>}
     </div>
   )
 }
@@ -283,45 +380,45 @@ function ItemSection({
 
   return (
     <div>
-      <div className={sectionHeader}>
-        <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">{label}</span>
-        <div className="flex gap-2 flex-wrap">
-          <CatalogPicker
-            catalog={catalog}
-            filterCategories={catalogCategories}
-            onSelect={addFromCatalog}
-          />
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>{label}</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <CatalogPicker catalog={catalog} filterCategories={catalogCategories} onSelect={addFromCatalog} />
           <Button size="sm" variant="ghost" onClick={add} type="button">{addLabel}</Button>
         </div>
       </div>
 
       {items.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="text-[#9E9287] text-xs">
-                <th className="text-left pb-2 pl-1 font-normal">Beskrivelse</th>
-                <th className="text-right pb-2 pr-1 font-normal">Antall</th>
-                <th className="text-right pb-2 pr-1 font-normal">Stk.pris</th>
-                <th className="text-right pb-2 pr-1 font-normal">Total</th>
-                <th className="w-6" />
+              <tr>
+                {['Beskrivelse', 'Antall', 'Stk.pris', 'Total', ''].map((h, i) => (
+                  <th key={h} style={{ textAlign: i >= 1 && i < 4 ? 'right' : i === 4 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 1 ? 80 : i === 2 ? 112 : i === 4 ? 24 : 'auto' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {items.map(item => (
                 <tr key={item.id} className="group">
-                  <td className="py-1 pr-2"><input className={cellInput} value={item.description} onChange={e => update(item.id, 'description', e.target.value)} placeholder="Beskrivelse" /></td>
-                  <td className="py-1 pr-2 w-20"><input className={`${cellInput} text-right`} type="number" min={1} value={item.quantity || ''} onChange={e => update(item.id, 'quantity', Number(e.target.value))} /></td>
-                  <td className="py-1 pr-2 w-28"><input className={`${cellInput} text-right`} type="number" value={item.unitPrice || ''} onChange={e => update(item.id, 'unitPrice', Number(e.target.value))} placeholder="0" /></td>
-                  <td className="py-1 pr-2 text-right text-[#E8E1D5] whitespace-nowrap">{formatNOK(item.quantity * item.unitPrice)}</td>
-                  <td className="py-1"><button type="button" onClick={() => remove(item.id)} className="text-[#6B6358] hover:text-[#B84040] opacity-0 group-hover:opacity-100 transition" title="Fjern">×</button></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={item.description} onChange={e => update(item.id, 'description', e.target.value)} placeholder="Beskrivelse" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" min={1} value={item.quantity || ''} onChange={e => update(item.id, 'quantity', Number(e.target.value))} /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={item.unitPrice || ''} onChange={e => update(item.id, 'unitPrice', Number(e.target.value))} placeholder="0" /></td>
+                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(item.quantity * item.unitPrice)}</td>
+                  <td style={{ padding: 4 }}>
+                    <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                      className="group-hover:opacity-100"
+                      title="Fjern">×</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      {items.length === 0 && <p className="text-[#6B6358] text-xs py-2">Ingen rader lagt til ennå</p>}
+      {items.length === 0 && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen rader lagt til ennå</p>}
     </div>
   )
 }
@@ -338,7 +435,7 @@ function PostProductionSection({
   onItemsChange: (items: QuoteBuilderItem[]) => void
 }) {
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <CrewSection
         label="Post-produksjon — Team"
         crew={crew}
@@ -361,32 +458,35 @@ function PostProductionSection({
 // ─── Totals panel ──────────────────────────────────────────────────────────────
 function TotalsPanel({ data }: { data: QuoteBuilderData }) {
   const t = calculateQuoteTotals(data)
-  const rows = [
-    { label: 'Mannskap', value: t.crewTotal, show: t.crewTotal > 0 },
-    { label: 'Utstyrsliste', value: t.equipmentTotal, show: t.equipmentTotal > 0 },
-    { label: 'Post-produksjon', value: t.postProductionTotal, show: t.postProductionTotal > 0 },
-    { label: 'Andre kostnader', value: t.otherCostsTotal, show: t.otherCostsTotal > 0 },
-    { label: 'Lisensiering', value: t.licensingTotal, show: t.licensingTotal > 0 },
-  ]
+  const crewPct = Math.round((data.crewDiscountFactor ?? 0) * 100)
+  const eqPct = Math.round((data.equipmentDiscountFactor ?? 0) * 100)
+  const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
+  const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: C.danger, fontFamily: 'var(--font-dm-sans)', paddingLeft: 12 }
   return (
-    <div className="bg-[#1A1713] border border-[#38332A] rounded-[3px] p-4 space-y-1 text-sm">
-      <p className="text-xs font-semibold tracking-widest uppercase text-[#C49434] mb-3">Totaler</p>
-      {rows.filter(r => r.show).map(r => (
-        <div key={r.label} className="flex justify-between text-[#9E9287]">
-          <span>{r.label}</span><span>{formatNOK(r.value)}</span>
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <p style={{ ...sectionLabelStyle, marginBottom: 12 }}>Totaler</p>
+
+      {t.crewTotal > 0 && (
+        <div style={rowStyle}><span>Mannskap</span><span>{formatNOK(t.crewTotal - t.crewDiscountAmount)}</span></div>
+      )}
+      {t.equipmentTotal > 0 && (
+        <div style={rowStyle}><span>Utstyrsliste</span><span>{formatNOK(t.equipmentTotal - t.equipmentDiscountAmount)}</span></div>
+      )}
+      {t.postProductionTotal > 0 && <div style={rowStyle}><span>Post-produksjon</span><span>{formatNOK(t.postProductionTotal)}</span></div>}
+      {t.otherCostsTotal > 0 && <div style={rowStyle}><span>Andre kostnader</span><span>{formatNOK(t.otherCostsTotal)}</span></div>}
+      {t.licensingTotal > 0 && <div style={rowStyle}><span>Lisensiering</span><span>{formatNOK(t.licensingTotal)}</span></div>}
+
+      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text, fontFamily: 'var(--font-dm-sans)' }}>
+          <span>Eks. MVA</span><span>{formatNOK(t.afterDiscount)}</span>
         </div>
-      ))}
-      <div className="border-t border-[#38332A] pt-2 mt-2 space-y-1">
-        <div className="flex justify-between text-[#E8E1D5]"><span>Subtotal</span><span>{formatNOK(t.subtotal)}</span></div>
-        {data.discountPercentage > 0 && (
-          <div className="flex justify-between text-[#B84040]"><span>Rabatt ({data.discountPercentage}%)</span><span>−{formatNOK(t.discountAmount)}</span></div>
-        )}
-        <div className="flex justify-between text-[#E8E1D5]"><span>Eks. MVA</span><span>{formatNOK(t.afterDiscount)}</span></div>
         {data.includeVat && (
-          <div className="flex justify-between text-[#9E9287]"><span>MVA ({data.vatRate}%)</span><span>{formatNOK(t.vatAmount)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }}>
+            <span>MVA ({data.vatRate}%)</span><span>{formatNOK(t.vatAmount)}</span>
+          </div>
         )}
-        <div className="flex justify-between text-[#E8E1D5] font-semibold text-base border-t border-[#38332A] pt-2 mt-1">
-          <span>Totalt ink. MVA</span><span>{formatNOK(t.finalInclVat)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 600, color: C.text, borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 4, fontFamily: 'var(--font-dm-sans)' }}>
+          <span>Totalt ink. MVA</span><span style={{ color: C.accent }}>{formatNOK(t.finalInclVat)}</span>
         </div>
       </div>
     </div>
@@ -420,49 +520,65 @@ function StartupSection({
 
   return (
     <div>
-      <div className={sectionHeader}>
-        <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">Oppstart/planlegging</span>
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>Oppstart/planlegging</span>
       </div>
-      <div className="space-y-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {STARTUP_ROLES.map(role => {
           const entry = getEntry(role)
           const active = !!entry
           return (
             <div key={role}
-              className="flex items-center gap-3 rounded-[3px] px-3 py-2 transition"
-              style={{ background: active ? '#1A1713' : 'transparent', border: `1px solid ${active ? '#38332A' : 'transparent'}` }}>
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                borderRadius: 3,
+                padding: '8px 12px',
+                transition: 'background 0.1s',
+                background: active ? C.surface : 'transparent',
+                border: `1px solid ${active ? C.border : 'transparent'}`,
+              }}>
               <button
                 type="button"
                 onClick={() => toggle(role)}
-                className="w-5 h-5 rounded-[3px] flex items-center justify-center flex-shrink-0 transition"
                 style={{
-                  background: active ? '#C49434' : '#201D18',
-                  border: `1px solid ${active ? '#C49434' : '#38332A'}`,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s, border-color 0.15s',
+                  background: active ? C.accent : C.surface2,
+                  border: `1px solid ${active ? C.accent : C.border}`,
                 }}
               >
-                {active && <span className="text-[#0C0B09] text-xs font-bold">✓</span>}
+                {active && <span style={{ color: '#fff', fontSize: '0.65rem', fontWeight: 700, lineHeight: 1 }}>✓</span>}
               </button>
-              <span className={`text-sm w-36 ${active ? 'text-[#E8E1D5]' : 'text-[#6B6358]'}`}>{role}</span>
+              <span style={{ fontSize: '0.8rem', width: 144, color: active ? C.text : C.text3, fontFamily: 'var(--font-dm-sans)' }}>{role}</span>
               {active && (
                 <>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-[#9E9287] whitespace-nowrap">Dager:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: '0.72rem', color: C.text2, whiteSpace: 'nowrap', fontFamily: 'var(--font-dm-sans)' }}>Dager:</span>
                     <input
                       type="number" min={1} value={entry.days || ''}
                       onChange={e => update(role, 'days', Number(e.target.value))}
-                      className="w-14 text-xs text-center rounded-[3px] bg-[#141210] border border-[#38332A] text-[#E8E1D5] focus:outline-none focus:border-[#C49434] px-2 py-1"
+                      style={{ width: 56, fontSize: '0.72rem', textAlign: 'center', borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, color: C.text, outline: 'none', padding: '4px 8px', fontFamily: 'var(--font-dm-sans)' }}
                     />
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-[#9E9287] whitespace-nowrap">Sats:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: '0.72rem', color: C.text2, whiteSpace: 'nowrap', fontFamily: 'var(--font-dm-sans)' }}>Sats:</span>
                     <input
                       type="number" value={entry.dailyRate || ''}
                       onChange={e => update(role, 'dailyRate', Number(e.target.value))}
-                      className="w-24 text-xs text-right rounded-[3px] bg-[#141210] border border-[#38332A] text-[#E8E1D5] focus:outline-none focus:border-[#C49434] px-2 py-1"
+                      style={{ width: 96, fontSize: '0.72rem', textAlign: 'right', borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, color: C.text, outline: 'none', padding: '4px 8px', fontFamily: 'var(--font-dm-sans)' }}
                       placeholder="0"
                     />
                   </div>
-                  <span className="text-xs text-[#C49434] ml-auto">{formatNOK(entry.dailyRate * entry.days)}</span>
+                  <span style={{ fontSize: '0.72rem', color: C.accent, marginLeft: 'auto', fontFamily: 'var(--font-dm-sans)' }}>{formatNOK(entry.dailyRate * entry.days)}</span>
                 </>
               )}
             </div>
@@ -475,12 +591,13 @@ function StartupSection({
 
 // ─── Shoot crew section (Opptak) with shared days control ────────────────────
 function ShootCrewSection({
-  shootDays, crew, teamMembers, catalog, onShootDaysChange, onCrewChange,
+  shootDays, crew, teamMembers, catalog, crewDiscountFactor, onShootDaysChange, onCrewChange,
 }: {
   shootDays: number
   crew: CrewMember[]
   teamMembers: TeamMember[]
   catalog: PriceCatalogItem[]
+  crewDiscountFactor: number
   onShootDaysChange: (days: number) => void
   onCrewChange: (crew: CrewMember[]) => void
 }) {
@@ -506,9 +623,9 @@ function ShootCrewSection({
 
   return (
     <div>
-      <div className={sectionHeader}>
-        <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">Opptak — Mannskap</span>
-        <div className="flex gap-2 flex-wrap">
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>Opptak — Mannskap</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {teamMembers.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => setLibraryOpen(o => !o)} type="button">
               Fra teambibliotek {libraryOpen ? '▲' : '▼'}
@@ -519,19 +636,25 @@ function ShootCrewSection({
       </div>
 
       {/* Shared shoot days control */}
-      <div className="flex items-center gap-3 mb-4 p-3 rounded-[3px]" style={{ background: '#1A1713', border: '1px solid #38332A' }}>
-        <span className="text-xs text-[#9E9287] whitespace-nowrap">Opptaksdager:</span>
-        <div className="flex gap-1">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: 12, borderRadius: 3, background: C.surface, border: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: '0.72rem', color: C.text2, whiteSpace: 'nowrap', fontFamily: 'var(--font-dm-sans)' }}>Opptaksdager:</span>
+        <div style={{ display: 'flex', gap: 4 }}>
           {[1, 2, 3, 4, 5, 6, 7].map(d => (
             <button
               key={d}
               type="button"
               onClick={() => applyShootDays(d)}
-              className="w-7 h-7 text-xs rounded-[3px] transition"
               style={{
-                background: shootDays === d ? '#C49434' : '#201D18',
-                color: shootDays === d ? '#0C0B09' : '#9E9287',
-                border: `1px solid ${shootDays === d ? '#C49434' : '#38332A'}`,
+                width: 28,
+                height: 28,
+                fontSize: '0.72rem',
+                borderRadius: 3,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-dm-sans)',
+                transition: 'background 0.1s, color 0.1s',
+                background: shootDays === d ? C.accent : C.surface2,
+                color: shootDays === d ? '#fff' : C.text2,
+                border: `1px solid ${shootDays === d ? C.accent : C.border}`,
                 fontWeight: shootDays === d ? 600 : 400,
               }}
             >
@@ -544,30 +667,32 @@ function ShootCrewSection({
           min={1}
           value={shootDays}
           onChange={e => applyShootDays(Number(e.target.value))}
-          className="w-14 text-xs text-center rounded-[3px] bg-[#141210] border border-[#38332A] text-[#E8E1D5] focus:outline-none focus:border-[#C49434] px-2 py-1"
+          style={{ width: 56, fontSize: '0.72rem', textAlign: 'center', borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, color: C.text, outline: 'none', padding: '4px 8px', fontFamily: 'var(--font-dm-sans)' }}
           placeholder="dager"
         />
-        <span className="text-xs text-[#6B6358]">— setter alle til samme antall dager</span>
+        <span style={{ fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>— setter alle til samme antall dager</span>
       </div>
 
       {libraryOpen && (
-        <div className="mb-4 rounded-[3px] overflow-hidden" style={{ background: '#1A1713', border: '1px solid #38332A' }}>
-          <p className="px-4 pt-3 pb-1 text-xs text-[#9E9287] tracking-widest uppercase">Teambibliotek</p>
+        <div style={{ marginBottom: 16, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
+          <p style={{ padding: '12px 16px 4px', fontSize: '0.58rem', color: C.text2, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'var(--font-dm-sans)' }}>Teambibliotek</p>
           {teamMembers.map(member => {
             const added = alreadyAdded.has(member.name)
             return (
               <button key={member.id} type="button" disabled={added}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition ${added ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#201D18]'}`}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', fontSize: '0.8rem', background: 'transparent', border: 'none', cursor: added ? 'not-allowed' : 'pointer', opacity: added ? 0.4 : 1, fontFamily: 'var(--font-dm-sans)', transition: 'background 0.1s' }}
+                onMouseEnter={e => { if (!added) (e.currentTarget as HTMLButtonElement).style.background = C.surface2 }}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
                 onClick={() => { if (!added) addFromLibrary(member) }}>
-                <div className="text-left">
-                  <span className="text-[#E8E1D5]">{member.name}</span>
-                  <span className="text-[#9E9287] ml-2 text-xs">{member.role}</span>
+                <div style={{ textAlign: 'left' }}>
+                  <span style={{ color: C.text }}>{member.name}</span>
+                  <span style={{ color: C.text2, marginLeft: 8, fontSize: '0.72rem' }}>{member.role}</span>
                 </div>
-                <div className="text-right">
+                <div style={{ textAlign: 'right' }}>
                   {member.daily_rate
-                    ? <span className="text-[#C49434] text-xs">{formatNOK(member.daily_rate)}/dag</span>
-                    : <span className="text-[#6B6358] text-xs">ingen dagsats</span>}
-                  {added && <span className="text-[#6B6358] text-xs ml-2">lagt til</span>}
+                    ? <span style={{ color: C.accent, fontSize: '0.72rem' }}>{formatNOK(member.daily_rate)}/dag</span>
+                    : <span style={{ color: C.text3, fontSize: '0.72rem' }}>ingen dagsats</span>}
+                  {added && <span style={{ color: C.text3, fontSize: '0.72rem', marginLeft: 8 }}>lagt til</span>}
                 </div>
               </button>
             )
@@ -576,42 +701,44 @@ function ShootCrewSection({
       )}
 
       {crew.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="text-[#9E9287] text-xs">
-                <th className="text-left pb-2 pl-1 font-normal">Rolle</th>
-                <th className="text-left pb-2 pl-1 font-normal">Navn</th>
-                <th className="text-right pb-2 pr-1 font-normal">Dagsats</th>
-                <th className="text-right pb-2 pr-1 font-normal">Dager</th>
-                <th className="text-right pb-2 pr-1 font-normal">Total</th>
-                <th className="w-6" />
+              <tr>
+                {['Rolle', 'Navn', 'Dagsats', 'Dager', 'Total', ''].map((h, i) => (
+                  <th key={h} style={{ textAlign: i >= 2 && i < 5 ? 'right' : i === 5 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 5 ? 24 : 'auto' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {crew.map(m => (
                 <tr key={m.id} className="group">
-                  <td className="py-1 pr-2"><input className={cellInput} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
-                  <td className="py-1 pr-2"><input className={cellInput} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
-                  <td className="py-1 pr-2"><input className={`${cellInput} text-right`} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
-                  <td className="py-1 pr-2">
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}>
                     <input
-                      className={`${cellInput} text-right`}
-                      style={{ color: m.days !== shootDays ? '#C49434' : undefined }}
+                      style={{ ...inputBase, textAlign: 'right', color: m.days !== shootDays ? C.accent : C.text }}
                       type="number" min={1} value={m.days || ''}
                       onChange={e => update(m.id, 'days', Number(e.target.value))}
                       title={m.days !== shootDays ? `Avviker fra opptaksdager (${shootDays})` : undefined}
                     />
                   </td>
-                  <td className="py-1 pr-2 text-right text-[#E8E1D5] whitespace-nowrap">{formatNOK(m.dailyRate * m.days)}</td>
-                  <td className="py-1"><button type="button" onClick={() => remove(m.id)} className="text-[#6B6358] hover:text-[#B84040] opacity-0 group-hover:opacity-100 transition" title="Fjern">×</button></td>
+                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days * (1 - crewDiscountFactor))}</td>
+                  <td style={{ padding: 4 }}>
+                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                      className="group-hover:opacity-100"
+                      title="Fjern">×</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      {crew.length === 0 && !libraryOpen && <p className="text-[#6B6358] text-xs py-2">Ingen lagt til ennå</p>}
+      {crew.length === 0 && !libraryOpen && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen lagt til ennå</p>}
     </div>
   )
 }
@@ -622,6 +749,7 @@ interface QuoteBuilderProps {
   teamMembers?: TeamMember[]
   customers?: Customer[]
   priceCatalog?: PriceCatalogItem[]
+  discountFactors?: DiscountFactor[]
   onSave: (data: QuoteBuilderData) => void
   onGeneratePDF: (data: QuoteBuilderData) => void
   saving?: boolean
@@ -633,6 +761,7 @@ export function QuoteBuilder({
   teamMembers = [],
   customers = [],
   priceCatalog = [],
+  discountFactors = [],
   onSave,
   onGeneratePDF,
   saving = false,
@@ -643,6 +772,8 @@ export function QuoteBuilder({
     startupCrew: initialData.startupCrew ?? [],
     shootDays: initialData.shootDays ?? 1,
     postProductionCrew: initialData.postProductionCrew ?? [],
+    crewDiscountFactor: initialData.crewDiscountFactor ?? 0,
+    equipmentDiscountFactor: initialData.equipmentDiscountFactor ?? 0,
   })
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [headerOpen, setHeaderOpen] = useState(true)
@@ -663,76 +794,113 @@ export function QuoteBuilder({
     }
   }
 
+  const handleShootDaysChange = useCallback((days: number) => {
+    const factor = discountFactors.find(f => f.shoot_day === days)
+    setData(prev => ({
+      ...prev,
+      shootDays: days,
+      crewDiscountFactor: factor !== undefined ? Number(factor.crew_factor) : prev.crewDiscountFactor ?? 0,
+      equipmentDiscountFactor: factor !== undefined ? Number(factor.equipment_factor) : prev.equipmentDiscountFactor ?? 0,
+    }))
+  }, [discountFactors])
+
+  const collapsibleHeader = (label: string, open: boolean, onToggle: () => void) => (
+    <button type="button"
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        background: C.surface,
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'background 0.1s',
+        fontFamily: 'var(--font-dm-sans)',
+      }}
+      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface}
+      onClick={onToggle}>
+      <span style={sectionLabelStyle}>{label}</span>
+      <span style={{ color: C.text2, fontSize: '0.8rem' }}>{open ? '▲' : '▼'}</span>
+    </button>
+  )
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
       {/* ── Header info ── */}
-      <div className="border border-[#38332A] rounded-[3px] overflow-hidden">
-        <button type="button"
-          className="w-full flex items-center justify-between px-4 py-3 bg-[#1A1713] hover:bg-[#201D18] transition"
-          onClick={() => setHeaderOpen(o => !o)}>
-          <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">Tilbudsinformasjon</span>
-          <span className="text-[#9E9287] text-sm">{headerOpen ? '▲' : '▼'}</span>
-        </button>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
+        {collapsibleHeader('Tilbudsinformasjon', headerOpen, () => setHeaderOpen(o => !o))}
         {headerOpen && (
-          <div className="p-4 space-y-4 bg-[#141210]">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, background: C.bg }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
-                <label className={labelClass}>Versjon</label>
-                <input className={fieldInput} value={data.version} onChange={e => set('version', e.target.value)} placeholder="V1" />
+                <label style={labelStyle}>Versjon</label>
+                <input style={fieldStyle} value={data.version} onChange={e => set('version', e.target.value)} placeholder="V1" />
               </div>
               <div>
-                <label className={labelClass}>Tilbudsdato</label>
-                <input className={fieldInput} type="date" value={data.quoteDate} onChange={e => set('quoteDate', e.target.value)} />
+                <label style={labelStyle}>Tilbudsdato</label>
+                <input style={fieldStyle} type="date" value={data.quoteDate} onChange={e => set('quoteDate', e.target.value)} />
               </div>
               <div>
-                <label className={labelClass}>Leveringsdato</label>
-                <input className={fieldInput} type="date" value={data.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} />
+                <label style={labelStyle}>Leveringsdato</label>
+                <input style={fieldStyle} type="date" value={data.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} />
               </div>
               <div>
-                <label className={labelClass}>Språk</label>
-                <select className={fieldInput} value={data.language} onChange={e => set('language', e.target.value as 'NO' | 'EN')}>
+                <label style={labelStyle}>Språk</label>
+                <select style={fieldStyle} value={data.language} onChange={e => set('language', e.target.value as 'NO' | 'EN')}>
                   <option value="NO">Norsk</option>
                   <option value="EN">English</option>
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
-                <label className={labelClass}>Prosjektnavn</label>
-                <input className={fieldInput} value={data.projectName} onChange={e => set('projectName', e.target.value)} placeholder="Prosjektnavn" />
+                <label style={labelStyle}>Prosjektnavn</label>
+                <input style={fieldStyle} value={data.projectName} onChange={e => set('projectName', e.target.value)} placeholder="Prosjektnavn" />
               </div>
               <div>
-                <label className={labelClass}>Referanse</label>
-                <input className={fieldInput} value={data.reference} onChange={e => set('reference', e.target.value)} placeholder="Video produksjon" />
+                <label style={labelStyle}>Referanse</label>
+                <input style={fieldStyle} value={data.reference} onChange={e => set('reference', e.target.value)} placeholder="Video produksjon" />
               </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Hva leveres til kunden</label>
+              <input
+                style={fieldStyle}
+                value={data.deliveryDescription ?? ''}
+                onChange={e => set('deliveryDescription', e.target.value)}
+                placeholder="F.eks. 2 kampanjefilmer á 90 sek + 30 retuserte produktbilder"
+              />
             </div>
             {customers.length > 0 && (
               <CustomerSelector customers={customers} selectedCustomerId={selectedCustomerId} onSelect={handleCustomerSelect} />
             )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
-                <label className={labelClass}>Kundekontakt</label>
-                <input className={fieldInput} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
+                <label style={labelStyle}>Kundekontakt</label>
+                <input style={fieldStyle} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
               </div>
               <div>
-                <label className={labelClass}>Kundenummer</label>
-                <input className={fieldInput} value={data.customerNumber} onChange={e => set('customerNumber', e.target.value)} placeholder="101" />
+                <label style={labelStyle}>Kundenummer</label>
+                <input style={fieldStyle} value={data.customerNumber} onChange={e => set('customerNumber', e.target.value)} placeholder="101" />
               </div>
               <div>
-                <label className={labelClass}>Vår kontakt</label>
-                <input className={fieldInput} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                <label style={labelStyle}>Vår kontakt</label>
+                <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
               </div>
             </div>
             <div>
-              <label className={labelClass}>Betalingsbetingelser</label>
-              <input className={fieldInput} value={data.paymentInfo} onChange={e => set('paymentInfo', e.target.value)} placeholder="14 dager" />
+              <label style={labelStyle}>Betalingsbetingelser</label>
+              <input style={fieldStyle} value={data.paymentInfo} onChange={e => set('paymentInfo', e.target.value)} placeholder="14 dager" />
             </div>
           </div>
         )}
       </div>
 
       {/* ── Line item sections ── */}
-      <div className="border border-[#38332A] rounded-[3px] p-4 space-y-8 bg-[#141210]">
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 32, background: C.bg }}>
         <StartupSection
           crew={data.startupCrew}
           onChange={v => set('startupCrew', v)}
@@ -742,7 +910,8 @@ export function QuoteBuilder({
           crew={data.crew}
           teamMembers={teamMembers}
           catalog={priceCatalog}
-          onShootDaysChange={v => set('shootDays', v)}
+          crewDiscountFactor={data.crewDiscountFactor ?? 0}
+          onShootDaysChange={handleShootDaysChange}
           onCrewChange={v => set('crew', v)}
         />
         <ItemSection
@@ -780,43 +949,57 @@ export function QuoteBuilder({
       </div>
 
       {/* ── Settings ── */}
-      <div className="border border-[#38332A] rounded-[3px] p-4 bg-[#141210]">
-        <p className="text-xs font-semibold tracking-widest uppercase text-[#C49434] mb-4">Innstillinger</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, background: C.bg }}>
+        <p style={{ ...sectionLabelStyle, marginBottom: 16 }}>Innstillinger</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 16 }}>
           <div>
-            <label className={labelClass}>MVA</label>
-            <select className={fieldInput} value={data.includeVat ? 'y' : 'n'} onChange={e => set('includeVat', e.target.value === 'y')}>
+            <label style={labelStyle}>MVA</label>
+            <select style={fieldStyle} value={data.includeVat ? 'y' : 'n'} onChange={e => set('includeVat', e.target.value === 'y')}>
               <option value="y">Ja</option><option value="n">Nei</option>
             </select>
           </div>
           <div>
-            <label className={labelClass}>MVA-sats (%)</label>
-            <input className={fieldInput} type="number" value={data.vatRate} onChange={e => set('vatRate', Number(e.target.value))} disabled={!data.includeVat} />
+            <label style={labelStyle}>MVA-sats (%)</label>
+            <input style={{ ...fieldStyle, opacity: data.includeVat ? 1 : 0.5 }} type="number" value={data.vatRate} onChange={e => set('vatRate', Number(e.target.value))} disabled={!data.includeVat} />
           </div>
           <div>
-            <label className={labelClass}>Rabatt (%)</label>
-            <select className={fieldInput} value={data.discountPercentage} onChange={e => set('discountPercentage', Number(e.target.value))}>
-              {[0, 5, 10, 15, 20, 25, 30].map(v => <option key={v} value={v}>{v}%</option>)}
-            </select>
+            <label style={labelStyle}>Mannskap-rabatt (%)</label>
+            <input
+              style={fieldStyle}
+              type="number" min={0} max={100} step={1}
+              value={Math.round((data.crewDiscountFactor ?? 0) * 100)}
+              onChange={e => set('crewDiscountFactor', Number(e.target.value) / 100)}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Utstyr-rabatt (%)</label>
+            <input
+              style={fieldStyle}
+              type="number" min={0} max={100} step={1}
+              value={Math.round((data.equipmentDiscountFactor ?? 0) * 100)}
+              onChange={e => set('equipmentDiscountFactor', Number(e.target.value) / 100)}
+              placeholder="0"
+            />
           </div>
         </div>
+        {discountFactors.length > 0 && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
+            Rabatter oppdateres automatisk fra flerdagsrabatt-tabellen når opptaksdager endres
+          </p>
+        )}
       </div>
 
       {/* ── Totals ── */}
       <TotalsPanel data={data} />
 
       {/* ── Terms ── */}
-      <div className="border border-[#38332A] rounded-[3px] overflow-hidden">
-        <button type="button"
-          className="w-full flex items-center justify-between px-4 py-3 bg-[#1A1713] hover:bg-[#201D18] transition"
-          onClick={() => setTermsOpen(o => !o)}>
-          <span className="text-xs font-semibold tracking-widest uppercase text-[#C49434]">Vilkår og betingelser</span>
-          <span className="text-[#9E9287] text-sm">{termsOpen ? '▲' : '▼'}</span>
-        </button>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
+        {collapsibleHeader('Vilkår og betingelser', termsOpen, () => setTermsOpen(o => !o))}
         {termsOpen && (
-          <div className="p-4 bg-[#141210]">
+          <div style={{ padding: 16, background: C.bg }}>
             <textarea
-              className="w-full bg-[#1A1713] border border-[#38332A] rounded-[3px] px-3 py-2 text-sm text-[#E8E1D5] focus:outline-none focus:border-[#C49434] transition min-h-[200px]"
+              style={{ ...fieldStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.6 }}
               value={data.terms}
               onChange={e => set('terms', e.target.value)}
             />
@@ -825,7 +1008,7 @@ export function QuoteBuilder({
       </div>
 
       {/* ── Actions ── */}
-      <div className="flex gap-3 pt-2">
+      <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
         <Button variant="secondary" onClick={() => onSave(data)} disabled={saving} type="button">
           {saving ? 'Lagrer...' : 'Lagre tilbud'}
         </Button>

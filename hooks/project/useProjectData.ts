@@ -145,7 +145,6 @@ export function useProjectData(projectId: string) {
           }
 
           if (sortedSectionImagesData && sortedSectionImagesData.length > 0) {
-            console.log(`Found ${sortedSectionImagesData.length} section images for section ${section.id}:`, sortedSectionImagesData)
             sectionImageDataMap[section.id] = sortedSectionImagesData as SectionImage[]
             
             const imageIds = sortedSectionImagesData.map(si => si.image_id)
@@ -165,23 +164,9 @@ export function useProjectData(projectId: string) {
                 .map(id => imagesData.find(img => img.id === id))
                 .filter(Boolean) as Image[]
               imagesMap[section.id] = sortedImages
-              console.log(`Loaded ${sortedImages.length} images for section ${section.id} (${section.type}):`, sortedImages.map((img, idx) => ({ 
-                index: idx, 
-                id: img.id, 
-                title: img.title, 
-                file_path: img.file_path?.substring(0, 50) + '...',
-                order_index: sortedSectionImagesData[idx]?.order_index 
-              })))
-              console.log(`[Edit] Image IDs for section ${section.id} (${section.type}):`, sortedImages.map(img => img.id).join(', '))
-            } else {
-              console.warn(`No images found for section ${section.id} despite having section_images`)
             }
-          } else {
-            console.log(`No section images found for section ${section.id}`)
           }
         }
-        console.log('Final imagesMap:', imagesMap)
-        console.log('Final sectionImageDataMap:', sectionImageDataMap)
         setSectionImages(imagesMap)
         setSectionImageData(sectionImageDataMap)
 

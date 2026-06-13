@@ -33,22 +33,15 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
   
   // Memoize image IDs string for stable dependency
   const imageIdsString = useMemo(() => images.map(img => img.id).join(','), [images])
-  
-  // Reset currentIndex når bildene endres eller imagesToShow endres
-  useEffect(() => {
-    console.log('[ImageGallery] Images changed, resetting currentIndex. Image IDs:', imageIdsString)
+
+  // Reset currentIndex når bildene eller imagesToShow endres
+  // (state-justering under render, jf. react.dev — unngår setState i effekt)
+  const galleryKey = `${imageIdsString}|${imagesToShow}`
+  const [prevGalleryKey, setPrevGalleryKey] = useState(galleryKey)
+  if (prevGalleryKey !== galleryKey) {
+    setPrevGalleryKey(galleryKey)
     setCurrentIndex(0)
-  }, [imageIdsString, imagesToShow])
-  
-  // Log når bildene endres
-  useEffect(() => {
-    console.log('[ImageGallery] Rendering with images:', images.map((img, idx) => ({ 
-      index: idx, 
-      id: img.id, 
-      title: img.title,
-      file_path: img.file_path?.substring(0, 50) + '...'
-    })))
-  }, [images])
+  }
 
   if (images.length === 0) {
     return (
@@ -65,16 +58,7 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
     )
   }
 
-  const getVisibleImages = () => {
-    const visible: Image[] = []
-    for (let i = 0; i < imagesToShow; i++) {
-      const index = (currentIndex + i) % images.length
-      visible.push(images[index])
-    }
-    return visible
-  }
 
-  const visibleImages = getVisibleImages()
 
   const maxIndex = Math.max(0, images.length - imagesToShow)
 

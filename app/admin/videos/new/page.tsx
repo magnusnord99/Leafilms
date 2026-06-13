@@ -216,9 +216,10 @@ export default function NewVideo() {
         errorMessage = error.message
       } else if (error && typeof error === 'object') {
         // Prøv å hente message fra error objektet
-        errorMessage = (error as any).message || 
-                      (error as any).error?.message || 
-                      (error as any).statusText ||
+        const errObj = error as { message?: string; error?: { message?: string }; statusText?: string }
+        errorMessage = errObj.message ||
+                      errObj.error?.message ||
+                      errObj.statusText ||
                       JSON.stringify(error)
       } else {
         errorMessage = String(error)

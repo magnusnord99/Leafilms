@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createServiceClient } from '@/lib/supabase-server'
+import type { SectionContent } from '@/lib/types'
 
 // Initialize OpenAI client lazily to avoid build-time errors
 function getOpenAIClient() {
@@ -16,7 +17,9 @@ function getOpenAIClient() {
 const contentTypeLabels: Record<string, string> = {
   film: 'Film',
   photo: 'Foto/Bilder',
-  both: 'Film og Foto'
+  both: 'Film og Foto',
+  video: 'Film',
+  mixed: 'Film og Foto'
 }
 
 const projectTypeLabels: Record<string, string> = {
@@ -66,8 +69,6 @@ const mediumLabels: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('[generate-project] Starting project generation...')
-    
     const {
       projectId,
       title,
@@ -82,14 +83,6 @@ export async function POST(req: NextRequest) {
       context
     } = await req.json()
 
-    console.log('[generate-project] Received data:', {
-      projectId,
-      title,
-      contentType,
-      projectType,
-      targetAudience
-    })
-
     // Valider påkrevd input
     if (!projectId || !contentType || !projectType || !targetAudience) {
       console.error('[generate-project] Missing required information')
@@ -99,12 +92,11 @@ export async function POST(req: NextRequest) {
     let supabase
     try {
       supabase = createServiceClient()
-      console.log('[generate-project] Service client created successfully')
-    } catch (clientError: any) {
-      console.error('[generate-project] Error creating service client:', clientError.message)
+    } catch (clientError) {
+      console.error('[generate-project] Error creating service client:', clientError)
       return Response.json({ 
         error: 'Kunne ikke koble til database. Sjekk at SUPABASE_SERVICE_ROLE_KEY er satt.',
-        details: clientError.message
+        details: clientError instanceof Error ? clientError.message : String(clientError)
       }, { status: 500 })
     }
 
@@ -154,7 +146,7 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
 `.trim()
 
     // Generer tekster for hver seksjon
-    const generatedContent: Record<string, any> = {}
+    const generatedContent: Record<string, SectionContent> = {}
 
     // 1. HERO-seksjon
     const heroSection = sections?.find(s => s.type === 'hero')
@@ -242,15 +234,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     // 8. Velg BAKGRUNNSBILDE for Hero
     if (heroSection) {
       try {
-        console.log('[generate-project] Selecting hero image...')
         const heroImageId = await selectSectionImage(contentType, industry, 'hero')
         if (heroImageId) {
-          console.log(`[generate-project] Hero image selected: ${heroImageId}, linking to section ${heroSection.id}...`)
           await linkImageToSection(heroSection.id, heroImageId, 'background')
           generatedContent.hero = { ...generatedContent.hero, imageId: heroImageId }
-          console.log('[generate-project] ✅ Hero image linked successfully')
-        } else {
-          console.warn('[generate-project] ⚠️ No hero image selected')
         }
       } catch (error) {
         console.error('[generate-project] ❌ Error linking hero image:', error)
@@ -260,15 +247,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     // 9. Velg BAKGRUNNSBILDE for Konsept
     if (conceptSection) {
       try {
-        console.log('[generate-project] Selecting concept image...')
         const conceptImageId = await selectSectionImage(contentType, industry, 'concept')
         if (conceptImageId) {
-          console.log(`[generate-project] Concept image selected: ${conceptImageId}, linking to section ${conceptSection.id}...`)
           await linkImageToSection(conceptSection.id, conceptImageId, 'background')
           generatedContent.concept = { ...generatedContent.concept, imageId: conceptImageId }
-          console.log('[generate-project] ✅ Concept image linked successfully')
-        } else {
-          console.warn('[generate-project] ⚠️ No concept image selected')
         }
       } catch (error) {
         console.error('[generate-project] ❌ Error linking concept image:', error)
@@ -278,15 +260,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     // 10. Velg BAKGRUNNSBILDE for Mål
     if (goalSection) {
       try {
-        console.log('[generate-project] Selecting goal image...')
         const goalImageId = await selectSectionImage(contentType, industry, 'goal')
         if (goalImageId) {
-          console.log(`[generate-project] Goal image selected: ${goalImageId}, linking to section ${goalSection.id}...`)
           await linkImageToSection(goalSection.id, goalImageId, 'background')
           generatedContent.goal = { ...generatedContent.goal, imageId: goalImageId }
-          console.log('[generate-project] ✅ Goal image linked successfully')
-        } else {
-          console.warn('[generate-project] ⚠️ No goal image selected')
         }
       } catch (error) {
         console.error('[generate-project] ❌ Error linking goal image:', error)
@@ -296,15 +273,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     // 11. Velg BAKGRUNNSBILDE for Levering (bruker deliverablesSection fra steg 4.5)
     if (deliverablesSection) {
       try {
-        console.log('[generate-project] Selecting deliverables image...')
         const deliverableImageId = await selectSectionImage(contentType, industry, 'deliverables')
         if (deliverableImageId) {
-          console.log(`[generate-project] Deliverables image selected: ${deliverableImageId}, linking to section ${deliverablesSection.id}...`)
           await linkImageToSection(deliverablesSection.id, deliverableImageId, 'background')
           generatedContent.deliverables = { ...generatedContent.deliverables, imageId: deliverableImageId }
-          console.log('[generate-project] ✅ Deliverables image linked successfully')
-        } else {
-          console.warn('[generate-project] ⚠️ No deliverables image selected')
         }
       } catch (error) {
         console.error('[generate-project] ❌ Error linking deliverables image:', error)
@@ -312,11 +284,9 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
     }
 
     // Oppdater seksjonene i databasen
-    console.log('Updating sections with generated content:', generatedContent)
     for (const section of sections || []) {
       const content = generatedContent[section.type]
       if (content) {
-        console.log(`Updating section ${section.id} (${section.type}) with:`, content)
         if (section.type === 'team' && content.selectedTeamIds) {
           // For team, lagre i section_team_members tabellen
           await supabase
@@ -369,24 +339,10 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
           
           if (updateError) {
             console.error(`Error updating section ${section.id} (${section.type}):`, updateError)
-          } else {
-            console.log(`Successfully updated section ${section.id} (${section.type}) with content:`, content)
           }
         }
       }
     }
-
-    console.log('[generate-project] ✅ Project generation completed successfully!')
-    console.log('[generate-project] Generated content summary:', {
-      hero: generatedContent.hero ? '✅' : '❌',
-      goal: generatedContent.goal ? '✅' : '❌',
-      concept: generatedContent.concept ? '✅' : '❌',
-      timeline: generatedContent.timeline ? '✅' : '❌',
-      deliverables: generatedContent.deliverables ? '✅' : '❌',
-      team: generatedContent.team ? '✅' : '❌',
-      cases: generatedContent.cases ? '✅' : '❌',
-      example_work: generatedContent.example_work ? '✅' : '❌'
-    })
 
     return Response.json({
       success: true,
@@ -394,13 +350,13 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
       message: 'Prosjekt generert med tekst og bilder'
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[generate-project] Error generating project:', error)
-    console.error('[generate-project] Error stack:', error.stack)
+    if (error instanceof Error) console.error('[generate-project] Error stack:', error.stack)
     return Response.json(
       { 
         error: 'Kunne ikke generere prosjekt',
-        details: error.message || 'Unknown error',
+        details: error instanceof Error ? error.message : 'Unknown error',
         hint: 'Sjekk at OPENAI_API_KEY og SUPABASE_SERVICE_ROLE_KEY er satt i miljøvariablene'
       },
       { status: 500 }
@@ -598,7 +554,6 @@ async function selectCaseStudies(
   const scored = cases.map(caseStudy => {
     let score = 0
     const tagsLower = caseStudy.tags?.map((t: string) => t.toLowerCase()) || []
-    const titleLower = caseStudy.title?.toLowerCase() || ''
 
     // Sjekk innholdstype
     if (contentType === 'film' && (tagsLower.includes('film') || tagsLower.includes('video'))) score += 10
@@ -664,7 +619,7 @@ async function generateDeliverables(
   scope: string,
   context: string,
   language: string = 'no'
-): Promise<Array<{ id: string; title: string; quantity: string; format: string; description: string }>> {
+): Promise<Array<{ id: string; title: string; quantity: number; format: string; description: string }>> {
   const contentTypeLabel = contentType === 'film'
     ? (language === 'en' ? 'Film' : 'Film')
     : contentType === 'photo'
@@ -672,14 +627,14 @@ async function generateDeliverables(
       : (language === 'en' ? 'Film and Photo' : 'Film og Foto')
 
   const prompt = language === 'en'
-    ? `${projectContext}\n\nTASK: Based on the project information above, suggest 3-5 concrete deliverables for this project.\n\nEach deliverable should have:\n- title: Short name (e.g. "PRODUCT PHOTOS", "MAIN FILM", "INSTAGRAM REELS", "DOCUMENTATION")\n- quantity: Number only (e.g. "20 pcs", "1 pc", "5 pcs")\n- format: Format/aspect ratio/duration (e.g. "16:9", "9:16", "1:1", "2:30 min", "30 sec")\n- description: A short description (1-2 sentences) of what the deliverable entails\n\nAdapt to:\n- Content type: ${contentTypeLabel}\n- Platforms: ${mediums?.join(', ') || 'Not specified'}\n- Scope: ${scope || 'Not specified'}\n\n${context ? 'Pay special attention to any specific wishes in the context.' : ''}\n\nRespond ONLY with valid JSON:\n[\n  { "id": "1", "title": "TITLE", "quantity": "quantity", "format": "format", "description": "Short description" },\n  ...\n]`
+    ? `${projectContext}\n\nTASK: Based on the project information above, suggest 3-5 concrete deliverables for this project.\n\nEach deliverable should have:\n- title: Short name (e.g. "PRODUCT PHOTOS", "MAIN FILM", "INSTAGRAM REELS", "DOCUMENTATION")\n- quantity: Integer number only (e.g. 20, 1, 5) — no units, no text\n- format: Format/aspect ratio/duration (e.g. "16:9", "9:16", "1:1", "2:30 min", "30 sec")\n- description: A short description (1-2 sentences) of what the deliverable entails\n\nAdapt to:\n- Content type: ${contentTypeLabel}\n- Platforms: ${mediums?.join(', ') || 'Not specified'}\n- Scope: ${scope || 'Not specified'}\n\n${context ? 'Pay special attention to any specific wishes in the context.' : ''}\n\nRespond ONLY with valid JSON:\n[\n  { "id": "1", "title": "TITLE", "quantity": 1, "format": "format", "description": "Short description" },\n  ...\n]`
     : `${projectContext}
 
 OPPGAVE: Basert på prosjektinformasjonen over, foreslå 3-5 konkrete leveranser (deliverables) for dette prosjektet.
 
 Hver leveranse skal ha:
 - title: Kort navn på leveransen (f.eks. "PRODUKTBILDER", "HOVEDFILM", "INSTAGRAM REELS", "DOKUMENTASJON")
-- quantity: Kun antall (f.eks. "20 stk", "1 stk", "5 stk")
+- quantity: Kun et heltall (f.eks. 20, 1, 5) — ingen tekst, ingen enheter
 - format: Format/aspect ratio/varighet (f.eks. "16:9", "9:16", "1:1", "2:30 min", "30 sek")
 - description: En kort beskrivelse (1-2 setninger) av hva leveransen innebærer
 
@@ -692,7 +647,7 @@ ${context ? `Legg spesielt merke til eventuelle spesifikke ønsker i konteksten.
 
 Svar BARE med gyldig JSON i dette formatet:
 [
-  { "id": "1", "title": "TITTEL", "quantity": "antall", "format": "format", "description": "Kort beskrivelse" },
+  { "id": "1", "title": "TITTEL", "quantity": 1, "format": "format", "description": "Kort beskrivelse" },
   ...
 ]`
 
@@ -719,10 +674,10 @@ Svar BARE med gyldig JSON i dette formatet:
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0])
       // Sørg for at alle items har riktig struktur
-      return parsed.map((item: any, index: number) => ({
+      return parsed.map((item: { id?: string; title?: string; quantity?: number | string; format?: string; description?: string }, index: number) => ({
         id: item.id || String(index + 1),
         title: item.title || 'LEVERANSE',
-        quantity: item.quantity || '',
+        quantity: typeof item.quantity === 'number' ? item.quantity : (parseInt(item.quantity ?? '', 10) || 1),
         format: item.format || '',
         description: item.description || ''
       }))
@@ -735,41 +690,41 @@ Svar BARE med gyldig JSON i dette formatet:
   if (language === 'en') {
     if (contentType === 'film') {
       return [
-        { id: '1', title: 'MAIN FILM', quantity: '1 pc', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading and sound design.' },
-        { id: '2', title: 'CUTDOWNS', quantity: '3 pcs', format: '30 sec', description: 'Shorter versions adapted for different platforms.' },
-        { id: '3', title: 'BEHIND THE SCENES', quantity: '1 pc', format: '1:00 min', description: 'Documentation of the production process.' }
+        { id: '1', title: 'MAIN FILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading and sound design.' },
+        { id: '2', title: 'CUTDOWNS', quantity: 3, format: '30 sec', description: 'Shorter versions adapted for different platforms.' },
+        { id: '3', title: 'BEHIND THE SCENES', quantity: 1, format: '1:00 min', description: 'Documentation of the production process.' }
       ]
     } else if (contentType === 'photo') {
       return [
-        { id: '1', title: 'PRODUCT PHOTOS', quantity: '20 pcs', format: '3:2', description: 'Professional product photos with retouching.' },
-        { id: '2', title: 'LIFESTYLE PHOTOS', quantity: '10 pcs', format: '16:9', description: 'Images showing the product in use.' },
-        { id: '3', title: 'SOCIAL MEDIA', quantity: '15 pcs', format: '1:1', description: 'Adapted images for Instagram and Facebook.' }
+        { id: '1', title: 'PRODUCT PHOTOS', quantity: 20, format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '2', title: 'LIFESTYLE PHOTOS', quantity: 10, format: '16:9', description: 'Images showing the product in use.' },
+        { id: '3', title: 'SOCIAL MEDIA', quantity: 15, format: '1:1', description: 'Adapted images for Instagram and Facebook.' }
       ]
     } else {
       return [
-        { id: '1', title: 'MAIN FILM', quantity: '1 pc', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading.' },
-        { id: '2', title: 'PRODUCT PHOTOS', quantity: '15 pcs', format: '3:2', description: 'Professional product photos with retouching.' },
-        { id: '3', title: 'REELS', quantity: '5 pcs', format: '9:16 - 15 sec', description: 'Short videos for social media.' }
+        { id: '1', title: 'MAIN FILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading.' },
+        { id: '2', title: 'PRODUCT PHOTOS', quantity: 15, format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '3', title: 'REELS', quantity: 5, format: '9:16 - 15 sec', description: 'Short videos for social media.' }
       ]
     }
   }
   if (contentType === 'film') {
     return [
-      { id: '1', title: 'HOVEDFILM', quantity: '1 stk', format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.' },
-      { id: '2', title: 'CUTDOWNS', quantity: '3 stk', format: '30 sek', description: 'Kortere versjoner tilpasset ulike plattformer.' },
-      { id: '3', title: 'BEHIND THE SCENES', quantity: '1 stk', format: '1:00 min', description: 'Dokumentasjon av produksjonsprosessen.' }
+      { id: '1', title: 'HOVEDFILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.' },
+      { id: '2', title: 'CUTDOWNS', quantity: 3, format: '30 sek', description: 'Kortere versjoner tilpasset ulike plattformer.' },
+      { id: '3', title: 'BEHIND THE SCENES', quantity: 1, format: '1:00 min', description: 'Dokumentasjon av produksjonsprosessen.' }
     ]
   } else if (contentType === 'photo') {
     return [
-      { id: '1', title: 'PRODUKTBILDER', quantity: '20 stk', format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
-      { id: '2', title: 'LIVSSTILSBILDER', quantity: '10 stk', format: '16:9', description: 'Bilder som viser produktet i bruk.' },
-      { id: '3', title: 'SOSIALE MEDIER', quantity: '15 stk', format: '1:1', description: 'Tilpassede bilder for Instagram og Facebook.' }
+      { id: '1', title: 'PRODUKTBILDER', quantity: 20, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
+      { id: '2', title: 'LIVSSTILSBILDER', quantity: 10, format: '16:9', description: 'Bilder som viser produktet i bruk.' },
+      { id: '3', title: 'SOSIALE MEDIER', quantity: 15, format: '1:1', description: 'Tilpassede bilder for Instagram og Facebook.' }
     ]
   } else {
     return [
-      { id: '1', title: 'HOVEDFILM', quantity: '1 stk', format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering.' },
-      { id: '2', title: 'PRODUKTBILDER', quantity: '15 stk', format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
-      { id: '3', title: 'REELS', quantity: '5 stk', format: '9:16 - 15 sek', description: 'Korte videoer for sosiale medier.' }
+      { id: '1', title: 'HOVEDFILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering.' },
+      { id: '2', title: 'PRODUKTBILDER', quantity: 15, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
+      { id: '3', title: 'REELS', quantity: 5, format: '9:16 - 15 sek', description: 'Korte videoer for sosiale medier.' }
     ]
   }
 }
@@ -793,11 +748,8 @@ async function selectSectionImage(
   }
 
   if (!images || images.length === 0) {
-    console.warn(`No images found in database for ${sectionType}`)
     return null
   }
-
-  console.log(`Found ${images.length} images to choose from for ${sectionType}`)
 
   // Definer preferanser basert på seksjonstype
   const sectionPreferences: Record<string, string[]> = {
@@ -847,15 +799,12 @@ async function selectSectionImage(
 
   // Returner beste match hvis score > 0, ellers tilfeldig
   if (scored[0]?.score > 0) {
-    console.log(`Selected image ${scored[0].id} for ${sectionType} with score ${scored[0].score}`)
     return scored[0].id
   }
-  
+
   // Fallback: returner et tilfeldig bilde
   const randomIndex = Math.floor(Math.random() * images.length)
-  const selectedId = images[randomIndex]?.id || null
-  console.log(`Selected random image ${selectedId} for ${sectionType} (no high-scoring matches)`)
-  return selectedId
+  return images[randomIndex]?.id || null
 }
 
 // Koble et bilde til en seksjon
@@ -889,8 +838,6 @@ async function linkImageToSection(
   if (insertError) {
     console.error(`Error linking image ${imageId} to section ${sectionId} (${position}):`, insertError)
     throw insertError
-  } else {
-    console.log(`Successfully linked image ${imageId} to section ${sectionId} (${position})`)
   }
 }
 
@@ -911,11 +858,8 @@ async function addBTSImagesToTeamGallery(teamSectionId: string): Promise<void> {
   }
 
   if (!btsImages || btsImages.length === 0) {
-    console.log('No BTS images found for team gallery')
     return
   }
-
-  console.log(`Found ${btsImages.length} BTS images for team gallery`)
 
   // Slett eksisterende galleri-bilder for denne seksjonen
   const { error: deleteError } = await supabase
@@ -943,8 +887,6 @@ async function addBTSImagesToTeamGallery(teamSectionId: string): Promise<void> {
   if (insertError) {
     console.error(`Error inserting BTS images to section ${teamSectionId}:`, insertError)
     throw insertError
-  } else {
-    console.log(`Successfully added ${inserts.length} BTS images to team gallery (section ${teamSectionId})`)
   }
 }
 
@@ -962,12 +904,12 @@ async function loadPresetImagesToSection(
     .eq('preset_id', presetId)
 
   if (!presetImages || presetImages.length === 0) {
-    console.log(`No preset images found for preset ${presetId}`)
     return
   }
 
   // Sorter manuelt basert på position (pos1, pos2, etc.)
-  presetImages.sort((a: any, b: any) => {
+  type PresetImageRow = { image_id: string; position: string | null }
+  ;(presetImages as PresetImageRow[]).sort((a, b) => {
     const aMatch = a.position?.match(/pos(\d+)/)
     const bMatch = b.position?.match(/pos(\d+)/)
     const aNum = aMatch ? parseInt(aMatch[1]) : 999
@@ -983,7 +925,7 @@ async function loadPresetImagesToSection(
 
   // Opprett nye koblinger i section_images (samme struktur som andre seksjoner)
   // Map position (pos1, pos2, etc.) til order_index (0, 1, 2, etc.)
-  const inserts = presetImages.map((pi: any, index: number) => {
+  const inserts = (presetImages as PresetImageRow[]).map((pi, index) => {
     // Extract position number from "pos1", "pos2", etc.
     const positionMatch = pi.position?.match(/pos(\d+)/)
     const orderIndex = positionMatch ? parseInt(positionMatch[1]) - 1 : index
@@ -1002,8 +944,6 @@ async function loadPresetImagesToSection(
 
   if (insertError) {
     console.error('Error inserting preset images to section_images:', insertError)
-  } else {
-    console.log(`Successfully loaded ${inserts.length} preset images to section ${sectionId}`)
   }
 }
 

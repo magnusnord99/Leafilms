@@ -1,12 +1,11 @@
 'use client'
 
 import { Section } from '@/lib/types'
-import { Text } from '@/components/ui'
 
 type MoodboardSectionProps = {
   section: Section
   editMode: boolean
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
 export function MoodboardSection({

@@ -31,7 +31,7 @@ export function CasePickerModal({
         <div className="flex items-start justify-between mb-6">
           <div>
             <Heading as="h2" size="md" className="mb-2">Velg Case Studies (maks 4)</Heading>
-            <Text variant="muted">Klikk for å velge/fjerne. Vises i "Tidligere arbeid"-seksjonen.</Text>
+            <Text variant="muted">Klikk for å velge/fjerne. Vises i &ldquo;Tidligere arbeid&rdquo;-seksjonen.</Text>
           </div>
           <button
             type="button"

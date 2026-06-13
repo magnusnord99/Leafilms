@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Section, CollagePreset, Image, VideoLibrary, SectionVideo } from '@/lib/types'
+import { Section, CollagePreset, Image, SectionImage, VideoLibrary, SectionVideo, Project, CollageImages } from '@/lib/types'
+
 import { saveSectionImages, saveSectionVideos } from '@/lib/services/imageService'
 
 type UseSectionHandlersProps = {
-  project: any
+  project: Project | null
   sections: Section[]
   setSections: (sections: Section[] | ((prev: Section[]) => Section[])) => void
   selectedCaseIds: string[]
@@ -13,8 +13,8 @@ type UseSectionHandlersProps = {
   setSelectedTeamMemberIds: (ids: string[] | ((prev: string[]) => string[])) => void
   sectionImages: Record<string, Image[]>
   setSectionImages: (images: Record<string, Image[]> | ((prev: Record<string, Image[]>) => Record<string, Image[]>)) => void
-  sectionImageData: Record<string, any[]>
-  setSectionImageData: (data: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
+  sectionImageData: Record<string, SectionImage[]>
+  setSectionImageData: (data: Record<string, SectionImage[]> | ((prev: Record<string, SectionImage[]>) => Record<string, SectionImage[]>)) => void
   sectionVideos: Record<string, VideoLibrary[]>
   setSectionVideos: (videos: Record<string, VideoLibrary[]> | ((prev: Record<string, VideoLibrary[]>) => Record<string, VideoLibrary[]>)) => void
   sectionVideoData: Record<string, SectionVideo[]>
@@ -30,7 +30,7 @@ type UseSectionHandlersProps = {
   editMode: boolean
   autoSave: () => void
   refreshData?: () => Promise<void>
-  setCollageImages: (images: any) => void
+  setCollageImages: (images: CollageImages) => void
   setSelectedPreset: (preset: CollagePreset | null) => void
   setShowPresetPicker: (show: boolean) => void
 }
@@ -43,13 +43,9 @@ export function useSectionHandlers({
   setSelectedCaseIds,
   selectedTeamMemberIds,
   setSelectedTeamMemberIds,
-  sectionImages,
   setSectionImages,
-  sectionImageData,
   setSectionImageData,
-  sectionVideos,
   setSectionVideos,
-  sectionVideoData,
   setSectionVideoData,
   imagePickerSectionId,
   setImagePickerSectionId,
@@ -67,7 +63,7 @@ export function useSectionHandlers({
   setShowPresetPicker
 }: UseSectionHandlersProps) {
   // Oppdater seksjon i state OG lagre direkte til DB
-  const updateSection = (sectionId: string, field: string, value: any) => {
+  const updateSection = (sectionId: string, field: string, value: unknown) => {
     setSections(sections.map(s =>
       s.id === sectionId
         ? { ...s, [field]: value }
@@ -84,7 +80,7 @@ export function useSectionHandlers({
   }
 
   // Oppdater content-feltet i en seksjon
-  const updateSectionContent = (sectionId: string, key: string, value: string | any) => {
+  const updateSectionContent = (sectionId: string, key: string, value: unknown) => {
     setSections(sections.map(s => 
       s.id === sectionId 
         ? { ...s, content: { ...s.content, [key]: value } }
@@ -310,13 +306,8 @@ export function useSectionHandlers({
     }
 
     try {
-      console.log('💾 [handleImageSelect] Saving images for section:', imagePickerSectionId, 'imageIds:', imageIds)
       const result = await saveSectionImages(imagePickerSectionId, imageIds)
-      console.log('✅ Save result:', result)
-      
-      if (!result.images || result.images.length === 0) {
-        console.warn('⚠️ No images returned from saveSectionImages')
-      }
+
       
       // Verifiser at bildene faktisk ble lagret i databasen
       const { data: verifyData, error: verifyError } = await supabase
@@ -328,7 +319,6 @@ export function useSectionHandlers({
       if (verifyError) {
         console.error('❌ Error verifying saved images:', verifyError)
       } else {
-        console.log('✅ Verified saved images in database:', verifyData)
         if (!verifyData || verifyData.length === 0) {
           console.error('❌ CRITICAL: Images were not saved to database!')
           alert('⚠️ Bildene ble ikke lagret i databasen. Prøv igjen.')
@@ -336,29 +326,19 @@ export function useSectionHandlers({
         }
       }
       
-      setSectionImages(prev => {
-        const updated = {
-          ...prev,
-          [imagePickerSectionId]: result.images
-        }
-        console.log('✅ Updated sectionImages state:', updated)
-        return updated
-      })
-      
-      setSectionImageData(prev => {
-        const updated = {
-          ...prev,
-          [imagePickerSectionId]: result.sectionImages
-        }
-        console.log('✅ Updated sectionImageData state:', updated)
-        return updated
-      })
-      
+      setSectionImages(prev => ({
+        ...prev,
+        [imagePickerSectionId]: result.images
+      }))
+
+      setSectionImageData(prev => ({
+        ...prev,
+        [imagePickerSectionId]: result.sectionImages
+      }))
+
       // Refresh data fra databasen for å sikre at alt er synkronisert
       if (refreshData) {
-        console.log('🔄 Refreshing data from database...')
         await refreshData()
-        console.log('✅ Data refreshed successfully')
       }
     } catch (error) {
       console.error('❌ Error saving images:', error)
@@ -377,13 +357,8 @@ export function useSectionHandlers({
     }
 
     try {
-      console.log('💾 [handleVideoSelect] Saving videos for section:', videoPickerSectionId, 'videoIds:', videoIds)
       const result = await saveSectionVideos(videoPickerSectionId, videoIds)
-      console.log('✅ Save result:', result)
-      
-      if (!result.videos || result.videos.length === 0) {
-        console.warn('⚠️ No videos returned from saveSectionVideos')
-      }
+
       
       // Verifiser at videoene faktisk ble lagret i databasen
       const { data: verifyData, error: verifyError } = await supabase
@@ -395,7 +370,6 @@ export function useSectionHandlers({
       if (verifyError) {
         console.error('❌ Error verifying saved videos:', verifyError)
       } else {
-        console.log('✅ Verified saved videos in database:', verifyData)
         if (!verifyData || verifyData.length === 0) {
           console.error('❌ CRITICAL: Videos were not saved to database!')
           alert('⚠️ Videoene ble ikke lagret i databasen. Prøv igjen.')
@@ -403,29 +377,19 @@ export function useSectionHandlers({
         }
       }
       
-      setSectionVideos(prev => {
-        const updated = {
-          ...prev,
-          [videoPickerSectionId]: result.videos
-        }
-        console.log('✅ Updated sectionVideos state:', updated)
-        return updated
-      })
-      
-      setSectionVideoData(prev => {
-        const updated = {
-          ...prev,
-          [videoPickerSectionId]: result.sectionVideos
-        }
-        console.log('✅ Updated sectionVideoData state:', updated)
-        return updated
-      })
-      
+      setSectionVideos(prev => ({
+        ...prev,
+        [videoPickerSectionId]: result.videos
+      }))
+
+      setSectionVideoData(prev => ({
+        ...prev,
+        [videoPickerSectionId]: result.sectionVideos
+      }))
+
       // Refresh data fra databasen for å sikre at alt er synkronisert
       if (refreshData) {
-        console.log('🔄 Refreshing data from database...')
         await refreshData()
-        console.log('✅ Data refreshed successfully')
       }
     } catch (error) {
       console.error('❌ Error saving videos:', error)
@@ -472,7 +436,7 @@ export function useSectionHandlers({
   }
 
   // Håndter preset-valg
-  const handlePresetSelect = async (preset: CollagePreset & { images: any }) => {
+  const handlePresetSelect = async (preset: CollagePreset & { images: CollageImages }) => {
     // Finn example_work seksjonen
     const exampleWorkSection = sections.find(s => s.type === 'example_work')
     if (!exampleWorkSection) {
@@ -496,11 +460,8 @@ export function useSectionHandlers({
       // Lagre bildene i section_images med position
       if (imageArray.length > 0) {
         const imageIds = imageArray.map(img => img.id)
-        console.log('💾 Saving collage images for preset:', preset.id, 'imageIds:', imageIds)
-        
-        const result = await saveSectionImages(exampleWorkSection.id, imageIds)
-        console.log('✅ Collage images saved:', result)
-        
+        await saveSectionImages(exampleWorkSection.id, imageIds)
+
         // Oppdater state
         setSelectedPreset(preset)
         setCollageImages(preset.images)

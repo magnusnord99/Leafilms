@@ -75,9 +75,9 @@ export default function EditAIExample({ params }: Props) {
         }
         setFormData(loaded)
         initialDataRef.current = loaded
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error fetching example:', err)
-        setError('Kunne ikke hente eksempel: ' + (err.message || 'Ukjent feil'))
+        setError('Kunne ikke hente eksempel: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
       } finally {
         setLoading(false)
       }
@@ -105,7 +105,7 @@ export default function EditAIExample({ params }: Props) {
           example_text: formData.example_text,
           quality_score: formData.quality_score,
           updated_at: new Date().toISOString()
-        } as any)
+        })
         .eq('id', id)
 
       if (error) throw error
@@ -114,9 +114,9 @@ export default function EditAIExample({ params }: Props) {
       setIsDirty(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating example:', err)
-      setError('Kunne ikke oppdatere eksempel: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke oppdatere eksempel: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setSaving(false)
     }
@@ -135,9 +135,9 @@ export default function EditAIExample({ params }: Props) {
 
       router.push('/admin/ai-examples')
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting example:', err)
-      setError('Kunne ikke slette eksempel: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke slette eksempel: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
       setShowDeleteConfirm(false)
     } finally {
       setDeleting(false)

@@ -24,7 +24,9 @@ export function SectionNavigation({ sections, getSectionTitle }: SectionNavigati
   }, [])
 
   useEffect(() => {
-    if (!isDesktop) { setIsVisible(false); return }
+    // Komponenten rendrer null når !isDesktop, og handleScroll() setter riktig
+    // synlighet ved re-subscribe — ingen grunn til setState her
+    if (!isDesktop) return
     const handleScroll = () => {
       if (window.scrollY > 200) {
         setIsVisible(true)

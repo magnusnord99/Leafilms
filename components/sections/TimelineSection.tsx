@@ -9,7 +9,7 @@ type TimelineSectionProps = {
   timelineSectionProgress: number
   timelineSectionRef: React.RefObject<HTMLDivElement | null>
   getSectionTitle: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
 const defaultTimelineItems = [
@@ -33,11 +33,11 @@ function TimelineCard({
   updateSectionContent,
 }: {
   index: number
-  item: { title: string; text: string; monthYear: string }
+  item: { title: string; text: string; monthYear?: string }
   isActive: boolean
   editMode: boolean
   section: Section
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }) {
   return (
     <div
@@ -139,7 +139,7 @@ function TimelineCard({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {(item as any).monthYear || (editMode ? 'Måned År' : '')}
+        {item.monthYear || (editMode ? 'Måned År' : '')}
       </p>
     </div>
   )
@@ -154,7 +154,7 @@ export function TimelineSection({
   updateSectionContent,
 }: TimelineSectionProps) {
   const [mobileIndex, setMobileIndex] = useState(0)
-  const timelineItems: { title: string; text: string; monthYear: string }[] =
+  const timelineItems: { title: string; text: string; monthYear?: string }[] =
     section.content.timelineItems || defaultTimelineItems
 
   // Active card = whichever card is closest to center based on scroll progress
@@ -441,7 +441,7 @@ export function TimelineSection({
             fontWeight: 500,
             transition: 'opacity 0.3s',
           }}>
-            {(timelineItems[activeIndex] as any)?.monthYear || ''}
+            {timelineItems[activeIndex]?.monthYear || ''}
           </span>
         </div>
 

@@ -10,7 +10,7 @@ import { Text } from '@/components/ui'
 
 interface DeliverableCardProps {
   title?: string
-  quantity?: string // "20 stk", "1 stk", etc.
+  quantity?: number
   format?: string // "16:9", "9:16", "1:1", "2:30 min", etc.
   aspectRatio?: string // Beholder for bakoverkompatibilitet
   description?: string
@@ -106,10 +106,10 @@ export function DeliverableCard({
               </button>
             )}
 
-            {/* Tittel: line-clamp-2 = max 2 linjer, variant="small" = fontstørrelse */}
+            {/* Tittel: line-clamp-2 kun i visningsmodde for kompakt kortlayout */}
             <Text
               variant="small"
-              className={`text-dark mb-1 font-semibold uppercase line-clamp-2 break-words ${editableClass}`}
+              className={`text-dark mb-1 font-semibold uppercase ${editMode ? '' : 'line-clamp-2'} break-words ${editableClass}`}
               contentEditable={editMode && !!onChange}
               suppressContentEditableWarning
               onBlur={(e) => {
@@ -122,21 +122,23 @@ export function DeliverableCard({
               {title}
             </Text>
 
-            {/* Antall: f.eks. "1 stk", "10 stk" */}
-            <Text
-              variant="muted"
-              className={`text-dark text-center text-xs ${editableClass}`}
-              contentEditable={editMode && !!onChange}
-              suppressContentEditableWarning
-              onBlur={(e) => {
-                if (editMode && onChange) {
-                  onChange('quantity', e.currentTarget.textContent || '')
-                }
-              }}
-              onClick={(e) => editMode && e.stopPropagation()}
-            >
-              {quantity || (editMode ? 'Antall' : '')}
-            </Text>
+            {/* Antall */}
+            {editMode && onChange ? (
+              <input
+                type="number"
+                min={1}
+                value={quantity ?? ''}
+                onChange={(e) => onChange('quantity', e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="0"
+                className="text-dark text-center text-xs w-12 bg-transparent outline-none border-b border-white/20 focus:border-white/60"
+                style={{ fontFamily: 'inherit', color: 'inherit' }}
+              />
+            ) : (
+              <Text variant="muted" className="text-dark text-center text-xs">
+                {quantity != null ? `${quantity} stk` : ''}
+              </Text>
+            )}
 
             {/* Format: f.eks. "9:16, 30 sek", "1:1" */}
             <Text
@@ -169,7 +171,7 @@ export function DeliverableCard({
             borderTop: '2px solid #C49434',
           }}
         >
-          <div className="flex flex-col items-center justify-center h-full text-center overflow-y-auto [font-size:0.6rem]">
+          <div className="flex flex-col items-center justify-start h-full text-center overflow-y-auto [font-size:0.6rem] pt-2">
             
 
             {/* Beskrivelse: textarea i edit-modus, tekst i visningsmodus. 'Ingen beskrivelse' = fallback når tom */}

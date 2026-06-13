@@ -345,9 +345,9 @@ export default function EditProject({ params }: Props) {
       <div style={{ padding: '16px 24px 0' }}>
         <Link href={`/admin/projects/${id}`} style={{ textDecoration: 'none' }}>
           <span
-            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#5C5C70', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = '#9B9BAD' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = '#5C5C70' }}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#8484A0', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = '#B4B4CC' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = '#8484A0' }}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2L4 6l3.5 4" />
@@ -404,11 +404,11 @@ export default function EditProject({ params }: Props) {
         </span>
         <span style={{ color: C.border, fontSize: '0.55rem' }}>·</span>
         {[
-          { label: 'Cases',       href: '/admin/cases' },
-          { label: 'Bilder',      href: '/admin/images' },
-          { label: 'Videoer',     href: '/admin/videos' },
+          { label: 'Cases',       href: '/admin/pitches/cases' },
+          { label: 'Bilder',      href: '/admin/pitches/images' },
+          { label: 'Videoer',     href: '/admin/pitches/videos' },
           { label: 'Priskatalog', href: '/admin/prices' },
-          { label: 'AI Eksempler',href: '/admin/ai-examples' },
+          { label: 'AI Eksempler',href: '/admin/pitches/ai-examples' },
         ].map((link, i, arr) => (
           <span key={link.href} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <a

@@ -24,7 +24,7 @@ const STAGE_COLOR: Record<string, { text: string; bg: string; border: string }> 
   møte:         { text: '#4A9AC4', bg: 'rgba(74,154,196,0.08)', border: 'rgba(74,154,196,0.30)' },
   kontrakt:     { text: '#4CAF7D', bg: 'rgba(76,175,125,0.08)', border: 'rgba(76,175,125,0.30)' },
   levering:     { text: '#E8A838', bg: 'rgba(232,168,56,0.08)', border: 'rgba(232,168,56,0.30)' },
-  videresalg:   { text: '#9B9BAD', bg: 'rgba(155,155,173,0.08)', border: 'rgba(155,155,173,0.30)' },
+  videresalg:   { text: '#B4B4CC', bg: 'rgba(155,155,173,0.08)', border: 'rgba(155,155,173,0.30)' },
 }
 
 type CrmProject = {
@@ -53,9 +53,6 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function daysSince(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
-}
 
 function StageBadge({ stage }: { stage: PipelineStage }) {
   const color = STAGE_COLOR[stage] ?? { text: C.text3, bg: 'transparent', border: C.border }

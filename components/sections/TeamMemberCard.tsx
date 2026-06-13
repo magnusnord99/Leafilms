@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { TeamMember } from '@/lib/types'
 import { PROJECT_ROLES, ROLE_ACTIONS, ROLE_ACTIONS_EN } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
@@ -86,15 +86,21 @@ export function TeamMemberCard({
   onProjectRoleChange,
 }: TeamMemberCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
-  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
-  const [customRole, setCustomRole] = useState('')
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(
+    () => parseProjectRole(projectRole || '').selected
+  )
+  const [customRole, setCustomRole] = useState(
+    () => parseProjectRole(projectRole || '').custom
+  )
 
-  // Oppdater state når projectRole endres utenfra
-  useEffect(() => {
+  // Synk state når projectRole endres utenfra (state-justering under render, jf. react.dev)
+  const [prevProjectRole, setPrevProjectRole] = useState(projectRole || '')
+  if (prevProjectRole !== (projectRole || '')) {
+    setPrevProjectRole(projectRole || '')
     const { selected, custom } = parseProjectRole(projectRole || '')
     setSelectedRoles(selected)
     setCustomRole(custom)
-  }, [projectRole])
+  }
 
   const syncRoleToParent = useCallback(
     (selected: Set<string>, custom: string) => {

@@ -71,14 +71,6 @@ export async function POST(request: NextRequest) {
     
     const redirectTo = `${baseUrl}/auth/accept-invitation`
     
-    // Log for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Invite - redirectTo:', redirectTo)
-      console.log('Invite - NEXT_PUBLIC_SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL)
-      console.log('Invite - origin:', request.headers.get('origin'))
-      console.log('Invite - host:', request.headers.get('host'))
-    }
-
     // Invite user
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
@@ -114,10 +106,10 @@ export async function POST(request: NextRequest) {
         email: inviteData.user?.email,
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in invite route:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }

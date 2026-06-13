@@ -53,12 +53,12 @@ export function ProjectChat({ projectId }: Props) {
     }
   }, [projectId])
 
-  // Fetch meldinger og nullstill unread når chatten åpnes
-  useEffect(() => {
-    if (!open) return
-    setUnread(0)
-    fetchMessages()
-  }, [open, projectId])
+  // Nullstill unread når chatten åpnes (state-justering under render, jf. react.dev)
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) setUnread(0)
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -71,6 +71,12 @@ export function ProjectChat({ projectId }: Props) {
       setMessages(data || [])
     }
   }
+
+  // Hent meldinger når chatten åpnes
+  useEffect(() => {
+    if (!open) return
+    fetchMessages()
+  }, [open, projectId])
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault()

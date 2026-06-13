@@ -33,8 +33,8 @@ async function showMigrations() {
     console.log('💡 Copy the SQL above to Supabase Dashboard > SQL Editor')
     console.log('   Or set up automatic migrations with: npm run migrate')
     
-  } catch (error: any) {
-    console.error('❌ Error:', error.message)
+  } catch (error) {
+    console.error('❌ Error:', error instanceof Error ? error.message : error)
     process.exit(1)
   }
 }

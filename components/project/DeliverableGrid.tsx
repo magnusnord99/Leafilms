@@ -5,7 +5,7 @@ import { DeliverableCard } from './DeliverableCard'
 export interface DeliverableItem {
   id: string
   title?: string
-  quantity?: string // "20 stk", "1 stk", etc.
+  quantity?: number
   format?: string // "16:9", "9:16", "1:1", "2:30 min", etc.
   aspectRatio?: string // Beholder for bakoverkompatibilitet
   description?: string
@@ -21,24 +21,24 @@ interface DeliverableGridProps {
 export function DeliverableGrid({ items, editMode = false, language = 'no', onItemsChange }: DeliverableGridProps) {
   // Default items hvis ingen er gitt
   const defaultItems: DeliverableItem[] = [
-    { 
-      id: '1', 
-      title: 'HOVEDFILM', 
-      quantity: '1 stk',
+    {
+      id: '1',
+      title: 'HOVEDFILM',
+      quantity: 1,
       format: '16:9 - 2:00 min',
       description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.'
     },
-    { 
-      id: '2', 
-      title: 'CUTDOWNS', 
-      quantity: '3 stk',
+    {
+      id: '2',
+      title: 'CUTDOWNS',
+      quantity: 3,
       format: '30 sek',
       description: 'Kortere versjoner tilpasset ulike plattformer.'
     },
-    { 
-      id: '3', 
-      title: 'BILDER', 
-      quantity: '15 stk',
+    {
+      id: '3',
+      title: 'BILDER',
+      quantity: 15,
       format: '1:1',
       description: 'Profesjonelle bilder med retusjering.'
     }
@@ -58,7 +58,7 @@ export function DeliverableGrid({ items, editMode = false, language = 'no', onIt
     const newItems = [...displayItems, {
       id: newId,
       title: 'NY LEVERANSE',
-      quantity: '1 stk',
+      quantity: 1,
       format: '',
       description: ''
     }]
@@ -67,8 +67,9 @@ export function DeliverableGrid({ items, editMode = false, language = 'no', onIt
 
   const handleFieldChange = (id: string, field: 'title' | 'quantity' | 'format' | 'description', value: string) => {
     if (!onItemsChange) return
-    const newItems = displayItems.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
+    const parsed = field === 'quantity' ? (parseInt(value, 10) || 1) : value
+    const newItems = displayItems.map(item =>
+      item.id === id ? { ...item, [field]: parsed } : item
     )
     onItemsChange(newItems)
   }

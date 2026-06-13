@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem } from '@/lib/types'
+import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
@@ -15,7 +14,6 @@ type Props = {
 
 export default function ProjectQuotePage({ params }: Props) {
   const { id: projectId } = use(params)
-  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -26,6 +24,7 @@ export default function ProjectQuotePage({ params }: Props) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [priceCatalog, setPriceCatalog] = useState<PriceCatalogItem[]>([])
+  const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
 
@@ -36,7 +35,7 @@ export default function ProjectQuotePage({ params }: Props) {
   async function loadAll() {
     setLoading(true)
     try {
-      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes] = await Promise.all([
+      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, discountFactorsRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
@@ -45,6 +44,7 @@ export default function ProjectQuotePage({ params }: Props) {
         supabase.from('sections').select('id, type').eq('project_id', projectId)
           .eq('type', 'team').maybeSingle(),
         supabase.from('price_catalog').select('*').order('category').order('name'),
+        supabase.from('discount_factors').select('*').order('shoot_day'),
       ])
 
       const proj = projectRes.data as Project | null
@@ -56,6 +56,7 @@ export default function ProjectQuotePage({ params }: Props) {
       setTeamMembers(members)
       setCustomers(custs)
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
+      setDiscountFactors((discountFactorsRes.data || []) as DiscountFactor[])
 
       if (existingQuote?.quote_data && existingQuote.quote_data.crew !== undefined) {
         // Existing quote — backfill deliveryDescription from project if missing
@@ -90,7 +91,7 @@ export default function ProjectQuotePage({ params }: Props) {
             .order('order_index')
 
           if (sectionMembers && sectionMembers.length > 0) {
-            const memberIds = sectionMembers.map((r: any) => r.team_member_id)
+            const memberIds = sectionMembers.map((r: { team_member_id: string }) => r.team_member_id)
             const crew: CrewMember[] = memberIds
               .map((mid: string) => members.find(m => m.id === mid))
               .filter((m): m is TeamMember => m !== undefined)
@@ -200,8 +201,8 @@ export default function ProjectQuotePage({ params }: Props) {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-    } catch (err: any) {
-      alert(err.message || 'Kunne ikke generere PDF')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke generere PDF')
     } finally {
       setGeneratingPDF(false)
     }
@@ -263,6 +264,7 @@ export default function ProjectQuotePage({ params }: Props) {
             teamMembers={teamMembers}
             customers={customers}
             priceCatalog={priceCatalog}
+            discountFactors={discountFactors}
             onSave={handleSave}
             onGeneratePDF={handleGeneratePDF}
             saving={saving}

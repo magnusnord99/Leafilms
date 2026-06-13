@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   DndContext,
@@ -19,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   getProjectsForPipeline, updatePipelineStage, setProjectType,
   getTasksForProjects, getAllProfiles, toggleTaskAssignee, updateTaskStatus,
+  advanceFromKontraktUnsigned,
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -49,6 +49,60 @@ const TYPE_OPTIONS: { value: ProjectType; label: string }[] = [
   { value: 'photo', label: 'Foto'  },
   { value: 'mixed', label: 'Begge' },
 ]
+
+// ─── Kontrakt-advarsel — vises når man prøver å flytte fra kontrakt uten signering ──
+
+function KontraktWarningModal({
+  projectTitle,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  projectTitle: string
+  onConfirm: () => void
+  onCancel: () => void
+  loading: boolean
+}) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)' }}
+      onClick={onCancel}
+    >
+      <div
+        style={{ background: C.surface, border: `1px solid rgba(240,165,0,0.3)`, borderRadius: 10, padding: '24px 28px', width: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text }}>
+            Kontrakten er ikke signert
+          </p>
+        </div>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 8, lineHeight: 1.6 }}>
+          <span style={{ color: C.text2 }}>{projectTitle}</span> har ikke en signert kontrakt enda.
+        </p>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#F0A500', marginBottom: 20, lineHeight: 1.5 }}>
+          Hvis du fortsetter vil det bli notert på prosjektet at kontrakten ikke er signert.
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, padding: '8px 0', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', color: C.text2, cursor: 'pointer' }}
+          >
+            Avbryt
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 0', borderRadius: 6, border: 'none', background: '#F0A500', color: '#0C0B09', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+          >
+            {loading ? '...' : 'Flytt uansett'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ─── Type modal — vises når man drar til post_prod uten project_type ──────────
 
@@ -598,12 +652,12 @@ export default function PipelinePage() {
   const [activeProject, setActiveProject] = useState<ProjectWithPipeline | null>(null)
   const [overStageId, setOverStageId] = useState<string | null>(null)
   const [pendingMove, setPendingMove] = useState<{ projectId: string; targetStage: PipelineStage } | null>(null)
+  const [kontraktWarning, setKontraktWarning] = useState<{ projectId: string; projectTitle: string } | null>(null)
+  const [kontraktWarningLoading, setKontraktWarningLoading] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
-
-  useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
@@ -620,11 +674,34 @@ export default function PipelinePage() {
     setLoading(false)
   }
 
+  useEffect(() => { fetchAll() }, [])
+
   function moveProject(projectId: string, targetStage: PipelineStage) {
+    const project = projects.find(p => p.id === projectId)
+    const currentIndex = PIPELINE_STAGES.findIndex(s => s.value === project?.pipeline_stage)
+    const targetIndex = PIPELINE_STAGES.findIndex(s => s.value === targetStage)
+    // Vis advarsel kun ved fremflytting fra kontrakt uten signering
+    if (project?.pipeline_stage === 'kontrakt' && targetIndex > currentIndex && !(project.pipeline_data as { contract_signed?: boolean } | null)?.contract_signed) {
+      setKontraktWarning({ projectId, projectTitle: project.title })
+      return
+    }
     setProjects(prev => prev.map(p =>
       p.id === projectId ? { ...p, pipeline_stage: targetStage } : p
     ))
     updatePipelineStage(projectId, targetStage).catch(() => fetchAll())
+  }
+
+  async function handleKontraktWarningConfirm() {
+    if (!kontraktWarning) return
+    setKontraktWarningLoading(true)
+    const result = await advanceFromKontraktUnsigned(kontraktWarning.projectId)
+    setKontraktWarningLoading(false)
+    setKontraktWarning(null)
+    if (result.ok) {
+      await fetchAll()
+    } else {
+      alert(result.error ?? 'Noe gikk galt')
+    }
   }
 
   async function handleAssigneeToggle(taskId: string, profileId: string) {
@@ -785,6 +862,15 @@ export default function PipelinePage() {
           projectTitle={pendingProject.title}
           onSelect={handleTypeModalSelect}
           onCancel={() => setPendingMove(null)}
+        />
+      )}
+
+      {kontraktWarning && (
+        <KontraktWarningModal
+          projectTitle={kontraktWarning.projectTitle}
+          onConfirm={handleKontraktWarningConfirm}
+          onCancel={() => setKontraktWarning(null)}
+          loading={kontraktWarningLoading}
         />
       )}
     </div>

@@ -3,20 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { CollagePreset, Image } from '@/lib/types'
+import { CollagePreset, Image, CollageImages } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 
 // Helper for å få full bilde-URL
 const getImageUrl = (image: Image) => {
   return supabase.storage.from('assets').getPublicUrl(image.file_path).data.publicUrl
-}
-
-type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
 }
 
 type PresetWithImages = CollagePreset & {
@@ -57,7 +49,7 @@ export default function CollagePresetsPage() {
             pos1: null, pos2: null, pos3: null, pos4: null, pos5: null
           }
 
-          presetImages?.forEach((pi: any) => {
+          ;((presetImages ?? []) as unknown as { position: string; images: Image | null }[]).forEach((pi) => {
             const pos = pi.position as keyof CollageImages
             if (pos in images) {
               images[pos] = pi.images

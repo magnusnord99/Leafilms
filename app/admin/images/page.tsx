@@ -3,315 +3,302 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Button, Input } from '@/components/ui'
 import { Image } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
-const sectionLabel = (text: string) => (
-  <span style={{
-    fontFamily: 'var(--font-dm-sans)',
-    fontSize: '0.6rem',
-    letterSpacing: '0.16em',
-    color: C.accent,
-    textTransform: 'uppercase' as const,
-    fontWeight: 500,
-  }}>
-    {text}
-  </span>
-)
+const categories = [
+  { value: 'all',          label: 'Alle' },
+  { value: 'landskap',     label: 'Landskap' },
+  { value: 'sport',        label: 'Sport' },
+  { value: 'closeup',      label: 'Close-up' },
+  { value: 'portrett',     label: 'Portrett' },
+  { value: 'event',        label: 'Event' },
+  { value: 'kommersiell',  label: 'Kommersiell' },
+  { value: 'abstrakt',     label: 'Abstrakt' },
+  { value: 'bts',          label: 'BTS' },
+]
+
+function getImageUrl(image: Image) {
+  return supabase.storage.from('assets').getPublicUrl(image.file_path).data.publicUrl
+}
 
 export default function ImagesPage() {
   const [loading, setLoading] = useState(true)
   const [images, setImages] = useState<Image[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all')
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  // Kategorier (kan utvides senere)
-  const categories = [
-    { value: 'all', label: 'Alle' },
-    { value: 'landskap', label: 'Landskap' },
-    { value: 'sport', label: 'Sport' },
-    { value: 'closeup', label: 'Close-up' },
-    { value: 'portrett', label: 'Portrett' },
-    { value: 'event', label: 'Event' },
-    { value: 'kommersiell', label: 'Kommersiell' },
-    { value: 'abstrakt', label: 'Abstrakt' },
-    { value: 'bts', label: 'Behind The Scenes' }
-  ]
-
   async function fetchImages() {
+    setLoading(true)
     try {
       let query = supabase
         .from('images')
-        .select('id, filename, file_path, title, category, subcategory, tags')
+        .select('id, filename, file_path, title, category, subcategory, tags, width, height, file_size, created_at, updated_at')
         .order('created_at', { ascending: false })
 
       if (selectedCategory !== 'all') {
         query = query.eq('category', selectedCategory)
       }
 
-      if (selectedSubcategory !== 'all' && selectedSubcategory !== '') {
-        query = query.eq('subcategory', selectedSubcategory)
-      }
-
-      if (searchQuery.trim()) {
-        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,tags.cs.{${searchQuery}}`)
-      }
-
       const { data, error } = await query
-
       if (error) throw error
       setImages((data || []) as Image[])
-    } catch (error) {
-      console.error('Error fetching images:', error)
+    } catch (err) {
+      console.error('Error fetching images:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchImages()
-  }, [selectedCategory, selectedSubcategory, searchQuery])
+  useEffect(() => { fetchImages() }, [selectedCategory])
 
-  async function handleDelete(imageId: string, imageTitle: string) {
-    if (!confirm(`Er du sikker på at du vil slette "${imageTitle || 'dette bildet'}"?\n\nDette kan ikke angres.`)) {
-      return
-    }
-    setDeletingId(imageId)
+  const filtered = searchQuery
+    ? images.filter(img =>
+        (img.title || img.filename).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (img.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : images
+
+  async function handleDelete(image: Image) {
+    if (!confirm(`Slett "${image.title || image.filename}"?\n\nDette kan ikke angres.`)) return
+    setDeletingId(image.id)
     setDeleteError(null)
     try {
-      const { data: imageData } = await supabase
-        .from('images')
-        .select('file_path')
-        .eq('id', imageId)
-        .single()
-
-      const { error: dbError } = await supabase
-        .from('images')
-        .delete()
-        .eq('id', imageId)
-
-      if (dbError) throw dbError
-
-      if (imageData?.file_path) {
-        const pathParts = imageData.file_path.split('/')
-        const fileName = pathParts[pathParts.length - 1]
-        const storagePath = `images/${fileName}`
-
-        await supabase.storage
-          .from('assets')
-          .remove([storagePath])
-      }
-
-      fetchImages()
-    } catch (error) {
-      console.error('Error deleting image:', error)
-      setDeleteError('Kunne ikke slette bilde. Prøv igjen.')
+      await supabase.storage.from('assets').remove([image.file_path])
+      const { error } = await supabase.from('images').delete().eq('id', image.id)
+      if (error) throw error
+      setImages(prev => prev.filter(i => i.id !== image.id))
+    } catch (err) {
+      console.error('Delete error:', err)
+      setDeleteError(err instanceof Error ? err.message : 'Sletting feilet')
     } finally {
       setDeletingId(null)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-        <div className="flex items-center gap-3">
-          <div style={{ width: 1, height: 24, background: C.accent, opacity: 0.5 }} />
-          <p style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: C.text3,
-            textTransform: 'uppercase',
-          }}>
-            Laster...
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  const noResults = images.length === 0
-  const isFiltered = searchQuery || selectedCategory !== 'all'
-
   return (
-    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
-      <div className="max-w-6xl mx-auto">
+    <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
           <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div style={{ width: 32, height: 1, background: C.accent }} />
-              {sectionLabel('Bibliotek')}
-            </div>
-            <h1 style={{
-              fontFamily: 'var(--font-cormorant)',
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              fontWeight: 300,
-              fontStyle: 'italic',
-              color: C.text,
-              lineHeight: 1,
-            }}>
-              Bilder
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>
+              Bildebibliiotek
             </h1>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 8, letterSpacing: '0.06em' }}>
-              {images.length} bilde{images.length !== 1 ? 'r' : ''} · gjenbrukes i prosjekter
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
+              {images.length} bilder totalt
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/admin/images/presets">
-              <Button variant="secondary" size="sm">Bilde-sett</Button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href="/admin/images/presets" style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '8px 16px',
+                background: C.surface,
+                color: C.text2,
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}>
+                Collage-presets
+              </button>
             </Link>
-            <Link href="/admin/images/new">
-              <Button variant="primary" size="sm">+ Last opp bilde</Button>
+            <Link href="/admin/images/new" style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '8px 16px',
+                background: C.accent,
+                color: '#fff',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}>
+                + Last opp bilder
+              </button>
             </Link>
           </div>
         </div>
 
-        {/* Error banner */}
         {deleteError && (
-          <div
-            className="mb-6 px-5 py-3 flex items-center justify-between"
-            style={{ background: 'rgba(184,64,64,0.12)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
-          >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E07070' }}>{deleteError}</p>
-            <button onClick={() => setDeleteError(null)} style={{ color: C.text3, lineHeight: 0 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" d="M2 2l10 10M12 2L2 12" />
-              </svg>
-            </button>
+          <div style={{ padding: '10px 14px', background: 'rgba(224,85,85,0.1)', border: '1px solid rgba(224,85,85,0.3)', borderRadius: 3, marginBottom: 16 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#E07070' }}>{deleteError}</p>
           </div>
         )}
 
-        {/* Søk og filtrering */}
-        <div className="mb-8 space-y-4">
-          <Input
-            type="text"
-            placeholder="Søk på tittel, beskrivelse eller tags..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
-          <div className="flex gap-2 flex-wrap">
-            {categories.map((cat) => (
-              <Button
+        {/* Filters */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          {/* Search */}
+          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+            <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              width="13" height="13" fill="none" stroke={C.text3} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Søk på tittel eller tags..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px 8px 32px',
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                color: C.text,
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.72rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Category filter */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {categories.map(cat => (
+              <button
                 key={cat.value}
-                variant={selectedCategory === cat.value ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => {
-                  setSelectedCategory(cat.value)
-                  setSelectedSubcategory('all')
+                onClick={() => setSelectedCategory(cat.value)}
+                style={{
+                  padding: '6px 12px',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.04em',
+                  borderRadius: 3,
+                  border: selectedCategory === cat.value ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                  background: selectedCategory === cat.value ? C.accentBg : C.surface,
+                  color: selectedCategory === cat.value ? C.accent : C.text3,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
                 }}
               >
                 {cat.label}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Images Grid */}
-        {!noResults ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {images.map((image) => {
-              const imageUrl = supabase.storage
-                .from('assets')
-                .getPublicUrl(image.file_path)
-
+        {/* Grid */}
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 20, height: 20, border: `1.5px solid ${C.border}`, borderTop: `1.5px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '56px 24px', border: `1px solid ${C.border}`, borderRadius: 4, background: C.surface }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+              {images.length === 0 ? 'Ingen bilder ennå' : 'Ingen bilder matcher søket'}
+            </p>
+            {images.length === 0 && (
+              <Link href="/admin/images/new" style={{ textDecoration: 'none' }}>
+                <button style={{
+                  padding: '9px 20px', background: C.accent, color: '#fff',
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.12em',
+                  textTransform: 'uppercase', fontWeight: 600, border: 'none', borderRadius: 3, cursor: 'pointer',
+                }}>
+                  Last opp første bilde
+                </button>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+            {filtered.map(image => {
+              const imgUrl = getImageUrl(image)
+              const isDeleting = deletingId === image.id
               return (
                 <div
                   key={image.id}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}
+                  style={{
+                    position: 'relative',
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    opacity: isDeleting ? 0.5 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
                 >
-                  {/* Thumbnail */}
-                  <div className="aspect-square" style={{ background: C.sidebar }}>
+                  <div style={{ aspectRatio: '4/3', overflow: 'hidden', background: C.surface2 }}>
                     <img
-                      src={imageUrl.data.publicUrl}
+                      src={imgUrl}
                       alt={image.title || image.filename}
-                      className="w-full h-full object-cover"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      loading="lazy"
                     />
                   </div>
-
-                  {/* Content */}
-                  <div className="p-4">
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, color: C.text, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <div style={{ padding: '8px 10px' }}>
+                    <p style={{
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '0.68rem',
+                      fontWeight: 500,
+                      color: C.text,
+                      marginBottom: 2,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
                       {image.title || image.filename}
                     </p>
-
-                    {/* Category */}
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, background: C.sidebar, padding: '2px 6px', borderRadius: 2 }}>
-                        {image.category}
-                      </span>
-                      {image.subcategory && (
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, background: C.sidebar, padding: '2px 6px', borderRadius: 2 }}>
-                          {image.subcategory}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Tags */}
-                    {image.tags && image.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {image.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.04em' }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                        {image.tags.length > 3 && (
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>+{image.tags.length - 3}</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <Link href={`/admin/images/${image.id}/edit`} className="flex-1">
-                        <Button variant="primary" size="sm" className="w-full">
-                          Rediger
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(image.id, image.title || image.filename)}
-                        disabled={deletingId === image.id}
-                        style={{ color: '#B84040' }}
-                      >
-                        {deletingId === image.id ? '...' : 'Slett'}
-                      </Button>
-                    </div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
+                      {image.category}{image.subcategory ? ` · ${image.subcategory.split('/').pop()}` : ''}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, padding: '0 8px 8px' }}>
+                    <Link href={`/admin/images/${image.id}/edit`} style={{ textDecoration: 'none', flex: 1 }}>
+                      <button style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        background: 'transparent',
+                        color: C.text3,
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.6rem',
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                      }}>
+                        Rediger
+                      </button>
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(image)}
+                      disabled={isDeleting}
+                      style={{
+                        padding: '4px 8px',
+                        background: 'transparent',
+                        color: '#E05555',
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.6rem',
+                        border: '1px solid rgba(224,85,85,0.25)',
+                        borderRadius: 2,
+                        cursor: isDeleting ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {isDeleting ? '...' : 'Slett'}
+                    </button>
                   </div>
                 </div>
               )
             })}
           </div>
-        ) : (
-          <div
-            className="p-12 text-center"
-            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3 }}
-          >
-            <p style={{ color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 8 }}>
-              {isFiltered ? 'Ingen bilder funnet' : 'Ingen bilder ennå'}
-            </p>
-            {!isFiltered && (
-              <>
-                <p style={{ color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', marginBottom: 20 }}>
-                  Last opp bilder her for å gjenbruke dem i prosjektpresentasjoner.
-                </p>
-                <Link href="/admin/images/new">
-                  <Button variant="primary">Last opp første bilde</Button>
-                </Link>
-              </>
-            )}
-          </div>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 16, textAlign: 'right' }}>
+            {filtered.length} {filtered.length !== images.length ? `av ${images.length} ` : ''}bilder
+          </p>
         )}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

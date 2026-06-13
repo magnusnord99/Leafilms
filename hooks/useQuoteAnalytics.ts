@@ -36,11 +36,17 @@ export function useQuoteAnalytics(
   
   // Don't track if we don't have required data
   const shouldTrack = quoteId && projectId && shareToken && sectionNames.length > 0
-  const sessionStartTime = useRef<number>(Date.now())
+  const sessionStartTime = useRef<number>(0)
   const sectionTimers = useRef<Map<string, QuoteSectionTime>>(new Map())
   const visibilityChanges = useRef<number>(0)
   const isActive = useRef<boolean>(true)
-  const lastActiveTime = useRef<number>(Date.now())
+  const lastActiveTime = useRef<number>(0)
+
+  // Initialiser tids-refs ved mount (Date.now() er ikke tillatt under render)
+  useEffect(() => {
+    if (sessionStartTime.current === 0) sessionStartTime.current = Date.now()
+    if (lastActiveTime.current === 0) lastActiveTime.current = Date.now()
+  }, [])
   const observerRef = useRef<IntersectionObserver | null>(null)
   const sendIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -162,7 +168,6 @@ export function useQuoteAnalytics(
     if (shouldTrack && !sessionId) {
       // Reset session start time when tracking starts
       sessionStartTime.current = Date.now()
-      console.log('[useQuoteAnalytics] Starting tracking:', { quoteId, projectId, shareToken })
     }
   }, [quoteId, projectId, shareToken, shouldTrack, sessionId])
 
@@ -222,7 +227,6 @@ export function useQuoteAnalytics(
           const data = await response.json()
           if (data.sessionId && !sessionId) {
             setSessionId(data.sessionId)
-            console.log('[useQuoteAnalytics] Session created:', data.sessionId)
           }
         } else {
           const errorData = await response.json().catch(() => ({}))
@@ -265,9 +269,6 @@ export function useQuoteAnalytics(
     }
   }, [quoteId, projectId, shareToken, sessionId, shouldTrack])
 
-  return {
-    sessionId,
-    totalTimeSeconds: Math.floor((Date.now() - sessionStartTime.current) / 1000)
-  }
+  return { sessionId }
 }
 

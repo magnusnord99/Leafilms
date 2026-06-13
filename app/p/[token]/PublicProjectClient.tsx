@@ -1,6 +1,9 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
+
+const ContractSigningSection = dynamic(() => import('./ContractSigningSection'), { ssr: false })
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { useMemo, useCallback, useEffect } from 'react'
@@ -41,6 +44,12 @@ type PublicProjectClientProps = {
   collageImages: CollageImages
   selectedPreset: CollagePreset | null
   shareToken: string
+  publishedContract?: {
+    contractText: string
+    isSigned: boolean
+    signedBy: string | null
+  } | null
+  projectId?: string
 }
 
 export function PublicProjectClient({
@@ -54,7 +63,9 @@ export function PublicProjectClient({
   caseStudies,
   collageImages,
   selectedPreset,
-  shareToken
+  shareToken,
+  publishedContract,
+  projectId,
 }: PublicProjectClientProps) {
   // Always call hooks in the same order - useMemo to ensure stable sectionIds
   const sectionIds = useMemo(() => sections.map(s => s.id), [sections])
@@ -149,16 +160,12 @@ export function PublicProjectClient({
 
   // Stable empty objects — avoids creating new references on every render
   const emptyImagePosition = useMemo(() => ({}), [])
-  const emptyRecord = useMemo(() => ({}), [])
 
   const heroSection = useMemo(() => sections.find(s => s.type === 'hero'), [sections])
   const exampleWorkSection = useMemo(() => sections.find(s => s.type === 'example_work'), [sections])
 
   useEffect(() => {
     if (!exampleWorkSection) return
-    // #region agent log
-    fetch('http://127.0.0.1:7381/ingest/a228fb17-ab53-43bb-8017-30648e1c3ac8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'217f87'},body:JSON.stringify({sessionId:'217f87',runId:'pre-fix',hypothesisId:'H1',location:'app/p/[token]/PublicProjectClient.tsx:160',message:'public client example_work data before render',data:{exampleWorkSectionId:exampleWorkSection.id,realSectionImageDataCount:(sectionImageData[exampleWorkSection.id] || []).length,collageImageIds:[collageImages.pos1?.id ?? null,collageImages.pos2?.id ?? null,collageImages.pos3?.id ?? null,collageImages.pos4?.id ?? null,collageImages.pos5?.id ?? null]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }, [exampleWorkSection, sectionImageData, collageImages])
 
   const sortedNonHeroSections = useMemo(() =>
@@ -358,6 +365,7 @@ export function PublicProjectClient({
                       editMode={false}
                       updateSectionContent={noop}
                       shareToken={shareToken}
+                      hasPublishedContract={!!publishedContract}
                     />
                   )}
 
@@ -441,6 +449,16 @@ export function PublicProjectClient({
           })
         )}
       </div>
+
+      {/* Contract Signing Section */}
+      {publishedContract && projectId && (
+        <ContractSigningSection
+          projectId={projectId}
+          contractText={publishedContract.contractText}
+          isSigned={publishedContract.isSigned}
+          signedBy={publishedContract.signedBy}
+        />
+      )}
 
       {/* Footer */}
       <footer className="py-8 px-8" style={{ background: '#0C0B09', borderTop: '1px solid #1A1713' }}>

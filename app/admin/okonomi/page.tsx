@@ -223,8 +223,6 @@ export default function OkonomiPage() {
   const [upcoming, setUpcoming] = useState<ProjectWithAmount[]>([])
   const [earned, setEarned] = useState<ProjectWithAmount[]>([])
 
-  useEffect(() => { fetchData() }, [])
-
   async function fetchData() {
     const supabase = createClient()
     const { data } = await supabase
@@ -255,6 +253,8 @@ export default function OkonomiPage() {
     setEarned(toAmountRows(EARNED_STAGES))
     setLoading(false)
   }
+
+  useEffect(() => { fetchData() }, [])
 
   const sumOf = (rows: ProjectWithAmount[]) =>
     rows.reduce((acc, p) => acc + (p.amount ?? 0), 0)

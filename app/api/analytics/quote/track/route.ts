@@ -17,15 +17,6 @@ export async function POST(request: NextRequest) {
       isFinal
     } = body
 
-    console.log('[Quote Analytics API] Received request:', {
-      quoteId,
-      projectId,
-      shareToken: shareToken?.substring(0, 10) + '...',
-      sessionId,
-      totalTimeSeconds,
-      isFinal
-    })
-
     if (!quoteId || !projectId || !shareToken) {
       console.error('[Quote Analytics API] Missing required fields:', {
         hasQuoteId: !!quoteId,
@@ -74,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     if (sessionId) {
       // Update existing session
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         section_times: sectionTimes,
         total_time_seconds: totalTimeSeconds,
         visibility_changes: visibilityChanges,
@@ -101,7 +92,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('[Quote Analytics API] Updated session:', data.id)
       return NextResponse.json({ success: true, sessionId: data.id })
     } else {
       // Create new session
@@ -131,13 +121,12 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('[Quote Analytics API] Created new session:', data.id)
       return NextResponse.json({ success: true, sessionId: data.id })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Quote analytics tracking error:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }

@@ -62,9 +62,9 @@ export default function NewCustomer() {
       if (error) throw error
 
       router.push(`/admin/customers/${data.id}/projects`)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating customer:', err)
-      setError('Kunne ikke opprette kunde: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke opprette kunde: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
       setLoading(false)
     }
   }

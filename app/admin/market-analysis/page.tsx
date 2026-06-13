@@ -20,8 +20,6 @@ export default function MarketAnalysisPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { fetchLatest() }, [])
-
   async function fetchLatest() {
     setLoading(true)
     const res = await fetch('/api/market-analysis')
@@ -31,6 +29,8 @@ export default function MarketAnalysisPage() {
     }
     setLoading(false)
   }
+
+  useEffect(() => { fetchLatest() }, [])
 
   async function triggerAnalysis() {
     setRunning(true)

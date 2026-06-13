@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import { Button, Input, Card, Heading, Text } from '@/components/ui'
 
 function AcceptInvitationContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -16,11 +15,6 @@ function AcceptInvitationContent() {
   const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
-    // Log all URL information for debugging (always log for troubleshooting)
-    console.log('AcceptInvitation - Full URL:', window.location.href)
-    console.log('AcceptInvitation - Search params:', Object.fromEntries(searchParams.entries()))
-    console.log('AcceptInvitation - Hash:', window.location.hash)
-
     // Sjekk om vi har en feilmelding fra callback eller hash
     const errorParam = searchParams.get('error')
     const hash = window.location.hash
@@ -33,10 +27,6 @@ function AcceptInvitationContent() {
       const hashErrorDescription = hashParams.get('error_description')
       
       if (hashError) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('AcceptInvitation - Error in hash:', { hashError, hashErrorCode, hashErrorDescription })
-        }
-        
         if (hashErrorCode === 'otp_expired' || hashError === 'access_denied') {
           setError('Invitasjonslinken er utløpt eller ugyldig. Be admin om å sende en ny invitasjon.')
         } else {
@@ -59,10 +49,6 @@ function AcceptInvitationContent() {
     async function checkSessionAndHash() {
       const { data: { session } } = await supabase.auth.getSession()
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('AcceptInvitation - Session check:', session ? 'Session exists' : 'No session')
-      }
-
       if (session && session.user) {
         setEmail(session.user.email || null)
         // Vi har en session, så vi kan sette passordet
@@ -91,10 +77,6 @@ function AcceptInvitationContent() {
         if (hashError) {
           const hashErrorCode = hashParams.get('error_code')
           const hashErrorDescription = hashParams.get('error_description')
-          if (process.env.NODE_ENV === 'development') {
-            console.error('AcceptInvitation - Error in hash:', { hashError, hashErrorCode, hashErrorDescription })
-          }
-          
           if (hashErrorCode === 'otp_expired' || hashError === 'access_denied') {
             setError('Invitasjonslinken er utløpt eller ugyldig. Be admin om å sende en ny invitasjon.')
           } else {
@@ -108,15 +90,6 @@ function AcceptInvitationContent() {
         hashToken = hashParams.get('token')
         hashCode = hashParams.get('code')
         hashType = hashParams.get('type')
-        if (process.env.NODE_ENV === 'development') {
-          console.log('AcceptInvitation - Hash params:', { 
-            hashAccessToken: hashAccessToken ? 'present' : 'missing', 
-            hashRefreshToken: hashRefreshToken ? 'present' : 'missing', 
-            hashToken, 
-            hashCode, 
-            hashType 
-          })
-        }
       }
       
       // Hvis vi har access_token i hash (Supabase har allerede autentisert brukeren)
@@ -172,17 +145,6 @@ function AcceptInvitationContent() {
       if (tokenParam || hashToken) {
         setToken(tokenParam || hashToken || '')
       } else if (!codeParam && !hashCode && !hashAccessToken) {
-        // Log detailed error for debugging
-        if (process.env.NODE_ENV === 'development') {
-          console.error('AcceptInvitation - No token/code found:', {
-            tokenParam,
-            codeParam,
-            typeParam,
-            hash,
-            fullUrl: window.location.href,
-            search: window.location.search
-          })
-        }
         setError('Ingen invitasjonstoken eller kode funnet. Sjekk at du bruker hele linken fra emailen.')
       }
     }
@@ -286,13 +248,14 @@ function AcceptInvitationContent() {
 
         // Redirect til admin
         window.location.href = '/admin'
-    } catch (err: any) {
+    } catch (err) {
       // Hvis verifyOtp feiler, kan det være at token må brukes annerledes
       // Prøv alternativ metode: bruk token direkte i URL
-      if (err.message?.includes('token') || err.message?.includes('invalid')) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('token') || msg.includes('invalid')) {
         setError('Invitasjonslinken er ugyldig eller utløpt. Be admin om å sende en ny invitasjon.')
       } else {
-        setError(err.message || 'Noe gikk galt ved aksept av invitasjon')
+        setError(err instanceof Error ? err.message : 'Noe gikk galt ved aksept av invitasjon')
       }
       setLoading(false)
     }

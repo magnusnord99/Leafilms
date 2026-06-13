@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CollagePreset, Image } from '@/lib/types'
+import { CollagePreset, Image, CollageImages } from '@/lib/types'
 import { Button, Heading, Text, Card } from '@/components/ui'
 
 // Helper for å få full bilde-URL
@@ -11,14 +11,6 @@ const getImageUrl = (image: Image) => {
 }
 
 // 5 posisjoner
-type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
-}
-
 type PresetWithImages = CollagePreset & {
   images: CollageImages
 }

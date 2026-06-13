@@ -75,7 +75,6 @@ export function Heading({
   }
 
   const effectiveSize = size || defaultSizes[Component] || 'md'
-  const isDisplaySize = displaySizes.includes(effectiveSize)
   const inlineStyle = sizeStyles[effectiveSize]
 
   return (

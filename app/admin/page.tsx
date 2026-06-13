@@ -3,8 +3,66 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
-import { Button, Badge } from '@/components/ui'
+import { Badge } from '@/components/ui'
 import { Project, Customer, MarketAnalysis } from '@/lib/types'
+
+const C = {
+  bg:       '#181920',
+  surface:  '#21212D',
+  surface2: '#2A2A38',
+  border:   '#3C3C52',
+  text:     '#EEEEF2',
+  text2:    '#B4B4CC',
+  text3:    '#8484A0',
+  accent:   '#7C5CFC',
+  success:  '#4CAF7D',
+  danger:   '#E05555',
+}
+
+function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
+      <div>
+        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2, marginBottom: subtitle ? 4 : 0 }}>
+          {title}
+        </h1>
+        {subtitle && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>{subtitle}</p>
+        )}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function Btn({ href, onClick, children, variant = 'primary', size = 'sm' }: {
+  href?: string
+  onClick?: () => void
+  children: React.ReactNode
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  size?: 'sm' | 'md'
+}) {
+  const styles: React.CSSProperties = {
+    fontFamily: 'var(--font-dm-sans)',
+    fontSize: size === 'sm' ? '0.75rem' : '0.8rem',
+    fontWeight: 500,
+    padding: size === 'sm' ? '6px 12px' : '8px 16px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    border: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    textDecoration: 'none',
+    transition: 'opacity 0.12s',
+    ...(variant === 'primary' && { background: C.accent, color: '#fff' }),
+    ...(variant === 'secondary' && { background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }),
+    ...(variant === 'ghost' && { background: 'transparent', color: C.text3 }),
+    ...(variant === 'danger' && { background: 'transparent', color: C.danger }),
+  }
+  if (href) return <Link href={href} style={styles}>{children}</Link>
+  return <button onClick={onClick} style={styles}>{children}</button>
+}
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
@@ -13,8 +71,9 @@ export default function AdminDashboard() {
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({})
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
   const [totalProjects, setTotalProjects] = useState(0)
-  const [publishedCount, setPublishedCount] = useState(0)
   const [latestAnalysis, setLatestAnalysis] = useState<MarketAnalysis | null>(null)
+  const [pipelineCounts, setPipelineCounts] = useState<Record<string, number>>({})
+  const [emailFollowUpCount, setEmailFollowUpCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -25,331 +84,288 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      // Fire parallelle kall: teller, 3 siste prosjekter, alle kunder
-      const [totalResult, publishedResult, projectsResult, customersResult] = await Promise.all([
+      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult] = await Promise.all([
         supabase.from('projects').select('*', { count: 'exact', head: true }),
-        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'published'),
-        supabase
-          .from('projects')
-          .select('id, title, status, client_name, updated_at, parent_project_id, version_number')
-          .order('updated_at', { ascending: false })
-          .limit(3),
-        supabase
-          .from('customers')
-          .select('id, name, company, email, phone, customer_number')
-          .order('name', { ascending: true }),
+        supabase.from('projects').select('id, title, status, pipeline_stage, client_name, updated_at, parent_project_id, version_number').order('updated_at', { ascending: false }).limit(5),
+        supabase.from('customers').select('id, name, company, email, phone, customer_number').order('name', { ascending: true }),
+        supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead'),
+        supabase.from('email_log').select('project_id, sent_at').order('sent_at', { ascending: true }),
       ])
 
       setTotalProjects(totalResult.count ?? 0)
-      setPublishedCount(publishedResult.count ?? 0)
 
-      const { data: projectsData, error: projectsError } = projectsResult
-      if (projectsError) {
-        console.error('Error fetching projects:', projectsError)
-      } else {
-        const projects = (projectsData || []) as Project[]
-        setRecentProjects(projects)
+      const projects = (projectsResult.data || []) as Project[]
+      setRecentProjects(projects)
 
-        // Hent share tokens for publiserte prosjekter
-        const publishedProjectIds = projects.filter(p => p.status === 'published').map(p => p.id)
-        if (publishedProjectIds.length > 0) {
-          const { data: sharesData } = await supabase
-            .from('project_shares')
-            .select('project_id, token')
-            .in('project_id', publishedProjectIds)
-
-          if (sharesData) {
-            const links: Record<string, string> = {}
-            sharesData.forEach(share => {
-              links[share.project_id] = `${window.location.origin}/p/${share.token}`
-            })
-            setShareLinks(links)
-          }
+      const publishedIds = projects.filter(p => p.status === 'published').map(p => p.id)
+      if (publishedIds.length > 0) {
+        const { data: sharesData } = await supabase.from('project_shares').select('project_id, token').in('project_id', publishedIds)
+        if (sharesData) {
+          const links: Record<string, string> = {}
+          sharesData.forEach(s => { links[s.project_id] = `${window.location.origin}/p/${s.token}` })
+          setShareLinks(links)
         }
       }
 
-      const { data: customersData, error: customersError } = customersResult
-      if (customersError) {
-        console.error('Error fetching customers:', customersError)
-      } else {
-        const customerList = (customersData || []) as Customer[]
-        setCustomers(customerList)
+      // Pipeline counts per stage
+      const stageCounts: Record<string, number> = {}
+      for (const row of pipelineResult.data ?? []) {
+        const stage = (row as { pipeline_stage: string }).pipeline_stage
+        stageCounts[stage] = (stageCounts[stage] ?? 0) + 1
+      }
+      setPipelineCounts(stageCounts)
 
-        // Hent prosjekttelling per kunde
-        const customerIds = customerList.map(c => c.id)
-        if (customerIds.length > 0) {
-          const { data: countsData } = await supabase
-            .from('projects')
-            .select('customer_id')
-            .in('customer_id', customerIds)
-          if (countsData) {
-            const counts: Record<string, number> = {}
-            countsData.forEach((p) => {
-              if (p.customer_id) counts[p.customer_id] = (counts[p.customer_id] || 0) + 1
-            })
-            setProjectCounts(counts)
-          }
+      // Email follow-up: projects in active stages with no email in last 7 days
+      const ACTIVE_STAGES = ['tilbud_sendt', 'møte', 'kontrakt', 'levering', 'videresalg']
+      const { data: activeProjects } = await supabase
+        .from('projects')
+        .select('id')
+        .in('pipeline_stage', ACTIVE_STAGES)
+      const logsByProject = new Map<string, string>()
+      for (const row of emailLogsResult.data ?? []) {
+        const r = row as { project_id: string; sent_at: string }
+        logsByProject.set(r.project_id, r.sent_at)
+      }
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const needsFollowUp = (activeProjects ?? []).filter(p => {
+        const lastSent = logsByProject.get((p as { id: string }).id)
+        return !lastSent || new Date(lastSent).getTime() < sevenDaysAgo
+      }).length
+      setEmailFollowUpCount(needsFollowUp)
+
+      const customerList = (customersResult.data || []) as Customer[]
+      setCustomers(customerList)
+
+      const customerIds = customerList.map(c => c.id)
+      if (customerIds.length > 0) {
+        const { data: countsData } = await supabase.from('projects').select('customer_id').in('customer_id', customerIds)
+        if (countsData) {
+          const counts: Record<string, number> = {}
+          countsData.forEach(p => { if (p.customer_id) counts[p.customer_id] = (counts[p.customer_id] || 0) + 1 })
+          setProjectCounts(counts)
         }
       }
-    } catch (error) {
-      console.error('Unexpected error in fetchData:', error)
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete(projectId: string, projectTitle: string) {
-    if (!confirm(`Er du sikker på at du vil slette "${projectTitle}"?\n\nDette kan ikke angres.`)) {
-      return
-    }
-
+    if (!confirm(`Slett "${projectTitle}"? Dette kan ikke angres.`)) return
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId)
-
-      if (error) throw error
-
+      await supabase.from('projects').delete().eq('id', projectId)
       fetchData()
-    } catch (error) {
-      console.error('Error deleting project:', error)
-    }
+    } catch (err) { console.error(err) }
   }
-
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <div className="flex items-center gap-3">
-          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.16em', color: '#62594E', textTransform: 'uppercase' }}>
-            Laster...
-          </p>
-        </div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
       </div>
     )
   }
 
-  const sectionLabel = (text: string) => (
-    <span style={{
-      fontFamily: 'var(--font-dm-sans)',
-      fontSize: '0.6rem',
-      letterSpacing: '0.16em',
-      color: '#C49434',
-      textTransform: 'uppercase' as const,
-      fontWeight: 500,
-    }}>
-      {text}
-    </span>
-  )
+  const stats = [
+    { label: 'Prosjekter',         value: totalProjects,                  href: '/admin/projects'  },
+    { label: 'Aktive i pipeline',  value: Object.values(pipelineCounts).reduce((a, b) => a + b, 0), href: '/admin/pipeline' },
+    { label: 'Kunder',             value: customers.length,               href: '/admin/customers' },
+    { label: 'E-post oppfølging',  value: emailFollowUpCount,             href: '/admin/email', highlight: emailFollowUpCount > 0 },
+  ]
+
+  const PIPELINE_STAGE_LABELS: Record<string, string> = {
+    lead: 'Lead', møte: 'Møte', tilbud_sendt: 'Tilbud sendt',
+    kontrakt: 'Kontrakt', pre_prod: 'Pre-prod', produksjon: 'Produksjon',
+    post_prod: 'Post-prod', levering: 'Levering', fakturert: 'Fakturert', videresalg: 'Videresalg',
+  }
+  const PIPELINE_STAGE_COLORS: Record<string, string> = {
+    lead: C.text3, møte: '#4A9AC4', tilbud_sendt: C.accent,
+    kontrakt: C.success, pre_prod: '#F0A500', produksjon: '#F0A500',
+    post_prod: '#F0A500', levering: '#E8A838', fakturert: C.success, videresalg: C.text2,
+  }
+  const activePipelineStages = Object.entries(pipelineCounts)
+    .filter(([, count]) => count > 0)
+    .sort(([a], [b]) => {
+      const order = ['lead', 'møte', 'tilbud_sendt', 'kontrakt', 'pre_prod', 'produksjon', 'post_prod', 'levering', 'fakturert', 'videresalg']
+      return order.indexOf(a) - order.indexOf(b)
+    })
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
-      <div className="max-w-5xl mx-auto">
+    <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 48px' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
-        {/* Page header */}
-        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div style={{ width: 32, height: 1, background: '#C49434' }} />
-              {sectionLabel('Dashboard')}
-            </div>
-            <h1 style={{
-              fontFamily: 'var(--font-cormorant)',
-              fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-              fontWeight: 300,
-              fontStyle: 'italic',
-              color: '#E8E1D5',
-              lineHeight: 1,
-            }}>
-              Leafilms Pitch
-            </h1>
-          </div>
+        <PageHeader
+          title="Dashboard"
+          action={<Btn href="/admin/projects/new">+ Nytt prosjekt</Btn>}
+        />
 
-          <div className="flex gap-2 items-center">
-            <Link href="/admin/projects/new">
-              <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-14">
-          {[
-            { label: 'Prosjekter', value: totalProjects, href: '/admin/projects' },
-            { label: 'Publiserte', value: publishedCount, href: '/admin/projects' },
-            { label: 'Kunder', value: customers.length, href: '/admin/customers' },
-            { label: 'Utkast', value: totalProjects - publishedCount, href: '/admin/projects' },
-          ].map((stat) => (
-            <Link key={stat.label} href={stat.href}>
+        {/* Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
+          {stats.map(s => (
+            <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
               <div
-                className="px-5 py-4 transition-colors"
-                style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
+                style={{ background: C.surface, border: `1px solid ${'highlight' in s && s.highlight ? 'rgba(124,92,252,0.4)' : C.border}`, borderRadius: 8, padding: '16px 20px', cursor: 'pointer', transition: 'border-color 0.12s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = ('highlight' in s && s.highlight ? 'rgba(124,92,252,0.4)' : C.border)}
               >
-                <p style={{ fontFamily: 'var(--font-cormorant)', fontSize: '2rem', fontWeight: 300, color: '#E8E1D5', lineHeight: 1, marginBottom: 4 }}>
-                  {stat.value}
-                </p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#62594E' }}>
-                  {stat.label}
-                </p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 600, color: 'highlight' in s && s.highlight ? C.accent : C.text, lineHeight: 1, marginBottom: 4 }}>{s.value}</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>{s.label}</p>
               </div>
             </Link>
           ))}
         </div>
 
-        {/* Recent Projects */}
-        <div className="mb-14">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div style={{ width: 20, height: 1, background: '#38332A' }} />
-              {sectionLabel('Sist åpnet')}
+        {/* Pipeline-oversikt */}
+        {activePipelineStages.length > 0 && (
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Pipeline
+              </h2>
+              <Btn href="/admin/pipeline" variant="ghost">Åpne pipeline →</Btn>
             </div>
-            <Link href="/admin/projects">
-              <Button variant="ghost" size="sm">Se alle →</Button>
-            </Link>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {activePipelineStages.map(([stage, count]) => (
+                <Link key={stage} href="/admin/pipeline" style={{ textDecoration: 'none' }}>
+                  <div style={{
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 8,
+                    padding: '10px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    cursor: 'pointer',
+                    transition: 'border-color 0.12s',
+                  }}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: PIPELINE_STAGE_COLORS[stage] ?? C.text3,
+                      flexShrink: 0,
+                    }} />
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                      {PIPELINE_STAGE_LABELS[stage] ?? stage}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, color: C.text }}>
+                      {count}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent projects */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Siste prosjekter
+            </h2>
+            <Btn href="/admin/projects" variant="ghost">Se alle →</Btn>
           </div>
 
-          {recentProjects && recentProjects.length > 0 ? (
-            <div className="flex flex-col gap-px" style={{ border: '1px solid #2A261F', borderRadius: 3 }}>
-              {recentProjects.map((project, i) => (
+          <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+            {recentProjects.length === 0 ? (
+              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>Ingen prosjekter ennå</p>
+                <Btn href="/admin/projects/new">Opprett første prosjekt</Btn>
+              </div>
+            ) : (
+              recentProjects.map((project, i) => (
                 <div
                   key={project.id}
-                  className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-5 py-4 transition-colors"
                   style={{
-                    background: '#161410',
-                    borderBottom: i < recentProjects.length - 1 ? '1px solid #2A261F' : 'none',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '12px 16px',
+                    background: C.surface,
+                    borderBottom: i < recentProjects.length - 1 ? `1px solid ${C.border}` : 'none',
+                    transition: 'background 0.1s',
                   }}
+                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = C.surface}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <p style={{
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        color: '#E8E1D5',
-                        letterSpacing: '0.03em',
-                      }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text }}>
                         {project.title}
                       </p>
                       <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-                        {project.status === 'published' ? 'Publisert' :
-                         project.status === 'archived' ? 'Arkivert' : 'Utkast'}
+                        {project.status === 'published' ? 'Publisert' : project.status === 'archived' ? 'Arkivert' : 'Utkast'}
                       </Badge>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {project.client_name && (
-                        <span style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
-                          {project.client_name}
+                      {(project as Project & { pipeline_stage?: string }).pipeline_stage && (project as Project & { pipeline_stage?: string }).pipeline_stage !== 'lead' && (
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
+                          color: PIPELINE_STAGE_COLORS[(project as Project & { pipeline_stage?: string }).pipeline_stage!] ?? C.text3,
+                          background: `${PIPELINE_STAGE_COLORS[(project as Project & { pipeline_stage?: string }).pipeline_stage!] ?? C.text3}18`,
+                          padding: '1px 7px', borderRadius: 4,
+                        }}>
+                          {PIPELINE_STAGE_LABELS[(project as Project & { pipeline_stage?: string }).pipeline_stage!] ?? (project as Project & { pipeline_stage?: string }).pipeline_stage}
                         </span>
                       )}
-                      <span style={{ fontSize: '0.65rem', color: '#38332A', fontFamily: 'var(--font-dm-sans)' }}>
-                        {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                      </span>
                     </div>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
+                      {new Date(project.updated_at).toLocaleDateString('nb-NO')}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2 flex-shrink-0">
-                    <Link href={`/admin/projects/${project.id}/edit`}>
-                      <Button variant="primary" size="sm">Åpne</Button>
-                    </Link>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <Btn href={`/admin/projects/${project.id}`}>Oversikt</Btn>
+                    <Btn href={`/admin/projects/${project.id}/edit`} variant="secondary">Pitch</Btn>
                     {shareLinks[project.id] && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={(e) => { e.preventDefault(); window.open(shareLinks[project.id], '_blank') }}
-                      >
-                        <span className="hidden sm:inline">Se publisert</span>
-                        <span className="sm:hidden">Publisert</span>
-                      </Button>
+                      <Btn variant="ghost" onClick={() => window.open(shareLinks[project.id], '_blank')}>↗</Btn>
                     )}
-                    <Link href={`/admin/projects/${project.id}/quote-analytics`} className="hidden sm:block">
-                      <Button variant="secondary" size="sm">Statistikk</Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => { e.preventDefault(); handleDelete(project.id, project.title) }}
-                      style={{ color: '#B84040' }}
-                    >
-                      Slett
-                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              className="p-10 text-center"
-              style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
-            >
-              <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
-                Ingen prosjekter ennå
-              </p>
-              <Link href="/admin/projects/new">
-                <Button variant="primary">Opprett første prosjekt</Button>
-              </Link>
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
 
         {/* Customers */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div style={{ width: 20, height: 1, background: '#38332A' }} />
-              {sectionLabel('Kunder')}
-            </div>
-            <Link href="/admin/customers/new">
-              <Button variant="primary" size="sm">+ Ny Kunde</Button>
-            </Link>
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Kunder
+            </h2>
+            <Btn href="/admin/customers/new" variant="secondary">+ Ny kunde</Btn>
           </div>
 
-          {customers && customers.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {customers.map((customer) => (
-                <Link key={customer.id} href={`/admin/customers/${customer.id}/projects`}>
+          {customers.length === 0 ? (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '40px 24px', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>Ingen kunder ennå</p>
+              <Btn href="/admin/customers/new">Opprett første kunde</Btn>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {customers.map(customer => (
+                <Link key={customer.id} href={`/admin/customers/${customer.id}/projects`} style={{ textDecoration: 'none' }}>
                   <div
-                    className="px-5 py-4 transition-all group"
-                    style={{
-                      background: '#161410',
-                      border: '1px solid #2A261F',
-                      borderRadius: 3,
-                    }}
+                    style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <p style={{
-                            fontFamily: 'var(--font-dm-sans)',
-                            fontSize: '0.8rem',
-                            fontWeight: 500,
-                            color: '#E8E1D5',
-                          }}>
-                            {customer.name}
-                          </p>
-                          {customer.company && (
-                            <span style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
-                              {customer.company}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-0.5 mb-2">
-                          {customer.email && (
-                            <p style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
-                              {customer.email}
-                            </p>
-                          )}
-                          {customer.phone && (
-                            <p style={{ fontSize: '0.65rem', color: '#62594E', fontFamily: 'var(--font-dm-sans)' }}>
-                              {customer.phone}
-                            </p>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.6rem', color: '#38332A', fontFamily: 'var(--font-dm-sans)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                          {projectCounts[customer.id] || 0} prosjekt{projectCounts[customer.id] !== 1 ? 'er' : ''}
-                        </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 2 }}>
+                          {customer.name}
+                        </p>
+                        {customer.company && (
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginBottom: 6 }}>{customer.company}</p>
+                        )}
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
+                          {projectCounts[customer.id] || 0} prosjekt{(projectCounts[customer.id] || 0) !== 1 ? 'er' : ''}
+                        </p>
                       </div>
-                      <svg className="w-3.5 h-3.5 flex-shrink-0 mt-1" fill="none" stroke="#38332A" viewBox="0 0 24 24">
+                      <svg width="14" height="14" fill="none" stroke={C.text3} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
@@ -357,59 +373,36 @@ export default function AdminDashboard() {
                 </Link>
               ))}
             </div>
-          ) : (
-            <div
-              className="p-10 text-center"
-              style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
-            >
-              <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
-                Ingen kunder ennå
-              </p>
-              <Link href="/admin/customers/new">
-                <Button variant="primary">Opprett første kunde</Button>
-              </Link>
-            </div>
           )}
         </div>
 
-        {/* Markedsanalyse widget */}
-        <div className="mb-14">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div style={{ width: 20, height: 1, background: '#38332A' }} />
-              {sectionLabel('Markedsanalyse')}
-            </div>
-            <Link href="/admin/market-analysis">
-              <Button variant="ghost" size="sm">Gå til analyse →</Button>
-            </Link>
+        {/* Market analysis widget */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Markedsanalyse
+            </h2>
+            <Btn href="/admin/market-analysis" variant="ghost">Se analyse →</Btn>
           </div>
-
-          <div
-            className="px-6 py-5 flex items-center justify-between"
-            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
-          >
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             {latestAnalysis?.results ? (
               <>
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#E8E1D5', marginBottom: 4 }}>
-                    <span style={{ color: '#C49434', fontWeight: 500 }}>{latestAnalysis.results.customers.length} leads</span> funnet sist uke
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, marginBottom: 3 }}>
+                    <span style={{ color: C.accent, fontWeight: 600 }}>{latestAnalysis.results.customers.length} leads</span> funnet sist uke
                   </p>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#3D3829', letterSpacing: '0.06em' }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
                     {new Date(latestAnalysis.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
-                <Link href="/admin/market-analysis">
-                  <Button variant="ghost" size="sm">Se detaljer</Button>
-                </Link>
+                <Btn href="/admin/market-analysis" variant="secondary">Se detaljer</Btn>
               </>
             ) : (
               <>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#3D3829', letterSpacing: '0.06em' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
                   Ingen analyser kjørt ennå. Kjøres automatisk hver mandag kl 08:00.
                 </p>
-                <Link href="/admin/market-analysis">
-                  <Button variant="primary" size="sm">Kjør nå</Button>
-                </Link>
+                <Btn href="/admin/market-analysis">Kjør nå</Btn>
               </>
             )}
           </div>
@@ -419,4 +412,3 @@ export default function AdminDashboard() {
     </div>
   )
 }
-

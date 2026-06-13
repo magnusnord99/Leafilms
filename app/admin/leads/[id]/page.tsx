@@ -8,12 +8,12 @@ import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 
 const C = {
   bg:       '#181920',
-  surface:  '#1E1E28',
-  surface2: '#252530',
-  border:   '#2D2D3A',
-  text:     '#E2E2E2',
-  text2:    '#9B9BAD',
-  text3:    '#5C5C70',
+  surface:  '#21212D',
+  surface2: '#2A2A38',
+  border:   '#3C3C52',
+  text:     '#EEEEF2',
+  text2:    '#B4B4CC',
+  text3:    '#8484A0',
   accent:   '#7C5CFC',
   accentBg: 'rgba(124,92,252,0.08)',
   success:  '#4CAF7D',

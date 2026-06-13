@@ -1,276 +1,617 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Button, Badge } from '@/components/ui'
-import { Project } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
+import { PIPELINE_STAGES, PipelineStage, ProjectType, QuoteBuilderData } from '@/lib/types'
+import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 
-type ProjectWithVersion = Project & { rootId: string; versionNumber: number }
-type ProjectGroup = { rootId: string; baseTitle: string; versions: ProjectWithVersion[] }
+// ─── Pipeline-hjelpere ────────────────────────────────────────────────────────
 
-const sectionLabel = (text: string) => (
-  <span style={{
-    fontFamily: 'var(--font-dm-sans)',
-    fontSize: '0.6rem',
-    letterSpacing: '0.16em',
-    color: '#C49434',
-    textTransform: 'uppercase' as const,
-    fontWeight: 500,
-  }}>
-    {text}
-  </span>
+const STAGE_INDEX: Record<string, number> = Object.fromEntries(
+  PIPELINE_STAGES.map((s, i) => [s.value, i])
+)
+const STAGE_LABEL: Record<string, string> = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.value, s.label])
 )
 
+type StageGroup = 'salg' | 'produksjon' | 'post' | 'fullført'
+
+const STAGE_GROUP: Record<PipelineStage, StageGroup> = {
+  lead: 'salg', møte: 'salg', tilbud_sendt: 'salg',
+  kontrakt: 'produksjon', pre_prod: 'produksjon', produksjon: 'produksjon',
+  post_prod: 'post', levering: 'post',
+  fakturert: 'fullført', videresalg: 'fullført',
+}
+
+const GROUP_COLOR: Record<StageGroup, string> = {
+  salg: '#4A8FA8',
+  produksjon: '#F0A500',
+  post: '#7C5CFC',
+  fullført: '#4CAF7D',
+}
+
+const GROUP_FILTERS: { value: StageGroup; label: string }[] = [
+  { value: 'salg', label: 'Salg' },
+  { value: 'produksjon', label: 'Produksjon' },
+  { value: 'post', label: 'Post & levering' },
+  { value: 'fullført', label: 'Fullført' },
+]
+
+const PROJECT_TYPE_LABEL: Record<string, string> = {
+  video: 'Film',
+  photo: 'Bilder',
+  mixed: 'Film & Bilder',
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days === 0) return 'I dag'
+  if (days === 1) return 'I går'
+  if (days < 7) return `${days} dager siden`
+  if (days < 30) return `${Math.floor(days / 7)} uker siden`
+  if (days < 365) return `${Math.floor(days / 30)} mnd siden`
+  return `${Math.floor(days / 365)} år siden`
+}
+
+function fmtShootDate(d: string): string {
+  return new Date(`${d}T00:00:00`).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+}
+
+function fmtMoney(n: number): string {
+  return `kr ${Math.round(n).toLocaleString('nb-NO')}`
+}
+
+// ─── Datatyper ────────────────────────────────────────────────────────────────
+
+type ProjectRow = {
+  id: string
+  title: string | null
+  status: string
+  client_name: string | null
+  updated_at: string
+  parent_project_id: string | null
+  version_number: number | null
+  pipeline_stage: PipelineStage | null
+  project_type: ProjectType | null
+  shoot_start: string | null
+  shoot_end: string | null
+  customer_name: string | null
+  customer_company: string | null
+}
+
+type TaskRow = { project_id: string; pipeline_stage: string; status: string }
+type QuoteRow = { project_id: string; accepted: boolean; total: number; updated_at: string }
+
+type ProjectCard = {
+  rootId: string
+  title: string
+  customer: string | null
+  stage: PipelineStage
+  group: StageGroup
+  type: ProjectType | null
+  shootStart: string | null
+  shootEnd: string | null
+  quoteTotal: number | null
+  quoteAccepted: boolean
+  tasksDone: number
+  tasksTotal: number
+  versionCount: number
+  updatedAt: string
+  overviewId: string
+  editId: string
+  shareLink: string | null
+  allIds: string[]
+}
+
+// ─── Side ─────────────────────────────────────────────────────────────────────
+
 export default function ProjectsPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [projectGroups, setProjectGroups] = useState<ProjectGroup[]>([])
+  const [projects, setProjects] = useState<ProjectRow[]>([])
+  const [tasks, setTasks] = useState<TaskRow[]>([])
+  const [quotes, setQuotes] = useState<QuoteRow[]>([])
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
+  const [search, setSearch] = useState('')
+  const [filterGroup, setFilterGroup] = useState<'all' | StageGroup>('all')
 
-  useEffect(() => {
-    fetchProjects()
-  }, [])
+  useEffect(() => { fetchAll() }, [])
 
-  async function fetchProjects() {
+  async function fetchAll() {
     try {
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('id, title, status, client_name, updated_at, parent_project_id, version_number')
-        .order('updated_at', { ascending: false })
+      const [projectsRes, tasksRes, quotesRes] = await Promise.all([
+        supabase
+          .from('projects')
+          .select(`
+            id, title, status, client_name, updated_at, parent_project_id,
+            version_number, pipeline_stage, project_type, shoot_start, shoot_end,
+            customers(name, company)
+          `)
+          .neq('status', 'lost')
+          .order('updated_at', { ascending: false }),
+        supabase.from('tasks').select('project_id, pipeline_stage, status'),
+        supabase
+          .from('quotes')
+          .select('project_id, status, quote_data, updated_at')
+          .not('quote_data', 'is', null),
+      ])
 
-      if (projectsError) {
-        console.error('Error fetching projects:', projectsError)
-      } else {
-        const projectsWithVersion = (projectsData || []).map((p: any) => ({
-          ...p,
-          rootId: p.parent_project_id ?? p.id,
-          versionNumber: p.version_number ?? 1
-        }))
+      if (projectsRes.error) throw projectsRes.error
 
-        const byRoot = new Map<string, ProjectWithVersion[]>()
-        for (const p of projectsWithVersion) {
-          const list = byRoot.get(p.rootId) ?? []
-          list.push(p)
-          byRoot.set(p.rootId, list)
+      type RawProject = Omit<ProjectRow, 'customer_name' | 'customer_company'> & {
+        customers: { name: string | null; company: string | null } | null
+      }
+      const rawProjects = (projectsRes.data ?? []) as unknown as RawProject[]
+
+      setProjects(rawProjects.map(p => ({
+        ...p,
+        customers: undefined,
+        customer_name: p.customers?.name ?? null,
+        customer_company: p.customers?.company ?? null,
+      })))
+
+      setTasks((tasksRes.data ?? []) as TaskRow[])
+
+      type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; updated_at: string }
+      setQuotes(((quotesRes.data ?? []) as unknown as RawQuote[]).flatMap(q => {
+        try {
+          const totals = calculateQuoteTotals(q.quote_data)
+          if (!Number.isFinite(totals.afterDiscount) || totals.afterDiscount <= 0) return []
+          return [{
+            project_id: q.project_id,
+            accepted: q.status === 'accepted',
+            total: totals.afterDiscount,
+            updated_at: q.updated_at,
+          }]
+        } catch {
+          return []
         }
-        for (const list of byRoot.values()) {
-          list.sort((a, b) => a.versionNumber - b.versionNumber)
-        }
+      }))
 
-        const groups: ProjectGroup[] = Array.from(byRoot.entries()).map(([rootId, versions]) => {
-          const rootProject = versions.find(v => v.id === rootId) ?? versions[0]
-          const baseTitle = (rootProject.title || '').replace(/\s+V\d+$/, '').trim() || rootProject.title
-          return { rootId, baseTitle, versions }
-        })
-
-        groups.sort((a, b) => {
-          const newestA = Math.max(...a.versions.map(p => new Date(p.updated_at).getTime()))
-          const newestB = Math.max(...b.versions.map(p => new Date(p.updated_at).getTime()))
-          return newestB - newestA
-        })
-
-        setProjectGroups(groups)
-
-        const publishedIds = projectsWithVersion
-          .filter((p: ProjectWithVersion) => p.status === 'published')
-          .map((p: ProjectWithVersion) => p.id)
-
-        if (publishedIds.length > 0) {
-          const { data: sharesData } = await supabase
-            .from('project_shares')
-            .select('project_id, token')
-            .in('project_id', publishedIds)
-
-          if (sharesData) {
-            const links: Record<string, string> = {}
-            sharesData.forEach(share => {
-              links[share.project_id] = `${window.location.origin}/p/${share.token}`
-            })
-            setShareLinks(links)
-          }
+      const publishedIds = rawProjects.filter(p => p.status === 'published').map(p => p.id)
+      if (publishedIds.length > 0) {
+        const { data: sharesData } = await supabase
+          .from('project_shares')
+          .select('project_id, token')
+          .in('project_id', publishedIds)
+        if (sharesData) {
+          const links: Record<string, string> = {}
+          ;(sharesData as { project_id: string; token: string }[]).forEach(s => {
+            links[s.project_id] = `${window.location.origin}/p/${s.token}`
+          })
+          setShareLinks(links)
         }
       }
-    } catch (error) {
-      console.error('Error fetching projects:', error)
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleDelete(projectId: string, projectTitle: string) {
-    if (!confirm(`Er du sikker på at du vil slette "${projectTitle}"?\n\nDette kan ikke angres.`)) return
+  // Grupper versjoner til prosjektkort. Representativ versjon = den som har
+  // kommet lengst i pipelinen (nyeste ved likt steg).
+  const cards = useMemo<ProjectCard[]>(() => {
+    const byRoot = new Map<string, ProjectRow[]>()
+    for (const p of projects) {
+      const rootId = p.parent_project_id ?? p.id
+      const list = byRoot.get(rootId) ?? []
+      list.push(p)
+      byRoot.set(rootId, list)
+    }
 
+    return Array.from(byRoot.entries()).map(([rootId, versions]) => {
+      const rep = [...versions].sort((a, b) => {
+        const stageDiff = (STAGE_INDEX[b.pipeline_stage ?? 'lead'] ?? 0) - (STAGE_INDEX[a.pipeline_stage ?? 'lead'] ?? 0)
+        if (stageDiff !== 0) return stageDiff
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      })[0]
+
+      const newest = [...versions].sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))[0]
+      const allIds = versions.map(v => v.id)
+      const stage = rep.pipeline_stage ?? 'lead'
+
+      const stageTasks = tasks.filter(t => allIds.includes(t.project_id) && t.pipeline_stage === stage)
+
+      const groupQuotes = quotes
+        .filter(q => allIds.includes(q.project_id))
+        .sort((a, b) => {
+          if (a.accepted !== b.accepted) return a.accepted ? -1 : 1
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        })
+      const quote = groupQuotes[0] ?? null
+
+      const sharedVersion = [...versions]
+        .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))
+        .find(v => shareLinks[v.id])
+
+      return {
+        rootId,
+        title: (rep.title || '').replace(/\s+V\d+$/, '').trim() || rep.title || '(uten tittel)',
+        customer: rep.customer_company || rep.customer_name || rep.client_name,
+        stage,
+        group: STAGE_GROUP[stage],
+        type: rep.project_type,
+        shootStart: rep.shoot_start,
+        shootEnd: rep.shoot_end,
+        quoteTotal: quote?.total ?? null,
+        quoteAccepted: quote?.accepted ?? false,
+        tasksDone: stageTasks.filter(t => t.status === 'done').length,
+        tasksTotal: stageTasks.length,
+        versionCount: versions.length,
+        updatedAt: versions.reduce((max, v) => v.updated_at > max ? v.updated_at : max, versions[0].updated_at),
+        overviewId: rep.id,
+        editId: newest.id,
+        shareLink: sharedVersion ? shareLinks[sharedVersion.id] : null,
+        allIds,
+      }
+    }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }, [projects, tasks, quotes, shareLinks])
+
+  const filtered = cards.filter(card => {
+    if (filterGroup !== 'all' && card.group !== filterGroup) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!card.title.toLowerCase().includes(q) && !(card.customer ?? '').toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const groupCounts = useMemo(() => {
+    const counts: Record<StageGroup, number> = { salg: 0, produksjon: 0, post: 0, fullført: 0 }
+    for (const card of cards) counts[card.group]++
+    return counts
+  }, [cards])
+
+  // Tilbudsverdi for prosjekter som er i arbeid (kontrakt → levering)
+  const activeValue = useMemo(() =>
+    cards
+      .filter(c => (c.group === 'produksjon' || c.group === 'post') && c.quoteTotal !== null)
+      .reduce((sum, c) => sum + (c.quoteTotal ?? 0), 0),
+  [cards])
+
+  async function handleDelete(card: ProjectCard) {
+    const versionNote = card.versionCount > 1 ? ` og alle ${card.versionCount} pitch-versjoner` : ''
+    if (!confirm(`Slett prosjektet "${card.title}"${versionNote}? Dette kan ikke angres.`)) return
     try {
-      const { error } = await supabase.from('projects').delete().eq('id', projectId)
-      if (error) throw error
-      fetchProjects()
-    } catch (error) {
-      console.error('Error deleting project:', error)
-      alert('Kunne ikke slette prosjekt')
+      await supabase.from('projects').delete().in('id', card.allIds)
+      fetchAll()
+    } catch (err) {
+      console.error(err)
     }
   }
 
-  const getVersionLabel = (p: Project) => {
-    const v = (p as { version_number?: number }).version_number ?? 1
-    return `V${v}`
-  }
-
-  const totalProjects = projectGroups.reduce((sum, g) => sum + g.versions.length, 0)
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-          Laster...
-        </p>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div style={{ width: 32, height: 1, background: '#C49434' }} />
-              {sectionLabel('Alle prosjekter')}
+    <div style={{ background: C.bg, color: C.text, minHeight: '100vh' }}>
+
+      {/* Sidehode */}
+      <div style={{ padding: '28px 16px 24px', background: C.sidebar, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ width: 24, height: 1, background: C.accent }} />
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', letterSpacing: '0.16em',
+                  color: C.accent, textTransform: 'uppercase', fontWeight: 500,
+                }}>
+                  Produksjon
+                </span>
+              </div>
+              <h1 style={{
+                fontFamily: 'var(--font-cormorant)', fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
+                fontWeight: 300, fontStyle: 'italic', color: C.text, lineHeight: 1.1,
+              }}>
+                Prosjekter
+              </h1>
             </div>
-            <h1 style={{
-              fontFamily: 'var(--font-cormorant)',
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              fontWeight: 300,
-              fontStyle: 'italic',
-              color: '#E8E1D5',
-              lineHeight: 1,
-            }}>
-              Prosjekter
-            </h1>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
-              {projectGroups.length} prosjekt{projectGroups.length !== 1 ? 'er' : ''} · {totalProjects} versjon{totalProjects !== 1 ? 'er' : ''} totalt
-            </p>
+            <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '9px 18px', background: C.accent, color: '#fff',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.12em',
+                textTransform: 'uppercase', fontWeight: 600, border: 'none', borderRadius: 3,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>
+                + Nytt prosjekt
+              </button>
+            </Link>
           </div>
-          <Link href="/admin/projects/new">
-            <Button variant="primary" size="sm">+ Nytt Prosjekt</Button>
-          </Link>
-        </div>
 
-        {/* Project groups */}
-        {projectGroups.length > 0 ? (
-          <div className="flex flex-col gap-4">
-            {projectGroups.map((group) => (
-              <div
-                key={group.rootId}
-                style={{ border: '1px solid #2A261F', borderRadius: 3, overflow: 'hidden' }}
-              >
-                {/* Group header */}
-                <div
-                  className="flex items-center justify-between px-5 py-3"
-                  style={{ background: '#161410', borderBottom: '1px solid #2A261F' }}
-                >
-                  <div>
-                    <p style={{
-                      fontFamily: 'var(--font-dm-sans)',
-                      fontSize: '0.8rem',
-                      fontWeight: 500,
-                      color: '#E8E1D5',
-                      letterSpacing: '0.03em',
-                    }}>
-                      {group.baseTitle}
-                    </p>
-                    {group.versions[0]?.client_name && (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 2 }}>
-                        {group.versions[0].client_name}
-                      </p>
-                    )}
-                  </div>
-                  <span style={{
-                    fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.6rem',
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: '#38332A',
-                  }}>
-                    {group.versions.length} versjon{group.versions.length !== 1 ? 'er' : ''}
-                  </span>
-                </div>
-
-                {/* Versions */}
-                {group.versions.map((project, i) => (
-                  <div
-                    key={project.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3"
-                    style={{
-                      background: '#0E0D0B',
-                      borderBottom: i < group.versions.length - 1 ? '1px solid #2A261F' : 'none',
-                    }}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-                        {project.status === 'published' ? 'Publisert' : project.status === 'archived' ? 'Arkivert' : 'Utkast'}
-                      </Badge>
-                      <span style={{
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.6rem',
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        background: 'rgba(196,148,52,0.1)',
-                        color: '#C49434',
-                        padding: '2px 7px',
-                        borderRadius: 2,
-                      }}>
-                        {getVersionLabel(project)}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#38332A' }}>
-                        {new Date(project.updated_at).toLocaleDateString('nb-NO')}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 flex-shrink-0">
-                      <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Rediger</Button>
-                      </Link>
-                      {shareLinks[project.id] && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => window.open(shareLinks[project.id], '_blank')}
-                        >
-                          <span className="hidden sm:inline">Se publisert</span>
-                          <span className="sm:hidden">Publisert</span>
-                        </Button>
-                      )}
-                      <Link href={`/admin/projects/${project.id}/quote-analytics`} className="hidden sm:block">
-                        <Button variant="secondary" size="sm">Statistikk</Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(project.id, project.title)}
-                        style={{ color: '#B84040' }}
-                      >
-                        Slett
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+          {/* Nøkkeltall */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, rowGap: 10 }}>
+            {[
+              { label: 'Totalt', value: String(cards.length), color: C.text },
+              ...GROUP_FILTERS.map(g => ({ label: g.label, value: String(groupCounts[g.value]), color: GROUP_COLOR[g.value] })),
+              ...(activeValue > 0 ? [{ label: 'I arbeid', value: fmtMoney(activeValue), color: C.text }] : []),
+            ].map(stat => (
+              <div key={stat.label}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.2rem', fontWeight: 600, color: stat.color }}>
+                  {stat.value}
+                </span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, letterSpacing: '0.06em', marginLeft: 6 }}>
+                  {stat.label}
+                </span>
               </div>
             ))}
           </div>
-        ) : (
-          <div
-            className="p-10 text-center"
-            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
-          >
-            <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 16 }}>
-              Ingen prosjekter ennå
+        </div>
+      </div>
+
+      {/* Innhold */}
+      <div style={{ padding: '24px 16px 48px', maxWidth: 1100, margin: '0 auto' }}>
+
+        {/* Filtre */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+            <svg
+              style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              width="13" height="13" fill="none" stroke={C.text3} viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Søk på tittel eller kunde..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 12px 8px 32px', background: C.surface,
+                border: `1px solid ${C.border}`, borderRadius: 3, color: C.text,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {([{ value: 'all' as const, label: 'Alle' }, ...GROUP_FILTERS]).map(g => {
+              const active = filterGroup === g.value
+              const color = g.value === 'all' ? C.accent : GROUP_COLOR[g.value]
+              return (
+                <button
+                  key={g.value}
+                  onClick={() => setFilterGroup(g.value)}
+                  style={{
+                    padding: '6px 12px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem',
+                    letterSpacing: '0.04em', borderRadius: 3,
+                    border: active ? `1px solid ${color}` : `1px solid ${C.border}`,
+                    background: active ? `${color}14` : C.surface,
+                    color: active ? color : C.text3,
+                    cursor: 'pointer', transition: 'all 0.12s',
+                  }}
+                >
+                  {g.label}{g.value !== 'all' ? ` · ${groupCounts[g.value]}` : ''}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Kort */}
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 20, height: 20, border: `1.5px solid ${C.border}`, borderTop: `1.5px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '56px 24px', border: `1px solid ${C.border}`, borderRadius: 4, background: C.surface }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+              {cards.length === 0 ? 'Ingen prosjekter ennå' : 'Ingen prosjekter matcher filteret'}
             </p>
-            <Link href="/admin/projects/new">
-              <Button variant="primary">Opprett første prosjekt</Button>
-            </Link>
+            {cards.length === 0 && (
+              <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
+                <button style={{
+                  padding: '9px 20px', background: C.accent, color: '#fff',
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.12em',
+                  textTransform: 'uppercase', fontWeight: 600, border: 'none', borderRadius: 3, cursor: 'pointer',
+                }}>
+                  Opprett første prosjekt
+                </button>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 14 }}>
+            {filtered.map(card => {
+              const stageColor = GROUP_COLOR[card.group]
+              const stageIndex = STAGE_INDEX[card.stage] ?? 0
+              const progress = (stageIndex + 1) / PIPELINE_STAGES.length
+
+              return (
+                <div
+                  key={card.rootId}
+                  onClick={() => router.push(`/admin/projects/${card.overviewId}`)}
+                  style={{
+                    display: 'flex', flexDirection: 'column',
+                    background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
+                    padding: '16px 16px 12px', cursor: 'pointer',
+                    transition: 'background 0.12s, border-color 0.12s',
+                  }}
+                  onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.background = C.surface2
+                    el.style.borderColor = `${stageColor}55`
+                  }}
+                  onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.background = C.surface
+                    el.style.borderColor = C.border
+                  }}
+                >
+                  {/* Steg + type + sist endret */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 500,
+                        color: stageColor, background: `${stageColor}18`, padding: '3px 8px',
+                        borderRadius: 3, whiteSpace: 'nowrap',
+                      }}>
+                        {STAGE_LABEL[card.stage] ?? card.stage}
+                      </span>
+                      {card.type && (
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text2,
+                          background: C.surface2, padding: '3px 8px', borderRadius: 3,
+                          border: `1px solid ${C.border}`, whiteSpace: 'nowrap',
+                        }}>
+                          {PROJECT_TYPE_LABEL[card.type]}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, whiteSpace: 'nowrap' }}>
+                      {timeAgo(card.updatedAt)}
+                    </span>
+                  </div>
+
+                  {/* Tittel + kunde */}
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.92rem', fontWeight: 600, color: C.text, lineHeight: 1.3, marginBottom: 2 }}>
+                    {card.title}
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 14 }}>
+                    {card.customer ?? 'Ingen kunde tilknyttet'}
+                  </p>
+
+                  {/* Pipeline-fremdrift */}
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ height: 3, background: C.surface2, borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${progress * 100}%`, height: '100%', background: stageColor, borderRadius: 2, transition: 'width 0.3s' }} />
+                    </div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', color: C.text3, marginTop: 4, letterSpacing: '0.04em' }}>
+                      Steg {stageIndex + 1} av {PIPELINE_STAGES.length}
+                    </p>
+                  </div>
+
+                  {/* Nøkkelinfo */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 14, flex: 1 }}>
+                    {[
+                      {
+                        label: 'Opptak',
+                        value: card.shootStart
+                          ? card.shootEnd && card.shootEnd !== card.shootStart
+                            ? `${fmtShootDate(card.shootStart)} – ${fmtShootDate(card.shootEnd)}`
+                            : fmtShootDate(card.shootStart)
+                          : '—',
+                        color: C.text2,
+                      },
+                      {
+                        label: 'Tilbud',
+                        value: card.quoteTotal !== null
+                          ? `${fmtMoney(card.quoteTotal)}${card.quoteAccepted ? ' · akseptert' : ''}`
+                          : '—',
+                        color: card.quoteAccepted ? '#4CAF7D' : C.text2,
+                      },
+                      {
+                        label: 'Oppgaver',
+                        value: card.tasksTotal > 0 ? `${card.tasksDone} av ${card.tasksTotal} fullført` : '—',
+                        color: card.tasksTotal > 0 && card.tasksDone === card.tasksTotal ? '#4CAF7D' : C.text2,
+                      },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
+                          {row.label}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: row.value === '—' ? C.text3 : row.color, textAlign: 'right' }}>
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bunnlinje */}
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
+                      {card.versionCount > 1 ? `${card.versionCount} pitch-versjoner` : '1 pitch-versjon'}
+                    </span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {card.shareLink && (
+                        <a
+                          href={card.shareLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Åpne publisert pitch"
+                          style={{
+                            padding: '5px 9px', color: C.text3, border: `1px solid ${C.border}`,
+                            borderRadius: 3, textDecoration: 'none', display: 'inline-flex',
+                            alignItems: 'center', transition: 'color 0.12s, border-color 0.12s',
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.color = C.text
+                            ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.text2
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.color = C.text3
+                            ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.border
+                          }}
+                        >
+                          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      <Link href={`/admin/projects/${card.editId}/edit`} style={{ textDecoration: 'none' }}>
+                        <button style={{
+                          padding: '5px 12px', background: 'transparent', color: C.text3,
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.06em',
+                          border: `1px solid ${C.border}`, borderRadius: 3, cursor: 'pointer',
+                          whiteSpace: 'nowrap', transition: 'color 0.12s',
+                        }}>
+                          Pitch
+                        </button>
+                      </Link>
+                      <Link href={`/admin/projects/${card.overviewId}`} style={{ textDecoration: 'none' }}>
+                        <button style={{
+                          padding: '5px 12px', background: C.accentBg, color: C.accent,
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.06em',
+                          border: `1px solid rgba(124,92,252,0.2)`, borderRadius: 3, cursor: 'pointer',
+                          whiteSpace: 'nowrap', transition: 'background 0.12s',
+                        }}>
+                          Oversikt
+                        </button>
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(card)}
+                        title="Slett prosjekt"
+                        style={{
+                          padding: '5px 9px', background: 'transparent', color: C.text3,
+                          border: `1px solid ${C.border}`, borderRadius: 3, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', transition: 'color 0.12s, border-color 0.12s',
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLButtonElement).style.color = C.danger
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = `${C.danger}66`
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLButtonElement).style.color = C.text3
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = C.border
+                        }}
+                      >
+                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
+
+        {/* Resultatteller */}
+        {!loading && filtered.length > 0 && filtered.length !== cards.length && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 12, textAlign: 'right' }}>
+            Viser {filtered.length} av {cards.length}
+          </p>
+        )}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

@@ -1,15 +1,7 @@
 'use client'
 
 import { ImagePickerModal, VideoPickerModal, CollagePresetPickerModal, TeamPickerModal, CasePickerModal } from '@/components/modals'
-import { Section, CollagePreset, CaseStudy, TeamMember, Image, VideoLibrary } from '@/lib/types'
-
-type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
-}
+import { Section, CollagePreset, CaseStudy, TeamMember, Image, VideoLibrary, CollageImages } from '@/lib/types'
 
 type EditProjectModalsProps = {
   showImagePicker: boolean

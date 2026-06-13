@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { CollagePreset, Image } from '@/lib/types'
+import { CollagePreset, Image, CollageImages } from '@/lib/types'
 import { Button, Card, Heading, Text, Input, Textarea } from '@/components/ui'
 import { ImagePickerModal } from '@/components/modals'
 
@@ -17,14 +17,6 @@ type Props = {
 }
 
 type Position = 'pos1' | 'pos2' | 'pos3' | 'pos4' | 'pos5'
-
-type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
-}
 
 export default function EditPresetPage({ params }: Props) {
   const router = useRouter()
@@ -80,7 +72,7 @@ export default function EditPresetPage({ params }: Props) {
         pos1: null, pos2: null, pos3: null, pos4: null, pos5: null
       }
 
-      presetImages?.forEach((pi: any) => {
+      ;((presetImages ?? []) as unknown as { position: string; images: Image | null }[]).forEach((pi) => {
         const pos = pi.position as Position
         if (pos in loadedImages) {
           loadedImages[pos] = pi.images

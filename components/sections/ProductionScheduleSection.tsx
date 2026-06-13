@@ -175,7 +175,7 @@ const COLUMNS = ['WHAT', 'LOCATION', 'DATE', 'CHANNELS', 'LIVE ON', 'PROD. DAYS'
 type ProductionScheduleSectionProps = {
   section: Section
   editMode: boolean
-  updateSectionContent: (sectionId: string, key: string, value: any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
 type TableBlockProps = {

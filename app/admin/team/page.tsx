@@ -2,22 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-import { Button } from '@/components/ui'
+import { createClient } from '@/lib/supabase-client'
 import { TeamMember } from '@/lib/types'
 
-const sectionLabel = (text: string) => (
-  <span style={{
-    fontFamily: 'var(--font-dm-sans)',
-    fontSize: '0.6rem',
-    letterSpacing: '0.16em',
-    color: '#C49434',
-    textTransform: 'uppercase' as const,
-    fontWeight: 500,
-  }}>
-    {text}
-  </span>
-)
+const C = {
+  bg:      '#181920',
+  surface: '#21212D',
+  surface2:'#2A2A38',
+  border:  '#3C3C52',
+  text:    '#EEEEF2',
+  text2:   '#B4B4CC',
+  text3:   '#8484A0',
+  accent:  '#7C5CFC',
+  danger:  '#E05555',
+}
 
 export default function TeamPage() {
   const [loading, setLoading] = useState(true)
@@ -25,199 +23,137 @@ export default function TeamPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchTeamMembers()
-  }, [])
-
   async function fetchTeamMembers() {
-    const { data, error } = await supabase
-      .from('team_members')
-      .select('*')
-      .order('order_index', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching team members:', error)
-    } else {
-      setTeamMembers((data || []) as TeamMember[])
-    }
+    const supabase = createClient()
+    const { data, error } = await supabase.from('team_members').select('*').order('order_index', { ascending: true })
+    if (!error) setTeamMembers((data || []) as TeamMember[])
     setLoading(false)
   }
 
-  async function handleDelete(teamMemberId: string, teamMemberName: string) {
-    if (!confirm(`Er du sikker på at du vil slette "${teamMemberName}"?\n\nDette kan ikke angres.`)) {
-      return
-    }
-    setDeletingId(teamMemberId)
-    setDeleteError(null)
-    try {
-      const { error } = await supabase
-        .from('team_members')
-        .delete()
-        .eq('id', teamMemberId)
+  useEffect(() => { fetchTeamMembers() }, [])
 
-      if (error) throw error
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Slett "${name}"? Dette kan ikke angres.`)) return
+    setDeletingId(id)
+    setDeleteError(null)
+    const supabase = createClient()
+    const { error } = await supabase.from('team_members').delete().eq('id', id)
+    if (error) {
+      setDeleteError('Kunne ikke slette team-medlem.')
+    } else {
       fetchTeamMembers()
-    } catch (error) {
-      console.error('Error deleting team member:', error)
-      setDeleteError('Kunne ikke slette team-medlem. Prøv igjen.')
-    } finally {
-      setDeletingId(null)
     }
+    setDeletingId(null)
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0C0B09' }}>
-        <div className="flex items-center gap-3">
-          <div style={{ width: 1, height: 24, background: '#C49434', opacity: 0.5 }} />
-          <p style={{
-            fontFamily: 'var(--font-dm-sans)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.16em',
-            color: '#62594E',
-            textTransform: 'uppercase',
-          }}>
-            Laster...
-          </p>
-        </div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
       </div>
     )
   }
 
+  // Hent public URL for profilbilde
+  function getImageUrl(path: string | null | undefined): string | null {
+    if (!path) return null
+    const supabase = createClient()
+    return supabase.storage.from('assets').getPublicUrl(path).data.publicUrl
+  }
+
   return (
-    <div className="min-h-screen p-4 sm:p-8 md:p-12" style={{ background: '#0C0B09', color: '#E8E1D5' }}>
-      <div className="max-w-5xl mx-auto">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px' }}>
+
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-6 mb-14">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
           <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div style={{ width: 32, height: 1, background: '#C49434' }} />
-              {sectionLabel('Bibliotek')}
-            </div>
-            <h1 style={{
-              fontFamily: 'var(--font-cormorant)',
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              fontWeight: 300,
-              fontStyle: 'italic',
-              color: '#E8E1D5',
-              lineHeight: 1,
-            }}>
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
               Team
             </h1>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E', marginTop: 8, letterSpacing: '0.06em' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
               {teamMembers.length} team-medlem{teamMembers.length !== 1 ? 'mer' : ''} · gjenbrukes i prosjekter
             </p>
           </div>
           <Link href="/admin/team/new">
-            <Button variant="primary" size="sm">+ Nytt Medlem</Button>
+            <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
+              + Nytt medlem
+            </button>
           </Link>
         </div>
 
-        {/* Error */}
+        {/* Feilmelding */}
         {deleteError && (
-          <div
-            className="mb-6 px-5 py-3 flex items-center justify-between"
-            style={{ background: 'rgba(184,64,64,0.12)', border: '1px solid rgba(184,64,64,0.3)', borderRadius: 3 }}
-          >
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E07070' }}>{deleteError}</p>
-            <button onClick={() => setDeleteError(null)} style={{ color: '#62594E', lineHeight: 0 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" d="M2 2l10 10M12 2L2 12" />
-              </svg>
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', marginBottom: 16, background: 'rgba(224,85,85,0.08)', border: `1px solid rgba(224,85,85,0.25)`, borderRadius: 8 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.danger }}>{deleteError}</p>
+            <button onClick={() => setDeleteError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3 }}>✕</button>
           </div>
         )}
 
-        {/* Team Members Grid */}
+        {/* Grid */}
         {teamMembers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teamMembers.map((teamMember) => {
-              const profileImageUrl = teamMember.profile_image_path
-                ? supabase.storage.from('assets').getPublicUrl(teamMember.profile_image_path).data.publicUrl
-                : null
-
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {teamMembers.map(member => {
+              const imgUrl = getImageUrl(member.profile_image_path)
               return (
-                <div
-                  key={teamMember.id}
-                  style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3, overflow: 'hidden' }}
-                >
-                  {/* Profile Image */}
-                  <div className="aspect-square flex items-center justify-center" style={{ background: '#0E0D0B' }}>
-                    {profileImageUrl ? (
-                      <img
-                        src={profileImageUrl}
-                        alt={teamMember.name}
-                        className="w-full h-full object-cover"
-                      />
+                <div key={member.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                  {/* Profilbilde */}
+                  <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2 }}>
+                    {imgUrl ? (
+                      <img src={imgUrl} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#38332A" strokeWidth="1">
-                        <circle cx="24" cy="18" r="10" />
-                        <path d="M4 44c0-11 9-18 20-18s20 7 20 18" />
+                      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke={C.border} strokeWidth="1.2">
+                        <circle cx="26" cy="20" r="10" />
+                        <path d="M6 46c0-11 9-18 20-18s20 7 20 18" />
                       </svg>
                     )}
                   </div>
 
-                  {/* Content */}
-                  <div className="p-5">
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: '#E8E1D5', marginBottom: 2 }}>
-                      {teamMember.name}
+                  {/* Innhold */}
+                  <div style={{ padding: '16px 18px' }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 2 }}>
+                      {member.name}
                     </p>
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#C49434', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
-                      {teamMember.role}
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.accent, marginBottom: 10 }}>
+                      {member.role}
                     </p>
 
-                    {teamMember.bio && (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#62594E', lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {teamMember.bio}
+                    {member.bio && (
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {member.bio}
                       </p>
                     )}
 
-                    {/* Contact Info */}
-                    {(teamMember.email || teamMember.phone) && (
-                      <div className="mb-4 space-y-1">
-                        {teamMember.email && (
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E' }}>
-                            {teamMember.email}
-                          </p>
-                        )}
-                        {teamMember.phone && (
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: '#62594E' }}>
-                            {teamMember.phone}
-                          </p>
-                        )}
+                    {(member.email || member.phone) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 12 }}>
+                        {member.email && <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{member.email}</span>}
+                        {member.phone && <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{member.phone}</span>}
                       </div>
                     )}
 
-                    {/* Tags */}
-                    {teamMember.tags && teamMember.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-4">
-                        {teamMember.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: '#62594E', letterSpacing: '0.06em', background: '#0E0D0B', padding: '2px 6px', borderRadius: 2 }}
-                          >
+                    {member.tags && member.tags.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                        {member.tags.map(tag => (
+                          <span key={tag} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, background: C.surface2, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4 }}>
                             {tag}
                           </span>
                         ))}
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <Link href={`/admin/team/${teamMember.id}/edit`} className="flex-1">
-                        <Button variant="primary" size="sm" className="w-full">
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Link href={`/admin/team/${member.id}/edit`} style={{ flex: 1 }}>
+                        <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '7px 0', width: '100%', borderRadius: 7, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
                           Rediger
-                        </Button>
+                        </button>
                       </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(teamMember.id, teamMember.name)}
-                        disabled={deletingId === teamMember.id}
-                        style={{ color: '#B84040' }}
+                      <button
+                        onClick={() => handleDelete(member.id, member.name)}
+                        disabled={deletingId === member.id}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '7px 14px', borderRadius: 7, cursor: deletingId === member.id ? 'default' : 'pointer', background: 'transparent', color: C.danger, border: `1px solid rgba(224,85,85,0.25)`, opacity: deletingId === member.id ? 0.5 : 1 }}
                       >
-                        {deletingId === teamMember.id ? '...' : 'Slett'}
-                      </Button>
+                        {deletingId === member.id ? '...' : 'Slett'}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -225,18 +161,13 @@ export default function TeamPage() {
             })}
           </div>
         ) : (
-          <div
-            className="p-12 text-center"
-            style={{ background: '#161410', border: '1px solid #2A261F', borderRadius: 3 }}
-          >
-            <p style={{ color: '#62594E', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', marginBottom: 8 }}>
-              Ingen team-medlemmer ennå
-            </p>
-            <p style={{ color: '#38332A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', marginBottom: 20 }}>
-              Legg til team-medlemmer her for å gjenbruke dem på tvers av prosjekter.
-            </p>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '56px 24px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: C.text3, marginBottom: 6 }}>Ingen team-medlemmer ennå</p>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginBottom: 20 }}>Legg til team-medlemmer for å gjenbruke dem på tvers av prosjekter.</p>
             <Link href="/admin/team/new">
-              <Button variant="primary">Legg til første team-medlem</Button>
+              <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '9px 20px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
+                Legg til første team-medlem
+              </button>
             </Link>
           </div>
         )}
@@ -244,4 +175,3 @@ export default function TeamPage() {
     </div>
   )
 }
-

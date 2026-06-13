@@ -13,7 +13,7 @@ type TeamSectionProps = {
   selectedTeamMemberIds: string[]
   sectionImages: Record<string, Image[]>
   getSectionTitle?: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   onTeamPickerOpen: () => void
   onGalleryImageClick: () => void
 }

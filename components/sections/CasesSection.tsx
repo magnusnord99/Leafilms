@@ -1,8 +1,13 @@
 'use client'
 
 import { Section, CaseStudy } from '@/lib/types'
-import { Button, Text } from '@/components/ui'
-import React, { useRef, useEffect, useState, useMemo } from 'react'
+import { Button } from '@/components/ui'
+import React, { useRef, useSyncExternalStore } from 'react'
+
+// Stabil no-op subscribe for hydreringsdetektoren under
+function emptySubscribe() {
+  return () => {}
+}
 
 type CasesSectionProps = {
   section: Section
@@ -10,7 +15,7 @@ type CasesSectionProps = {
   allCases: CaseStudy[]
   selectedCaseIds: string[]
   getSectionTitle?: (type: string) => string
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   onCasePickerOpen: () => void
   casesSectionProgress?: number
   casesSectionRef?: React.RefObject<HTMLDivElement | null>
@@ -29,12 +34,12 @@ export function CasesSection({
 }: CasesSectionProps) {
   const internalRef = useRef<HTMLDivElement>(null)
   const sectionRef = casesSectionRef || internalRef
-  const [isMounted, setIsMounted] = useState(false)
-  
-  // Set mounted flag after component mounts on client
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
+  // Hydreringsdetektor: false på server/første render, true på klient etter mount
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  )
   
   // Easing function for smoother animation (ease-out cubic)
   const easeOutCubic = React.useCallback((t: number) => {
@@ -75,12 +80,6 @@ export function CasesSection({
     }
   }, [isMounted])
   
-  // Debug: log progress changes (only in development)
-  useEffect(() => {
-    if (!editMode && process.env.NODE_ENV === 'development') {
-      console.log('[CasesSection] Progress:', casesSectionProgress.toFixed(2), 'Ref:', sectionRef.current !== null)
-    }
-  }, [casesSectionProgress, editMode, sectionRef])
 
   return (
     <div ref={sectionRef} className="py-16 md:py-20 px-8 md:px-16">

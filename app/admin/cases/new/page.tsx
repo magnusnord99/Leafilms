@@ -104,11 +104,11 @@ export default function NewCase() {
 
       if (error) throw error
 
-      router.push('/admin/cases')
+      router.push('/admin/pitches/cases')
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating case:', err)
-      setError('Kunne ikke opprette case: ' + (err.message || 'Ukjent feil'))
+      setError('Kunne ikke opprette case: ' + (err instanceof Error ? err.message : 'Ukjent feil'))
     } finally {
       setLoading(false)
       setUploading(false)
@@ -126,7 +126,7 @@ export default function NewCase() {
         {/* Header */}
         <div className="mb-10">
           <Link
-            href="/admin/cases"
+            href="/admin/pitches/cases"
             className="flex items-center gap-2 mb-8 transition-colors"
             style={{
               fontFamily: 'var(--font-dm-sans)',
@@ -304,7 +304,7 @@ export default function NewCase() {
             >
               {uploading ? 'Laster opp bilde...' : loading ? 'Oppretter...' : 'Opprett case'}
             </button>
-            <Link href="/admin/cases">
+            <Link href="/admin/pitches/cases">
               <button
                 type="button"
                 style={{

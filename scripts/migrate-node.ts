@@ -52,7 +52,8 @@ async function runMigrations() {
       await client.query(sql)
       console.log('✅')
       ok++
-    } catch (err: any) {
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
       // Skip "already exists" errors — idempotent re-runs
       if (
         err.code === '42P07' || // relation already exists

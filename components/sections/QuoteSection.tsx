@@ -40,12 +40,13 @@ type QuoteSectionProps = {
   section: Section
   project: Project
   editMode: boolean
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   shareToken?: string
+  hasPublishedContract?: boolean
 }
 
-function isBuilderData(data: any): data is QuoteBuilderData {
-  return data && Array.isArray(data.crew)
+function isBuilderData(data: unknown): data is QuoteBuilderData {
+  return !!data && Array.isArray((data as { crew?: unknown }).crew)
 }
 
 function formatNOK(amount: number) {
@@ -63,6 +64,7 @@ export function QuoteSection({
   editMode,
   updateSectionContent,
   shareToken,
+  hasPublishedContract = false,
 }: QuoteSectionProps) {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [dbQuoteData, setDbQuoteData] = useState<QuoteData | null>(null)
@@ -117,8 +119,8 @@ export function QuoteSection({
         throw new Error(err.error || 'Kunne ikke akseptere tilbud')
       }
       setQuoteAccepted(true)
-    } catch (error: any) {
-      alert('Kunne ikke akseptere tilbud: ' + (error.message || 'Ukjent feil'))
+    } catch (error) {
+      alert('Kunne ikke akseptere tilbud: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
     } finally {
       setAcceptingQuote(false)
     }
@@ -155,7 +157,7 @@ export function QuoteSection({
                 {formatNOK(totals.finalInclVat)} ink. MVA
               </p>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#9E9287' }}>
-                {builderData?.crew?.length ?? 0} mannskapsmedlemmer · Rabatt {builderData?.discountPercentage ?? 0}%
+                {builderData?.crew?.length ?? 0} mannskapsmedlemmer
               </p>
             </div>
           ) : (
@@ -345,18 +347,6 @@ export function QuoteSection({
             style={{ borderTop: '1px solid #2A261F' }}
             data-quote-section="totals"
           >
-            {quoteData.subtotalExclVat !== undefined && (
-              <div className="flex justify-between items-baseline">
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Produksjon totalt eksl. mva</p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{formatCurrency(quoteData.subtotalExclVat)}</p>
-              </div>
-            )}
-            {quoteData.totalDiscount !== undefined && quoteData.totalDiscount > 0 && (
-              <div className="flex justify-between items-baseline">
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Rabatt</p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434' }}>−{formatCurrency(quoteData.totalDiscount)}</p>
-              </div>
-            )}
             {quoteData.finalPriceExclVat !== undefined && (
               <div className="flex justify-between items-baseline pt-3" style={{ borderTop: '1px solid #2A261F' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris eksl. MVA</p>
@@ -384,36 +374,38 @@ export function QuoteSection({
             style={{ borderTop: '1px solid #2A261F' }}
             data-quote-section="actions"
           >
-            {quoteAccepted ? (
-              <div className="flex items-center gap-3">
-                <div style={{ width: 24, height: 1, background: '#4A9A70' }} />
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5BB880' }}>
-                  Tilbud akseptert
+            {hasPublishedContract ? (
+              <div className="flex items-center gap-4">
+                <a
+                  href="#kontrakt"
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                    background: '#C49434',
+                    color: '#0C0B09',
+                    border: 'none',
+                    padding: '14px 32px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    display: 'inline-block',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#D4A848' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#C49434' }}
+                >
+                  Gå til signering ↓
+                </a>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#62594E' }}>
+                  Les og signer produksjonsavtalen nedenfor
                 </p>
               </div>
             ) : (
-              <button
-                onClick={handleAcceptQuote}
-                disabled={acceptingQuote}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.72rem',
-                  letterSpacing: '0.16em',
-                  textTransform: 'uppercase',
-                  background: '#C49434',
-                  color: '#0C0B09',
-                  border: 'none',
-                  padding: '14px 32px',
-                  cursor: acceptingQuote ? 'not-allowed' : 'pointer',
-                  opacity: acceptingQuote ? 0.6 : 1,
-                  fontWeight: 600,
-                  transition: 'background 0.2s, opacity 0.2s',
-                }}
-                onMouseEnter={(e) => { if (!acceptingQuote) (e.currentTarget as HTMLButtonElement).style.background = '#D4A848' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#C49434' }}
-              >
-                {acceptingQuote ? 'Behandler...' : 'Aksepter tilbud'}
-              </button>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#62594E', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                Tilbud sendt — avtale følger
+              </p>
             )}
           </div>
         </div>

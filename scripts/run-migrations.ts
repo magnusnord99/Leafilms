@@ -73,8 +73,8 @@ async function runMigrations() {
     console.log('\n   Or use psql with DATABASE_URL:')
     console.log('   psql $DATABASE_URL -f database-migrations/XXX_file.sql')
     
-  } catch (error: any) {
-    console.error('❌ Error:', error.message)
+  } catch (error) {
+    console.error('❌ Error:', error instanceof Error ? error.message : error)
     process.exit(1)
   }
 }

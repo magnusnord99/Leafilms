@@ -34,6 +34,8 @@ export type QuoteTotals = {
   otherCostsTotal: number
   licensingTotal: number
   subtotal: number
+  crewDiscountAmount: number
+  equipmentDiscountAmount: number
   discountAmount: number
   afterDiscount: number
   vatAmount: number
@@ -51,7 +53,17 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
   const licensingTotal = data.licensing.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
 
   const subtotal = crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal
-  const discountAmount = subtotal * (data.discountPercentage / 100)
+
+  const crewFactor = data.crewDiscountFactor ?? 0
+  const equipmentFactor = data.equipmentDiscountFactor ?? 0
+  const crewDiscountAmount = crewTotal * crewFactor
+  const equipmentDiscountAmount = equipmentTotal * equipmentFactor
+  // Backward compat: use flat discountPercentage only when no separate factors are set
+  const legacyFlatDiscount = (crewFactor === 0 && equipmentFactor === 0)
+    ? subtotal * ((data.discountPercentage ?? 0) / 100)
+    : 0
+  const discountAmount = crewDiscountAmount + equipmentDiscountAmount + legacyFlatDiscount
+
   const afterDiscount = subtotal - discountAmount
   const vatAmount = data.includeVat ? afterDiscount * (data.vatRate / 100) : 0
   const finalInclVat = afterDiscount + vatAmount
@@ -63,6 +75,8 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
     otherCostsTotal,
     licensingTotal,
     subtotal,
+    crewDiscountAmount,
+    equipmentDiscountAmount,
     discountAmount,
     afterDiscount,
     vatAmount,

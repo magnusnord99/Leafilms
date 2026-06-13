@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Section, Image, SectionImage, CollagePreset } from '@/lib/types'
+import { Section, Image, SectionImage, CollagePreset, CollageImages } from '@/lib/types'
+export type { CollageImages } from '@/lib/types'
 import { Button, Text } from '@/components/ui'
 import { ImagePositionControls } from '@/components/project'
 import { supabase } from '@/lib/supabase'
@@ -12,14 +13,6 @@ const getImageUrl = (image: Image) => {
 }
 
 export type CollagePosition = 'pos1' | 'pos2' | 'pos3' | 'pos4' | 'pos5'
-
-export type CollageImages = {
-  pos1: Image | null
-  pos2: Image | null
-  pos3: Image | null
-  pos4: Image | null
-  pos5: Image | null
-}
 
 const POSITION_ORDER: CollagePosition[] = ['pos1', 'pos2', 'pos3', 'pos4', 'pos5']
 
@@ -32,7 +25,7 @@ type ExampleWorkSectionProps = {
   imagePosition: Record<string, { x: number; y: number; zoom: number | null }>
   setImagePosition: React.Dispatch<React.SetStateAction<Record<string, { x: number; y: number; zoom: number | null }>>>
   saveBackgroundPosition: (sectionId: string, imageIndex: number, positionX: number, positionY: number, zoom: number | null, imageId?: string) => Promise<void>
-  updateSectionContent: (sectionId: string, key: string, value: string | any) => void
+  updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   onImageClick: (position: CollagePosition) => void
   onOpenPresetPicker: () => void
 }

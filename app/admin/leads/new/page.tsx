@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createLead } from '@/lib/actions/leads'
+import { getAllProfiles } from '@/lib/actions/pipeline'
 
 const C = {
   bg:       '#181920',
@@ -62,6 +63,12 @@ export default function NewLeadPage() {
   const [salesPoints, setSalesPoints] = useState<string[]>(['', '', ''])
   const [coldEmail, setColdEmail] = useState('')
   const [notes, setNotes] = useState('')
+  const [quoteAssigneeId, setQuoteAssigneeId] = useState('')
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+
+  useEffect(() => {
+    getAllProfiles().then(setProfiles)
+  }, [])
 
   function addSalesPoint() {
     setSalesPoints(prev => [...prev, ''])
@@ -94,6 +101,7 @@ export default function NewLeadPage() {
       reason,
       sales_points: salesPoints.filter(s => s.trim()),
       notes,
+      quote_assignee_id: quoteAssigneeId || undefined,
     })
 
     if (!result) {
@@ -266,6 +274,25 @@ export default function NewLeadPage() {
                     + Legg til salgspunkt
                   </button>
                 </div>
+              </div>
+
+              {/* Tilbud-ansvarlig */}
+              <div style={{ borderTop: `1px solid rgba(124,92,252,0.2)`, paddingTop: 14, marginTop: 6, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.accent, whiteSpace: 'nowrap' }}>
+                  👤 Tilbud-ansvarlig
+                </label>
+                <select
+                  value={quoteAssigneeId}
+                  onChange={e => setQuoteAssigneeId(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                  onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                >
+                  <option value=''>Velg hvem som sender tilbudet... (valgfritt)</option>
+                  {profiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

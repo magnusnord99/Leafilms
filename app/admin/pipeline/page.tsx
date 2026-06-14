@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   getProjectsForPipeline, updatePipelineStage, setProjectType,
   getTasksForProjects, getAllProfiles, toggleTaskAssignee, updateTaskStatus,
-  advanceFromKontraktUnsigned,
+  advanceFromKontraktUnsigned, assignQuoteAndMove,
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -97,6 +97,74 @@ function KontraktWarningModal({
             style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 0', borderRadius: 6, border: 'none', background: '#F0A500', color: '#0C0B09', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
           >
             {loading ? '...' : 'Flytt uansett'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Tilbud-assign modal — vises når man drar til Sende tilbud uten ansvarlig ─
+
+function TilbudAssignModal({
+  projectTitle,
+  profiles,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  projectTitle: string
+  profiles: { id: string; name: string | null; email: string }[]
+  onConfirm: (assigneeId: string) => void
+  onCancel: () => void
+  loading: boolean
+}) {
+  const [selectedId, setSelectedId] = useState('')
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)' }}
+      onClick={onCancel}
+    >
+      <div
+        style={{ background: C.surface, border: `1px solid rgba(124,92,252,0.5)`, borderRadius: 12, padding: '24px 28px', width: 380, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text, marginBottom: 6 }}>
+          👤 Hvem sender tilbudet?
+        </p>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 18 }}>
+          <em>«{projectTitle}»</em> flyttes til Sende tilbud — tildel ansvarlig.
+        </p>
+        <select
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
+            color: selectedId ? C.text : C.text3,
+            background: C.surface2, border: `1px solid rgba(124,92,252,0.4)`,
+            borderRadius: 8, padding: '9px 12px', outline: 'none', marginBottom: 18,
+          }}
+        >
+          <option value=''>Velg teammedlem...</option>
+          {profiles.map(p => (
+            <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+          ))}
+        </select>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', padding: '9px 18px', borderRadius: 8, background: 'transparent', color: C.text3, border: `1px solid ${C.border}`, cursor: 'pointer' }}
+          >
+            Avbryt
+          </button>
+          <button
+            onClick={() => selectedId && onConfirm(selectedId)}
+            disabled={!selectedId || loading}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, padding: '9px 20px', borderRadius: 8, background: C.accent, color: '#fff', border: 'none', cursor: (!selectedId || loading) ? 'default' : 'pointer', opacity: (!selectedId || loading) ? 0.5 : 1, transition: 'opacity 0.15s' }}
+          >
+            {loading ? 'Flytter...' : 'Flytt prosjekt →'}
           </button>
         </div>
       </div>
@@ -654,6 +722,8 @@ export default function PipelinePage() {
   const [pendingMove, setPendingMove] = useState<{ projectId: string; targetStage: PipelineStage } | null>(null)
   const [kontraktWarning, setKontraktWarning] = useState<{ projectId: string; projectTitle: string } | null>(null)
   const [kontraktWarningLoading, setKontraktWarningLoading] = useState(false)
+  const [tilbudAssign, setTilbudAssign] = useState<{ projectId: string; projectTitle: string } | null>(null)
+  const [tilbudAssignLoading, setTilbudAssignLoading] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -680,6 +750,10 @@ export default function PipelinePage() {
     const project = projects.find(p => p.id === projectId)
     const currentIndex = PIPELINE_STAGES.findIndex(s => s.value === project?.pipeline_stage)
     const targetIndex = PIPELINE_STAGES.findIndex(s => s.value === targetStage)
+    if (targetStage === 'tilbud_sendt' && !project?.quote_assignee_id) {
+      setTilbudAssign({ projectId, projectTitle: project!.title })
+      return
+    }
     // Vis advarsel kun ved fremflytting fra kontrakt uten signering
     if (project?.pipeline_stage === 'kontrakt' && targetIndex > currentIndex && !(project.pipeline_data as { contract_signed?: boolean } | null)?.contract_signed) {
       setKontraktWarning({ projectId, projectTitle: project.title })
@@ -701,6 +775,17 @@ export default function PipelinePage() {
       await fetchAll()
     } else {
       alert(result.error ?? 'Noe gikk galt')
+    }
+  }
+
+  async function handleTilbudAssignConfirm(assigneeId: string) {
+    if (!tilbudAssign) return
+    setTilbudAssignLoading(true)
+    const result = await assignQuoteAndMove(tilbudAssign.projectId, assigneeId)
+    setTilbudAssignLoading(false)
+    setTilbudAssign(null)
+    if (result.ok) {
+      fetchAll()
     }
   }
 
@@ -871,6 +956,16 @@ export default function PipelinePage() {
           onConfirm={handleKontraktWarningConfirm}
           onCancel={() => setKontraktWarning(null)}
           loading={kontraktWarningLoading}
+        />
+      )}
+
+      {tilbudAssign && (
+        <TilbudAssignModal
+          projectTitle={tilbudAssign.projectTitle}
+          profiles={profiles}
+          onConfirm={handleTilbudAssignConfirm}
+          onCancel={() => setTilbudAssign(null)}
+          loading={tilbudAssignLoading}
         />
       )}
     </div>

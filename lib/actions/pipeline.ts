@@ -1392,6 +1392,37 @@ export async function getProjectDeliverablesSection(projectId: string): Promise<
   }
 }
 
+export async function updateProjectDeliverablesSection(
+  projectId: string,
+  items: NonNullable<SectionContent['deliverableItems']>
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: section, error: fetchError } = await supabase
+      .from('sections')
+      .select('id, content')
+      .eq('project_id', projectId)
+      .eq('type', 'deliverables')
+      .maybeSingle()
+    if (fetchError) return { error: fetchError.message }
+    if (!section) {
+      const { error: insertError } = await supabase
+        .from('sections')
+        .insert({ project_id: projectId, type: 'deliverables', content: { deliverableItems: items } })
+      if (insertError) return { error: insertError.message }
+    } else {
+      const { error: updateError } = await supabase
+        .from('sections')
+        .update({ content: { ...(section.content as object), deliverableItems: items }, updated_at: new Date().toISOString() })
+        .eq('id', section.id)
+      if (updateError) return { error: updateError.message }
+    }
+    return {}
+  } catch {
+    return { error: 'Noe gikk galt' }
+  }
+}
+
 /**
  * Henter tasks for en liste med prosjekt-IDer i én spørring.
  * Returnerer tasks gruppert per project_id, med assignees.
@@ -1668,6 +1699,55 @@ export async function advanceFromKontraktUnsigned(
     return { ok: true }
   } catch (err) {
     console.error('advanceFromKontraktUnsigned unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function assignQuoteAndMove(
+  projectId: string,
+  assigneeId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: project, error: fetchError } = await supabase
+      .from('projects')
+      .select('title')
+      .eq('id', projectId)
+      .single()
+
+    if (fetchError || !project) {
+      return { ok: false, error: 'Prosjekt ikke funnet' }
+    }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        quote_assignee_id: assigneeId,
+        pipeline_stage: 'tilbud_sendt',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId)
+
+    if (error) {
+      return { ok: false, error: 'Kunne ikke oppdatere prosjekt' }
+    }
+
+    await seedTasksFromTemplates(projectId, 'tilbud_sendt')
+
+    await notifyAssignment({
+      recipientId: assigneeId,
+      type: 'quote_assigned',
+      projectId,
+      preview: project.title,
+    })
+
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+
+    return { ok: true }
+  } catch (err) {
+    console.error('assignQuoteAndMove unexpected error:', err)
     return { ok: false, error: 'Uventet feil' }
   }
 }

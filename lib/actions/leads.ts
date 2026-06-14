@@ -22,6 +22,7 @@ export async function createLead(data: {
   reason: string
   sales_points: string[]
   notes: string
+  quote_assignee_id?: string
 }): Promise<{ leadId: string; projectId: string } | null> {
   try {
     const supabase = await createClient()
@@ -40,6 +41,7 @@ export async function createLead(data: {
         status: 'draft',
         language: 'no',
         client_name: null,
+        quote_assignee_id: data.quote_assignee_id ?? null,
       })
       .select('id')
       .single()
@@ -108,6 +110,16 @@ export async function createLead(data: {
         )
       }
     } catch { /* ikke kritisk */ }
+
+    // Send varsel til tilbud-ansvarlig hvis satt ved opprettelse
+    if (data.quote_assignee_id) {
+      await notifyAssignment({
+        recipientId: data.quote_assignee_id,
+        type: 'quote_assigned',
+        projectId: project.id,
+        preview: projectTitle,
+      })
+    }
 
     revalidatePath('/admin/pipeline')
     revalidatePath('/admin/leads')

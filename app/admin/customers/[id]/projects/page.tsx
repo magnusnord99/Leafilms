@@ -3,9 +3,50 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-import { Button, Card, Badge, Heading, Text } from '@/components/ui'
+import { createClient } from '@/lib/supabase-client'
+import { C } from '@/lib/admin-theme'
 import { Customer, Project, Quote, Contract } from '@/lib/types'
+
+type ProjectWithDetails = Project & { quotes: Quote[]; contracts: Contract[] }
+
+const statusLabel: Record<string, string> = {
+  published: 'Publisert',
+  archived:  'Arkivert',
+  draft:     'Utkast',
+}
+
+const statusColors: Record<string, { bg: string; color: string; border: string }> = {
+  published: { bg: 'rgba(80,200,120,0.1)',  color: '#50C878', border: 'rgba(80,200,120,0.25)' },
+  archived:  { bg: 'rgba(132,132,160,0.1)', color: C.text3,   border: C.border },
+  draft:     { bg: 'rgba(124,92,252,0.1)',  color: C.accent,  border: 'rgba(124,92,252,0.25)' },
+}
+
+const quoteStatusLabel: Record<string, string> = {
+  accepted: 'Godtatt',
+  sent:     'Sendt',
+  rejected: 'Avslått',
+  draft:    'Utkast',
+}
+
+function Badge({ status, label }: { status: string; label: string }) {
+  const s = statusColors[status] ?? statusColors.draft
+  return (
+    <span style={{
+      fontFamily: 'var(--font-dm-sans)',
+      fontSize: '0.6rem',
+      fontWeight: 600,
+      letterSpacing: '0.1em',
+      textTransform: 'uppercase',
+      padding: '2px 8px',
+      borderRadius: 3,
+      background: s.bg,
+      color: s.color,
+      border: `1px solid ${s.border}`,
+    }}>
+      {label}
+    </span>
+  )
+}
 
 export default function CustomerProjectsPage() {
   const params = useParams()
@@ -13,10 +54,11 @@ export default function CustomerProjectsPage() {
 
   const [loading, setLoading] = useState(true)
   const [customer, setCustomer] = useState<Customer | null>(null)
-  const [projects, setProjects] = useState<(Project & { quotes: Quote[], contracts: Contract[] })[]>([])
+  const [projects, setProjects] = useState<ProjectWithDetails[]>([])
 
   async function fetchData() {
-    // Hent kunde
+    const supabase = createClient()
+
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
       .select('*')
@@ -25,12 +67,12 @@ export default function CustomerProjectsPage() {
 
     if (customerError) {
       console.error('Error fetching customer:', customerError)
+      setLoading(false)
       return
     }
 
     setCustomer(customerData as Customer)
 
-    // Hent prosjekter for kunden
     const { data: projectsData, error: projectsError } = await supabase
       .from('projects')
       .select('*')
@@ -45,7 +87,6 @@ export default function CustomerProjectsPage() {
 
     const projectIds = (projectsData || []).map((p) => p.id)
 
-    // Batch-hent tilbud og kontrakter for alle prosjekter i to parallelle kall
     const [quotesResult, contractsResult] = await Promise.all([
       projectIds.length > 0
         ? supabase
@@ -77,236 +118,240 @@ export default function CustomerProjectsPage() {
       contractsByProject.set(c.project_id, list)
     })
 
-    const projectsWithDetails = (projectsData || []).map((project) => ({
-      ...project,
-      quotes: quotesByProject.get(project.id) ?? [],
-      contracts: contractsByProject.get(project.id) ?? [],
-    }))
-
-    setProjects(projectsWithDetails)
+    setProjects(
+      (projectsData || []).map((project) => ({
+        ...project,
+        quotes: quotesByProject.get(project.id) ?? [],
+        contracts: contractsByProject.get(project.id) ?? [],
+      }))
+    )
     setLoading(false)
   }
 
-  useEffect(() => {
-    if (customerId) {
-      fetchData()
+  async function handleDeleteQuote(quote: Quote) {
+    if (!confirm('Slett dette tilbudet? Dette kan ikke angres.')) return
+    const supabase = createClient()
+
+    if (quote.pdf_path) {
+      await supabase.storage.from('assets').remove([quote.pdf_path])
     }
+
+    const { error } = await supabase.from('quotes').delete().eq('id', quote.id)
+    if (error) { alert('Kunne ikke slette tilbud.'); return }
+    fetchData()
+  }
+
+  useEffect(() => {
+    if (customerId) fetchData()
   }, [customerId])
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text variant="body">Laster...</Text>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          Laster...
+        </p>
       </div>
     )
   }
 
   if (!customer) {
     return (
-      <div className="min-h-screen p-8">
-        <div className="max-w-6xl mx-auto">
-          <Card className="p-12 text-center">
-            <Text variant="body" className="mb-4">Kunde ikke funnet</Text>
-            <Link href="/admin/customers">
-              <Button variant="primary">Tilbake til kunder</Button>
-            </Link>
-          </Card>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', color: C.text2, marginBottom: 16 }}>Kunde ikke funnet</p>
+          <Link href="/admin/customers" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.accent, textDecoration: 'none' }}>
+            Tilbake til kunder
+          </Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
+
+        {/* Back */}
+        <Link
+          href="/admin/customers"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, textDecoration: 'none', marginBottom: 28 }}
+        >
+          <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+          </svg>
+          Kunder
+        </Link>
+
         {/* Header */}
-        <div className="mb-8">
-          <Link href="/admin/customers">
-            <Button variant="secondary" size="sm" className="mb-4">← Tilbake til kunder</Button>
-          </Link>
-          <div className="flex items-center justify-between">
-            <div>
-              <Heading as="h1" size="lg" className="mb-2 !text-white">{customer.name}</Heading>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+              <div style={{ width: 28, height: 1, background: C.accent }} />
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.16em', color: C.accent, textTransform: 'uppercase', fontWeight: 500 }}>
+                Kunde
+              </span>
+            </div>
+            <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: 'clamp(1.8rem, 3vw, 2.4rem)', fontWeight: 300, fontStyle: 'italic', color: C.text, lineHeight: 1.1, marginBottom: 6 }}>
+              {customer.name}
+            </h1>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
               {customer.company && (
-                <Text variant="body" className="!text-white">{customer.company}</Text>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>{customer.company}</span>
               )}
               {customer.email && (
-                <Text variant="body" className="!text-white">📧 {customer.email}</Text>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>{customer.email}</span>
+              )}
+              {customer.phone && (
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>{customer.phone}</span>
               )}
             </div>
-            <div className="flex gap-3">
-              <Link href={`/admin/customers/${customer.id}/edit`}>
-                <Button variant="secondary">Rediger Kunde</Button>
-              </Link>
-              <Link href={`/admin/projects/new?customer_id=${customer.id}`}>
-                <Button variant="primary">+ Nytt Prosjekt</Button>
-              </Link>
-            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginTop: 4 }}>
+            <Link href={`/admin/customers/${customer.id}/edit`}>
+              <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, cursor: 'pointer', background: 'transparent', color: C.text2, border: `1px solid ${C.border}` }}>
+                Rediger
+              </button>
+            </Link>
+            <Link href={`/admin/projects/new?customer_id=${customer.id}`}>
+              <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
+                + Nytt prosjekt
+              </button>
+            </Link>
           </div>
         </div>
 
-        {/* Projects List */}
-        <div className="space-y-6">
-          <Heading as="h2" size="md" className="!text-white">Prosjekter</Heading>
-          
-          {projects && projects.length > 0 ? (
-            <div className="space-y-4">
-              {projects.map((project) => (
-                <Card key={project.id} hover>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Heading as="h3" size="sm">{project.title}</Heading>
-                        <Badge variant={project.status as 'draft' | 'published' | 'archived'}>
-                          {project.status === 'published' ? '🟢 Publisert' : 
-                           project.status === 'archived' ? '⚫ Arkivert' : 
-                           '🟡 Utkast'}
-                        </Badge>
-                      </div>
+        {/* Section label */}
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, marginBottom: 12 }}>
+          {projects.length} prosjekt{projects.length !== 1 ? 'er' : ''}
+        </p>
 
-                      {/* Tilbud */}
-                      {project.quotes && project.quotes.length > 0 ? (
-                        <div className="mb-3 p-3 bg-background-elevated rounded-lg">
-                          <Text variant="body" className="text-sm font-medium mb-2">Pristilbud ({project.quotes.length}):</Text>
-                          <div className="space-y-2">
-                            {project.quotes.map((quote) => (
-                              <div key={quote.id} className="flex items-center justify-between p-2 bg-background rounded border border-border">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant={quote.status === 'accepted' ? 'published' : quote.status === 'sent' ? 'published' : 'draft'}>
-                                    {quote.version || 'V1'}
-                                  </Badge>
-                                  <Badge variant={quote.status === 'accepted' ? 'published' : 'draft'}>
-                                    {quote.status === 'accepted' ? 'Godtatt' : 
-                                     quote.status === 'sent' ? 'Sendt' : 
-                                     quote.status === 'rejected' ? 'Avslått' : 
-                                     'Utkast'}
-                                  </Badge>
-                                  {quote.pdf_path ? (
-                                    <a
-                                      href={supabase.storage.from('assets').getPublicUrl(quote.pdf_path).data.publicUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-400 hover:text-blue-300 underline text-xs"
-                                    >
-                                      📄 Se PDF
-                                    </a>
-                                  ) : (
-                                    <Text variant="muted" className="text-xs">
-                                      (Ingen PDF lagret)
-                                    </Text>
-                                  )}
-                                  {quote.accepted_at && (
-                                    <Text variant="muted" className="text-xs">
-                                      Akseptert: {new Date(quote.accepted_at).toLocaleDateString('nb-NO')}
-                                    </Text>
-                                  )}
-                                  <Text variant="muted" className="text-xs">
-                                    {new Date(quote.created_at).toLocaleDateString('nb-NO', {
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric'
-                                    })}
-                                  </Text>
-                                </div>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={async () => {
-                                    if (!confirm('Er du sikker på at du vil slette dette tilbudet? Dette kan ikke angres.')) {
-                                      return
-                                    }
+        {/* Projects */}
+        {projects.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {projects.map((project) => (
+              <div
+                key={project.id}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px' }}
+              >
+                {/* Project header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: project.quotes.length > 0 || project.contracts.length > 0 ? 14 : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
+                      {project.title}
+                    </p>
+                    <Badge status={project.status} label={statusLabel[project.status] ?? project.status} />
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
+                      {new Date(project.created_at).toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <Link href={`/admin/projects/${project.id}/edit`}>
+                    <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}>
+                      Åpne
+                    </button>
+                  </Link>
+                </div>
 
-                                    try {
-                                      // Slett PDF fra storage hvis den finnes
-                                      if (quote.pdf_path) {
-                                        const { error: storageError } = await supabase.storage
-                                          .from('assets')
-                                          .remove([quote.pdf_path])
-
-                                        if (storageError) {
-                                          console.error('Error deleting PDF from storage:', storageError)
-                                        }
-                                      }
-
-                                      // Slett quote fra database
-                                      const { error: deleteError } = await supabase
-                                        .from('quotes')
-                                        .delete()
-                                        .eq('id', quote.id)
-
-                                      if (deleteError) {
-                                        console.error('Error deleting quote:', deleteError)
-                                        alert('Kunne ikke slette tilbud. Prøv igjen.')
-                                      } else {
-                                        // Refresh data
-                                        fetchData()
-                                      }
-                                    } catch (error) {
-                                      console.error('Error deleting quote:', error)
-                                      alert('Kunne ikke slette tilbud. Prøv igjen.')
-                                    }
-                                  }}
-                                  className="text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+                {/* Quotes */}
+                {project.quotes.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+                      Tilbud
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {project.quotes.map((quote) => {
+                        const supabase = createClient()
+                        const pdfUrl = quote.pdf_path
+                          ? supabase.storage.from('assets').getPublicUrl(quote.pdf_path).data.publicUrl
+                          : null
+                        return (
+                          <div
+                            key={quote.id}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text }}>
+                                {quote.version || 'V1'}
+                              </span>
+                              <Badge
+                                status={quote.status === 'accepted' ? 'published' : 'draft'}
+                                label={quoteStatusLabel[quote.status] ?? quote.status}
+                              />
+                              {pdfUrl && (
+                                <a
+                                  href={pdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.accent, textDecoration: 'underline' }}
                                 >
-                                  🗑️ Slett
-                                </Button>
-                              </div>
-                            ))}
+                                  Se PDF
+                                </a>
+                              )}
+                              {quote.accepted_at && (
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                  Akseptert {new Date(quote.accepted_at).toLocaleDateString('nb-NO')}
+                                </span>
+                              )}
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                {new Date(quote.created_at).toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteQuote(quote)}
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500, padding: '4px 10px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                            >
+                              Slett
+                            </button>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="mb-3">
-                          <Text variant="body" className="text-sm text-gray-500">Ingen tilbud lagt ved ennå</Text>
-                        </div>
-                      )}
-
-                      {/* Kontrakter */}
-                      {project.contracts && project.contracts.length > 0 && (
-                        <div className="mb-3">
-                          <Text variant="body" className="text-sm font-medium mb-1">Kontrakter:</Text>
-                          <div className="space-y-1">
-                            {project.contracts.map((contract) => (
-                              <div key={contract.id} className="flex items-center gap-2 text-sm">
-                                <Badge variant={contract.status === 'signed' ? 'published' : 'draft'}>
-                                  {contract.status === 'signed' ? '✅ Signert' : 
-                                   contract.status === 'sent' ? '📤 Sendt' : 
-                                   '⏳ Ventende'}
-                                </Badge>
-                                {contract.signed_at && (
-                                  <Text variant="muted" className="text-xs">
-                                    Signert: {new Date(contract.signed_at).toLocaleDateString('nb-NO')}
-                                  </Text>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <Text variant="muted" className="text-sm">
-                        Opprettet: {new Date(project.created_at).toLocaleDateString('nb-NO')}
-                      </Text>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link href={`/admin/projects/${project.id}/edit`}>
-                        <Button variant="primary" size="sm">Rediger</Button>
-                      </Link>
+                        )
+                      })}
                     </div>
                   </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="p-12 text-center">
-              <Text variant="body" className="mb-4">Ingen prosjekter for denne kunden ennå</Text>
-              <Link href={`/admin/projects/new?customer_id=${customer.id}`}>
-                <Button variant="primary">Opprett første prosjekt →</Button>
-              </Link>
-            </Card>
-          )}
-        </div>
+                )}
+
+                {/* Contracts */}
+                {project.contracts.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+                      Kontrakter
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {project.contracts.map((contract) => (
+                        <div
+                          key={contract.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                        >
+                          <Badge
+                            status={contract.status === 'signed' ? 'published' : 'draft'}
+                            label={contract.status === 'signed' ? 'Signert' : contract.status === 'sent' ? 'Sendt' : 'Ventende'}
+                          />
+                          {contract.signed_at && (
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                              Signert {new Date(contract.signed_at).toLocaleDateString('nb-NO')}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '48px 24px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3, marginBottom: 16 }}>
+              Ingen prosjekter for denne kunden ennå
+            </p>
+            <Link href={`/admin/projects/new?customer_id=${customer.id}`}>
+              <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
+                Opprett første prosjekt
+              </button>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   )
 }
-

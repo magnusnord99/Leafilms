@@ -155,6 +155,11 @@ body.admin-page {
    ANIMATIONS
    ═══════════════════════════════════════════════════ */
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

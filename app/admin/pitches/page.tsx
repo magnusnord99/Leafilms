@@ -42,7 +42,6 @@ const PROJECT_TYPE_LABEL: Record<string, string> = {
   mixed: 'Film & Bilder',
 }
 
-
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const days = Math.floor(diff / 86400000)
@@ -127,101 +126,49 @@ export default function PitchesPage() {
   const totalDraft = projects.filter(p => p.status === 'draft').length
 
   return (
-    <div style={{ background: C.bg, color: C.text, minHeight: '100vh' }}>
+    <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 16px 48px' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
-      {/* Page header */}
-      <div style={{
-        padding: '28px 16px 24px',
-        background: C.sidebar,
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-
-          {/* Title row */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <div style={{ width: 24, height: 1, background: C.accent }} />
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.58rem',
-                  letterSpacing: '0.16em',
-                  color: C.accent,
-                  textTransform: 'uppercase',
-                  fontWeight: 500,
-                }}>
-                  Pitcher
-                </span>
-              </div>
-              <h1 style={{
-                fontFamily: 'var(--font-cormorant)',
-                fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-                fontWeight: 300,
-                fontStyle: 'italic',
-                color: C.text,
-                lineHeight: 1.1,
-              }}>
-                Oversikt
-              </h1>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2, marginBottom: 4 }}>
+              Pitcher
+            </h1>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                {projects.length} totalt
+              </span>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#4CAF7D' }}>
+                {totalPublished} publisert
+              </span>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                {totalDraft} utkast
+              </span>
             </div>
-            <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
-              <button style={{
-                padding: '9px 18px',
-                background: C.accent,
-                color: '#fff',
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.65rem',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: 3,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}>
-                + Ny pitch
-              </button>
-            </Link>
           </div>
-
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: 24 }}>
-            {[
-              { label: 'Totalt', value: projects.length },
-              { label: 'Publisert', value: totalPublished, color: '#4CAF7D' },
-              { label: 'Utkast', value: totalDraft, color: C.text3 },
-            ].map(stat => (
-              <div key={stat.label}>
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '1.2rem',
-                  fontWeight: 600,
-                  color: stat.color ?? C.text,
-                }}>
-                  {stat.value}
-                </span>
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.62rem',
-                  color: C.text3,
-                  letterSpacing: '0.06em',
-                  marginLeft: 6,
-                }}>
-                  {stat.label}
-                </span>
-              </div>
-            ))}
-          </div>
+          <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
+            <button style={{
+              padding: '8px 18px',
+              background: C.accent,
+              color: '#fff',
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}>
+              + Ny pitch
+            </button>
+          </Link>
         </div>
-      </div>
-
-      {/* Content */}
-      <div style={{ padding: '24px 16px 48px', maxWidth: 1000, margin: '0 auto' }}>
 
         {/* Filters */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
           {/* Search */}
-          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
             <svg
               style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
               width="13" height="13" fill="none" stroke={C.text3} viewBox="0 0 24 24"
@@ -238,32 +185,33 @@ export default function PitchesPage() {
                 padding: '8px 12px 8px 32px',
                 background: C.surface,
                 border: `1px solid ${C.border}`,
-                borderRadius: 3,
+                borderRadius: 8,
                 color: C.text,
                 fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.72rem',
+                fontSize: '0.78rem',
                 outline: 'none',
               }}
             />
           </div>
 
-          {/* Status filter */}
-          <div style={{ display: 'flex', gap: 4 }}>
+          {/* Status tabs */}
+          <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, alignSelf: 'flex-end' }}>
             {([['all', 'Alle'], ['draft', 'Utkast'], ['published', 'Publisert']] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setFilterStatus(val)}
                 style={{
-                  padding: '6px 12px',
+                  padding: '8px 12px',
                   fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.04em',
-                  borderRadius: 3,
-                  border: filterStatus === val ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                  background: filterStatus === val ? C.accentBg : C.surface,
-                  color: filterStatus === val ? C.accent : C.text3,
+                  fontSize: '0.78rem',
+                  fontWeight: filterStatus === val ? 600 : 400,
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: `2px solid ${filterStatus === val ? C.accent : 'transparent'}`,
+                  color: filterStatus === val ? C.text : C.text3,
                   cursor: 'pointer',
-                  transition: 'all 0.12s',
+                  marginBottom: -1,
+                  transition: 'color 0.1s',
                 }}
               >
                 {label}
@@ -272,17 +220,16 @@ export default function PitchesPage() {
           </div>
 
           {/* Type filter */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignSelf: 'center' }}>
             {([['all', 'Alle typer'], ['video', 'Film'], ['photo', 'Bilder'], ['mixed', 'Begge']] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setFilterType(val)}
                 style={{
-                  padding: '6px 12px',
+                  padding: '5px 10px',
                   fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.04em',
-                  borderRadius: 3,
+                  fontSize: '0.72rem',
+                  borderRadius: 6,
                   border: filterType === val ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
                   background: filterType === val ? C.accentBg : C.surface,
                   color: filterType === val ? C.accent : C.text3,
@@ -306,7 +253,7 @@ export default function PitchesPage() {
             textAlign: 'center',
             padding: '56px 24px',
             border: `1px solid ${C.border}`,
-            borderRadius: 4,
+            borderRadius: 10,
             background: C.surface,
           }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
@@ -319,12 +266,10 @@ export default function PitchesPage() {
                   background: C.accent,
                   color: '#fff',
                   fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
+                  fontSize: '0.78rem',
                   fontWeight: 600,
                   border: 'none',
-                  borderRadius: 3,
+                  borderRadius: 8,
                   cursor: 'pointer',
                 }}>
                   Opprett første pitch
@@ -333,31 +278,8 @@ export default function PitchesPage() {
             )}
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 680 }}>
-            {/* Table header */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 120px 100px 90px 90px auto',
-              gap: 12,
-              padding: '6px 16px',
-              alignItems: 'center',
-            }}>
-              {['Pitch', 'Pipeline', 'Type', 'Status', 'Sist oppdatert', ''].map(h => (
-                <span key={h} style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.58rem',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: C.text3,
-                  fontWeight: 500,
-                }}>
-                  {h}
-                </span>
-              ))}
-            </div>
-
-            {filtered.map(project => {
+          <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+            {filtered.map((project, i) => {
               const customerName = project.customer_name || project.client_name
               const stageColor = PIPELINE_COLOR[project.pipeline_stage ?? ''] ?? C.text3
               const shareLink = shareLinks[project.id]
@@ -366,14 +288,8 @@ export default function PitchesPage() {
                 <div
                   key={project.id}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 120px 100px 90px 90px auto',
-                    gap: 12,
-                    padding: '12px 16px',
+                    borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : 'none',
                     background: C.surface,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 3,
-                    alignItems: 'center',
                     transition: 'background 0.1s',
                     cursor: 'pointer',
                   }}
@@ -381,203 +297,196 @@ export default function PitchesPage() {
                   onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
                   onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = C.surface}
                 >
-                  {/* Title + customer */}
-                  <div>
-                    <p style={{
-                      fontFamily: 'var(--font-dm-sans)',
-                      fontSize: '0.8rem',
-                      fontWeight: 500,
-                      color: C.text,
-                      marginBottom: customerName ? 2 : 0,
-                    }}>
-                      {project.title || '(uten tittel)'}
-                    </p>
-                    {customerName && (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '12px 16px',
+                  }}>
+
+                    {/* Title + customer */}
+                    <div style={{ flex: 1, minWidth: 140 }}>
                       <p style={{
                         fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.65rem',
-                        color: C.text3,
+                        fontSize: '0.82rem',
+                        fontWeight: 500,
+                        color: C.text,
+                        marginBottom: customerName ? 2 : 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}>
-                        {customerName}
+                        {project.title || '(uten tittel)'}
                       </p>
-                    )}
-                  </div>
+                      {customerName && (
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                          {customerName}
+                        </p>
+                      )}
+                    </div>
 
-                  {/* Pipeline stage */}
-                  <div>
-                    {project.pipeline_stage ? (
+                    {/* Badges */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+                      {project.pipeline_stage && (
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.62rem',
+                          fontWeight: 500,
+                          color: stageColor,
+                          background: `${stageColor}18`,
+                          padding: '3px 8px',
+                          borderRadius: 4,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {PIPELINE_LABEL[project.pipeline_stage] ?? project.pipeline_stage}
+                        </span>
+                      )}
+                      {project.project_type && (
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.62rem',
+                          color: C.text2,
+                          background: C.surface2,
+                          padding: '3px 8px',
+                          borderRadius: 4,
+                          border: `1px solid ${C.border}`,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {PROJECT_TYPE_LABEL[project.project_type] ?? project.project_type}
+                        </span>
+                      )}
                       <span style={{
                         fontFamily: 'var(--font-dm-sans)',
                         fontSize: '0.62rem',
                         fontWeight: 500,
-                        color: stageColor,
-                        background: `${stageColor}18`,
+                        color: project.status === 'published' ? '#4CAF7D' : C.text3,
+                        background: project.status === 'published' ? 'rgba(76,175,125,0.1)' : C.surface2,
                         padding: '3px 8px',
-                        borderRadius: 3,
+                        borderRadius: 4,
                         whiteSpace: 'nowrap',
                       }}>
-                        {PIPELINE_LABEL[project.pipeline_stage] ?? project.pipeline_stage}
+                        {project.status === 'published' ? 'Publisert' : 'Utkast'}
                       </span>
-                    ) : (
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>—</span>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Type */}
-                  <div>
-                    {project.project_type ? (
-                      <span style={{
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.62rem',
-                        color: C.text2,
-                        background: C.surface2,
-                        padding: '3px 8px',
-                        borderRadius: 3,
-                        border: `1px solid ${C.border}`,
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {PROJECT_TYPE_LABEL[project.project_type] ?? project.project_type}
-                      </span>
-                    ) : (
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>—</span>
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div>
+                    {/* Date */}
                     <span style={{
                       fontFamily: 'var(--font-dm-sans)',
-                      fontSize: '0.62rem',
-                      fontWeight: 500,
-                      color: project.status === 'published' ? '#4CAF7D' : C.text3,
-                      background: project.status === 'published' ? 'rgba(76,175,125,0.1)' : C.surface2,
-                      padding: '3px 8px',
-                      borderRadius: 3,
+                      fontSize: '0.68rem',
+                      color: C.text3,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
                     }}>
-                      {project.status === 'published' ? 'Publisert' : 'Utkast'}
+                      {timeAgo(project.updated_at)}
                     </span>
-                  </div>
 
-                  {/* Date */}
-                  <span style={{
-                    fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.65rem',
-                    color: C.text3,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {timeAgo(project.updated_at)}
-                  </span>
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
-                    {shareLink && (
-                      <a
-                        href={shareLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Åpne pitch"
-                        style={{
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      {shareLink && (
+                        <a
+                          href={shareLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Åpne pitch"
+                          style={{
+                            padding: '5px 8px',
+                            background: 'transparent',
+                            color: C.text3,
+                            fontFamily: 'var(--font-dm-sans)',
+                            fontSize: '0.72rem',
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            transition: 'color 0.12s, border-color 0.12s',
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.color = C.text
+                            ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.text2
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.color = C.text3
+                            ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.border
+                          }}
+                        >
+                          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      <Link
+                        href={`/admin/projects/${project.id}/quote-analytics`}
+                        style={{ textDecoration: 'none' }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <button style={{
                           padding: '5px 10px',
                           background: 'transparent',
                           color: C.text3,
                           fontFamily: 'var(--font-dm-sans)',
-                          fontSize: '0.65rem',
+                          fontSize: '0.72rem',
                           border: `1px solid ${C.border}`,
-                          borderRadius: 3,
+                          borderRadius: 6,
                           cursor: 'pointer',
-                          textDecoration: 'none',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          transition: 'color 0.12s, border-color 0.12s',
-                        }}
-                        onMouseEnter={e => {
-                          (e.currentTarget as HTMLAnchorElement).style.color = C.text
-                          ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.text2
-                        }}
-                        onMouseLeave={e => {
-                          (e.currentTarget as HTMLAnchorElement).style.color = C.text3
-                          ;(e.currentTarget as HTMLAnchorElement).style.borderColor = C.border
-                        }}
+                          whiteSpace: 'nowrap',
+                          transition: 'color 0.12s',
+                        }}>
+                          Statistikk
+                        </button>
+                      </Link>
+                      <Link
+                        href={`/admin/projects/${project.id}/edit`}
+                        style={{ textDecoration: 'none' }}
+                        onClick={e => e.stopPropagation()}
                       >
-                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
-                    )}
-                    <Link
-                      href={`/admin/projects/${project.id}/quote-analytics`}
-                      style={{ textDecoration: 'none' }}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button style={{
-                        padding: '5px 12px',
-                        background: 'transparent',
-                        color: C.text3,
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.62rem',
-                        letterSpacing: '0.06em',
-                        border: `1px solid ${C.border}`,
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        transition: 'color 0.12s',
-                      }}>
-                        Statistikk
-                      </button>
-                    </Link>
-                    <Link
-                      href={`/admin/projects/${project.id}/edit`}
-                      style={{ textDecoration: 'none' }}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button style={{
-                        padding: '5px 12px',
-                        background: C.accentBg,
-                        color: C.accent,
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.62rem',
-                        letterSpacing: '0.06em',
-                        border: `1px solid rgba(124,92,252,0.2)`,
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        transition: 'background 0.12s',
-                      }}>
-                        Rediger pitch
-                      </button>
-                    </Link>
-                    <Link
-                      href={`/admin/projects/${project.id}`}
-                      style={{ textDecoration: 'none' }}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button style={{
-                        padding: '5px 12px',
-                        background: 'transparent',
-                        color: C.text3,
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.62rem',
-                        letterSpacing: '0.06em',
-                        border: `1px solid ${C.border}`,
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        transition: 'color 0.12s',
-                      }}>
-                        Oversikt
-                      </button>
-                    </Link>
+                        <button style={{
+                          padding: '5px 10px',
+                          background: C.accentBg,
+                          color: C.accent,
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.72rem',
+                          border: `1px solid rgba(124,92,252,0.2)`,
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          Rediger
+                        </button>
+                      </Link>
+                      <Link
+                        href={`/admin/projects/${project.id}`}
+                        style={{ textDecoration: 'none' }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <button style={{
+                          padding: '5px 10px',
+                          background: 'transparent',
+                          color: C.text3,
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.72rem',
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          transition: 'color 0.12s',
+                        }}>
+                          Oversikt
+                        </button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
-          </div>
         )}
 
         {/* Results count */}
         {!loading && filtered.length > 0 && filtered.length !== projects.length && (
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 12, textAlign: 'right' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 10, textAlign: 'right' }}>
             Viser {filtered.length} av {projects.length}
           </p>
         )}

@@ -1,0 +1,95 @@
+<h2>Hva skjer når prosjektet flyttes til "Sende tilbud" uten ansvarlig?</h2>
+<p class="subtitle">Tre måter å håndtere manglende tildeleing på:</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: sans-serif; font-size: 11px; padding: 16px; background: #181920; border-radius: 8px; color: #EEEEF2; position: relative;">
+
+        <!-- Pipeline-kort i bakgrunnen, dimmert -->
+        <div style="opacity: 0.25; display: flex; gap: 6px; margin-bottom: 12px;">
+          <div style="background: #21212D; border: 1px solid #3C3C52; border-radius: 6px; width: 60px; height: 40px;"></div>
+          <div style="background: #21212D; border: 1px solid #3C3C52; border-radius: 6px; width: 60px; height: 40px;"></div>
+        </div>
+
+        <!-- Blocking modal -->
+        <div style="background: #21212D; border: 1px solid rgba(124,92,252,0.5); border-radius: 10px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+          <div style="font-size: 14px; font-weight: 700; color: #EEEEF2; margin-bottom: 6px;">👤 Hvem sender tilbudet?</div>
+          <div style="font-size: 10px; color: #8484A0; margin-bottom: 12px;">Prosjektet flyttes til «Sende tilbud» — velg hvem som er ansvarlig.</div>
+          <div style="background: #2A2A38; border: 1px solid rgba(124,92,252,0.4); border-radius: 5px; padding: 7px 10px; color: #EEEEF2; font-size: 10px; display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>Velg teammedlem...</span><span style="color: #8484A0;">▾</span>
+          </div>
+          <div style="display: flex; gap: 6px; justify-content: flex-end;">
+            <div style="background: transparent; border: 1px solid #3C3C52; border-radius: 5px; padding: 5px 10px; color: #8484A0; font-size: 9px; cursor: pointer;">Avbryt</div>
+            <div style="background: #7C5CFC; border-radius: 5px; padding: 5px 10px; color: #fff; font-size: 9px; font-weight: 600;">Flytt prosjekt →</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Blokkerende modal</h3>
+      <p>Samme opplevelse som kontraktadvarselen dere allerede har. Du <em>må</em> velge ansvarlig (eller avbryte) for å gå videre. Ingen kan glippe.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: sans-serif; font-size: 11px; padding: 16px; background: #181920; border-radius: 8px; color: #EEEEF2;">
+
+        <!-- Pipeline-kort -->
+        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+          <div style="background: #21212D; border: 1px solid #3C3C52; border-radius: 6px; width: 60px; height: 40px;"></div>
+          <div style="background: #21212D; border: 2px solid rgba(240,165,0,0.5); border-radius: 6px; width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #F0A500;">Sende tilbud</div>
+        </div>
+
+        <!-- Toast-banner -->
+        <div style="background: rgba(240,165,0,0.1); border: 1px solid rgba(240,165,0,0.4); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 14px;">⚠️</span>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; font-weight: 600; color: #F0A500; margin-bottom: 2px;">Ingen er tildelt tilbudet</div>
+            <div style="font-size: 9px; color: #8484A0;">Prosjektet er flyttet, men ingen er satt som ansvarlig for å sende tilbud.</div>
+          </div>
+          <div style="background: rgba(240,165,0,0.2); border: 1px solid rgba(240,165,0,0.3); border-radius: 4px; padding: 4px 8px; font-size: 9px; color: #F0A500; white-space: nowrap; cursor: pointer;">Tildel nå</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Advarsel + fortsett</h3>
+      <p>Prosjektet flyttes uansett, men du ser en gul advarsel øverst med snarvei til å tildele. Mer fleksibelt, men lettere å ignorere.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: sans-serif; font-size: 11px; padding: 16px; background: #181920; border-radius: 8px; color: #EEEEF2;">
+
+        <!-- Pipeline-kort med inline indikator -->
+        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+          <div style="background: #21212D; border: 1px solid #3C3C52; border-radius: 6px; width: 60px; height: 40px;"></div>
+          <div style="background: #21212D; border: 1px solid #3C3C52; border-radius: 6px; overflow: hidden; width: 80px; height: 50px; padding: 6px 7px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="font-size: 8px; color: #EEEEF2; font-weight: 500;">Norsk Matfestival</div>
+            <div style="background: rgba(240,165,0,0.15); border: 1px solid rgba(240,165,0,0.3); border-radius: 3px; padding: 2px 5px; font-size: 8px; color: #F0A500;">⚠ Ikke tildelt</div>
+          </div>
+        </div>
+
+        <!-- Prosjektkortet med badge -->
+        <div style="background: #21212D; border: 1px solid rgba(240,165,0,0.3); border-radius: 8px; padding: 10px 12px;">
+          <div style="font-size: 10px; font-weight: 600; color: #EEEEF2; margin-bottom: 6px;">Sende tilbud</div>
+          <div style="display: flex; gap: 5px; align-items: center;">
+            <div style="width: 16px; height: 16px; border-radius: 50%; background: rgba(240,165,0,0.2); border: 1px dashed rgba(240,165,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 8px; color: #F0A500;">?</div>
+            <span style="font-size: 9px; color: #F0A500;">Ingen ansvarlig — klikk for å tildele</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Inline på pipeline-kortet</h3>
+      <p>Selve kortet i pipeline-visningen viser et "Ikke tildelt"-badge. Synlig hele tiden kortet står i steget, ikke bare én gang.</p>
+    </div>
+  </div>
+
+</div>

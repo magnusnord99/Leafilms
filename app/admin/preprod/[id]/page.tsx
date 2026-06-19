@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  getPreprodDetail, updatePreprodData, updatePreprodTaskStatus,
-  PreprodData, PreprodCrewMember, PackingItem,
+  getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
+  getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
-import { toggleTaskAssignee } from '@/lib/actions/pipeline'
+import { toggleTaskAssignee, setInvoiceAssignee } from '@/lib/actions/pipeline'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 
@@ -274,7 +274,7 @@ function PackingList({
 // ─── Crew section ─────────────────────────────────────────────────────────────
 
 function CrewSection({
-  title, crew, projectId, field, profiles, onChange,
+  title, crew, projectId, field, profiles, onChange, onCrewAdded,
 }: {
   title: string
   crew: PreprodCrewMember[]
@@ -282,12 +282,32 @@ function CrewSection({
   field: 'prod_crew' | 'post_crew'
   profiles: { id: string; name: string | null; email: string }[]
   onChange: (crew: PreprodCrewMember[]) => void
+  onCrewAdded?: (updated: PreprodCrewMember[]) => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [role, setRole] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editSelectedId, setEditSelectedId] = useState('')
+  const [editRole, setEditRole] = useState('')
 
   const available = profiles.filter(p => !crew.some(c => c.profile_id === p.id))
+
+  async function importFromPitch() {
+    setImporting(true)
+    const pitchCrew = await getPitchTeamAsProdCrew(projectId)
+    if (pitchCrew.length > 0) {
+      const merged = [
+        ...pitchCrew,
+        ...crew.filter(c => !pitchCrew.some(p => p.profile_id === c.profile_id)),
+      ]
+      onChange(merged)
+      updatePreprodData(projectId, { [field]: merged })
+      onCrewAdded?.(merged)
+    }
+    setImporting(false)
+  }
 
   function addCrew() {
     if (!selectedId) return
@@ -296,6 +316,7 @@ function CrewSection({
     const next = [...crew, { profile_id: selectedId, name: profile.name ?? profile.email, role: role.trim() || 'Crew' }]
     onChange(next)
     updatePreprodData(projectId, { [field]: next })
+    onCrewAdded?.(next)
     setSelectedId('')
     setRole('')
     setShowPicker(false)
@@ -305,24 +326,62 @@ function CrewSection({
     const next = crew.filter(c => c.profile_id !== profileId)
     onChange(next)
     updatePreprodData(projectId, { [field]: next })
+    onCrewAdded?.(next)
+  }
+
+  function startEdit(member: PreprodCrewMember) {
+    setEditingId(member.profile_id)
+    setEditSelectedId(member.profile_id)
+    setEditRole(member.role)
+    setShowPicker(false)
+  }
+
+  function saveEdit() {
+    if (!editingId || !editSelectedId) return
+    const profile = profiles.find(p => p.id === editSelectedId)
+    const next = crew.map(c =>
+      c.profile_id === editingId
+        ? { profile_id: editSelectedId, name: profile?.name ?? profile?.email ?? c.name, role: editRole.trim() || c.role }
+        : c
+    )
+    onChange(next)
+    updatePreprodData(projectId, { [field]: next })
+    setEditingId(null)
   }
 
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <SectionTitle>{title}</SectionTitle>
-        {!showPicker && (
-          <button
-            onClick={() => setShowPicker(true)}
-            style={{
-              fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
-              padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
-              background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)',
-            }}
-          >
-            + Legg til
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {field === 'prod_crew' && !showPicker && (
+            <button
+              onClick={importFromPitch}
+              disabled={importing}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500,
+                padding: '3px 8px', borderRadius: 5, cursor: importing ? 'wait' : 'pointer',
+                background: 'transparent', color: C.text3,
+                border: `1px solid ${C.border}`,
+                opacity: importing ? 0.6 : 1,
+              }}
+            >
+              {importing ? '...' : '↓ Hent fra pitch'}
+            </button>
+          )}
+          {!showPicker && (
+            <button
+              onClick={() => setShowPicker(true)}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
+                background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)',
+              }}
+            >
+              + Legg til
+            </button>
+          )}
+        </div>
       </div>
 
       {showPicker && (
@@ -384,27 +443,275 @@ function CrewSection({
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {crew.map(member => (
-            <div key={member.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: C.surface2, borderRadius: 6, border: `1px solid ${C.border}` }}>
-              <Avatar id={member.profile_id} name={member.name} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: C.text }}>{member.name}</p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{member.role}</p>
+          {crew.map(member => {
+            const isEditing = editingId === member.profile_id
+            return (
+              <div key={member.profile_id} style={{ background: C.surface2, borderRadius: 6, border: `1px solid ${isEditing ? 'rgba(124,92,252,0.35)' : C.border}`, overflow: 'hidden', transition: 'border-color 0.12s' }}>
+                {/* Normal visning */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px' }}>
+                  <Avatar id={member.profile_id} name={member.name} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500, color: C.text }}>{member.name}</p>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{member.role}</p>
+                  </div>
+                  <button
+                    onClick={() => isEditing ? setEditingId(null) : startEdit(member)}
+                    title="Rediger"
+                    style={{ background: isEditing ? C.accentBg : 'none', border: `1px solid ${isEditing ? 'rgba(124,92,252,0.3)' : 'transparent'}`, borderRadius: 4, cursor: 'pointer', color: isEditing ? C.accent : C.text3, padding: '3px 5px', lineHeight: 0, transition: 'all 0.12s' }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => remove(member.profile_id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M2 2l8 8M10 2L2 10" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Inline redigeringsform */}
+                {isEditing && (
+                  <div style={{ padding: '10px 12px 12px', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, background: C.accentBg }}>
+                    <select
+                      value={editSelectedId}
+                      onChange={e => setEditSelectedId(e.target.value)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
+                    >
+                      {profiles.map(p => (
+                        <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={editRole}
+                      onChange={e => setEditRole(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                      placeholder="Rolle"
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
+                    />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={saveEdit}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 12px', borderRadius: 5, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
+                      >
+                        Lagre
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', padding: '5px 10px', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: C.text3, border: `1px solid ${C.border}` }}
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => remove(member.profile_id)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 2l8 8M10 2L2 10" />
-                </svg>
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── PostCrewSection — oppgavebasert tildeling for post-produksjon ───────────
+
+const POST_ROLES_VIDEO: { key: string; label: string }[] = [
+  { key: 'video_logging',   label: 'Logging'   },
+  { key: 'video_grovklipp', label: 'Grovklipp' },
+  { key: 'video_klipp',     label: 'Klipp'     },
+  { key: 'video_farger',    label: 'Farger'    },
+  { key: 'video_lyd',       label: 'Lyd'       },
+  { key: 'video_ferdig',    label: 'Ferdig'    },
+]
+const POST_ROLES_PHOTO: { key: string; label: string }[] = [
+  { key: 'photo_selektering',        label: 'Selektering'        },
+  { key: 'photo_seleksjon_til_kunde', label: 'Seleksjon til kunde' },
+  { key: 'photo_redigering',         label: 'Redigering'         },
+  { key: 'photo_ferdig',             label: 'Ferdig'             },
+]
+
+type RoleGroup = { heading: string; color: string; roles: { key: string; label: string }[] }
+
+function resolveGroups(projectType: string | null | undefined): RoleGroup[] {
+  if (projectType === 'photo') return [{ heading: 'Foto', color: '#4A9EFF', roles: POST_ROLES_PHOTO }]
+  if (projectType === 'mixed') return [
+    { heading: 'Video', color: '#C49434', roles: POST_ROLES_VIDEO },
+    { heading: 'Foto',  color: '#4A9EFF', roles: POST_ROLES_PHOTO },
+  ]
+  return [{ heading: 'Video', color: '#C49434', roles: POST_ROLES_VIDEO }]
+}
+
+function PostCrewSection({
+  crew, projectId, profiles, projectType, onChange, onCrewAdded,
+}: {
+  crew: PreprodCrewMember[]
+  projectId: string
+  profiles: { id: string; name: string | null; email: string }[]
+  projectType: string | null | undefined
+  onChange: (crew: PreprodCrewMember[]) => void
+  onCrewAdded?: (updated: PreprodCrewMember[]) => void
+}) {
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!openKey) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpenKey(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [openKey])
+
+  const groups = resolveGroups(projectType)
+
+  function assignRole(key: string, profile: { id: string; name: string | null; email: string }) {
+    const prev = crew.find(c => c.role === key)
+    const next = [
+      ...crew.filter(c => c.role !== key),
+      { profile_id: profile.id, name: profile.name ?? profile.email, role: key },
+    ]
+    onChange(next)
+    updatePreprodData(projectId, { post_crew: next })
+    syncPostCrewToTask(projectId, key, profile.id, prev?.profile_id ?? null)
+    onCrewAdded?.(next)
+    setOpenKey(null)
+  }
+
+  function removeRole(key: string) {
+    const prev = crew.find(c => c.role === key)
+    const next = crew.filter(c => c.role !== key)
+    onChange(next)
+    updatePreprodData(projectId, { post_crew: next })
+    if (prev) syncPostCrewToTask(projectId, key, null, prev.profile_id)
+    onCrewAdded?.(next)
+  }
+
+  return (
+    <div ref={ref} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+      <SectionTitle>Fordeling — Post-produksjon</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {groups.map(group => (
+          <div key={group.heading}>
+            {groups.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: group.color }}>
+                  {group.heading}
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {group.roles.map(({ key, label }) => {
+                const member = crew.find(c => c.role === key)
+                const isOpen = openKey === key
+                const assigned = member
+                  ? profiles.find(p => p.id === member.profile_id) ?? { id: member.profile_id, name: member.name, email: member.name }
+                  : null
+
+                return (
+                  <div key={key} style={{ position: 'relative' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', borderRadius: 7,
+                      background: isOpen ? C.accentBg : C.surface2,
+                      border: `1px solid ${isOpen ? 'rgba(124,92,252,0.3)' : C.border}`,
+                      transition: 'all 0.12s',
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, flex: 1 }}>
+                        {label}
+                      </span>
+                      {assigned ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <Avatar id={assigned.id} name={assigned.name} size={22} />
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text }}>
+                            {assigned.name ?? assigned.email}
+                          </span>
+                          <button
+                            onClick={() => setOpenKey(isOpen ? null : key)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: '0 2px', lineHeight: 0, fontSize: '0.7rem' }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => removeRole(key)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M2 2l8 8M10 2L2 10" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setOpenKey(isOpen ? null : key)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                            color: isOpen ? C.accent : C.text3,
+                            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                          </svg>
+                          Tildel
+                        </button>
+                      )}
+                    </div>
+
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+                        background: C.surface2, border: `1px solid ${C.border}`,
+                        borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        minWidth: 200, padding: '3px 0',
+                      }}>
+                        {profiles.map(p => {
+                          const isCurrent = assigned?.id === p.id
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => assignRole(key, p)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 9,
+                                width: '100%', padding: '7px 12px',
+                                background: isCurrent ? C.accentBg : 'none',
+                                border: 'none', cursor: 'pointer', textAlign: 'left',
+                              }}
+                              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+                            >
+                              <Avatar id={p.id} name={p.name} size={22} />
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: isCurrent ? C.accent : C.text, flex: 1 }}>
+                                {p.name ?? p.email}
+                              </span>
+                              {isCurrent && (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                  <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -545,6 +852,105 @@ function TaskList({
   )
 }
 
+// ─── Invoice assignee card ────────────────────────────────────────────────────
+
+function InvoiceAssigneeCard({
+  projectId,
+  currentAssigneeId,
+  profiles,
+}: {
+  projectId: string
+  currentAssigneeId: string | null
+  profiles: { id: string; name: string | null; email: string }[]
+}) {
+  const [assigneeId, setAssigneeId] = useState<string | null>(currentAssigneeId)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const assignee = profiles.find(p => p.id === assigneeId) ?? null
+
+  async function select(profileId: string | null) {
+    setSaving(true)
+    setOpen(false)
+    setAssigneeId(profileId)
+    await setInvoiceAssignee(projectId, profileId)
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px' }}>
+      <SectionTitle>Faktura-ansvarlig</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        {assignee ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar id={assignee.id} name={assignee.name} size={22} />
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text }}>{assignee.name ?? assignee.email}</span>
+          </div>
+        ) : (
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>Ikke tildelt</span>
+        )}
+
+        <div ref={ref} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setOpen(v => !v)}
+            disabled={saving}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
+              color: C.accent, background: `${C.accent}14`, border: `1px solid ${C.accent}30`,
+              borderRadius: 6, padding: '4px 10px', cursor: 'pointer', opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {assignee ? 'Bytt' : 'Tildel'}
+          </button>
+
+          {open && (
+            <div style={{
+              position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50,
+              background: C.surface2, border: `1px solid ${C.border}`,
+              borderRadius: 8, minWidth: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              padding: '4px 0',
+            }}>
+              {assignee && (
+                <>
+                  <button onClick={() => select(null)} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
+                    Fjern tildeling
+                  </button>
+                  <div style={{ height: 1, background: C.border }} />
+                </>
+              )}
+              {profiles.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => select(p.id)}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '7px 12px',
+                    background: p.id === assigneeId ? `${C.accent}14` : 'none',
+                    border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-dm-sans)',
+                  }}
+                >
+                  <Avatar id={p.id} name={p.name} size={18} />
+                  <span style={{ fontSize: '0.78rem', color: C.text, fontWeight: p.id === assigneeId ? 600 : 400 }}>{p.name ?? p.email}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function PreprodDetailPage() {
@@ -574,6 +980,18 @@ export default function PreprodDetailPage() {
 
   function handleTaskStatusChange(taskId: string, status: Task['status']) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
+  }
+
+  async function handleCrewChanged(updatedProdCrew?: PreprodCrewMember[], updatedPostCrew?: PreprodCrewMember[]) {
+    const prodCrew = updatedProdCrew ?? preprod?.prod_crew ?? []
+    const postCrew = updatedPostCrew ?? preprod?.post_crew ?? []
+    const hasProd = prodCrew.length > 0
+    const hasPost = postCrew.length > 0
+    const newStatus = (hasProd && hasPost) ? 'done' : (hasProd || hasPost) ? 'in_progress' : 'todo'
+    await setTildelTaskStatus(id, newStatus)
+    setTasks(prev => prev.map(t =>
+      t.title === 'Tildel oppgaver til teamet' ? { ...t, status: newStatus } : t
+    ))
   }
 
   if (loading) {
@@ -646,16 +1064,17 @@ export default function PreprodDetailPage() {
               field="prod_crew"
               profiles={profiles}
               onChange={next => patchPreprod({ prod_crew: next })}
+              onCrewAdded={next => handleCrewChanged(next, undefined)}
             />
 
             {/* Fordeling: Post */}
-            <CrewSection
-              title="Fordeling — Post-produksjon"
+            <PostCrewSection
               crew={preprod.post_crew}
               projectId={id}
-              field="post_crew"
               profiles={profiles}
+              projectType={project.project_type}
               onChange={next => patchPreprod({ post_crew: next })}
+              onCrewAdded={next => handleCrewChanged(undefined, next)}
             />
           </div>
 
@@ -672,6 +1091,11 @@ export default function PreprodDetailPage() {
               projectId={id}
               quoteEquipment={project.quote_equipment}
               onChange={next => patchPreprod({ packing_list: next })}
+            />
+            <InvoiceAssigneeCard
+              projectId={id}
+              currentAssigneeId={(project as { invoice_assignee_id?: string | null }).invoice_assignee_id ?? null}
+              profiles={profiles}
             />
           </div>
 

@@ -168,10 +168,10 @@ export async function seedTasksFromTemplates(
   try {
     const supabase = await createClient()
 
-    // Sjekk om det allerede finnes tasks for dette steget
-    const { count, error: countError } = await supabase
+    // Hent eksisterende oppgavetitler for dette steget for å unngå duplikater
+    const { data: existingTasks, error: countError } = await supabase
       .from('tasks')
-      .select('id', { count: 'exact', head: true })
+      .select('title')
       .eq('project_id', projectId)
       .eq('pipeline_stage', stage)
 
@@ -180,10 +180,7 @@ export async function seedTasksFromTemplates(
       return
     }
 
-    if ((count ?? 0) > 0) {
-      // Tasks finnes allerede for dette steget — ikke seed på nytt
-      return
-    }
+    const existingTitles = new Set((existingTasks ?? []).map((t: { title: string }) => t.title))
 
     // For post_prod: hent project_type først
     let projectType: string | null = null
@@ -229,19 +226,23 @@ export async function seedTasksFromTemplates(
       return
     }
 
-    // Opprett tasks basert på templates
-    const tasksToInsert = templates.map((t: TaskTemplateRow) => ({
-      project_id: projectId,
-      pipeline_stage: stage,
-      title: t.title,
-      description: t.description ?? null,
-      status: 'todo' as const,
-      sort_order: t.sort_order,
-      sub_type: null,
-      due_date: null,
-      priority: null,
-      created_by: null,
-    }))
+    // Opprett kun templates som ikke allerede finnes (tittel-match)
+    const tasksToInsert = templates
+      .filter((t: TaskTemplateRow) => !existingTitles.has(t.title))
+      .map((t: TaskTemplateRow) => ({
+        project_id: projectId,
+        pipeline_stage: stage,
+        title: t.title,
+        description: t.description ?? null,
+        status: 'todo' as const,
+        sort_order: t.sort_order,
+        sub_type: null,
+        due_date: null,
+        priority: null,
+        created_by: null,
+      }))
+
+    if (tasksToInsert.length === 0) return
 
     const { error: insertError } = await supabase
       .from('tasks')
@@ -259,7 +260,21 @@ export async function seedTasksFromTemplates(
  * Seeder to uavhengige post_prod-flyter for mixed-prosjekter:
  * én for video (sub_type='video') og én for foto (sub_type='photo').
  */
-async function seedMixedPostProdTasks(supabase: SupabaseServerClient, projectId: string): Promise<void> {
+async function seedMixedPostProdTasks(
+  supabase: SupabaseServerClient,
+  projectId: string,
+): Promise<void> {
+  // Bygg et sett av "sub_type:title" for eksisterende oppgaver for å unngå duplikater
+  const { data: existing } = await supabase
+    .from('tasks')
+    .select('title, sub_type')
+    .eq('project_id', projectId)
+    .eq('pipeline_stage', 'post_prod')
+
+  const existingKeys = new Set(
+    (existing ?? []).map((t: { title: string; sub_type: string | null }) => `${t.sub_type}:${t.title}`)
+  )
+
   const [{ data: videoTemplates }, { data: photoTemplates }] = await Promise.all([
     supabase
       .from('task_templates')
@@ -276,30 +291,34 @@ async function seedMixedPostProdTasks(supabase: SupabaseServerClient, projectId:
   ])
 
   const toInsert = [
-    ...(videoTemplates ?? []).map((t: TaskTemplateRow) => ({
-      project_id: projectId,
-      pipeline_stage: 'post_prod',
-      title: t.title,
-      description: t.description ?? null,
-      status: 'todo' as const,
-      sort_order: t.sort_order,
-      sub_type: 'video',
-      due_date: null,
-      priority: null,
-      created_by: null,
-    })),
-    ...(photoTemplates ?? []).map((t: TaskTemplateRow) => ({
-      project_id: projectId,
-      pipeline_stage: 'post_prod',
-      title: t.title,
-      description: t.description ?? null,
-      status: 'todo' as const,
-      sort_order: t.sort_order,
-      sub_type: 'photo',
-      due_date: null,
-      priority: null,
-      created_by: null,
-    })),
+    ...(videoTemplates ?? [])
+      .filter((t: TaskTemplateRow) => !existingKeys.has(`video:${t.title}`))
+      .map((t: TaskTemplateRow) => ({
+        project_id: projectId,
+        pipeline_stage: 'post_prod',
+        title: t.title,
+        description: t.description ?? null,
+        status: 'todo' as const,
+        sort_order: t.sort_order,
+        sub_type: 'video',
+        due_date: null,
+        priority: null,
+        created_by: null,
+      })),
+    ...(photoTemplates ?? [])
+      .filter((t: TaskTemplateRow) => !existingKeys.has(`photo:${t.title}`))
+      .map((t: TaskTemplateRow) => ({
+        project_id: projectId,
+        pipeline_stage: 'post_prod',
+        title: t.title,
+        description: t.description ?? null,
+        status: 'todo' as const,
+        sort_order: t.sort_order,
+        sub_type: 'photo',
+        due_date: null,
+        priority: null,
+        created_by: null,
+      })),
   ]
 
   if (toInsert.length > 0) {
@@ -1699,6 +1718,72 @@ export async function advanceFromKontraktUnsigned(
     return { ok: true }
   } catch (err) {
     console.error('advanceFromKontraktUnsigned unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function setQuoteAssignee(
+  projectId: string,
+  assigneeId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ quote_assignee_id: assigneeId, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { ok: false, error: 'Kunne ikke oppdatere tilbud-ansvarlig' }
+    if (assigneeId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', projectId)
+        .single()
+      await notifyAssignment({
+        recipientId: assigneeId,
+        type: 'quote_assigned',
+        projectId,
+        preview: project?.title ?? '',
+      })
+    }
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('setQuoteAssignee unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function setInvoiceAssignee(
+  projectId: string,
+  assigneeId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ invoice_assignee_id: assigneeId, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { ok: false, error: 'Kunne ikke oppdatere faktura-ansvarlig' }
+    if (assigneeId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', projectId)
+        .single()
+      await notifyAssignment({
+        recipientId: assigneeId,
+        type: 'invoice_assigned',
+        projectId,
+        preview: project?.title ?? '',
+      })
+    }
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/faktura/${projectId}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('setInvoiceAssignee unexpected error:', err)
     return { ok: false, error: 'Uventet feil' }
   }
 }

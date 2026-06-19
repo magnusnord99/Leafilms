@@ -182,6 +182,168 @@ export async function updatePreprodData(projectId: string, preprod: Partial<Prep
   }
 }
 
+// Henter teamet fra pitch-seksjonen og matcher mot profiles via email.
+// Returnerer PreprodCrewMember[] med profile_id der match finnes.
+export async function getPitchTeamAsProdCrew(
+  projectId: string
+): Promise<PreprodCrewMember[]> {
+  try {
+    const supabase = await createClient()
+
+    // Finn team-seksjonen for prosjektet
+    const { data: section } = await supabase
+      .from('sections')
+      .select('id, content')
+      .eq('project_id', projectId)
+      .eq('type', 'team')
+      .maybeSingle()
+
+    if (!section) return []
+
+    const content = section.content as {
+      teamMemberRoles?: Record<string, string>
+    } | null
+
+    // Hent valgte teammedlemmer via junction-tabell
+    const { data: links } = await supabase
+      .from('section_team_members')
+      .select('team_member_id, order_index')
+      .eq('section_id', section.id)
+      .order('order_index', { ascending: true })
+
+    if (!links?.length) return []
+
+    const memberIds = links.map((l: { team_member_id: string }) => l.team_member_id)
+
+    const { data: members } = await supabase
+      .from('team_members')
+      .select('id, name, role, email')
+      .in('id', memberIds)
+
+    if (!members?.length) return []
+
+    // Hent alle profiles for å matche på email
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+
+    const profileByEmail = new Map(
+      (profiles ?? [])
+        .filter((p: { email: string | null }) => p.email)
+        .map((p: { id: string; name: string | null; email: string }) => [p.email.toLowerCase(), p])
+    )
+
+    return memberIds
+      .map((id: string) => {
+        const member = members.find((m: { id: string }) => m.id === id)
+        if (!member) return null
+
+        // Prosjektspesifikk rolle overstyrer standardrollen
+        const role = content?.teamMemberRoles?.[id] ?? member.role
+
+        // Match til profile via email
+        const profile = member.email
+          ? profileByEmail.get(member.email.toLowerCase())
+          : null
+
+        return {
+          profile_id: profile?.id ?? `tm_${id}`,
+          name: profile?.name ?? member.name,
+          role,
+        }
+      })
+      .filter((m): m is PreprodCrewMember => m !== null)
+  } catch (err) {
+    console.error('getPitchTeamAsProdCrew error:', err)
+    return []
+  }
+}
+
+// Setter status på "Tildel oppgaver til teamet" basert på crew-tilstand.
+export async function setTildelTaskStatus(
+  projectId: string,
+  status: 'todo' | 'in_progress' | 'done'
+): Promise<string | null> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('tasks')
+      .update({ status })
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'pre_prod')
+      .eq('title', 'Tildel oppgaver til teamet')
+      .neq('status', status)
+      .select('id')
+      .maybeSingle()
+    revalidatePath(`/admin/preprod/${projectId}`)
+    return data?.id ?? null
+  } catch (err) {
+    console.error('setTildelTaskStatus error:', err)
+    return null
+  }
+}
+
+// Kobler pre-prod post_crew-rolle til task_assignees på faktiske post-prod-oppgaver.
+// Fjerner forrige person og legger til ny på alle matchende oppgavetitler.
+const ROLE_TASK_MAP: Record<string, string[]> = {
+  video_logging:             ['Logging'],
+  video_grovklipp:           ['Grovklipp'],
+  video_klipp:               ['Klipp'],
+  video_farger:              ['Farger'],
+  video_lyd:                 ['Lyd'],
+  video_ferdig:              ['Ferdig'],
+  photo_selektering:         ['Selektering', 'Selektering bilder'],
+  photo_seleksjon_til_kunde: ['Seleksjon til kunde'],
+  photo_redigering:          ['Redigering', 'Redigering bilder'],
+  photo_ferdig:              ['Ferdig'],
+}
+
+export async function syncPostCrewToTask(
+  projectId: string,
+  roleKey: string,
+  newProfileId: string | null,
+  prevProfileId: string | null
+): Promise<void> {
+  const titles = ROLE_TASK_MAP[roleKey]
+  if (!titles?.length || (!newProfileId && !prevProfileId)) return
+
+  try {
+    const supabase = await createClient()
+
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .in('title', titles)
+
+    if (!tasks?.length) return
+
+    const taskIds = tasks.map(t => t.id)
+
+    if (prevProfileId) {
+      await supabase
+        .from('task_assignees')
+        .delete()
+        .in('task_id', taskIds)
+        .eq('profile_id', prevProfileId)
+    }
+
+    if (newProfileId) {
+      await supabase
+        .from('task_assignees')
+        .upsert(
+          taskIds.map(task_id => ({ task_id, profile_id: newProfileId })),
+          { onConflict: 'task_id,profile_id' }
+        )
+    }
+
+    revalidatePath(`/admin/postprod/${projectId}`)
+  } catch (err) {
+    console.error('syncPostCrewToTask error:', err)
+  }
+}
+
 export async function updatePreprodTaskStatus(
   taskId: string,
   status: 'todo' | 'in_progress' | 'done'

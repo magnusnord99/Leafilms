@@ -59,6 +59,7 @@ export type Project = {
   meeting_summary?: Record<string, unknown> | null
   pipeline_data?: PipelineData | null
   quote_assignee_id?: string | null
+  invoice_assignee_id?: string | null
   created_at: string
   updated_at: string
 }

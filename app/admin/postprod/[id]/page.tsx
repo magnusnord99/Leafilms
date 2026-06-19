@@ -10,6 +10,7 @@ import {
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee, updatePostProdDelivery,
   getProjectDeliverablesSection,
+  updateProjectDeliverablesSection,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import type { ProjectType, Task, ProjectWithPipeline, TaskMessage } from '@/lib/types'
@@ -227,8 +228,12 @@ export default function PostProdDetailPage() {
   const [deliveryPhoto, setDeliveryPhoto] = useState('')
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
+  const [editingDeliverables, setEditingDeliverables] = useState(false)
+  const [draftDeliverables, setDraftDeliverables] = useState<DeliverableItem[]>([])
+  const [savingDeliverables, setSavingDeliverables] = useState(false)
 
   type DeliverableItem = {
+    id?: string
     title?: string
     description?: string
     quantity?: number | string
@@ -734,58 +739,144 @@ export default function PostProdDetailPage() {
             {showDeliveryModal && (
               <div
                 style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
-                onClick={e => { if (e.target === e.currentTarget) setShowDeliveryModal(false) }}
+                onClick={e => { if (e.target === e.currentTarget && !editingDeliverables) setShowDeliveryModal(false) }}
               >
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 460, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                       Leveranser
                     </span>
-                    <button onClick={() => setShowDeliveryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {!editingDeliverables ? (
+                        <button
+                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true) }}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
+                        >
+                          Rediger
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditingDeliverables(false)}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
+                          >
+                            Avbryt
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setSavingDeliverables(true)
+                              const items = draftDeliverables.map(it => ({
+                                id: it.id ?? String(Date.now()),
+                                title: it.title,
+                                quantity: typeof it.quantity === 'string' ? (parseInt(it.quantity, 10) || undefined) : it.quantity,
+                                format: it.format,
+                                description: it.description,
+                              }))
+                              const res = await updateProjectDeliverablesSection(projectId, items)
+                              setSavingDeliverables(false)
+                              if (!res.error) {
+                                setDeliverableItems(draftDeliverables)
+                                setEditingDeliverables(false)
+                              }
+                            }}
+                            disabled={savingDeliverables}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: savingDeliverables ? 0.6 : 1 }}
+                          >
+                            {savingDeliverables ? 'Lagrer...' : 'Lagre'}
+                          </button>
+                        </>
+                      )}
+                      <button onClick={() => { setShowDeliveryModal(false); setEditingDeliverables(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
+                    </div>
                   </div>
 
-                  {deliverableItems.length === 0 ? (
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
-                      Ingen leveranser er lagt til i pitchen for dette prosjektet.
-                    </p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {deliverableItems.map((item, i) => {
-                        const qty = typeof item.quantity === 'number'
-                          ? item.quantity
-                          : (item.quantity != null ? parseInt(item.quantity, 10) || null : null)
-                        return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                            {qty != null && (
-                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.accent, minWidth: 28, textAlign: 'right', flexShrink: 0 }}>
-                                {qty}
-                              </span>
-                            )}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block' }}>
-                                {item.title || '—'}
-                              </span>
-                              {item.description && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 1 }}>
-                                  {item.description}
+                  {/* Scrollbar content */}
+                  <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                    {editingDeliverables ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {draftDeliverables.map((item, i) => (
+                          <div key={item.id ?? i} style={{ background: C.surface2, borderRadius: 8, padding: '12px 14px', position: 'relative' }}>
+                            <button
+                              onClick={() => setDraftDeliverables(prev => prev.filter((_, idx) => idx !== i))}
+                              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
+                              title="Fjern"
+                            >×</button>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 80px', gap: 8, marginBottom: 8 }}>
+                              <input
+                                value={item.title ?? ''}
+                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, title: e.target.value } : it))}
+                                placeholder="Tittel"
+                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity ?? ''}
+                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))}
+                                placeholder="Ant."
+                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
+                              />
+                              <input
+                                value={item.format ?? ''}
+                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
+                                placeholder="Format"
+                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
+                              />
+                            </div>
+                            <textarea
+                              value={item.description ?? ''}
+                              onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
+                              placeholder="Beskrivelse (valgfri)"
+                              rows={2}
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), title: '', quantity: 1, format: '', description: '' }])}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer', width: '100%', marginTop: 4 }}
+                        >
+                          + Legg til leveranse
+                        </button>
+                      </div>
+                    ) : deliverableItems.length === 0 ? (
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
+                        Ingen leveranser er lagt til ennå. Trykk «Rediger» for å legge til.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {deliverableItems.map((item, i) => {
+                          const qty = typeof item.quantity === 'number'
+                            ? item.quantity
+                            : (item.quantity != null ? parseInt(item.quantity as string, 10) || null : null)
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                              {qty != null && (
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.accent, minWidth: 24, textAlign: 'right', flexShrink: 0, paddingTop: 1 }}>
+                                  {qty}
+                                </span>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block', wordBreak: 'break-word' }}>
+                                  {item.title || '—'}
+                                </span>
+                                {item.description && (
+                                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>
+                                    {item.description}
+                                  </span>
+                                )}
+                              </div>
+                              {item.format && (
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4, marginTop: 2 }}>
+                                  {item.format}
                                 </span>
                               )}
                             </div>
-                            {item.format && (
-                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4 }}>
-                                {item.format}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
-                      Redigeres i pitchen for dette prosjektet — under seksjonen «Leveranser».
-                    </p>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   getProjectsForPipeline, updatePipelineStage, setProjectType,
   getTasksForProjects, getAllProfiles, toggleTaskAssignee, updateTaskStatus,
-  advanceFromKontraktUnsigned, assignQuoteAndMove,
+  advanceFromKontraktUnsigned, assignQuoteAndMove, setQuoteAssignee, setInvoiceAssignee,
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -26,6 +26,23 @@ import { C } from '@/lib/admin-theme'
 type Profile = { id: string; name: string | null; email: string }
 
 const accentBorder = 'rgba(124,92,252,0.35)'
+
+const AVATAR_COLORS = [
+  '#7C5CFC', // lilla
+  '#4A8FA8', // stålblå
+  '#4CAF7D', // grønn
+  '#E07B54', // terrakotta
+  '#C49434', // gull
+  '#B85C8A', // rosa
+  '#5C9E6B', // mosegrønn
+  '#6B7EC4', // lavendel
+]
+
+function avatarColor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
 
 // Gruppe 1: Lead → Tilbud (før kontrakt) — stålblå
 // Gruppe 2: Kontrakt → Produksjon — gull
@@ -281,7 +298,7 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
             {task.assignees.slice(0, 3).map((a, i) => (
               <span key={a.id} style={{
                 width: 16, height: 16, borderRadius: '50%',
-                background: C.accent, color: '#fff',
+                background: avatarColor(a.id), color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.5rem', fontWeight: 700,
                 marginLeft: i > 0 ? -4 : 0,
@@ -329,8 +346,8 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
               >
                 <span style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                  background: isAssigned ? C.accent : C.surface,
-                  border: `1px solid ${isAssigned ? C.accent : C.border}`,
+                  background: isAssigned ? avatarColor(p.id) : C.surface,
+                  border: `1px solid ${isAssigned ? avatarColor(p.id) : C.border}`,
                   color: isAssigned ? '#fff' : C.text2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.6rem', fontWeight: 700,
@@ -354,6 +371,213 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
   )
 }
 
+// ─── QuoteAssigneePicker — enkeltperson assignee for tilbud ──────────────────
+
+function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
+  projectId: string
+  assignee: Profile | null
+  profiles: Profile[]
+  onAssigned: (profile: Profile | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  async function select(profile: Profile | null) {
+    setSaving(true)
+    setOpen(false)
+    await setQuoteAssignee(projectId, profile?.id ?? null)
+    onAssigned(profile)
+    setSaving(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        title={assignee ? `Tilbud-ansvarlig: ${assignee.name ?? assignee.email}` : 'Tildel tilbud-ansvarlig'}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '3px 7px 3px 5px', borderRadius: 20, cursor: saving ? 'wait' : 'pointer',
+          background: open ? C.accentBg : assignee ? 'rgba(74,143,168,0.12)' : C.surface2,
+          border: `1px solid ${open ? accentBorder : assignee ? 'rgba(74,143,168,0.4)' : C.border}`,
+          transition: 'all 0.12s',
+          opacity: saving ? 0.6 : 1,
+        }}
+      >
+        {assignee ? (
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%',
+            background: avatarColor(assignee.id), color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.52rem', fontWeight: 700, flexShrink: 0,
+          }}>
+            {(assignee.name ?? assignee.email)[0].toUpperCase()}
+          </span>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="2" strokeLinecap="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+          </svg>
+        )}
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? avatarColor(assignee.id) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {assignee ? (assignee.name ?? assignee.email).split(' ')[0] : 'Tildel'}
+        </span>
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 2L3.5 5L6 2" stroke={C.text3} strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
+          background: C.surface2, border: `1px solid ${C.border}`,
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          minWidth: 180, padding: '3px 0',
+        }}>
+          {assignee && (
+            <button
+              onClick={() => select(null)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+            >
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Fjern tildeling</span>
+            </button>
+          )}
+          {assignee && <div style={{ height: 1, background: C.border, margin: '2px 0' }} />}
+          {profiles.map(p => {
+            const isSelected = p.id === assignee?.id
+            return (
+              <button
+                key={p.id}
+                onClick={() => select(p)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: isSelected ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+              >
+                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? avatarColor(p.id) : C.surface, border: `1px solid ${isSelected ? avatarColor(p.id) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                  {(p.name ?? p.email)[0].toUpperCase()}
+                </span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? avatarColor(p.id) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.name ?? p.email}
+                </span>
+                {isSelected && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={avatarColor(p.id)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── InvoiceAssigneePicker — faktura-ansvarlig ────────────────────────────────
+
+function InvoiceAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
+  projectId: string
+  assignee: Profile | null
+  profiles: Profile[]
+  onAssigned: (profile: Profile | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  async function select(profile: Profile | null) {
+    setSaving(true)
+    setOpen(false)
+    await setInvoiceAssignee(projectId, profile?.id ?? null)
+    onAssigned(profile)
+    setSaving(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        title={assignee ? `Faktura-ansvarlig: ${assignee.name ?? assignee.email}` : 'Tildel faktura-ansvarlig'}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '3px 7px 3px 5px', borderRadius: 20, cursor: saving ? 'wait' : 'pointer',
+          background: open ? C.accentBg : assignee ? 'rgba(76,175,125,0.12)' : C.surface2,
+          border: `1px solid ${open ? accentBorder : assignee ? 'rgba(76,175,125,0.4)' : C.border}`,
+          transition: 'all 0.12s',
+          opacity: saving ? 0.6 : 1,
+        }}
+      >
+        {assignee ? (
+          <span style={{ width: 18, height: 18, borderRadius: '50%', background: avatarColor(assignee.id), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.52rem', fontWeight: 700, flexShrink: 0 }}>
+            {(assignee.name ?? assignee.email)[0].toUpperCase()}
+          </span>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="2" strokeLinecap="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+          </svg>
+        )}
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? avatarColor(assignee.id) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {assignee ? (assignee.name ?? assignee.email).split(' ')[0] : 'Tildel'}
+        </span>
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 2L3.5 5L6 2" stroke={C.text3} strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', minWidth: 180, padding: '3px 0' }}>
+          {assignee && (
+            <>
+              <button onClick={() => select(null)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Fjern tildeling</span>
+              </button>
+              <div style={{ height: 1, background: C.border, margin: '2px 0' }} />
+            </>
+          )}
+          {profiles.map(p => {
+            const isSelected = p.id === assignee?.id
+            return (
+              <button key={p.id} onClick={() => select(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: isSelected ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? avatarColor(p.id) : C.surface, border: `1px solid ${isSelected ? avatarColor(p.id) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                  {(p.name ?? p.email)[0].toUpperCase()}
+                </span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? avatarColor(p.id) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.name ?? p.email}
+                </span>
+                {isSelected && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={avatarColor(p.id)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── DraggableCard ────────────────────────────────────────────────────────────
 
 function DraggableCard({
@@ -363,6 +587,8 @@ function DraggableCard({
   onStageAdvance,
   onAssigneeToggle,
   onTaskStatusToggle,
+  onQuoteAssigned,
+  onInvoiceAssigned,
   advancing,
   isDragOverlay = false,
 }: {
@@ -372,6 +598,8 @@ function DraggableCard({
   onStageAdvance: (id: string, stage: PipelineStage) => void
   onAssigneeToggle: (taskId: string, profileId: string) => void
   onTaskStatusToggle: (taskId: string, currentStatus: Task['status']) => void
+  onQuoteAssigned: (projectId: string, profile: Profile | null) => void
+  onInvoiceAssigned: (projectId: string, profile: Profile | null) => void
   advancing: boolean
   isDragOverlay?: boolean
 }) {
@@ -401,6 +629,14 @@ function DraggableCard({
     return unique
   }, [tasks])
 
+  const quoteAssignee = project.quote_assignee_id
+    ? profiles.find(p => p.id === project.quote_assignee_id) ?? null
+    : null
+
+  const invoiceAssignee = project.invoice_assignee_id
+    ? profiles.find(p => p.id === project.invoice_assignee_id) ?? null
+    : null
+
   const titleHref =
     stage === 'lead'         ? `/admin/projects/${project.id}/contact`
     : stage === 'møte'       ? `/admin/projects/${project.id}/email`
@@ -409,7 +645,7 @@ function DraggableCard({
     : stage === 'pre_prod'   ? `/admin/preprod/${project.id}`
     : stage === 'post_prod'  ? `/admin/postprod/${project.id}`
     : stage === 'levering'   ? `/admin/projects/${project.id}/email`
-    : stage === 'fakturert'  ? `/admin/okonomi`
+    : stage === 'fakturert'  ? `/admin/faktura/${project.id}`
     : stage === 'videresalg' ? `/admin/projects/${project.id}/email`
     : `/admin/projects/${project.id}`
 
@@ -531,11 +767,23 @@ function DraggableCard({
           ) : stage === 'videresalg' ? (
             <ActionBtn href={`/admin/projects/${project.id}/email`} primary>Send e-post</ActionBtn>
           ) : stage === 'kontrakt' ? (
-            <ActionBtn href={`/admin/projects/${project.id}/email`} primary>Send kontrakt</ActionBtn>
+            <>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                color: C.text3, background: C.surface2,
+                border: `1px solid ${C.border}`,
+                padding: '5px 9px', borderRadius: 5,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F0A500', flexShrink: 0, animation: 'pulse 2s infinite' }} />
+                Venter på signering
+              </span>
+              <ActionBtn href={`/admin/projects/${project.id}?tab=kontrakt`}>Se kontrakt</ActionBtn>
+            </>
           ) : stage === 'produksjon' ? (
             <ActionBtn href={`/admin/projects/${project.id}`}>Prosjekt →</ActionBtn>
           ) : stage === 'fakturert' ? (
-            <ActionBtn href={`/admin/okonomi`}>Økonomi →</ActionBtn>
+            <ActionBtn href={`/admin/faktura/${project.id}`} primary>Send faktura →</ActionBtn>
           ) : (
             <ActionBtn href={`/admin/projects/${project.id}`}>Oversikt</ActionBtn>
           )}
@@ -552,13 +800,35 @@ function DraggableCard({
         </div>
       )}
 
-      {/* Footer — leveranse + teamavatar */}
-      {!isDragOverlay && (project.delivery_description || allAssignees.length > 0) && (
-        <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.border}` }}>
+      {/* Footer — leveranse + assignees */}
+      {!isDragOverlay && (project.delivery_description || stage === 'tilbud_sendt' || stage === 'fakturert' || allAssignees.length > 0) && (
+        <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
           {project.delivery_description && (
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginBottom: allAssignees.length > 0 ? 7 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               📦 {project.delivery_description}
             </p>
+          )}
+          {stage === 'tilbud_sendt' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>Ansvarlig:</span>
+              <QuoteAssigneePicker
+                projectId={project.id}
+                assignee={quoteAssignee}
+                profiles={profiles}
+                onAssigned={profile => onQuoteAssigned(project.id, profile)}
+              />
+            </div>
+          )}
+          {stage === 'fakturert' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>Ansvarlig:</span>
+              <InvoiceAssigneePicker
+                projectId={project.id}
+                assignee={invoiceAssignee}
+                profiles={profiles}
+                onAssigned={profile => onInvoiceAssigned(project.id, profile)}
+              />
+            </div>
           )}
           {allAssignees.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -566,19 +836,19 @@ function DraggableCard({
               <div style={{ display: 'flex' }}>
                 {allAssignees.slice(0, 5).map((a, i) => (
                   <span key={a.id} title={a.name ?? a.email} style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: C.accent, color: '#fff',
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: avatarColor(a.id), color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', fontWeight: 700,
-                    marginLeft: i > 0 ? -5 : 0,
-                    border: `2px solid ${C.surface}`,
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.5rem', fontWeight: 700,
+                    marginLeft: i > 0 ? -4 : 0,
+                    border: `1.5px solid ${C.surface}`,
                     position: 'relative', zIndex: 5 - i,
                   }}>
                     {(a.name ?? a.email)[0].toUpperCase()}
                   </span>
                 ))}
                 {allAssignees.length > 5 && (
-                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: C.surface2, color: C.text3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, marginLeft: -5, border: `2px solid ${C.surface}` }}>
+                  <span style={{ width: 16, height: 16, borderRadius: '50%', background: C.surface2, color: C.text3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.5rem', fontWeight: 700, marginLeft: -4, border: `1.5px solid ${C.surface}` }}>
                     +{allAssignees.length - 5}
                   </span>
                 )}
@@ -647,6 +917,8 @@ function DroppableColumn({
   onStageAdvance,
   onAssigneeToggle,
   onTaskStatusToggle,
+  onQuoteAssigned,
+  onInvoiceAssigned,
   isOver,
 }: {
   stage: { value: PipelineStage; label: string }
@@ -656,6 +928,8 @@ function DroppableColumn({
   onStageAdvance: (id: string, stage: PipelineStage) => void
   onAssigneeToggle: (taskId: string, profileId: string) => void
   onTaskStatusToggle: (taskId: string, currentStatus: Task['status']) => void
+  onQuoteAssigned: (projectId: string, profile: Profile | null) => void
+  onInvoiceAssigned: (projectId: string, profile: Profile | null) => void
   isOver: boolean
 }) {
   const { setNodeRef } = useDroppable({ id: stage.value })
@@ -697,6 +971,8 @@ function DroppableColumn({
             onStageAdvance={onStageAdvance}
             onAssigneeToggle={onAssigneeToggle}
             onTaskStatusToggle={onTaskStatusToggle}
+            onQuoteAssigned={onQuoteAssigned}
+            onInvoiceAssigned={onInvoiceAssigned}
             advancing={false}
           />
         ))}
@@ -811,6 +1087,18 @@ export default function PipelinePage() {
     await toggleTaskAssignee(taskId, profileId)
   }
 
+  function handleQuoteAssigned(projectId: string, profile: Profile | null) {
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, quote_assignee_id: profile?.id ?? null } : p
+    ))
+  }
+
+  function handleInvoiceAssigned(projectId: string, profile: Profile | null) {
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, invoice_assignee_id: profile?.id ?? null } : p
+    ))
+  }
+
   async function handleTaskStatusToggle(taskId: string, currentStatus: Task['status']) {
     const nextStatus: Task['status'] = currentStatus === 'done' ? 'todo' : 'done'
     setTasksByProject(prev => {
@@ -920,6 +1208,8 @@ export default function PipelinePage() {
                 onStageAdvance={moveProject}
                 onAssigneeToggle={handleAssigneeToggle}
                 onTaskStatusToggle={handleTaskStatusToggle}
+                onQuoteAssigned={handleQuoteAssigned}
+                onInvoiceAssigned={handleInvoiceAssigned}
                 isOver={overStageId === stage.value}
               />
             ))}
@@ -935,6 +1225,8 @@ export default function PipelinePage() {
               onStageAdvance={() => {}}
               onAssigneeToggle={() => {}}
               onTaskStatusToggle={() => {}}
+              onQuoteAssigned={() => {}}
+              onInvoiceAssigned={() => {}}
               advancing={false}
               isDragOverlay
             />

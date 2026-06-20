@@ -9,6 +9,7 @@ import { PIPELINE_STAGES } from '@/lib/types'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
+type LeadContact = { name: string; company: string | null; email: string | null }
 type TaskTemplateRow = { title: string; description: string | null; sort_order: number }
 
 /**
@@ -1580,42 +1581,69 @@ export async function sendTilbudToKunde(
     }
 
     const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
-    const customerEmail: string | null = customer?.email ?? null
-    const customerName: string = customer?.name ?? 'Kunde'
+    let recipientEmail: string | null = customer?.email?.trim() || null
+    let recipientName: string = customer?.name ?? customer?.company ?? 'Kunde'
     const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
+
+    if (!recipientEmail) {
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('name, company, email')
+        .eq('converted_to_project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (leadError) {
+        console.error('sendTilbudToKunde lead lookup error:', leadError)
+        return { ok: false, error: 'Kunne ikke hente lead-kontakt' }
+      }
+
+      const leadContact = lead as LeadContact | null
+      recipientEmail = leadContact?.email?.trim() || null
+      recipientName = leadContact?.name ?? leadContact?.company ?? recipientName
+    }
+
+    if (!recipientEmail) {
+      return { ok: false, error: 'Prosjektet mangler e-postadresse til kunde/lead' }
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return { ok: false, error: 'E-postutsending er ikke konfigurert' }
+    }
 
     const pitchUrl = pitchToken
       ? `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.leafilms.no'}/p/${pitchToken}`
       : null
 
     // Send e-post
-    if (process.env.RESEND_API_KEY && customerEmail) {
-      const subject = `Prosjektbeskrivelse og tilbud — ${project.title}`
-      const body = pitchUrl
-        ? `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi har satt sammen en prosjektbeskrivelse og pristilbud til deg. Du finner alt her:\n\n${pitchUrl}\n\nDu kan også lese gjennom og signere produksjonsavtalen direkte på siden.\n\nTa gjerne kontakt hvis du har spørsmål!\n\nMed vennlig hilsen,\nLeafilms-teamet`
-        : `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi sender deg hermed pristilbud for ${project.title}. Ta kontakt for å diskutere detaljer.\n\nMed vennlig hilsen,\nLeafilms-teamet`
+    const subject = `Prosjektbeskrivelse og tilbud — ${project.title}`
+    const body = pitchUrl
+      ? `Hei ${recipientName},\n\nTakk for interessen i Leafilms!\n\nVi har satt sammen en prosjektbeskrivelse og pristilbud til deg. Du finner alt her:\n\n${pitchUrl}\n\nDu kan også lese gjennom og signere produksjonsavtalen direkte på siden.\n\nTa gjerne kontakt hvis du har spørsmål!\n\nMed vennlig hilsen,\nLeafilms-teamet`
+      : `Hei ${recipientName},\n\nTakk for interessen i Leafilms!\n\nVi sender deg hermed pristilbud for ${project.title}. Ta kontakt for å diskutere detaljer.\n\nMed vennlig hilsen,\nLeafilms-teamet`
 
-      try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: 'Leafilms <post@leafilms.no>',
-            to: [customerEmail],
-            subject,
-            text: body,
-          }),
-        })
-        if (!res.ok) {
-          const resBody = await res.text()
-          console.error('sendTilbudToKunde Resend feil:', res.status, resBody)
-        }
-      } catch (emailErr) {
-        console.error('sendTilbudToKunde e-post unntak:', emailErr)
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'Leafilms <post@leafilms.no>',
+          to: [recipientEmail],
+          subject,
+          text: body,
+        }),
+      })
+      if (!res.ok) {
+        const resBody = await res.text()
+        console.error('sendTilbudToKunde Resend feil:', res.status, resBody)
+        return { ok: false, error: 'Kunne ikke sende e-post til kunde' }
       }
+    } catch (emailErr) {
+      console.error('sendTilbudToKunde e-post unntak:', emailErr)
+      return { ok: false, error: 'Kunne ikke sende e-post til kunde' }
     }
 
     // Flytt til kontrakt-steget

@@ -310,14 +310,17 @@ export async function deleteLead(leadId: string): Promise<boolean> {
       .eq('id', leadId)
       .single()
 
-    await supabase.from('leads').delete().eq('id', leadId)
-
-    if (lead?.converted_to_project_id) {
-      await supabase.from('projects').delete().eq('id', lead.converted_to_project_id)
+    const { error } = await supabase.from('leads').delete().eq('id', leadId)
+    if (error) {
+      console.error('deleteLead delete error:', error)
+      return false
     }
 
     revalidatePath('/admin/leads')
     revalidatePath('/admin/pipeline')
+    if (lead?.converted_to_project_id) {
+      revalidatePath(`/admin/projects/${lead.converted_to_project_id}`)
+    }
     return true
   } catch (err) {
     console.error('deleteLead unexpected:', err)

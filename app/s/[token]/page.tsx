@@ -18,5 +18,5 @@ export default async function SelectionPage({
     return <PinClient token={token} />
   }
 
-  return <GalleryClient token={token} gallery={data.gallery} images={data.images} />
+  return <GalleryClient token={token} gallery={data.gallery} images={data.legacyImages} />
 }

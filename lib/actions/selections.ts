@@ -32,7 +32,16 @@ export type SelectionImage = {
   selected: boolean
   comment: string | null
   selected_at: string | null
+  album_id: string | null
   signedUrl?: string
+}
+
+export type AlbumForCustomer = {
+  id: string
+  name: string
+  slug: string
+  images: (SelectionImage & { signedUrl: string })[]
+  selectedCount: number
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +140,7 @@ export async function getAdminGallery(projectId: string): Promise<{
 // ---------------------------------------------------------------------------
 export async function registerUploadedImages(
   galleryId: string,
-  files: { filename: string; storagePath: string; sortOrder: number }[]
+  files: { filename: string; storagePath: string; sortOrder: number; albumId?: string }[]
 ): Promise<void> {
   const supabase = await createClient()
 
@@ -141,6 +150,7 @@ export async function registerUploadedImages(
       filename: f.filename,
       storage_path: f.storagePath,
       sort_order: f.sortOrder,
+      album_id: f.albumId ?? null,
     }))
   )
 
@@ -317,11 +327,11 @@ export async function verifyGalleryPin(
 // ---------------------------------------------------------------------------
 export async function getGalleryForCustomer(token: string): Promise<{
   gallery: SelectionGallery
-  images: (SelectionImage & { signedUrl: string })[]
+  albums: AlbumForCustomer[]
+  legacyImages: (SelectionImage & { signedUrl: string })[]
 } | null> {
   const cookieStore = await cookies()
   const galleryIdFromCookie = cookieStore.get(cookieKey(token))?.value
-
   if (!galleryIdFromCookie) return null
 
   const service = createServiceClient()
@@ -343,24 +353,51 @@ export async function getGalleryForCustomer(token: string): Promise<{
 
   const imgs = (images ?? []) as SelectionImage[]
   const paths = imgs.filter(i => i.storage_path).map(i => i.storage_path!)
-
   const signedUrlMap: Record<string, string> = {}
+
   if (paths.length > 0) {
     const { data: urlData } = await service.storage
       .from('selections')
       .createSignedUrls(paths, SIGNED_URL_EXPIRY)
-
     for (const item of urlData ?? []) {
       if (item.signedUrl && item.path) signedUrlMap[item.path] = item.signedUrl
     }
   }
 
+  const withUrl = imgs.map(img => ({
+    ...img,
+    signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
+  }))
+
+  const { data: albumRows } = await service
+    .from('selection_albums')
+    .select('id, name, slug, sort_order')
+    .eq('gallery_id', gallery.id)
+    .order('sort_order', { ascending: true })
+
+  const albumList = (albumRows ?? []) as { id: string; name: string; slug: string; sort_order: number }[]
+
+  if (albumList.length === 0) {
+    return {
+      gallery: gallery as SelectionGallery,
+      albums: [],
+      legacyImages: withUrl,
+    }
+  }
+
+  const albums: AlbumForCustomer[] = albumList.map(album => {
+    const albumImages = withUrl.filter(i => i.album_id === album.id)
+    return {
+      ...album,
+      images: albumImages,
+      selectedCount: albumImages.filter(i => i.selected).length,
+    }
+  })
+
   return {
     gallery: gallery as SelectionGallery,
-    images: imgs.map(img => ({
-      ...img,
-      signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
-    })),
+    albums,
+    legacyImages: [],
   }
 }
 

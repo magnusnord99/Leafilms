@@ -7,9 +7,6 @@ import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, up
 import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
 import { updateProjectShootDates } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
-import { getAdminGallery } from '@/lib/actions/selections'
-import type { SelectionGallery as GalleryData, SelectionImage } from '@/lib/actions/selections'
-import SelectionGallery from './SelectionGallery'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
 import type { Quote } from '@/lib/types'
@@ -576,13 +573,6 @@ export default function ProjectHubPage() {
 
   const [stepperContractPublished, setStepperContractPublished] = useState(false)
   const [sendingTilbud, setSendingTilbud] = useState(false)
-  const [selectionGalleryData, setSelectionGalleryData] = useState<{
-    gallery: GalleryData
-    images: SelectionImage[]
-    selectedCount: number
-    signedUrls: Record<string, string>
-  } | null>(null)
-
   const [contractText, setContractText] = useState('')
   const [contractIsPublished, setContractIsPublished] = useState(false)
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
@@ -631,16 +621,7 @@ export default function ProjectHubPage() {
         const cs = await getContractStatus(projectId)
         setStepperContractPublished(cs.isPublished)
       }
-      // Hent seleksjonsgalleri for post_prod
-      if (data.project.pipeline_stage === 'post_prod') {
-        try {
-          const galleryData = await getAdminGallery(projectId)
-          setSelectionGalleryData(galleryData)
-        } catch {
-          // Tabell finnes ikke enda (migrasjon ikke kjørt) — vis tom tilstand
-          setSelectionGalleryData(null)
-        }
-      }
+
     }
     setProfiles(allProfiles)
     setLoading(false)
@@ -1122,11 +1103,18 @@ export default function ProjectHubPage() {
                     <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
                       Kundeseleksjon
                     </h3>
-                    <SelectionGallery
-                      projectId={projectId}
-                      initialData={selectionGalleryData}
-                      deliveryPhoto={(project as unknown as { delivery_photo?: string | null }).delivery_photo}
-                    />
+                    <Link
+                      href={`/admin/projects/${projectId}/selection`}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '8px 14px', borderRadius: 7,
+                        border: `1px solid ${C.border}`, background: 'none',
+                        color: C.text2, fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.78rem', textDecoration: 'none',
+                      }}
+                    >
+                      → Administrer seleksjon
+                    </Link>
                   </div>
                 )}
               </>

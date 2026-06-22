@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase-client'
 import {
   updateAlbum,
   deleteAlbum,
@@ -11,11 +11,6 @@ import {
 import { registerUploadedImages } from '@/lib/actions/selections'
 import type { AlbumWithImages } from '@/lib/actions/selection-albums'
 import { C } from '@/lib/admin-theme'
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 type UploadStatus = { filename: string; progress: 'pending' | 'uploading' | 'done' | 'error'; error?: string }
 

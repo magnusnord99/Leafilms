@@ -1,0 +1,82 @@
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase-server'
+import { getAllGalleriesOverview } from '@/lib/actions/selection-albums'
+
+export default async function SelectionsOverviewPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const galleries = await getAllGalleriesOverview()
+
+  const C = {
+    bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
+    border: '#3C3C52', text: '#EEEEF2', text2: '#B4B4CC', text3: '#8484A0',
+    accent: '#7C5CFC',
+  }
+
+  const statusMap: Record<string, { label: string; color: string }> = {
+    open:      { label: 'Åpen',     color: '#4CAF7D' },
+    submitted: { label: 'Innsendt', color: '#C49434' },
+    purged:    { label: 'Slettet',  color: '#8484A0' },
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.2rem', fontWeight: 700, color: C.text, marginBottom: 24 }}>
+          Seleksjoner
+        </h1>
+
+        {galleries.length === 0 ? (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>Ingen aktive gallerier.</p>
+        ) : (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {['Prosjekt', 'Status', 'Album', 'Valgt', 'Innsendt'].map(h => (
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {galleries.map((g, i) => {
+                  const st = statusMap[g.status] ?? statusMap.open
+                  return (
+                    <tr
+                      key={g.galleryId}
+                      style={{ borderBottom: i < galleries.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                    >
+                      <td style={{ padding: '12px 16px' }}>
+                        <Link
+                          href={`/admin/projects/${g.projectId}/selection`}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, textDecoration: 'none' }}
+                        >
+                          {g.projectName}
+                        </Link>
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: st.color }}>{st.label}</span>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                        {g.albumCount}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                        {g.totalSelected}{g.targetCount ? ` / ${g.targetCount}` : ''}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                        {g.submittedAt ? new Date(g.submittedAt).toLocaleDateString('nb-NO') : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

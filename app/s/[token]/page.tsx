@@ -7,9 +7,7 @@ import {
 import { albumTokenExists, getAlbumForCustomer, verifyAlbumPin } from '@/lib/actions/selection-picks'
 import PinClient from './PinClient'
 import GalleryClient from './GalleryClient'
-// @ts-expect-error — komponent lages i Task 7
 import AlbumOverviewClient from './AlbumOverviewClient'
-// @ts-expect-error — komponent lages i Task 8
 import AlbumGalleryClient from './[album]/AlbumGalleryClient'
 
 export default async function SelectionPage({

@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { verifyGalleryPin } from '@/lib/actions/selections'
 
 const S = {
   bg:      '#0C0B09',
@@ -14,7 +13,15 @@ const S = {
   danger:  '#C0503A',
 }
 
-export default function PinClient({ token }: { token: string }) {
+type VerifyResult = { ok: boolean; error?: string; locked?: boolean }
+
+export default function PinClient({
+  token,
+  verifyAction,
+}: {
+  token: string
+  verifyAction: (token: string, pin: string) => Promise<VerifyResult>
+}) {
   const [pin, setPin] = useState(['', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +56,7 @@ export default function PinClient({ token }: { token: string }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await verifyGalleryPin(token, code)
+      const res = await verifyAction(token, code)
       if (res.ok) {
         router.refresh()
       } else {
@@ -68,10 +75,7 @@ export default function PinClient({ token }: { token: string }) {
       minHeight: '100dvh', background: S.bg, display: 'flex',
       alignItems: 'center', justifyContent: 'center', padding: '24px',
     }}>
-      <div style={{
-        width: '100%', maxWidth: 360, textAlign: 'center',
-      }}>
-        {/* Logo / tittel */}
+      <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
         <div style={{
           fontFamily: 'Georgia, serif', fontSize: '1.6rem', letterSpacing: '0.12em',
           color: S.gold, marginBottom: 8, textTransform: 'uppercase',
@@ -84,7 +88,6 @@ export default function PinClient({ token }: { token: string }) {
         }}>
           Bildeseleksjon
         </p>
-
         <div style={{
           background: S.surface, border: `1px solid ${S.border}`,
           borderRadius: 12, padding: '32px 28px',
@@ -95,7 +98,6 @@ export default function PinClient({ token }: { token: string }) {
           }}>
             Skriv inn PIN-koden du mottok
           </p>
-
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24 }}>
               {pin.map((digit, i) => (
@@ -121,7 +123,6 @@ export default function PinClient({ token }: { token: string }) {
                 />
               ))}
             </div>
-
             {error && (
               <p style={{
                 fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: '0.78rem',
@@ -130,7 +131,6 @@ export default function PinClient({ token }: { token: string }) {
                 {error}
               </p>
             )}
-
             <button
               type="submit"
               disabled={pin.join('').length < 4 || loading || locked}

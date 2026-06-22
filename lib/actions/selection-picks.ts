@@ -176,13 +176,28 @@ export async function addAlbumImagePickComment(
 
   const service = createServiceClient()
 
+  const { data: img } = await service
+    .from('selection_images')
+    .select('album_id')
+    .eq('id', imageId)
+    .single()
+
+  if (img?.album_id !== albumId) throw new Error('Ikke autorisert')
+
+  const { data: existing } = await service
+    .from('selection_album_picks')
+    .select('selected')
+    .eq('album_id', albumId)
+    .eq('image_id', imageId)
+    .maybeSingle()
+
   await service
     .from('selection_album_picks')
     .upsert({
       album_id: albumId,
       image_id: imageId,
       comment: comment.trim() || null,
-      selected: false,
+      selected: existing?.selected ?? false,
     }, { onConflict: 'album_id,image_id' })
 }
 

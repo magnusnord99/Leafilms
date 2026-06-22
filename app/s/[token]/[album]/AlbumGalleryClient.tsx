@@ -227,6 +227,86 @@ export default function AlbumGalleryClient({
           </div>
         </div>
       )}
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (() => {
+        const img = images[lightboxIndex]
+        const signedUrl = (img as { signedUrl: string }).signedUrl
+        const sel = isSelected(img, isDirectAlbumLink)
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(12,11,9,0.96)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', zIndex: 100, padding: 16,
+            }}
+            onClick={() => setLightboxIndex(null)}
+          >
+            {/* Topbar */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              padding: '12px 16px', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', background: 'rgba(12,11,9,0.8)',
+            }}
+              onClick={e => e.stopPropagation()}
+            >
+              <span style={{ fontFamily: 'sans-serif', fontSize: '0.75rem', color: S.text3 }}>
+                {lightboxIndex + 1} / {images.length}
+              </span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  onClick={() => handleToggle(img.id)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, border: 'none',
+                    fontFamily: 'sans-serif', fontSize: '0.78rem', fontWeight: 600,
+                    cursor: 'pointer',
+                    background: sel ? S.gold : 'rgba(255,255,255,0.08)',
+                    color: sel ? '#0C0B09' : S.text,
+                  }}
+                >
+                  {sel ? '✓ Valgt' : 'Velg'}
+                </button>
+                <button
+                  onClick={() => setLightboxIndex(null)}
+                  style={{ background: 'none', border: 'none', color: S.text2, fontSize: '1.2rem', cursor: 'pointer', padding: '4px 8px' }}
+                >✕</button>
+              </div>
+            </div>
+
+            {/* Bilde */}
+            <div style={{ maxWidth: '90vw', maxHeight: '80vh', position: 'relative' }} onClick={e => e.stopPropagation()}>
+              {signedUrl
+                ? <img src={signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', display: 'block', borderRadius: 4 }} />
+                : <div style={{ width: 400, height: 300, background: S.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: S.text3, fontSize: '0.75rem' }}>{img.filename}</span>
+                  </div>
+              }
+            </div>
+
+            {/* Nav-piler */}
+            {lightboxIndex > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); setLightboxIndex(p => p !== null ? p - 1 : null) }}
+                style={{
+                  position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(255,255,255,0.08)', border: 'none', color: S.text,
+                  fontSize: '1.4rem', cursor: 'pointer', borderRadius: 6, padding: '10px 14px',
+                }}
+              >‹</button>
+            )}
+            {lightboxIndex < images.length - 1 && (
+              <button
+                onClick={e => { e.stopPropagation(); setLightboxIndex(p => p !== null ? p + 1 : null) }}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(255,255,255,0.08)', border: 'none', color: S.text,
+                  fontSize: '1.4rem', cursor: 'pointer', borderRadius: 6, padding: '10px 14px',
+                }}
+              >›</button>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

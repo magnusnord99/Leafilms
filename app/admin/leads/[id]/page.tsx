@@ -83,8 +83,14 @@ export default function LeadDetailPage() {
   async function handleDelete() {
     if (!confirmDelete) { setConfirmDelete(true); return }
     setDeleting(true)
-    await deleteLead(leadId)
-    router.push('/admin/leads')
+    const ok = await deleteLead(leadId)
+    if (ok) {
+      router.push('/admin/leads')
+    } else {
+      setDeleting(false)
+      setConfirmDelete(false)
+      alert('Kunne ikke slette lead. Prøv igjen.')
+    }
   }
 
   async function handleCopyEmail() {

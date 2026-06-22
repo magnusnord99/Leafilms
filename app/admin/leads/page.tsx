@@ -46,8 +46,12 @@ export default function LeadsPage() {
     if (confirmId !== id) { setConfirmId(id); return }
     setDeletingId(id)
     setConfirmId(null)
-    await deleteLead(id)
-    setLeads(prev => prev.filter(l => l.id !== id))
+    const ok = await deleteLead(id)
+    if (ok) {
+      setLeads(prev => prev.filter(l => l.id !== id))
+    } else {
+      alert('Kunne ikke slette lead. Prøv igjen.')
+    }
     setDeletingId(null)
   }
 

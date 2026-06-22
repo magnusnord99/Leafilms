@@ -34,14 +34,21 @@ export default function ReviewClient({
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const target = gallery.target_count
   const isOver = target != null && totalSelected > target
 
   async function handleSubmit() {
     setSubmitting(true)
-    await submitGallery(token)
-    setSubmitted(true)
-    setSubmitting(false)
+    setSubmitError(null)
+    try {
+      await submitGallery(token)
+      setSubmitted(true)
+    } catch {
+      setSubmitError('Noe gikk galt. Prøv igjen.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (submitted) {
@@ -151,9 +158,16 @@ export default function ReviewClient({
         >
           {submitting ? 'Sender...' : 'Bekreft og send inn'}
         </button>
-        <p style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: S.text3, textAlign: 'center', marginTop: 6 }}>
-          Kan ikke endres etter innsending
-        </p>
+        {submitError && (
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: '#C0503A', textAlign: 'center', marginTop: 6 }}>
+            {submitError}
+          </p>
+        )}
+        {!submitError && (
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: S.text3, textAlign: 'center', marginTop: 6 }}>
+            Kan ikke endres etter innsending
+          </p>
+        )}
       </div>
     </div>
   )

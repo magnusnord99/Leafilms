@@ -285,17 +285,22 @@ export async function setTildelTaskStatus(
 
 // Kobler pre-prod post_crew-rolle til task_assignees på faktiske post-prod-oppgaver.
 // Fjerner forrige person og legger til ny på alle matchende oppgavetitler.
-const ROLE_TASK_MAP: Record<string, string[]> = {
-  video_logging:             ['Logging'],
-  video_grovklipp:           ['Grovklipp'],
-  video_klipp:               ['Klipp'],
-  video_farger:              ['Farger'],
-  video_lyd:                 ['Lyd'],
-  video_ferdig:              ['Ferdig'],
-  photo_selektering:         ['Selektering', 'Selektering bilder'],
-  photo_seleksjon_til_kunde: ['Seleksjon til kunde'],
-  photo_redigering:          ['Redigering', 'Redigering bilder'],
-  photo_ferdig:              ['Ferdig'],
+type PostRoleTaskConfig = {
+  titles: string[]
+  subType: 'video' | 'photo'
+}
+
+const ROLE_TASK_MAP: Record<string, PostRoleTaskConfig> = {
+  video_logging:             { titles: ['Logging'], subType: 'video' },
+  video_grovklipp:           { titles: ['Grovklipp'], subType: 'video' },
+  video_klipp:               { titles: ['Klipp'], subType: 'video' },
+  video_farger:              { titles: ['Farger'], subType: 'video' },
+  video_lyd:                 { titles: ['Lyd'], subType: 'video' },
+  video_ferdig:              { titles: ['Ferdig'], subType: 'video' },
+  photo_selektering:         { titles: ['Selektering', 'Selektering bilder'], subType: 'photo' },
+  photo_seleksjon_til_kunde: { titles: ['Seleksjon til kunde'], subType: 'photo' },
+  photo_redigering:          { titles: ['Redigering', 'Redigering bilder'], subType: 'photo' },
+  photo_ferdig:              { titles: ['Ferdig'], subType: 'photo' },
 }
 
 export async function syncPostCrewToTask(
@@ -304,22 +309,25 @@ export async function syncPostCrewToTask(
   newProfileId: string | null,
   prevProfileId: string | null
 ): Promise<void> {
-  const titles = ROLE_TASK_MAP[roleKey]
-  if (!titles?.length || (!newProfileId && !prevProfileId)) return
+  const config = ROLE_TASK_MAP[roleKey]
+  if (!config?.titles.length || (!newProfileId && !prevProfileId)) return
 
   try {
     const supabase = await createClient()
 
     const { data: tasks } = await supabase
       .from('tasks')
-      .select('id')
+      .select('id, sub_type')
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
-      .in('title', titles)
+      .in('title', config.titles)
 
     if (!tasks?.length) return
 
-    const taskIds = tasks.map(t => t.id)
+    const scopedTasks = tasks.filter(t => t.sub_type === config.subType)
+    const fallbackTasks = tasks.filter(t => t.sub_type === null)
+    const taskIds = (scopedTasks.length > 0 ? scopedTasks : fallbackTasks).map(t => t.id)
+    if (taskIds.length === 0) return
 
     if (prevProfileId) {
       await supabase

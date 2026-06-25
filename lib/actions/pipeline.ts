@@ -867,7 +867,7 @@ Returner KUN e-postteksten, ingen subject-linje.`
     // Steg 4: Oppdater pipeline_data med meeting_link og sent_at
     const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
 
-    const { error: updateError } = await supabase
+    const { data: updatedProject, error: updateError } = await supabase
       .from('projects')
       .update({
         pipeline_data: {
@@ -1571,12 +1571,15 @@ export async function sendTilbudToKunde(
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('title, pipeline_data, customers(id, name, email, company)')
+      .select('title, pipeline_stage, pipeline_data, customers(id, name, email, company)')
       .eq('id', projectId)
       .single()
 
     if (projectError || !project) {
       return { ok: false, error: 'Fant ikke prosjektet' }
+    }
+    if (project.pipeline_stage !== 'tilbud_sendt') {
+      return { ok: false, error: 'Tilbud kan bare sendes fra Sende tilbud-steget' }
     }
 
     const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
@@ -1654,10 +1657,16 @@ export async function sendTilbudToKunde(
         updated_at: new Date().toISOString(),
       })
       .eq('id', projectId)
+      .eq('pipeline_stage', 'tilbud_sendt')
+      .select('id')
+      .maybeSingle()
 
     if (updateError) {
       console.error('sendTilbudToKunde update error:', updateError)
       return { ok: false, error: 'Kunne ikke oppdatere pipeline-steg' }
+    }
+    if (!updatedProject) {
+      return { ok: false, error: 'Prosjektet er ikke lenger i Sende tilbud-steget' }
     }
 
     revalidatePath('/admin/pipeline')

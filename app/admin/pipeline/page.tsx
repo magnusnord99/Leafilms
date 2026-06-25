@@ -1061,7 +1061,10 @@ export default function PipelinePage() {
     setTilbudAssignLoading(false)
     setTilbudAssign(null)
     if (result.ok) {
-      fetchAll()
+      await fetchAll()
+    } else {
+      alert(result.error ?? 'Noe gikk galt')
+      await fetchAll()
     }
   }
 

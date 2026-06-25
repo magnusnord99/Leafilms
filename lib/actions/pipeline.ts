@@ -1580,42 +1580,66 @@ export async function sendTilbudToKunde(
     }
 
     const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
-    const customerEmail: string | null = customer?.email ?? null
-    const customerName: string = customer?.name ?? 'Kunde'
+    let recipientEmail: string | null = customer?.email?.trim() || null
+    let recipientName: string = customer?.name || customer?.company || 'Kunde'
     const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
+
+    if (!recipientEmail) {
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('name, company, email')
+        .eq('converted_to_project_id', projectId)
+        .maybeSingle()
+
+      if (leadError) {
+        console.error('sendTilbudToKunde lead lookup error:', leadError)
+        return { ok: false, error: 'Kunne ikke hente mottaker for tilbudet' }
+      }
+
+      recipientEmail = lead?.email?.trim() || null
+      recipientName = lead?.name || lead?.company || recipientName
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return { ok: false, error: 'E-posttjenesten er ikke konfigurert' }
+    }
+
+    if (!recipientEmail) {
+      return { ok: false, error: 'Fant ingen e-postadresse å sende tilbudet til' }
+    }
 
     const pitchUrl = pitchToken
       ? `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.leafilms.no'}/p/${pitchToken}`
       : null
 
     // Send e-post
-    if (process.env.RESEND_API_KEY && customerEmail) {
-      const subject = `Prosjektbeskrivelse og tilbud — ${project.title}`
-      const body = pitchUrl
-        ? `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi har satt sammen en prosjektbeskrivelse og pristilbud til deg. Du finner alt her:\n\n${pitchUrl}\n\nDu kan også lese gjennom og signere produksjonsavtalen direkte på siden.\n\nTa gjerne kontakt hvis du har spørsmål!\n\nMed vennlig hilsen,\nLeafilms-teamet`
-        : `Hei ${customerName},\n\nTakk for interessen i Leafilms!\n\nVi sender deg hermed pristilbud for ${project.title}. Ta kontakt for å diskutere detaljer.\n\nMed vennlig hilsen,\nLeafilms-teamet`
+    const subject = `Prosjektbeskrivelse og tilbud — ${project.title}`
+    const body = pitchUrl
+      ? `Hei ${recipientName},\n\nTakk for interessen i Leafilms!\n\nVi har satt sammen en prosjektbeskrivelse og pristilbud til deg. Du finner alt her:\n\n${pitchUrl}\n\nDu kan også lese gjennom og signere produksjonsavtalen direkte på siden.\n\nTa gjerne kontakt hvis du har spørsmål!\n\nMed vennlig hilsen,\nLeafilms-teamet`
+      : `Hei ${recipientName},\n\nTakk for interessen i Leafilms!\n\nVi sender deg hermed pristilbud for ${project.title}. Ta kontakt for å diskutere detaljer.\n\nMed vennlig hilsen,\nLeafilms-teamet`
 
-      try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: 'Leafilms <post@leafilms.no>',
-            to: [customerEmail],
-            subject,
-            text: body,
-          }),
-        })
-        if (!res.ok) {
-          const resBody = await res.text()
-          console.error('sendTilbudToKunde Resend feil:', res.status, resBody)
-        }
-      } catch (emailErr) {
-        console.error('sendTilbudToKunde e-post unntak:', emailErr)
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'Leafilms <post@leafilms.no>',
+          to: [recipientEmail],
+          subject,
+          text: body,
+        }),
+      })
+      if (!res.ok) {
+        const resBody = await res.text()
+        console.error('sendTilbudToKunde Resend feil:', res.status, resBody)
+        return { ok: false, error: 'Kunne ikke sende tilbudet på e-post' }
       }
+    } catch (emailErr) {
+      console.error('sendTilbudToKunde e-post unntak:', emailErr)
+      return { ok: false, error: 'Kunne ikke sende tilbudet på e-post' }
     }
 
     // Flytt til kontrakt-steget
@@ -1797,7 +1821,7 @@ export async function assignQuoteAndMove(
 
     const { data: project, error: fetchError } = await supabase
       .from('projects')
-      .select('title')
+      .select('title, pipeline_stage')
       .eq('id', projectId)
       .single()
 
@@ -1805,7 +1829,11 @@ export async function assignQuoteAndMove(
       return { ok: false, error: 'Prosjekt ikke funnet' }
     }
 
-    const { error } = await supabase
+    if (!['lead', 'møte'].includes(project.pipeline_stage ?? '')) {
+      return { ok: false, error: 'Prosjektet kan ikke flyttes tilbake til Sende tilbud herfra' }
+    }
+
+    const { data: updatedProject, error } = await supabase
       .from('projects')
       .update({
         quote_assignee_id: assigneeId,
@@ -1813,9 +1841,15 @@ export async function assignQuoteAndMove(
         updated_at: new Date().toISOString(),
       })
       .eq('id', projectId)
+      .in('pipeline_stage', ['lead', 'møte'])
+      .select('id')
+      .maybeSingle()
 
     if (error) {
       return { ok: false, error: 'Kunne ikke oppdatere prosjekt' }
+    }
+    if (!updatedProject) {
+      return { ok: false, error: 'Prosjektet kan ikke flyttes tilbake til Sende tilbud herfra' }
     }
 
     await seedTasksFromTemplates(projectId, 'tilbud_sendt')

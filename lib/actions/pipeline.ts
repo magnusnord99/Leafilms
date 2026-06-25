@@ -1646,7 +1646,7 @@ export async function sendTilbudToKunde(
     }
 
     // Flytt til kontrakt-steget
-    const { error: updateError } = await supabase
+    const { data: updatedProject, error: updateError } = await supabase
       .from('projects')
       .update({
         pipeline_stage: 'kontrakt',

@@ -867,7 +867,7 @@ Returner KUN e-postteksten, ingen subject-linje.`
     // Steg 4: Oppdater pipeline_data med meeting_link og sent_at
     const existingPipelineData = (project.pipeline_data as PipelineData) ?? {}
 
-    const { data: updatedProject, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('projects')
       .update({
         pipeline_data: {

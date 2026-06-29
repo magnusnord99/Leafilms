@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     const pdfFileName = `${contract.id}-${Date.now()}.pdf`
     let pdfUrl: string | null = null
 
-    if (pdfBuffer) {
+    if (pdfBuffer != null) {
       const { error: uploadError } = await supabase.storage
         .from('contracts')
         .upload(pdfFileName, pdfBuffer, {
@@ -151,10 +151,13 @@ export async function POST(request: NextRequest) {
         pdfUrl = urlData.publicUrl
 
         // Lagre PDF-URL på kontrakt-raden
-        await supabase
+        const { error: pdfUrlUpdateError } = await supabase
           .from('contracts')
           .update({ pdf_url: pdfUrl })
           .eq('id', contract.id)
+        if (pdfUrlUpdateError) {
+          console.error('sign contract pdf_url update error:', pdfUrlUpdateError)
+        }
       }
     }
 

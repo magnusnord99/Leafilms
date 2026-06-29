@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Hent kontrakt for prosjektet
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
-      .select('id, published_at, status')
+      .select('id, published_at, status, contract_text')
       .eq('project_id', projectId)
       .single()
 
@@ -94,12 +94,12 @@ export async function POST(request: NextRequest) {
         doc.fontSize(16).font('Helvetica-Bold').text('Produksjonsavtale', { align: 'center' })
         doc.moveDown(0.5)
         doc.fontSize(9).font('Helvetica').fillColor('#666666')
-          .text(`Generert: ${new Date(signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'center' })
+          .text(`Generert: ${new Date(signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'center' })
         doc.fillColor('#000000')
         doc.moveDown(1.5)
 
         // Kontrakttekst
-        doc.fontSize(9).font('Courier').text(contractSnapshot, {
+        doc.fontSize(9).font('Courier').text(contract.contract_text ?? contractSnapshot, {
           lineGap: 2,
           paragraphGap: 4,
         })
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         doc.fontSize(9).font('Helvetica-Bold').text('Signatur')
         doc.font('Helvetica').moveDown(0.3)
         doc.text(`Signert av: ${signerName} (${signerEmail})`)
-        doc.text(`Dato: ${new Date(signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+        doc.text(`Dato: ${new Date(signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
         doc.text(`IP: ${ip}`)
         doc.moveDown(0.8)
 
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
 
     // Send bekreftelsese-poster via Resend
     if (process.env.RESEND_API_KEY) {
-      const formattedDate = new Date(signedAt).toLocaleDateString('no-NO', {
+      const formattedDate = new Date(signedAt).toLocaleString('nb-NO', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
       })
 

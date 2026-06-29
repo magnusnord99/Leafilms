@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 type ContractSigningSectionProps = {
   projectId: string
@@ -22,7 +22,66 @@ export default function ContractSigningSection({
   const [signed, setSigned] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isDrawing = useRef(false)
+  const [hasSigned, setHasSigned] = useState(false)
+
   const isSigned = initialIsSigned || signed
+
+  const getCanvasPos = useCallback((e: { clientX: number; clientY: number }, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    }
+  }, [])
+
+  const startDrawing = useCallback((x: number, y: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    isDrawing.current = true
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+  }, [])
+
+  const draw = useCallback((x: number, y: number) => {
+    if (!isDrawing.current) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.lineTo(x, y)
+    ctx.stroke()
+    setHasSigned(true)
+  }, [])
+
+  const stopDrawing = useCallback(() => {
+    isDrawing.current = false
+  }, [])
+
+  const clearCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setHasSigned(false)
+  }, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.strokeStyle = '#E8E1D5'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+  }, [])
 
   async function handleSign() {
     setSigning(true)
@@ -36,6 +95,7 @@ export default function ContractSigningSection({
           signerName: name,
           signerEmail: email,
           contractSnapshot: contractText,
+          signatureImage: canvasRef.current?.toDataURL('image/png') ?? '',
         }),
       })
       if (res.ok) {
@@ -51,7 +111,7 @@ export default function ContractSigningSection({
     }
   }
 
-  const canSubmit = name.trim() !== '' && email.trim() !== '' && accepted && !signing
+  const canSubmit = name.trim() !== '' && email.trim() !== '' && accepted && hasSigned && !signing
 
   return (
     <section
@@ -219,6 +279,94 @@ export default function ContractSigningSection({
               />
               Jeg har lest og godtar produksjonsavtalen
             </label>
+
+            {/* Signaturcanvas */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label
+                  style={{
+                    fontFamily: 'var(--font-dm-sans, "DM Sans", sans-serif)',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: 'rgba(232,225,213,0.5)',
+                  }}
+                >
+                  Signatur
+                </label>
+                <button
+                  type="button"
+                  onClick={clearCanvas}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontFamily: 'var(--font-dm-sans, "DM Sans", sans-serif)',
+                    fontSize: '0.7rem',
+                    color: 'rgba(232,225,213,0.35)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Tøm
+                </button>
+              </div>
+              <canvas
+                ref={canvasRef}
+                width={700}
+                height={160}
+                onMouseDown={e => {
+                  const canvas = canvasRef.current
+                  if (!canvas) return
+                  const pos = getCanvasPos(e.nativeEvent, canvas)
+                  startDrawing(pos.x, pos.y)
+                }}
+                onMouseMove={e => {
+                  const canvas = canvasRef.current
+                  if (!canvas) return
+                  const pos = getCanvasPos(e.nativeEvent, canvas)
+                  draw(pos.x, pos.y)
+                }}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={e => {
+                  e.preventDefault()
+                  const canvas = canvasRef.current
+                  if (!canvas) return
+                  const pos = getCanvasPos(e.touches[0], canvas)
+                  startDrawing(pos.x, pos.y)
+                }}
+                onTouchMove={e => {
+                  e.preventDefault()
+                  const canvas = canvasRef.current
+                  if (!canvas) return
+                  const pos = getCanvasPos(e.touches[0], canvas)
+                  draw(pos.x, pos.y)
+                }}
+                onTouchEnd={stopDrawing}
+                style={{
+                  width: '100%',
+                  height: 160,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${hasSigned ? 'rgba(196,148,52,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                  borderRadius: 4,
+                  cursor: 'crosshair',
+                  touchAction: 'none',
+                  display: 'block',
+                }}
+              />
+              {!hasSigned && (
+                <p style={{
+                  fontFamily: 'var(--font-dm-sans, "DM Sans", sans-serif)',
+                  fontSize: '0.7rem',
+                  color: 'rgba(232,225,213,0.3)',
+                  margin: 0,
+                  textAlign: 'center',
+                }}>
+                  Tegn signaturen din her
+                </p>
+              )}
+            </div>
 
             {/* Error */}
             {error && (

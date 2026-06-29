@@ -20,6 +20,11 @@ BEGIN
     RAISE EXCEPTION 'Ikke-tillatt SQL-operasjon';
   END IF;
 
+  -- Blokker tilgang til sensitive skjemaer (auth, vault, storage, etc.)
+  IF query ~* '\m(auth|vault|storage|supabase_functions|information_schema|pg_catalog)\s*\.' THEN
+    RAISE EXCEPTION 'Tilgang til dette skjemaet er ikke tillatt';
+  END IF;
+
   EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || query || ' LIMIT 50) t'
     INTO result;
 

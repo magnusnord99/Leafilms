@@ -141,21 +141,39 @@ export default function ContractSigningSection({
         {/* Contract text box */}
         <div
           style={{
-            maxHeight: 500,
-            overflowY: 'auto',
             border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 4,
-            padding: '1.25rem',
-            marginBottom: '2rem',
-            background: 'rgba(255,255,255,0.02)',
-            whiteSpace: 'pre-wrap',
-            fontFamily: 'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace',
-            fontSize: '0.8rem',
-            lineHeight: 1.65,
-            color: 'rgba(232,225,213,0.75)',
+            borderRadius: 6,
+            padding: '2rem 2.25rem',
+            marginBottom: '2.5rem',
+            background: 'rgba(255,255,255,0.025)',
           }}
         >
-          {contractText}
+          {contractText.split('\n').map((line, i) => {
+            const isSectionHeader = /^\d+\.\s+\S/.test(line) && line.length < 60
+            const isSubHeader = /^\d+\.\d+/.test(line)
+            const isEmpty = line.trim() === ''
+            if (isEmpty) return <div key={i} style={{ height: '0.75rem' }} />
+            return (
+              <p
+                key={i}
+                style={{
+                  fontFamily: 'var(--font-dm-sans, "DM Sans", sans-serif)',
+                  fontSize: isSectionHeader ? '0.8rem' : '0.875rem',
+                  fontWeight: isSectionHeader || isSubHeader ? 600 : 400,
+                  letterSpacing: isSectionHeader ? '0.08em' : 0,
+                  textTransform: isSectionHeader ? 'uppercase' : 'none',
+                  lineHeight: 1.8,
+                  color: isSectionHeader
+                    ? 'rgba(196,148,52,0.85)'
+                    : 'rgba(232,225,213,0.85)',
+                  marginBottom: isSectionHeader ? '0.4rem' : '0.1rem',
+                  marginTop: isSectionHeader ? '1.5rem' : 0,
+                }}
+              >
+                {line}
+              </p>
+            )
+          })}
         </div>
 
         {/* Signed state */}

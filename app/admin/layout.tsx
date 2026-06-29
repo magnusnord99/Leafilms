@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/admin/NotificationBell'
 import { FeedbackButton } from '@/components/admin/FeedbackButton'
+import { AIChatButton } from '@/components/ai/AIChatButton'
 import { C } from '@/lib/admin-theme'
 
 type NavItem = { href: string; label: string; exact?: boolean }
@@ -315,6 +316,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
 
+      <AIChatButton />
       <FeedbackButton />
     </div>
   )

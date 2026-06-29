@@ -1,17 +1,22 @@
 import { NextRequest } from 'next/server'
+import PDFDocument from 'pdfkit'
 import { createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { projectId, signerName, signerEmail, contractSnapshot } = body
+    const { projectId, signerName, signerEmail, contractSnapshot, signatureImage } = body
 
     // Valider påkrevde felt
-    if (!projectId || !signerName || !signerEmail || !contractSnapshot) {
+    if (!projectId || !signerName || !signerEmail || !contractSnapshot || !signatureImage) {
       return Response.json(
-        { error: 'Manglende felt: projectId, signerName, signerEmail, contractSnapshot' },
+        { error: 'Manglende felt: projectId, signerName, signerEmail, contractSnapshot, signatureImage' },
         { status: 400 }
       )
+    }
+
+    if (typeof signatureImage !== 'string' || !signatureImage.startsWith('data:image/png;base64,') || signatureImage.length < 200) {
+      return Response.json({ error: 'Ugyldig signaturbildet' }, { status: 400 })
     }
 
     const ip =
@@ -64,6 +69,7 @@ export async function POST(request: NextRequest) {
           signedAt,
           contractSnapshot,
           ip,
+          signatureImage,
         },
         updated_at: signedAt,
       })
@@ -72,6 +78,84 @@ export async function POST(request: NextRequest) {
     if (updateContractError) {
       console.error('sign contract update error:', updateContractError)
       return Response.json({ error: 'Kunne ikke registrere signering' }, { status: 500 })
+    }
+
+    // Generer PDF i minnet (ikke-fatal — kontrakt er allerede signert)
+    let pdfBuffer: Buffer | null = null
+    try {
+      pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 60, size: 'A4' })
+        const chunks: Buffer[] = []
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk))
+        doc.on('end', () => resolve(Buffer.concat(chunks)))
+        doc.on('error', reject)
+
+        // Tittel
+        doc.fontSize(16).font('Helvetica-Bold').text('Produksjonsavtale', { align: 'center' })
+        doc.moveDown(0.5)
+        doc.fontSize(9).font('Helvetica').fillColor('#666666')
+          .text(`Generert: ${new Date(signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'center' })
+        doc.fillColor('#000000')
+        doc.moveDown(1.5)
+
+        // Kontrakttekst
+        doc.fontSize(9).font('Courier').text(contractSnapshot, {
+          lineGap: 2,
+          paragraphGap: 4,
+        })
+
+        doc.moveDown(2)
+
+        // Signeringsseksjon
+        doc.moveTo(60, doc.y).lineTo(doc.page.width - 60, doc.y).strokeColor('#cccccc').lineWidth(0.5).stroke()
+        doc.strokeColor('#000000').lineWidth(1)
+        doc.moveDown(1)
+
+        doc.fontSize(9).font('Helvetica-Bold').text('Signatur')
+        doc.font('Helvetica').moveDown(0.3)
+        doc.text(`Signert av: ${signerName} (${signerEmail})`)
+        doc.text(`Dato: ${new Date(signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+        doc.text(`IP: ${ip}`)
+        doc.moveDown(0.8)
+
+        // Signaturbilde
+        const imgBase64 = signatureImage.replace('data:image/png;base64,', '')
+        const imgBuffer = Buffer.from(imgBase64, 'base64')
+        doc.image(imgBuffer, { width: 220, height: 55 })
+
+        doc.end()
+      })
+    } catch (pdfErr) {
+      console.error('sign contract PDF generation error:', pdfErr)
+    }
+
+    // Last opp PDF til Supabase Storage
+    const pdfFileName = `${contract.id}-${Date.now()}.pdf`
+    let pdfUrl: string | null = null
+
+    if (pdfBuffer) {
+      const { error: uploadError } = await supabase.storage
+        .from('contracts')
+        .upload(pdfFileName, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: false,
+        })
+
+      if (uploadError) {
+        console.error('sign contract PDF upload error:', uploadError)
+        // Ikke fatal — logg og fortsett uten PDF-URL
+      } else {
+        const { data: urlData } = supabase.storage
+          .from('contracts')
+          .getPublicUrl(pdfFileName)
+        pdfUrl = urlData.publicUrl
+
+        // Lagre PDF-URL på kontrakt-raden
+        await supabase
+          .from('contracts')
+          .update({ pdf_url: pdfUrl })
+          .eq('id', contract.id)
+      }
     }
 
     // Sett quote til accepted
@@ -162,18 +246,27 @@ export async function POST(request: NextRequest) {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
       })
 
+      const pdfAttachment = pdfBuffer != null
+        ? [{
+            filename: `Produksjonsavtale-${(projectTitle ?? 'kontrakt').replace(/\s+/g, '-')}.pdf`,
+            content: pdfBuffer.toString('base64'),
+          }]
+        : []
+
       const emails = [
         // Bekreftelse til signataren
         {
           to: signerEmail,
           subject: `Bekreftelse på signert produksjonsavtale — ${projectTitle}`,
           text: `Hei ${signerName},\n\nVi bekrefter at du har signert produksjonsavtalen for ${projectTitle}.\n\nSignert av: ${signerName} (${signerEmail})\nDato: ${formattedDate}\n\nTa vare på denne e-posten som bekreftelse på inngått avtale.\n\nMed vennlig hilsen,\nLeafilms`,
+          attachments: pdfAttachment,
         },
         // Intern varsling til Leafilms
         {
           to: 'post@leafilms.no',
           subject: `Kontrakt signert — ${projectTitle}`,
           text: `Produksjonsavtalen for ${projectTitle} er signert.\n\nSignert av: ${signerName} (${signerEmail})\nDato: ${formattedDate}\nIP: ${ip}`,
+          attachments: pdfAttachment,
         },
       ]
 
@@ -190,6 +283,7 @@ export async function POST(request: NextRequest) {
               to: [email.to],
               subject: email.subject,
               text: email.text,
+              attachments: email.attachments,
             }),
           })
           if (!res.ok) {

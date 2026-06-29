@@ -180,7 +180,7 @@ export function AIChatPanel({ onClose }: Props) {
                   height: 6,
                   borderRadius: '50%',
                   background: C.text3,
-                  animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+                  animation: `ai-dot-pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
                 }}
               />
             ))}

@@ -551,14 +551,6 @@ export default function ProjectHubPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const projectId = params.id as string
-  const fromParam = searchParams?.get('from') ?? null
-  const backHref = fromParam ?? '/admin/pipeline'
-  const backLabel = (() => {
-    if (!fromParam) return 'Pipeline'
-    if (fromParam.includes('/customers/')) return 'Kunder'
-    if (fromParam === '/admin/projects') return 'Prosjekter'
-    return 'Tilbake'
-  })()
 
   const [hubData, setHubData] = useState<HubData>(null)
   const [loading, setLoading] = useState(true)
@@ -783,19 +775,6 @@ export default function ProjectHubPage() {
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh' }}>
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '28px 24px 48px' }}>
-
-        {/* Back link */}
-        <div style={{ marginBottom: 20 }}>
-          <Link href={backHref} style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text2 }}
-              onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text3 }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2L4 6l3.5 4" /></svg>
-              {backLabel}
-            </span>
-          </Link>
-        </div>
 
         {/* Header */}
         <div style={{ marginBottom: 28, paddingBottom: 24, borderBottom: `1px solid ${C.border}` }}>

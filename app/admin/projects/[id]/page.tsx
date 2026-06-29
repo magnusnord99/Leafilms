@@ -551,6 +551,14 @@ export default function ProjectHubPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const projectId = params.id as string
+  const fromParam = searchParams?.get('from') ?? null
+  const backHref = fromParam ?? '/admin/pipeline'
+  const backLabel = (() => {
+    if (!fromParam) return 'Pipeline'
+    if (fromParam.includes('/customers/')) return 'Kunder'
+    if (fromParam === '/admin/projects') return 'Prosjekter'
+    return 'Tilbake'
+  })()
 
   const [hubData, setHubData] = useState<HubData>(null)
   const [loading, setLoading] = useState(true)
@@ -576,6 +584,7 @@ export default function ProjectHubPage() {
   const [contractText, setContractText] = useState('')
   const [contractIsPublished, setContractIsPublished] = useState(false)
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
+  const [contractPdfUrl, setContractPdfUrl] = useState<string | null>(null)
   const [loadingContract, setLoadingContract] = useState(false)
   const [publishingContract, setPublishingContract] = useState(false)
   const [contractSaved, setContractSaved] = useState(false)
@@ -734,6 +743,7 @@ export default function ProjectHubPage() {
     setContractText(data.contractText)
     setContractIsPublished(data.isPublished)
     setContractSignature(data.signature)
+    setContractPdfUrl(data.pdfUrl)
     setLoadingContract(false)
   }
 
@@ -776,13 +786,13 @@ export default function ProjectHubPage() {
 
         {/* Back link */}
         <div style={{ marginBottom: 20 }}>
-          <Link href="/admin/pipeline" style={{ textDecoration: 'none' }}>
+          <Link href={backHref} style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
               onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text2 }}
               onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text3 }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2L4 6l3.5 4" /></svg>
-              Pipeline
+              {backLabel}
             </span>
           </Link>
         </div>
@@ -1207,6 +1217,25 @@ export default function ProjectHubPage() {
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
                     {contractSignature.signerEmail} · {new Date(contractSignature.signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
+                  {contractPdfUrl && (
+                    <a
+                      href={contractPdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)',
+                        fontSize: '0.72rem',
+                        color: C.accent,
+                        textDecoration: 'none',
+                        display: 'inline-block',
+                        marginTop: 4,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+                      onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+                    >
+                      Åpne signert kontrakt →
+                    </a>
+                  )}
                 </div>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.success, background: 'rgba(76,175,125,0.1)', padding: '3px 10px', borderRadius: 4 }}>
                   Bindende

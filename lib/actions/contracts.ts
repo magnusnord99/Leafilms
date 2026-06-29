@@ -126,6 +126,7 @@ export async function getProjectContractData(projectId: string): Promise<{
   contractText: string
   isPublished: boolean
   contractId: string | null
+  pdfUrl: string | null
   signature: {
     signerName: string
     signerEmail: string
@@ -175,6 +176,7 @@ export async function getProjectContractData(projectId: string): Promise<{
       contractText: contract.contract_text,
       isPublished: !!contract.published_at,
       contractId: contract.id,
+      pdfUrl: contract.pdf_url ?? null,
       signature,
     }
   }
@@ -239,6 +241,7 @@ export async function getProjectContractData(projectId: string): Promise<{
     contractText,
     isPublished: !!contract?.published_at,
     contractId: contract?.id ?? null,
+    pdfUrl: contract?.pdf_url ?? null,
     signature,
   }
 }

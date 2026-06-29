@@ -13,10 +13,9 @@ import {
   updateProjectDeliverablesSection,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
+import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
+import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline, TaskMessage } from '@/lib/types'
-import SelectionGallery from '@/app/admin/projects/[id]/SelectionGallery'
-import { getAdminGallery } from '@/lib/actions/selections'
-import type { SelectionGallery as GalleryData, SelectionImage } from '@/lib/actions/selections'
 
 const C = {
   bg:       '#181920',
@@ -207,16 +206,14 @@ export default function PostProdDetailPage() {
   const [seedError, setSeedError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string | null; email: string } | null>(null)
   const [showRejectionForm, setShowRejectionForm] = useState(false)
-  const [selectionGalleryData, setSelectionGalleryData] = useState<{
-    gallery: GalleryData; images: SelectionImage[]
-    selectedCount: number; signedUrls: Record<string, string>
-  } | null>(null)
   const [rejectionNote, setRejectionNote] = useState('')
   const [rejectionNoteError, setRejectionNoteError] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
+  const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
+  const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
 
   const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
 
@@ -278,13 +275,15 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, delivSection] = await Promise.all([
+    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs] = await Promise.all([
       getPostProdProjects(),
       getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
       getProjectDeliverablesSection(projectId),
+      getSelectedImagesForProject(projectId),
     ])
+    setSelectionImages(selImgs)
     setDeliverableItems(delivSection?.items ?? [])
     setProfiles(allProfiles)
 
@@ -385,9 +384,6 @@ export default function PostProdDetailPage() {
       const td = (selectedTask.task_data as Record<string, string>) ?? {}
       setTaskData(prev => ({ ...prev, [selectedTask.id]: td }))
       pendingTaskDataRef.current[selectedTask.id] = td
-    }
-    if (selectedTask.title === SELEKSJON_TITLE) {
-      getAdminGallery(projectId).then(setSelectionGalleryData).catch(() => setSelectionGalleryData(null))
     }
   }, [selectedTask?.id])
 
@@ -685,7 +681,40 @@ export default function PostProdDetailPage() {
                   </p>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Lever-knapper */}
+                {currentProject.project_type === 'video' && (
+                  <button
+                    onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=video`)}
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: C.success, color: '#fff', border: 'none' }}
+                  >
+                    ↑ Lever film
+                  </button>
+                )}
+                {currentProject.project_type === 'photo' && (
+                  <button
+                    onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: '#4A9AC4', color: '#fff', border: 'none' }}
+                  >
+                    ↑ Lever bilder
+                  </button>
+                )}
+                {currentProject.project_type === 'mixed' && (
+                  <>
+                    <button
+                      onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=video`)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: C.success, color: '#fff', border: 'none' }}
+                    >
+                      ↑ Lever film
+                    </button>
+                    <button
+                      onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: '#4A9AC4', color: '#fff', border: 'none' }}
+                    >
+                      ↑ Lever bilder
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={handleReseed}
                   disabled={reseeding}
@@ -1061,11 +1090,93 @@ export default function PostProdDetailPage() {
               {/* Seleksjonsgalleri */}
               {selectedTask.title === SELEKSJON_TITLE && (
                 <div style={{ marginBottom: 28 }}>
-                  <SelectionGallery
-                    projectId={projectId}
-                    initialData={selectionGalleryData}
-                    deliveryPhoto={projects.find(p => p.id === projectId)?.delivery_photo}
-                  />
+                  <Link
+                    href={`/admin/projects/${projectId}/selection`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '9px 16px', borderRadius: 7, border: `1px solid ${C.border}`,
+                      background: C.surface2, color: C.text2,
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                      textDecoration: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    → Administrer galleri
+                  </Link>
+                </div>
+              )}
+
+              {/* Valgte bilder for redigering */}
+              {(selectedTask.title === 'Redigering' || selectedTask.title === 'Redigering bilder') && selectionImages.length > 0 && (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Valgt av kunden ({selectionImages.length})
+                    </label>
+                    <Link
+                      href={`/admin/projects/${projectId}/selection`}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.accent, textDecoration: 'none' }}
+                    >
+                      Se galleri →
+                    </Link>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 4 }}>
+                    {selectionImages.map((img, idx) => (
+                      <div
+                        key={img.id}
+                        onClick={() => setSelectionLightbox(idx)}
+                        style={{ position: 'relative', aspectRatio: '4/3', borderRadius: 5, overflow: 'hidden', cursor: 'pointer', background: C.surface2 }}
+                      >
+                        {img.signedUrl
+                          ? <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                          : <div style={{ width: '100%', height: '100%' }} />
+                        }
+                        {img.comment && (
+                          <div style={{ position: 'absolute', bottom: 3, left: 3, width: 7, height: 7, borderRadius: '50%', background: '#C49434' }} />
+                        )}
+                        {img.albumName && (
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '2px 4px', background: 'rgba(0,0,0,0.55)', fontFamily: 'var(--font-dm-sans)', fontSize: '0.5rem', color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {img.albumName}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Lightbox */}
+                  {selectionLightbox !== null && (() => {
+                    const img = selectionImages[selectionLightbox]
+                    return (
+                      <div
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(12,11,9,0.97)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}
+                        onClick={() => setSelectionLightbox(null)}
+                      >
+                        <div style={{ maxWidth: '90vw', maxHeight: '80vh', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                          {img?.signedUrl
+                            ? <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
+                            : <div style={{ width: 400, height: 300, background: C.surface2 }} />
+                          }
+                          {img?.comment && (
+                            <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
+                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: '#E8E0D0', lineHeight: 1.5, margin: 0 }}>{img.comment}</p>
+                            </div>
+                          )}
+                          {img?.albumName && (
+                            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 6, textAlign: 'center' }}>{img.albumName}</p>
+                          )}
+                        </div>
+                        {selectionLightbox > 0 && (
+                          <button onClick={e => { e.stopPropagation(); setSelectionLightbox(p => p !== null ? p - 1 : null) }} style={{ position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)', width: 44, height: 44, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}>‹</button>
+                        )}
+                        {selectionLightbox < selectionImages.length - 1 && (
+                          <button onClick={e => { e.stopPropagation(); setSelectionLightbox(p => p !== null ? p + 1 : null) }} style={{ position: 'absolute', top: '50%', right: 12, transform: 'translateY(-50%)', width: 44, height: 44, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}>›</button>
+                        )}
+                        <button onClick={() => setSelectionLightbox(null)} style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', fontSize: '1rem', cursor: 'pointer' }}>×</button>
+                        <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
+                          {selectionLightbox + 1} / {selectionImages.length}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
@@ -1464,13 +1575,33 @@ export default function PostProdDetailPage() {
               )}
 
               {allDone && isSelectedDone && selectedIdx === displayTasks.length - 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'rgba(76,175,125,0.08)', border: `1px solid rgba(76,175,125,0.2)`, borderRadius: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 8L6.5 11.5L13 4.5" stroke="#4CAF7D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.success }}>
-                    Alle oppgaver fullført — klar for levering
-                  </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', background: 'rgba(76,175,125,0.08)', border: `1px solid rgba(76,175,125,0.2)`, borderRadius: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8L6.5 11.5L13 4.5" stroke="#4CAF7D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.success }}>
+                      Alle oppgaver fullført — klar for levering
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(currentProject.project_type === 'video' || currentProject.project_type === 'mixed') && (
+                      <button
+                        onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=video`)}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: C.success, color: '#fff', border: 'none' }}
+                      >
+                        ↑ Lever film
+                      </button>
+                    )}
+                    {(currentProject.project_type === 'photo' || currentProject.project_type === 'mixed') && (
+                      <button
+                        onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: '#4A9AC4', color: '#fff', border: 'none' }}
+                      >
+                        ↑ Lever bilder
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

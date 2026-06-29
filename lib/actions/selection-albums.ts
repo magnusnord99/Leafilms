@@ -15,6 +15,7 @@ export type SelectionAlbum = {
   album_target_count: number | null
   album_status: 'open' | 'submitted'
   album_submitted_at: string | null
+  parent_album_id: string | null
   created_at: string
   updated_at: string
 }
@@ -78,6 +79,67 @@ function generateToken(): string {
 
 function generatePin(): string {
   return String(Math.floor(1000 + Math.random() * 9000))
+}
+
+export type SelectedImageForEditor = {
+  id: string
+  filename: string
+  signedUrl: string
+  comment: string | null
+  albumName: string | null
+  sort_order: number
+}
+
+export async function getSelectedImagesForProject(projectId: string): Promise<SelectedImageForEditor[]> {
+  const supabase = await createClient()
+  const service = createServiceClient()
+
+  const { data: gallery } = await supabase
+    .from('selection_galleries')
+    .select('id')
+    .eq('project_id', projectId)
+    .neq('status', 'purged')
+    .limit(1)
+    .maybeSingle()
+
+  if (!gallery) return []
+
+  const { data: albums } = await supabase
+    .from('selection_albums')
+    .select('id, name')
+    .eq('gallery_id', gallery.id)
+
+  const albumNameById: Record<string, string> = {}
+  for (const a of albums ?? []) albumNameById[a.id] = a.name
+
+  const { data: images } = await supabase
+    .from('selection_images')
+    .select('id, filename, storage_path, comment, album_id, sort_order')
+    .eq('gallery_id', gallery.id)
+    .eq('selected', true)
+    .order('sort_order', { ascending: true })
+
+  if (!images || images.length === 0) return []
+
+  const paths = images.filter(i => i.storage_path).map(i => i.storage_path as string)
+  const signedUrlMap: Record<string, string> = {}
+  if (paths.length > 0) {
+    const { data: urlData } = await service.storage
+      .from('selections')
+      .createSignedUrls(paths, 60 * 60 * 2)
+    for (const item of urlData ?? []) {
+      if (item.signedUrl && item.path) signedUrlMap[item.path] = item.signedUrl
+    }
+  }
+
+  return images.map(img => ({
+    id: img.id,
+    filename: img.filename,
+    signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
+    comment: img.comment,
+    albumName: img.album_id ? (albumNameById[img.album_id] ?? null) : null,
+    sort_order: img.sort_order,
+  }))
 }
 
 export async function getAdminSelectionPage(projectId: string): Promise<AdminSelectionPageData | null> {
@@ -151,7 +213,7 @@ export async function getAdminSelectionPage(projectId: string): Promise<AdminSel
   }
 }
 
-export async function createAlbum(galleryId: string, name: string): Promise<SelectionAlbum> {
+export async function createAlbum(galleryId: string, name: string, parentAlbumId?: string): Promise<SelectionAlbum> {
   const supabase = await createClient()
   const slug = slugify(name) || `album-${Date.now()}`
 
@@ -179,6 +241,7 @@ export async function createAlbum(galleryId: string, name: string): Promise<Sele
       name,
       slug: finalSlug,
       sort_order: (maxOrder?.sort_order ?? -1) + 1,
+      parent_album_id: parentAlbumId ?? null,
     })
     .select('*')
     .single()
@@ -201,6 +264,24 @@ export async function updateAlbum(
   await supabase.from('selection_albums').update(patch).eq('id', albumId)
 }
 
+export async function deleteAllAlbumImages(albumId: string): Promise<void> {
+  const supabase = await createClient()
+  const service = createServiceClient()
+
+  const { data: images } = await supabase
+    .from('selection_images')
+    .select('storage_path')
+    .eq('album_id', albumId)
+    .not('storage_path', 'is', null)
+
+  const paths = (images ?? []).map(i => i.storage_path).filter(Boolean) as string[]
+  if (paths.length > 0) {
+    await service.storage.from('selections').remove(paths)
+  }
+
+  await supabase.from('selection_images').delete().eq('album_id', albumId)
+}
+
 export async function deleteAlbum(albumId: string): Promise<void> {
   const supabase = await createClient()
   const service = createServiceClient()
@@ -220,6 +301,23 @@ export async function deleteAlbum(albumId: string): Promise<void> {
   await supabase.from('selection_albums').delete().eq('id', albumId)
 }
 
+export async function moveImagesToAlbum(imageIds: string[], targetAlbumId: string): Promise<void> {
+  const supabase = await createClient()
+  await supabase
+    .from('selection_images')
+    .update({ album_id: targetAlbumId })
+    .in('id', imageIds)
+}
+
+export async function deleteAlbumImage(imageId: string, storagePath: string | null): Promise<void> {
+  const supabase = await createClient()
+  if (storagePath) {
+    const service = createServiceClient()
+    await service.storage.from('selections').remove([storagePath])
+  }
+  await supabase.from('selection_images').delete().eq('id', imageId)
+}
+
 export async function reorderAlbums(albumIds: string[]): Promise<void> {
   const supabase = await createClient()
   await Promise.all(
@@ -234,23 +332,32 @@ export async function reorderAlbums(albumIds: string[]): Promise<void> {
 
 export async function enableAlbumSharing(
   albumId: string,
-  targetCount?: number
+  targetCount?: number,
+  pinCode?: string,
 ): Promise<{ token: string; pinCode: string }> {
   const supabase = await createClient()
   const token = generateToken()
-  const pinCode = generatePin()
+  const resolvedPin = pinCode ?? generatePin()
 
   await supabase
     .from('selection_albums')
     .update({
       album_token: token,
-      album_pin_code: pinCode,
+      album_pin_code: resolvedPin,
       album_target_count: targetCount ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', albumId)
 
-  return { token, pinCode }
+  return { token, pinCode: resolvedPin }
+}
+
+export async function updateAlbumPin(albumId: string, pinCode: string): Promise<void> {
+  const supabase = await createClient()
+  await supabase
+    .from('selection_albums')
+    .update({ album_pin_code: pinCode, updated_at: new Date().toISOString() })
+    .eq('id', albumId)
 }
 
 export async function disableAlbumSharing(albumId: string): Promise<void> {
@@ -267,54 +374,78 @@ export async function disableAlbumSharing(albumId: string): Promise<void> {
 }
 
 export async function getAllGalleriesOverview(): Promise<{
-  galleryId: string
   projectId: string
   projectName: string
-  status: string
+  taskStatus: string
+  galleryId: string | null
+  galleryStatus: string | null
   albumCount: number
   totalSelected: number
   targetCount: number | null
   submittedAt: string | null
-  createdAt: string
 }[]> {
   const supabase = await createClient()
 
+  // Hent alle post_prod-prosjekter med aktiv "Seleksjon til kunde"-oppgave
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('id, status, project_id, projects!inner(id, title, pipeline_stage, project_type)')
+    .ilike('title', 'Seleksjon til kunde')
+    .neq('status', 'done')
+    .eq('projects.pipeline_stage', 'post_prod')
+    .in('projects.project_type', ['photo', 'mixed'])
+
+  if (!tasks || tasks.length === 0) return []
+
+  // Dedupliser — et prosjekt kan ha flere slike oppgaver
+  const seen = new Set<string>()
+  const uniqueTasks = tasks.filter(t => {
+    if (seen.has(t.project_id)) return false
+    seen.add(t.project_id)
+    return true
+  })
+
+  // Hent alle gallerier (ikke purged) for disse prosjektene
+  const projectIds = uniqueTasks.map(t => t.project_id)
   const { data: galleries } = await supabase
     .from('selection_galleries')
-    .select(`
-      id, project_id, status, target_count, submitted_at, created_at,
-      projects ( name )
-    `)
+    .select('id, project_id, status, target_count, submitted_at')
+    .in('project_id', projectIds)
     .neq('status', 'purged')
-    .order('created_at', { ascending: false })
 
-  if (!galleries) return []
+  const galleryByProject = Object.fromEntries((galleries ?? []).map(g => [g.project_id, g]))
 
   return Promise.all(
-    galleries.map(async (g) => {
-      const { count: albumCount } = await supabase
-        .from('selection_albums')
-        .select('id', { count: 'exact', head: true })
-        .eq('gallery_id', g.id)
+    uniqueTasks.map(async (task) => {
+      const proj = task.projects as unknown as { id: string; title: string } | null
+      const gallery = galleryByProject[task.project_id] ?? null
 
-      const { count: selectedCount } = await supabase
-        .from('selection_images')
-        .select('id', { count: 'exact', head: true })
-        .eq('gallery_id', g.id)
-        .eq('selected', true)
-
-      const proj = g.projects as unknown as { name: string } | null
+      let albumCount = 0
+      let totalSelected = 0
+      if (gallery) {
+        const { count: ac } = await supabase
+          .from('selection_albums')
+          .select('id', { count: 'exact', head: true })
+          .eq('gallery_id', gallery.id)
+        const { count: sc } = await supabase
+          .from('selection_images')
+          .select('id', { count: 'exact', head: true })
+          .eq('gallery_id', gallery.id)
+          .eq('selected', true)
+        albumCount = ac ?? 0
+        totalSelected = sc ?? 0
+      }
 
       return {
-        galleryId: g.id,
-        projectId: g.project_id,
-        projectName: proj?.name ?? '—',
-        status: g.status,
-        albumCount: albumCount ?? 0,
-        totalSelected: selectedCount ?? 0,
-        targetCount: g.target_count,
-        submittedAt: g.submitted_at,
-        createdAt: g.created_at,
+        projectId: task.project_id,
+        projectName: proj?.title ?? '—',
+        taskStatus: task.status,
+        galleryId: gallery?.id ?? null,
+        galleryStatus: gallery?.status ?? null,
+        albumCount,
+        totalSelected,
+        targetCount: gallery?.target_count ?? null,
+        submittedAt: gallery?.submitted_at ?? null,
       }
     })
   )

@@ -29,6 +29,14 @@ export default async function AlbumPage({
       totalSelected={data.albums.reduce((s, a) => s + a.selectedCount, 0)}
       targetCount={data.gallery.target_count}
       isDirectAlbumLink={false}
+      allAlbums={data.albums.map(a => ({
+          id: a.id,
+          name: a.name,
+          slug: a.slug,
+          selectedCount: a.selectedCount,
+          parent_album_id: a.parent_album_id,
+          coverUrl: a.images[0]?.signedUrl ?? null,
+        }))}
     />
   )
 }

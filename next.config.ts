@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV === 'development'
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   compress: true,
+  allowedDevOrigins: ['192.168.1.206'],
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',
@@ -22,9 +25,9 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   async headers() {
+    if (isDev) return []
     return [
       {
-        // Cache statiske Next.js-assets (JS, CSS, fonter) aggressivt
         source: '/_next/static/:path*',
         headers: [
           {
@@ -34,7 +37,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Cache bilder fra Next.js image optimizer kortere (innhold kan endre seg)
         source: '/_next/image',
         headers: [
           {
@@ -44,7 +46,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Ikke cache API-ruter
         source: '/api/:path*',
         headers: [
           {

@@ -132,20 +132,9 @@ export default function PitchesPage() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
           <div>
-            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2, marginBottom: 4 }}>
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2 }}>
               Pitcher
             </h1>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                {projects.length} totalt
-              </span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#4CAF7D' }}>
-                {totalPublished} publisert
-              </span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                {totalDraft} utkast
-              </span>
-            </div>
           </div>
           <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
             <button style={{
@@ -196,7 +185,7 @@ export default function PitchesPage() {
 
           {/* Status tabs */}
           <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, alignSelf: 'flex-end' }}>
-            {([['all', 'Alle'], ['draft', 'Utkast'], ['published', 'Publisert']] as const).map(([val, label]) => (
+            {([['all', 'Alle', projects.length], ['draft', 'Utkast', totalDraft], ['published', 'Publisert', totalPublished]] as const).map(([val, label, count]) => (
               <button
                 key={val}
                 onClick={() => setFilterStatus(val)}
@@ -212,9 +201,28 @@ export default function PitchesPage() {
                   cursor: 'pointer',
                   marginBottom: -1,
                   transition: 'color 0.1s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
                 }}
               >
                 {label}
+                <span style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  color: filterStatus === val
+                    ? (val === 'published' ? '#4CAF7D' : C.accent)
+                    : C.text3,
+                  background: filterStatus === val
+                    ? (val === 'published' ? 'rgba(76,175,125,0.12)' : C.accentBg)
+                    : C.surface2,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  minWidth: 18,
+                  textAlign: 'center',
+                }}>
+                  {count}
+                </span>
               </button>
             ))}
           </div>
@@ -326,48 +334,60 @@ export default function PitchesPage() {
                       )}
                     </div>
 
-                    {/* Badges */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-                      {project.pipeline_stage && (
+                    {/* Badges — fixed grid so all rows align */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 100px 76px', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+                      <div>
+                        {project.pipeline_stage && (
+                          <span style={{
+                            display: 'block',
+                            fontFamily: 'var(--font-dm-sans)',
+                            fontSize: '0.62rem',
+                            fontWeight: 500,
+                            color: stageColor,
+                            background: `${stageColor}18`,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            whiteSpace: 'nowrap',
+                            textAlign: 'center',
+                          }}>
+                            {PIPELINE_LABEL[project.pipeline_stage] ?? project.pipeline_stage}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        {project.project_type && (
+                          <span style={{
+                            display: 'block',
+                            fontFamily: 'var(--font-dm-sans)',
+                            fontSize: '0.62rem',
+                            color: C.text2,
+                            background: C.surface2,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            border: `1px solid ${C.border}`,
+                            whiteSpace: 'nowrap',
+                            textAlign: 'center',
+                          }}>
+                            {PROJECT_TYPE_LABEL[project.project_type] ?? project.project_type}
+                          </span>
+                        )}
+                      </div>
+                      <div>
                         <span style={{
+                          display: 'block',
                           fontFamily: 'var(--font-dm-sans)',
                           fontSize: '0.62rem',
                           fontWeight: 500,
-                          color: stageColor,
-                          background: `${stageColor}18`,
+                          color: project.status === 'published' ? '#4CAF7D' : C.text3,
+                          background: project.status === 'published' ? 'rgba(76,175,125,0.1)' : C.surface2,
                           padding: '3px 8px',
                           borderRadius: 4,
                           whiteSpace: 'nowrap',
+                          textAlign: 'center',
                         }}>
-                          {PIPELINE_LABEL[project.pipeline_stage] ?? project.pipeline_stage}
+                          {project.status === 'published' ? 'Publisert' : 'Utkast'}
                         </span>
-                      )}
-                      {project.project_type && (
-                        <span style={{
-                          fontFamily: 'var(--font-dm-sans)',
-                          fontSize: '0.62rem',
-                          color: C.text2,
-                          background: C.surface2,
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          border: `1px solid ${C.border}`,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {PROJECT_TYPE_LABEL[project.project_type] ?? project.project_type}
-                        </span>
-                      )}
-                      <span style={{
-                        fontFamily: 'var(--font-dm-sans)',
-                        fontSize: '0.62rem',
-                        fontWeight: 500,
-                        color: project.status === 'published' ? '#4CAF7D' : C.text3,
-                        background: project.status === 'published' ? 'rgba(76,175,125,0.1)' : C.surface2,
-                        padding: '3px 8px',
-                        borderRadius: 4,
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {project.status === 'published' ? 'Publisert' : 'Utkast'}
-                      </span>
+                      </div>
                     </div>
 
                     {/* Date */}

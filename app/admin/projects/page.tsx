@@ -423,7 +423,7 @@ export default function ProjectsPage() {
               return (
                 <div
                   key={card.rootId}
-                  onClick={() => router.push(`/admin/projects/${card.overviewId}`)}
+                  onClick={() => router.push(`/admin/projects/${card.overviewId}?from=/admin/projects`)}
                   style={{
                     display: 'flex', flexDirection: 'column',
                     background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
@@ -564,7 +564,7 @@ export default function ProjectsPage() {
                           Pitch
                         </button>
                       </Link>
-                      <Link href={`/admin/projects/${card.overviewId}`} style={{ textDecoration: 'none' }}>
+                      <Link href={`/admin/projects/${card.overviewId}?from=/admin/projects`} style={{ textDecoration: 'none' }}>
                         <button style={{
                           padding: '5px 12px', background: C.accentBg, color: C.accent,
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.06em',

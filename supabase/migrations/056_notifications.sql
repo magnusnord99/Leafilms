@@ -69,7 +69,7 @@ DECLARE
   rec       RECORD;
   proj_id   UUID;
   sndr_name TEXT;
-BEGIN
+zBEGIN
   SELECT project_id INTO proj_id FROM tasks WHERE id = NEW.task_id;
   SELECT COALESCE(name, email, 'Ukjent') INTO sndr_name FROM profiles WHERE id = NEW.user_id;
 

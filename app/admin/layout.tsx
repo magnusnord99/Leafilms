@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/admin/NotificationBell'
+import { FeedbackButton } from '@/components/admin/FeedbackButton'
 import { C } from '@/lib/admin-theme'
 
 type NavItem = { href: string; label: string; exact?: boolean }
@@ -35,8 +36,10 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin/projects', label: 'Prosjekter' },
       { href: '/admin/calendar', label: 'Kalender' },
-      { href: '/admin/preprod',  label: 'Pre-prod' },
-      { href: '/admin/postprod', label: 'Post-prod' },
+      { href: '/admin/preprod',    label: 'Pre-prod' },
+      { href: '/admin/postprod',   label: 'Post-prod' },
+      { href: '/admin/selections',  label: 'Gallerier' },
+      { href: '/admin/transfers',   label: 'Leveranser' },
     ],
   },
   {
@@ -49,8 +52,9 @@ const navGroups: NavGroup[] = [
   {
     label: null,
     items: [
-      { href: '/admin/team',  label: 'Team' },
-      { href: '/admin/users', label: 'Brukere' },
+      { href: '/admin/team',       label: 'Team' },
+      { href: '/admin/users',      label: 'Brukere' },
+      { href: '/admin/feedback',   label: 'Tilbakemeldinger' },
     ],
   },
 ]
@@ -310,6 +314,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+
+      <FeedbackButton />
     </div>
   )
 }

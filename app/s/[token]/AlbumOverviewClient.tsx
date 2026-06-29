@@ -1,9 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { SelectionGallery } from '@/lib/actions/selections'
-import type { AlbumForCustomer } from '@/lib/actions/selections'
+import type { SelectionGallery, AlbumForCustomer, GalleryVideo } from '@/lib/actions/selections'
 
 const S = {
   bg:      '#0C0B09',
@@ -23,12 +21,15 @@ export default function AlbumOverviewClient({
   token,
   gallery,
   albums,
+  videos = [],
 }: {
   token: string
   gallery: SelectionGallery
   albums: AlbumForCustomer[]
+  videos?: GalleryVideo[]
 }) {
   const router = useRouter()
+  const rootAlbums = albums.filter(a => a.parent_album_id === null)
   const totalSelected = albums.reduce((sum, a) => sum + a.selectedCount, 0)
   const target = gallery.target_count
   const isOver = target != null && totalSelected > target
@@ -63,11 +64,20 @@ export default function AlbumOverviewClient({
       {/* Album-grid */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, maxWidth: 860, margin: '0 auto' }}>
-          {albums.map(album => (
+          {rootAlbums.map(album => (
             <AlbumCard
               key={album.id}
               album={album}
+              allAlbums={albums}
               onClick={() => router.push(`/s/${token}/${album.slug}`)}
+            />
+          ))}
+
+          {videos.map(video => (
+            <VideoCard
+              key={video.id}
+              video={video}
+              onClick={() => router.push(`/s/${token}/video/${video.id}`)}
             />
           ))}
 
@@ -120,8 +130,74 @@ export default function AlbumOverviewClient({
   )
 }
 
-function AlbumCard({ album, onClick }: { album: AlbumForCustomer; onClick: () => void }) {
-  const coverImage = album.images[0]
+function countAlbumTree(albumId: string, allAlbums: AlbumForCustomer[]): { total: number; selected: number; cover: string | null } {
+  const album = allAlbums.find(a => a.id === albumId)
+  if (!album) return { total: 0, selected: 0, cover: null }
+
+  let total = album.images.length
+  let selected = album.selectedCount
+  let cover = album.images[0]?.signedUrl ?? null
+
+  for (const child of allAlbums.filter(a => a.parent_album_id === albumId)) {
+    const sub = countAlbumTree(child.id, allAlbums)
+    total += sub.total
+    selected += sub.selected
+    if (!cover && sub.cover) cover = sub.cover
+  }
+
+  return { total, selected, cover }
+}
+
+function VideoCard({ video, onClick }: { video: GalleryVideo; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${S.border}`, cursor: 'pointer' }}
+    >
+      <div style={{
+        aspectRatio: '16/9', background: S.surface2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative',
+      }}>
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="13" stroke={S.text3} strokeWidth="1.5" />
+          <polygon points="11,9 21,14 11,19" fill={S.gold} />
+        </svg>
+        {video.status === 'submitted' && (
+          <div style={{
+            position: 'absolute', bottom: 6, right: 6,
+            background: 'rgba(196,148,52,0.9)', color: '#0C0B09',
+            fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
+            padding: '2px 7px', borderRadius: 8,
+          }}>
+            Sendt inn
+          </div>
+        )}
+        {video.comment_count > 0 && video.status !== 'submitted' && (
+          <div style={{
+            position: 'absolute', bottom: 6, right: 6,
+            background: 'rgba(196,148,52,0.9)', color: '#0C0B09',
+            fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
+            padding: '2px 7px', borderRadius: 8,
+          }}>
+            {video.comment_count} kommentar{video.comment_count !== 1 ? 'er' : ''}
+          </div>
+        )}
+      </div>
+      <div style={{ padding: '9px 11px', background: S.surface }}>
+        <div style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', fontWeight: 600, color: S.text }}>
+          {video.title}
+        </div>
+        <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 2 }}>
+          Video
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AlbumCard({ album, allAlbums, onClick }: { album: AlbumForCustomer; allAlbums: AlbumForCustomer[]; onClick: () => void }) {
+  const { total, selected, cover } = countAlbumTree(album.id, allAlbums)
 
   return (
     <div
@@ -129,23 +205,23 @@ function AlbumCard({ album, onClick }: { album: AlbumForCustomer; onClick: () =>
       style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #2A2820', cursor: 'pointer' }}
     >
       <div style={{ aspectRatio: '16/9', background: '#1A1916', overflow: 'hidden', position: 'relative' }}>
-        {coverImage?.signedUrl ? (
+        {cover ? (
           <img
-            src={coverImage.signedUrl}
+            src={cover}
             alt={album.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#1A1916' }} />
         )}
-        {album.selectedCount > 0 && (
+        {selected > 0 && (
           <div style={{
             position: 'absolute', bottom: 6, right: 6,
             background: 'rgba(196,148,52,0.9)', color: '#0C0B09',
             fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
             padding: '2px 7px', borderRadius: 8,
           }}>
-            {album.selectedCount} valgt
+            {selected} valgt
           </div>
         )}
       </div>
@@ -154,7 +230,7 @@ function AlbumCard({ album, onClick }: { album: AlbumForCustomer; onClick: () =>
           {album.name}
         </div>
         <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: '#8A8070', marginTop: 2 }}>
-          {album.images.length} bilder
+          {total} bilder
         </div>
       </div>
     </div>

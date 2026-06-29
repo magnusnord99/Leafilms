@@ -394,6 +394,11 @@ body.admin-page {
    VIDEO — skjul native iOS/WebKit play-knapp
    ═══════════════════════════════════════════════════ */
 
+/* Admin bildekort — slett-knapp på hover */
+.admin-img-card:hover .admin-img-delete {
+  display: flex !important;
+}
+
 video::-webkit-media-controls-start-playback-button,
 video::-webkit-media-controls-play-button,
 video::-webkit-media-controls-panel,

@@ -1,6 +1,7 @@
 'use server'
 
 import { cookies } from 'next/headers'
+import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 dager
@@ -40,6 +41,7 @@ export type AlbumForCustomer = {
   id: string
   name: string
   slug: string
+  parent_album_id: string | null
   images: (SelectionImage & { signedUrl: string })[]
   selectedCount: number
 }
@@ -325,10 +327,18 @@ export async function verifyGalleryPin(
 // ---------------------------------------------------------------------------
 // KUNDE: Hent galleri (krever gyldig PIN-cookie)
 // ---------------------------------------------------------------------------
+export type GalleryVideo = {
+  id: string
+  title: string
+  status: 'open' | 'submitted'
+  comment_count: number
+}
+
 export async function getGalleryForCustomer(token: string): Promise<{
   gallery: SelectionGallery
   albums: AlbumForCustomer[]
   legacyImages: (SelectionImage & { signedUrl: string })[]
+  videos: GalleryVideo[]
 } | null> {
   const cookieStore = await cookies()
   const galleryIdFromCookie = cookieStore.get(cookieKey(token))?.value
@@ -371,17 +381,20 @@ export async function getGalleryForCustomer(token: string): Promise<{
 
   const { data: albumRows } = await service
     .from('selection_albums')
-    .select('id, name, slug, sort_order')
+    .select('id, name, slug, sort_order, parent_album_id')
     .eq('gallery_id', gallery.id)
     .order('sort_order', { ascending: true })
 
-  const albumList = (albumRows ?? []) as { id: string; name: string; slug: string; sort_order: number }[]
+  const albumList = (albumRows ?? []) as { id: string; name: string; slug: string; sort_order: number; parent_album_id: string | null }[]
+
+  const videos = await fetchGalleryVideos(service, gallery.id)
 
   if (albumList.length === 0) {
     return {
       gallery: gallery as SelectionGallery,
       albums: [],
       legacyImages: withUrl,
+      videos,
     }
   }
 
@@ -398,7 +411,38 @@ export async function getGalleryForCustomer(token: string): Promise<{
     gallery: gallery as SelectionGallery,
     albums,
     legacyImages: [],
+    videos,
   }
+}
+
+async function fetchGalleryVideos(
+  service: ReturnType<typeof createServiceClient>,
+  galleryId: string,
+): Promise<GalleryVideo[]> {
+  const { data: vids } = await service
+    .from('video_reviews')
+    .select('id, title, status')
+    .eq('gallery_id', galleryId)
+    .order('created_at', { ascending: true })
+
+  if (!vids || vids.length === 0) return []
+
+  const { data: commentCounts } = await service
+    .from('video_comments')
+    .select('review_id')
+    .in('review_id', vids.map(v => v.id))
+
+  const countMap: Record<string, number> = {}
+  for (const c of commentCounts ?? []) {
+    countMap[c.review_id] = (countMap[c.review_id] ?? 0) + 1
+  }
+
+  return vids.map(v => ({
+    id: v.id,
+    title: v.title,
+    status: v.status as 'open' | 'submitted',
+    comment_count: countMap[v.id] ?? 0,
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +475,9 @@ export async function toggleImageSelection(
       selected_at: selected ? new Date().toISOString() : null,
     })
     .eq('id', imageId)
+
+  revalidatePath(`/s/${token}`)
+  revalidatePath(`/s/${token}/review`)
 }
 
 // ---------------------------------------------------------------------------

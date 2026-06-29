@@ -57,6 +57,7 @@ export default async function SelectionPage({
       token={token}
       gallery={data.gallery}
       albums={data.albums}
+      videos={data.videos}
     />
   )
 }

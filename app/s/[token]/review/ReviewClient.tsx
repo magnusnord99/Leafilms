@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitGallery } from '@/lib/actions/selections'
 import type { SelectionGallery, AlbumForCustomer } from '@/lib/actions/selections'
@@ -35,6 +35,20 @@ export default function ReviewClient({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const allImages = selectedAlbums.flatMap(a => a.images.map(img => ({ ...img, albumName: a.name })))
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') setLightboxIndex(p => p !== null ? Math.min(p + 1, allImages.length - 1) : null)
+      if (e.key === 'ArrowLeft') setLightboxIndex(p => p !== null ? Math.max(p - 1, 0) : null)
+      if (e.key === 'Escape') setLightboxIndex(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxIndex, allImages.length])
   const target = gallery.target_count
   const isOver = target != null && totalSelected > target
 
@@ -114,18 +128,25 @@ export default function ReviewClient({
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 4 }}>
-              {album.images.map(img => (
-                <div key={img.id} style={{ position: 'relative', aspectRatio: '4/3', borderRadius: 5, overflow: 'hidden' }}>
-                  {img.signedUrl
-                    ? <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    : <div style={{ width: '100%', height: '100%', background: S.surface2 }} />
-                  }
-                  <div style={{ position: 'absolute', top: 3, right: 3, width: 12, height: 12, borderRadius: '50%', background: S.gold }} />
-                  {img.comment && (
-                    <div style={{ position: 'absolute', bottom: 3, left: 3, width: 10, height: 10, borderRadius: '50%', background: 'rgba(196,148,52,0.7)' }} />
-                  )}
-                </div>
-              ))}
+              {album.images.map(img => {
+                const globalIdx = allImages.findIndex(i => i.id === img.id)
+                return (
+                  <div
+                    key={img.id}
+                    onClick={() => setLightboxIndex(globalIdx)}
+                    style={{ position: 'relative', aspectRatio: '4/3', borderRadius: 5, overflow: 'hidden', cursor: 'pointer' }}
+                  >
+                    {img.signedUrl
+                      ? <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      : <div style={{ width: '100%', height: '100%', background: S.surface2 }} />
+                    }
+                    <div style={{ position: 'absolute', top: 3, right: 3, width: 12, height: 12, borderRadius: '50%', background: S.gold }} />
+                    {img.comment && (
+                      <div style={{ position: 'absolute', bottom: 3, left: 3, width: 10, height: 10, borderRadius: '50%', background: 'rgba(196,148,52,0.7)' }} />
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}
@@ -144,6 +165,43 @@ export default function ReviewClient({
           </div>
         )}
       </div>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (() => {
+        const img = allImages[lightboxIndex]
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(12,11,9,0.97)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}
+            onClick={() => setLightboxIndex(null)}
+          >
+            <div
+              style={{ maxWidth: '90vw', maxHeight: '85vh', position: 'relative' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {img?.signedUrl
+                ? <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
+                : <div style={{ width: 400, height: 300, background: S.surface2 }} />
+              }
+              {img?.comment && (
+                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
+                  <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{img.comment}</p>
+                </div>
+              )}
+            </div>
+
+            {lightboxIndex > 0 && (
+              <button onClick={e => { e.stopPropagation(); setLightboxIndex(p => p !== null ? p - 1 : null) }} style={{ position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)', width: 44, height: 44, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}>‹</button>
+            )}
+            {lightboxIndex < allImages.length - 1 && (
+              <button onClick={e => { e.stopPropagation(); setLightboxIndex(p => p !== null ? p + 1 : null) }} style={{ position: 'absolute', top: '50%', right: 12, transform: 'translateY(-50%)', width: 44, height: 44, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}>›</button>
+            )}
+            <button onClick={() => setLightboxIndex(null)} style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: S.text, fontSize: '1rem', cursor: 'pointer' }}>×</button>
+            <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontFamily: 'sans-serif', fontSize: '0.7rem', color: S.text3 }}>
+              {lightboxIndex + 1} / {allImages.length}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Send inn */}
       <div style={{ padding: '12px 16px', borderTop: `1px solid ${S.border}`, background: S.surface, flexShrink: 0 }}>

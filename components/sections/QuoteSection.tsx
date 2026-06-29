@@ -68,12 +68,13 @@ export function QuoteSection({
 }: QuoteSectionProps) {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [dbQuoteData, setDbQuoteData] = useState<QuoteData | null>(null)
+  const [dbBuilderData, setDbBuilderData] = useState<QuoteBuilderData | null>(null)
   const [acceptingQuote, setAcceptingQuote] = useState(false)
   const [quoteAccepted, setQuoteAccepted] = useState(false)
 
-  // Fetch quote from DB for display (public view)
+  // Fetch quote from DB for display (both edit preview and public view)
   useEffect(() => {
-    if (editMode || !project.id) return
+    if (!project.id) return
 
     supabase
       .from('quotes')
@@ -87,13 +88,14 @@ export function QuoteSection({
         setQuoteId(data.id)
         if (data.quote_data) {
           if (isBuilderData(data.quote_data)) {
+            setDbBuilderData(data.quote_data as QuoteBuilderData)
             setDbQuoteData(convertBuilderDataToQuoteData(data.quote_data as QuoteBuilderData))
           } else {
             setDbQuoteData(data.quote_data as QuoteData)
           }
         }
       })
-  }, [editMode, project.id])
+  }, [project.id])
 
   const quoteData: QuoteData | null = dbQuoteData
 
@@ -131,8 +133,8 @@ export function QuoteSection({
 
   // ── Edit mode: show summary + link to dedicated quote page ────────────────
   if (editMode) {
-    // Try to show a live preview if builder data is stored
-    const builderData = section.content?.quoteBuilderData as QuoteBuilderData | undefined
+    // Use section content if present, fall back to DB quote
+    const builderData = (section.content?.quoteBuilderData as QuoteBuilderData | undefined) ?? dbBuilderData ?? undefined
     const totals = builderData ? calculateQuoteTotals(builderData) : null
 
     return (

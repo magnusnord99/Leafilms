@@ -226,9 +226,14 @@ export async function seedTasksFromTemplates(
       return
     }
 
-    // Opprett kun templates som ikke allerede finnes (tittel-match)
+    // Opprett kun templates som ikke allerede finnes — deduper også innen template-listen
+    const seenInBatch = new Set<string>()
     const tasksToInsert = templates
-      .filter((t: TaskTemplateRow) => !existingTitles.has(t.title))
+      .filter((t: TaskTemplateRow) => {
+        if (existingTitles.has(t.title) || seenInBatch.has(t.title)) return false
+        seenInBatch.add(t.title)
+        return true
+      })
       .map((t: TaskTemplateRow) => ({
         project_id: projectId,
         pipeline_stage: stage,
@@ -290,9 +295,16 @@ async function seedMixedPostProdTasks(
       .order('sort_order', { ascending: true }),
   ])
 
+  const seenVideo = new Set<string>()
+  const seenPhoto = new Set<string>()
   const toInsert = [
     ...(videoTemplates ?? [])
-      .filter((t: TaskTemplateRow) => !existingKeys.has(`video:${t.title}`))
+      .filter((t: TaskTemplateRow) => {
+        const key = `video:${t.title}`
+        if (existingKeys.has(key) || seenVideo.has(t.title)) return false
+        seenVideo.add(t.title)
+        return true
+      })
       .map((t: TaskTemplateRow) => ({
         project_id: projectId,
         pipeline_stage: 'post_prod',
@@ -306,7 +318,12 @@ async function seedMixedPostProdTasks(
         created_by: null,
       })),
     ...(photoTemplates ?? [])
-      .filter((t: TaskTemplateRow) => !existingKeys.has(`photo:${t.title}`))
+      .filter((t: TaskTemplateRow) => {
+        const key = `photo:${t.title}`
+        if (existingKeys.has(key) || seenPhoto.has(t.title)) return false
+        seenPhoto.add(t.title)
+        return true
+      })
       .map((t: TaskTemplateRow) => ({
         project_id: projectId,
         pipeline_stage: 'post_prod',

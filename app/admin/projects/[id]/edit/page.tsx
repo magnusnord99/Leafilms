@@ -343,7 +343,7 @@ export default function EditProject({ params }: Props) {
     <div className="min-h-screen bg-background text-dark">
       {/* Tilbake til hub */}
       <div style={{ padding: '16px 24px 0' }}>
-        <Link href={`/admin/projects/${id}`} style={{ textDecoration: 'none' }}>
+        <Link href={`/admin/projects/${id}${searchParams?.get('from') ? `?from=${searchParams.get('from')}` : ''}`} style={{ textDecoration: 'none' }}>
           <span
             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#8484A0', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
             onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = '#B4B4CC' }}

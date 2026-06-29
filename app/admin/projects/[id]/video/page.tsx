@@ -1,9 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
-import { getAdminSelectionPage } from '@/lib/actions/selection-albums'
-import SelectionAdminClient from './SelectionAdminClient'
+import { getAdminVideoReviews } from '@/lib/actions/video-reviews'
+import VideoAdminClient from './VideoAdminClient'
 
-export default async function SelectionAdminPage({
+export default async function VideoAdminPage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -22,13 +22,13 @@ export default async function SelectionAdminPage({
 
   if (!project) notFound()
 
-  const selectionData = await getAdminSelectionPage(projectId)
+  const reviews = await getAdminVideoReviews(projectId)
 
   return (
-    <SelectionAdminClient
+    <VideoAdminClient
       projectId={projectId}
       projectName={project.title}
-      initialData={selectionData}
+      initialReviews={reviews}
     />
   )
 }

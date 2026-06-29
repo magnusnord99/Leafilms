@@ -246,7 +246,7 @@ export default function CustomerProjectsPage() {
                       {new Date(project.created_at).toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
-                  <Link href={`/admin/projects/${project.id}/edit`}>
+                  <Link href={`/admin/projects/${project.id}?from=/admin/customers/${customerId}/projects`}>
                     <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}>
                       Åpne
                     </button>

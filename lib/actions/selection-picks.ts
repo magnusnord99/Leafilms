@@ -146,6 +146,7 @@ export async function toggleAlbumImagePick(
   if (!albumId) throw new Error('Ikke autorisert')
 
   const service = createServiceClient()
+  const now = new Date().toISOString()
 
   const { data: img } = await service
     .from('selection_images')
@@ -155,14 +156,20 @@ export async function toggleAlbumImagePick(
 
   if (img?.album_id !== albumId) throw new Error('Ikke autorisert')
 
-  await service
-    .from('selection_album_picks')
-    .upsert({
-      album_id: albumId,
-      image_id: imageId,
-      selected,
-      selected_at: selected ? new Date().toISOString() : null,
-    }, { onConflict: 'album_id,image_id' })
+  await Promise.all([
+    service
+      .from('selection_album_picks')
+      .upsert({
+        album_id: albumId,
+        image_id: imageId,
+        selected,
+        selected_at: selected ? now : null,
+      }, { onConflict: 'album_id,image_id' }),
+    service
+      .from('selection_images')
+      .update({ selected, selected_at: selected ? now : null })
+      .eq('id', imageId),
+  ])
 }
 
 export async function addAlbumImagePickComment(
@@ -191,14 +198,21 @@ export async function addAlbumImagePickComment(
     .eq('image_id', imageId)
     .maybeSingle()
 
-  await service
-    .from('selection_album_picks')
-    .upsert({
-      album_id: albumId,
-      image_id: imageId,
-      comment: comment.trim() || null,
-      selected: existing?.selected ?? false,
-    }, { onConflict: 'album_id,image_id' })
+  const trimmedComment = comment.trim() || null
+  await Promise.all([
+    service
+      .from('selection_album_picks')
+      .upsert({
+        album_id: albumId,
+        image_id: imageId,
+        comment: trimmedComment,
+        selected: existing?.selected ?? false,
+      }, { onConflict: 'album_id,image_id' }),
+    service
+      .from('selection_images')
+      .update({ comment: trimmedComment })
+      .eq('id', imageId),
+  ])
 }
 
 export async function submitAlbumPicks(albumToken: string): Promise<void> {
@@ -208,6 +222,29 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
 
   const service = createServiceClient()
   const now = new Date().toISOString()
+
+  // Hent alle picks og alle bilder i albumet
+  const [{ data: picks }, { data: images }] = await Promise.all([
+    service.from('selection_album_picks').select('image_id, selected, comment').eq('album_id', albumId),
+    service.from('selection_images').select('id').eq('album_id', albumId),
+  ])
+
+  const pickMap = Object.fromEntries((picks ?? []).map(p => [p.image_id, p]))
+
+  // Synk alle bilder til selection_images
+  await Promise.all(
+    (images ?? []).map(img => {
+      const pick = pickMap[img.id]
+      return service
+        .from('selection_images')
+        .update({
+          selected: pick?.selected ?? false,
+          selected_at: pick?.selected ? now : null,
+          comment: pick?.comment ?? null,
+        })
+        .eq('id', img.id)
+    })
+  )
 
   await service
     .from('selection_albums')

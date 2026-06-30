@@ -11,6 +11,7 @@ import {
   getAllProfiles, toggleTaskAssignee, updatePostProdDelivery,
   getProjectDeliverablesSection,
   updateProjectDeliverablesSection,
+  setProjectLead,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
@@ -219,6 +220,10 @@ export default function PostProdDetailPage() {
 
   const [dueDates, setDueDates] = useState<Record<string, string>>({})
 
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
+  const leadDropdownRef = useRef<HTMLDivElement>(null)
+
   // Leveringsinfo
   const [editingDelivery, setEditingDelivery] = useState(false)
   const [deliveryVideo, setDeliveryVideo] = useState('')
@@ -255,6 +260,25 @@ export default function PostProdDetailPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [assigneeDropdownOpen])
+
+  useEffect(() => {
+    if (!leadDropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (leadDropdownRef.current && !leadDropdownRef.current.contains(e.target as Node)) {
+        setLeadDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [leadDropdownOpen])
+
+  async function handleSetLead(profileId: string | null) {
+    const prev = projectLead
+    const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
+    setProjectLead_(profile)
+    const result = await setProjectLead(projectId, profileId)
+    if (!result.ok) setProjectLead_(prev)
+  }
 
   const VENTER_TITLE = 'Venter på tilbakemelding'
   const SELEKSJON_TITLE = 'Seleksjon til kunde'
@@ -318,6 +342,7 @@ export default function PostProdDetailPage() {
     if (currentProj) {
       setDeliveryVideo(currentProj.delivery_video ?? '')
       setDeliveryPhoto(currentProj.delivery_photo ?? '')
+      setProjectLead_(currentProj.project_lead ?? null)   // ← ny linje
     }
     setLoading(false)
   }
@@ -680,6 +705,91 @@ export default function PostProdDetailPage() {
                     {currentProject.customer.name}{currentProject.customer.company ? ` — ${currentProject.customer.company}` : ''}
                   </p>
                 )}
+                {/* Prosjektleder */}
+                <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
+                  <button
+                    onClick={() => setLeadDropdownOpen(v => !v)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                      background: 'none', border: `1px solid ${C.border}`,
+                      color: projectLead ? C.text2 : C.text3,
+                    }}
+                  >
+                    {projectLead ? (
+                      <>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                          background: getProfileColor(projectLead.id), color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.58rem', fontWeight: 700,
+                        }}>
+                          {(projectLead.name ?? projectLead.email)[0].toUpperCase()}
+                        </span>
+                        {projectLead.name ?? projectLead.email}
+                      </>
+                    ) : (
+                      '+ Prosjektleder'
+                    )}
+                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 4L6 8L10 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {leadDropdownOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 150,
+                      background: C.surface2, border: `1px solid ${C.border}`,
+                      borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                      minWidth: 200, maxHeight: 260, overflowY: 'auto', padding: '4px 0',
+                    }}>
+                      {projectLead && (
+                        <button
+                          onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                            color: C.danger, background: 'none', border: 'none',
+                            borderBottom: `1px solid ${C.border}`,
+                            padding: '7px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          Fjern leder
+                        </button>
+                      )}
+                      {profiles.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                            color: p.id === projectLead?.id ? C.accent : C.text,
+                            background: 'none', border: 'none',
+                            padding: '7px 14px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                          }}
+                          onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
+                          onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+                        >
+                          <span style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: getProfileColor(p.id), color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.65rem', fontWeight: 700,
+                          }}>
+                            {(p.name ?? p.email)[0].toUpperCase()}
+                          </span>
+                          {p.name ?? p.email}
+                          {p.id === projectLead?.id && (
+                            <span style={{ marginLeft: 'auto', color: C.accent, fontSize: '0.65rem' }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
                 {/* Lever-knapper */}
@@ -1106,11 +1216,11 @@ export default function PostProdDetailPage() {
               )}
 
               {/* Valgte bilder for redigering */}
-              {(selectedTask.title === 'Redigering' || selectedTask.title === 'Redigering bilder') && selectionImages.length > 0 && (
+              {selectionImages.length > 0 && (
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Valgt av kunden ({selectionImages.length})
+                      Kundens bildevalg ({selectionImages.length})
                     </label>
                     <Link
                       href={`/admin/projects/${projectId}/selection`}

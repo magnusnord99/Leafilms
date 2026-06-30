@@ -60,6 +60,7 @@ export type Project = {
   pipeline_data?: PipelineData | null
   quote_assignee_id?: string | null
   invoice_assignee_id?: string | null
+  project_lead_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -456,6 +457,8 @@ export type ProjectWithPipeline = Project & {
   pipeline_stage: PipelineStage
   project_type?: ProjectType | null
   pipeline_data?: PipelineData | null
+  project_lead_id?: string | null
+  project_lead?: { id: string; name: string | null; email: string } | null
   customer?: {
     id: string
     name: string

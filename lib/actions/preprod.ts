@@ -95,7 +95,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
 
     const { data: project, error: pErr } = await supabase
       .from('projects')
-      .select('*, customers(id, name, company)')
+      .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
       .eq('id', projectId)
       .single()
 
@@ -137,6 +137,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
       project: {
         ...project,
         customer: project.customers ?? null,
+        project_lead: (project as { project_lead?: ProjectWithPipeline['project_lead'] }).project_lead ?? null,
         preprod,
         quote_equipment: quoteEquipment,
       },

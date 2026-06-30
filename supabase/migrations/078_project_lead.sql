@@ -1,0 +1,2 @@
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS project_lead_id UUID REFERENCES profiles(id) ON DELETE SET NULL;

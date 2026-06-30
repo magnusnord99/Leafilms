@@ -250,4 +250,77 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
     .from('selection_albums')
     .update({ album_status: 'submitted', album_submitted_at: now, updated_at: now })
     .eq('id', albumId)
+
+  // Hent project_id via gallery
+  const { data: album } = await service
+    .from('selection_albums')
+    .select('gallery_id')
+    .eq('id', albumId)
+    .single()
+
+  if (!album?.gallery_id) return
+
+  const { data: gallery } = await service
+    .from('selection_galleries')
+    .select('project_id')
+    .eq('id', album.gallery_id)
+    .single()
+
+  if (!gallery?.project_id) return
+
+  const projectId = gallery.project_id
+
+  // Varsle task-assignees, fallback til prosjektleder
+  const { data: taskRows } = await service
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+
+  const taskIds = (taskRows ?? []).map((t: { id: string }) => t.id)
+  let profileIds: string[] = []
+
+  if (taskIds.length > 0) {
+    const { data: assignees } = await service
+      .from('task_assignees')
+      .select('profile_id')
+      .in('task_id', taskIds)
+
+    profileIds = [...new Set((assignees ?? []).map((a: { profile_id: string }) => a.profile_id))]
+  }
+
+  if (profileIds.length === 0) {
+    const { data: proj } = await service
+      .from('projects')
+      .select('project_lead_id')
+      .eq('id', projectId)
+      .single()
+
+    if (proj?.project_lead_id) profileIds = [proj.project_lead_id]
+  }
+
+  // Marker "Seleksjon til kunde"-task som done
+  const { data: selTask } = await service
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('pipeline_stage', 'post_prod')
+    .ilike('title', 'Seleksjon til kunde')
+    .maybeSingle()
+
+  await Promise.all([
+    profileIds.length > 0
+      ? service.from('notifications').insert(
+          profileIds.map((uid: string) => ({
+            user_id: uid,
+            type: 'selection_submitted',
+            project_id: projectId,
+            message_preview: 'Kunden har sendt inn sitt bildevalg',
+            sender_name: 'Kunde',
+          }))
+        )
+      : Promise.resolve(),
+    selTask
+      ? service.from('tasks').update({ status: 'done', updated_at: now }).eq('id', selTask.id)
+      : Promise.resolve(),
+  ])
 }

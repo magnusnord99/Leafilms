@@ -509,6 +509,74 @@ export async function addImageComment(
 }
 
 // ---------------------------------------------------------------------------
+// INTERN: Varsel + task-markering ved seleksjonsinnsending
+// ---------------------------------------------------------------------------
+async function notifyOnSelectionSubmit(
+  projectId: string,
+  service: ReturnType<typeof createServiceClient>
+): Promise<void> {
+  const { data: taskRows } = await service
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+
+  const taskIds = (taskRows ?? []).map((t: { id: string }) => t.id)
+  let profileIds: string[] = []
+
+  if (taskIds.length > 0) {
+    const { data: assignees } = await service
+      .from('task_assignees')
+      .select('profile_id')
+      .in('task_id', taskIds)
+
+    profileIds = [...new Set((assignees ?? []).map((a: { profile_id: string }) => a.profile_id))]
+  }
+
+  if (profileIds.length === 0) {
+    const { data: proj } = await service
+      .from('projects')
+      .select('project_lead_id')
+      .eq('id', projectId)
+      .single()
+
+    if (proj?.project_lead_id) profileIds = [proj.project_lead_id]
+  }
+
+  if (profileIds.length === 0) return
+
+  await service.from('notifications').insert(
+    profileIds.map((uid: string) => ({
+      user_id: uid,
+      type: 'selection_submitted',
+      project_id: projectId,
+      message_preview: 'Kunden har sendt inn sitt bildevalg',
+      sender_name: 'Kunde',
+    }))
+  )
+}
+
+async function markSeleksjonTaskDone(
+  projectId: string,
+  service: ReturnType<typeof createServiceClient>,
+  now: string
+): Promise<void> {
+  const { data: selTask } = await service
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('pipeline_stage', 'post_prod')
+    .ilike('title', 'Seleksjon til kunde')
+    .maybeSingle()
+
+  if (selTask) {
+    await service
+      .from('tasks')
+      .update({ status: 'done', updated_at: now })
+      .eq('id', selTask.id)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // KUNDE: Send inn utvalg
 // ---------------------------------------------------------------------------
 export async function submitGallery(token: string): Promise<void> {
@@ -532,49 +600,10 @@ export async function submitGallery(token: string): Promise<void> {
     .update({ status: 'submitted', submitted_at: now, updated_at: now })
     .eq('id', galleryId)
 
-  // Varsle alle profilbrukere som har tasks i prosjektet
-  const { data: assignees } = await service
-    .from('task_assignees')
-    .select('profile_id')
-    .in(
-      'task_id',
-      (
-        await service
-          .from('tasks')
-          .select('id')
-          .eq('project_id', gallery.project_id)
-      ).data?.map((t: { id: string }) => t.id) ?? []
-    )
-
-  const profileIds = [...new Set((assignees ?? []).map((a: { profile_id: string }) => a.profile_id))]
-
-  if (profileIds.length > 0) {
-    await service.from('notifications').insert(
-      profileIds.map((uid: string) => ({
-        user_id: uid,
-        type: 'selection_submitted',
-        project_id: gallery.project_id,
-        message_preview: 'Kunden har sendt inn sitt bildevalg',
-        sender_name: 'Kunde',
-      }))
-    )
-  }
-
-  // Marker "Seleksjon til kunde"-tasken som ferdig så neste steg aktiveres
-  const { data: selTask } = await service
-    .from('tasks')
-    .select('id')
-    .eq('project_id', gallery.project_id)
-    .eq('pipeline_stage', 'post_prod')
-    .ilike('title', 'Seleksjon til kunde')
-    .maybeSingle()
-
-  if (selTask) {
-    await service
-      .from('tasks')
-      .update({ status: 'done', updated_at: now })
-      .eq('id', selTask.id)
-  }
+  await Promise.all([
+    notifyOnSelectionSubmit(gallery.project_id, service),
+    markSeleksjonTaskDone(gallery.project_id, service, now),
+  ])
 }
 
 // ---------------------------------------------------------------------------

@@ -50,14 +50,16 @@ export async function sendQuoteMessage(opts: {
 
     // Send varsel til alle taggede brukere (feil svelges)
     const preview = opts.message.slice(0, 120)
-    await Promise.all(
-      opts.mentionedUserIds.map(recipientId =>
+    // fire-and-forget — errors must never affect the ok return
+    Promise.all(
+      opts.mentionedUserIds.map(id =>
         notifyAssignment({
-          recipientId,
+          recipientId: id,
           type: 'quote_mention',
           projectId: opts.projectId,
           preview,
         })
+          .catch(() => {})
       )
     )
 

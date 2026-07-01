@@ -9,7 +9,7 @@ export async function getQuoteMessages(quoteId: string): Promise<QuoteMessage[]>
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('quote_messages')
-      .select('*, user:profiles(id, name, email)')
+      .select('id, quote_id, project_id, user_id, message, mentions, created_at')
       .eq('quote_id', quoteId)
       .order('created_at', { ascending: true })
 
@@ -17,7 +17,24 @@ export async function getQuoteMessages(quoteId: string): Promise<QuoteMessage[]>
       console.error('getQuoteMessages error:', error)
       return []
     }
-    return (data ?? []) as QuoteMessage[]
+
+    const rows = data ?? []
+    if (rows.length === 0) return []
+
+    // Fetch profiles separately — never join through auth.users (RLS/FK issues)
+    const userIds = [...new Set(rows.map(r => r.user_id))]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .in('id', userIds)
+
+    const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+
+    return rows.map(r => ({
+      ...r,
+      mentions: r.mentions as string[],
+      user: profileMap[r.user_id] ?? null,
+    })) as QuoteMessage[]
   } catch (err) {
     console.error('getQuoteMessages unexpected error:', err)
     return []

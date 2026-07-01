@@ -344,7 +344,9 @@ export default async function PublicProjectView({ params }: Props) {
     .eq('project_id', share.project_id)
     .single()
 
-  const publishedContract = contractData?.published_at ? {
+  const contractHiddenFromPitch = !!(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
+
+  const publishedContract = contractData?.published_at && !contractHiddenFromPitch ? {
     contractText: contractData.contract_text ?? '',
     isSigned: contractData.status === 'signed',
     signedBy: contractData.signed_by ?? null,

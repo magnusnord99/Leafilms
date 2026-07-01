@@ -30,6 +30,7 @@ interface EditProjectTopBarProps {
   showMobilePreview: boolean
   shareLink: string | null
   translating?: boolean
+  contractHiddenFromPitch?: boolean
   onEditModeToggle: () => void
   onMobilePreviewToggle: () => void
   onSave: () => void
@@ -39,6 +40,7 @@ interface EditProjectTopBarProps {
   onAddProductionScheduleSection?: () => void
   onDuplicateVersion?: () => void
   onTranslate?: () => void
+  onToggleContractHidden?: () => void
   duplicating?: boolean
 }
 
@@ -51,6 +53,7 @@ export function EditProjectTopBar({
   showMobilePreview,
   shareLink,
   translating = false,
+  contractHiddenFromPitch = false,
   onEditModeToggle,
   onMobilePreviewToggle,
   onSave,
@@ -60,6 +63,7 @@ export function EditProjectTopBar({
   onAddProductionScheduleSection,
   onDuplicateVersion,
   onTranslate,
+  onToggleContractHidden,
   duplicating = false,
 }: EditProjectTopBarProps) {
   const router = useRouter()
@@ -126,6 +130,10 @@ export function EditProjectTopBar({
         : project.language === 'en' ? 'NO → EN' : 'EN → NO',
       action: () => { if (!translating && !saving) { onTranslate!(); setMenuOpen(false) } },
       disabled: translating || saving,
+    },
+    onToggleContractHidden && {
+      label: contractHiddenFromPitch ? 'Vis kontrakt for kunde' : 'Skjul kontrakt fra kunde',
+      action: () => { onToggleContractHidden(); setMenuOpen(false) },
     },
   ].filter(Boolean) as Array<{
     label: string

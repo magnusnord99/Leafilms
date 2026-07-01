@@ -23,6 +23,7 @@ import {
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { HeroSection } from '@/components/sections'
 import { C } from '@/lib/admin-theme'
+import { setContractHiddenFromPitch } from '@/lib/actions/contracts'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -175,6 +176,19 @@ export default function EditProject({ params }: Props) {
       alert(err instanceof Error ? err.message : 'Oversettelse feilet')
     } finally {
       setTranslating(false)
+    }
+  }
+
+  const handleToggleContractHidden = async () => {
+    if (!project) return
+    const nextHidden = !(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
+    setProject(prev => prev ? { ...prev, pipeline_data: { ...prev.pipeline_data, contract_hidden_from_pitch: nextHidden } } : prev)
+    try {
+      await setContractHiddenFromPitch(id, nextHidden)
+    } catch (err) {
+      console.error('Toggle contract hidden error:', err)
+      setProject(prev => prev ? { ...prev, pipeline_data: { ...prev.pipeline_data, contract_hidden_from_pitch: !nextHidden } } : prev)
+      alert('Kunne ikke oppdatere synlighet for kontrakten. Prøv igjen.')
     }
   }
 
@@ -366,6 +380,7 @@ export default function EditProject({ params }: Props) {
         showMobilePreview={showMobilePreview}
         shareLink={shareLink}
         translating={translating}
+        contractHiddenFromPitch={!!(project?.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch}
         onEditModeToggle={() => setEditMode(!editMode)}
         onMobilePreviewToggle={() => setShowMobilePreview(!showMobilePreview)}
         onSave={() => handleSave(true)}
@@ -375,6 +390,7 @@ export default function EditProject({ params }: Props) {
         onAddProductionScheduleSection={addProductionScheduleSection}
         onDuplicateVersion={handleDuplicateVersion}
         onTranslate={handleTranslate}
+        onToggleContractHidden={handleToggleContractHidden}
         duplicating={duplicating}
       />
 

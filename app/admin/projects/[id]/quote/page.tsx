@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
+import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
 
@@ -27,6 +28,7 @@ export default function ProjectQuotePage({ params }: Props) {
   const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null }[]>([])
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
   const savingRef = useRef(false)
@@ -61,6 +63,7 @@ export default function ProjectQuotePage({ params }: Props) {
       setCustomers(custs)
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
       setDiscountFactors((discountFactorsRes.data || []) as DiscountFactor[])
+      setProfiles((profilesRes.data ?? []) as { id: string; name: string | null }[])
 
       if (existingQuote?.quote_data && existingQuote.quote_data.crew !== undefined) {
         // Existing quote — backfill deliveryDescription from project if missing
@@ -309,6 +312,15 @@ export default function ProjectQuotePage({ params }: Props) {
             onGeneratePDF={handleGeneratePDF}
             saving={saving}
             generatingPDF={generatingPDF}
+          />
+        )}
+
+        {/* Chat — kun synlig etter tilbudet er lagret første gang */}
+        {existingQuoteId && (
+          <QuoteChat
+            quoteId={existingQuoteId}
+            projectId={projectId}
+            profiles={profiles}
           />
         )}
       </div>

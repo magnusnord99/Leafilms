@@ -29,6 +29,8 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
     } else if (n.type === 'task_assigned' || n.type === 'project_message') {
       router.push(`/admin/projects/${n.project_id}`)
+    } else if (n.type === 'quote_mention') {
+      router.push(`/admin/projects/${n.project_id}/quote`)
     } else {
       router.push(`/admin/postprod/${n.project_id}`)
     }
@@ -99,7 +101,7 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                     </svg>
-                  ) : n.type === 'project_message' ? (
+                  ) : n.type === 'project_message' || n.type === 'quote_mention' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
@@ -122,6 +124,7 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                         : n.type === 'task_assigned' ? 'tildelte deg en oppgave'
                         : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
                         : n.type === 'selection_submitted' ? 'sendte inn bildevalg'
+                        : n.type === 'quote_mention' ? 'tagget deg i tilbud'
                         : 'i en oppgave'}
                     </span>
                   </div>

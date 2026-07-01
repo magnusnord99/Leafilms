@@ -280,3 +280,31 @@ export async function unpublishContract(projectId: string): Promise<void> {
     throw new Error('Kunne ikke fjerne kontrakten')
   }
 }
+
+// ---------------------------------------------------------------------------
+// Skjul/vis kontraktseksjonen på den offentlige pitchen (uavhengig av published_at)
+// ---------------------------------------------------------------------------
+export async function setContractHiddenFromPitch(projectId: string, hidden: boolean): Promise<void> {
+  const supabase = await createClient()
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('pipeline_data')
+    .eq('id', projectId)
+    .single()
+
+  const existingPipelineData = (project?.pipeline_data as Record<string, unknown>) ?? {}
+
+  const { error } = await supabase
+    .from('projects')
+    .update({
+      pipeline_data: { ...existingPipelineData, contract_hidden_from_pitch: hidden },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', projectId)
+
+  if (error) {
+    console.error('setContractHiddenFromPitch error:', error)
+    throw new Error('Kunne ikke oppdatere synlighet for kontrakten')
+  }
+}

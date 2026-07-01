@@ -79,6 +79,17 @@ export type Quote = {
   updated_at: string
 }
 
+export type QuoteMessage = {
+  id: string
+  quote_id: string
+  project_id: string
+  user_id: string
+  message: string
+  mentions: string[]
+  created_at: string
+  user: { id: string; name: string | null; email: string } | null
+}
+
 export type CrewMember = {
   id: string
   role: string

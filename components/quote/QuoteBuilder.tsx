@@ -105,6 +105,16 @@ const sectionHeaderStyle: React.CSSProperties = {
 }
 
 // ─── Shared: Price catalog picker ─────────────────────────────────────────────
+const CATEGORY_LABELS: Record<string, string> = {
+  kamera: 'Kamera',
+  lys: 'Lys',
+  lyd: 'Lyd',
+  utstyr: 'Utstyr',
+  post: 'Post',
+  transport: 'Transport',
+  annet: 'Annet',
+}
+
 function CatalogPicker({
   catalog,
   onSelect,
@@ -121,6 +131,14 @@ function CatalogPicker({
     .filter(i => !filterCategories || filterCategories.includes(i.category))
     .filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
 
+  const useGrouped = (filterCategories?.length ?? 0) >= 2
+
+  const grouped: { cat: string; items: PriceCatalogItem[] }[] = useGrouped
+    ? (filterCategories ?? [])
+        .map(cat => ({ cat, items: filtered.filter(i => i.category === cat) }))
+        .filter(g => g.items.length > 0)
+    : []
+
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <Button size="sm" variant="ghost" type="button" onClick={() => setOpen(o => !o)}>
@@ -136,12 +154,14 @@ function CatalogPicker({
           background: C.surface,
           border: `1px solid ${C.border}`,
           borderRadius: 3,
-          minWidth: 260,
-          maxHeight: 280,
+          minWidth: 280,
+          maxHeight: 320,
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}>
           {catalog.length > 0 && (
-            <div style={{ padding: 8 }}>
+            <div style={{ padding: 8, flexShrink: 0 }}>
               <input
                 autoFocus
                 style={{ ...fieldStyle, background: C.bg, padding: '6px 12px', fontSize: '0.78rem' }}
@@ -151,7 +171,7 @@ function CatalogPicker({
               />
             </div>
           )}
-          <div style={{ overflowY: 'auto', maxHeight: 220 }}>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
             {catalog.length === 0 ? (
               <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>
                 Ingen elementer i katalogen ennå.{' '}
@@ -159,40 +179,65 @@ function CatalogPicker({
               </p>
             ) : filtered.length === 0 ? (
               <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>
+            ) : useGrouped ? (
+              grouped.map(({ cat, items }) => (
+                <div key={cat}>
+                  <div style={{
+                    padding: '6px 16px 4px',
+                    fontSize: '0.58rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase' as const,
+                    color: C.text3,
+                    fontFamily: 'var(--font-dm-sans)',
+                    borderTop: `1px solid ${C.border}`,
+                  }}>
+                    {CATEGORY_LABELS[cat] ?? cat}
+                  </div>
+                  {items.map(item => (
+                    <CatalogItem key={item.id} item={item} onSelect={() => { onSelect(item); setOpen(false); setSearch('') }} />
+                  ))}
+                </div>
+              ))
             ) : (
               filtered.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 16px',
-                    fontSize: '0.8rem',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'var(--font-dm-sans)',
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
-                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
-                  onClick={() => { onSelect(item); setOpen(false); setSearch('') }}
-                >
-                  <span style={{ color: C.text }}>{item.name}</span>
-                  <span style={{ color: C.accent, fontSize: '0.72rem', marginLeft: 12, whiteSpace: 'nowrap' }}>
-                    {item.default_price > 0 ? formatNOK(item.default_price) : '—'} / {item.unit}
-                  </span>
-                </button>
+                <CatalogItem key={item.id} item={item} onSelect={() => { onSelect(item); setOpen(false); setSearch('') }} />
               ))
             )}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function CatalogItem({ item, onSelect }: { item: PriceCatalogItem; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '9px 16px',
+        fontSize: '0.78rem',
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'var(--font-dm-sans)',
+        transition: 'background 0.1s',
+      }}
+      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+      onClick={onSelect}
+    >
+      <span style={{ color: C.text }}>{item.name}</span>
+      <span style={{ color: C.accent, fontSize: '0.72rem', marginLeft: 12, whiteSpace: 'nowrap' }}>
+        {item.default_price.toLocaleString('nb-NO')} {item.unit}
+      </span>
+    </button>
   )
 }
 

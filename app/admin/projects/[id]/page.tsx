@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, sendTilbudToKunde } from '@/lib/actions/pipeline'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, sendTilbudToKunde, setProjectLead } from '@/lib/actions/pipeline'
 import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
 import { updateProjectShootDates } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
@@ -23,6 +23,13 @@ const C = {
   accentBg: 'rgba(124,92,252,0.08)',
   success:  '#4CAF7D',
   danger:   '#E05555',
+}
+
+const PROFILE_COLORS = ['#7C5CFC', '#4A9AC4', '#4CAF7D', '#F0A500', '#E8529A', '#E07C3A', '#50C8C8']
+function getProfileColor(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fffffff
+  return PROFILE_COLORS[h % PROFILE_COLORS.length]
 }
 
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
@@ -601,6 +608,10 @@ export default function ProjectHubPage() {
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
+  const leadDropdownRef = useRef<HTMLDivElement>(null)
+
   async function fetchHub() {
     setLoading(true)
     setError(null)
@@ -617,6 +628,7 @@ export default function ProjectHubPage() {
       setShootEnd(projDates.shoot_end ?? '')
       setNotesValue(data.project.meeting_notes ?? '')
       setSummary(data.project.meeting_summary ?? null)
+      setProjectLead_(data.project.project_lead ?? null)
       // Hent kontrakt-status for stepper (tilbud_sendt) og kontrakt-steg
       if (data.project.pipeline_stage === 'tilbud_sendt' || data.project.pipeline_stage === 'kontrakt') {
         const cs = await getContractStatus(projectId)
@@ -743,6 +755,25 @@ export default function ProjectHubPage() {
     if (activeTab === 'kontrakt') loadContract()
   }, [activeTab])
 
+  useEffect(() => {
+    if (!leadDropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (leadDropdownRef.current && !leadDropdownRef.current.contains(e.target as Node)) {
+        setLeadDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [leadDropdownOpen])
+
+  async function handleSetLead(profileId: string | null) {
+    const prev = projectLead
+    const profile = profileId ? profiles.find((p: { id: string; name: string | null; email: string }) => p.id === profileId) ?? null : null
+    setProjectLead_(profile)
+    const result = await setProjectLead(projectId, profileId)
+    if (!result.ok) setProjectLead_(prev)
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -788,6 +819,91 @@ export default function ProjectHubPage() {
                   {project.customer.name}{project.customer.company ? ` — ${project.customer.company}` : ''}
                 </p>
               )}
+                {/* Prosjektleder */}
+                <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
+                  <button
+                    onClick={() => setLeadDropdownOpen(v => !v)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                      background: 'none', border: `1px solid ${C.border}`,
+                      color: projectLead ? C.text2 : C.text3,
+                    }}
+                  >
+                    {projectLead ? (
+                      <>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                          background: getProfileColor(projectLead.id), color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.58rem', fontWeight: 700,
+                        }}>
+                          {(projectLead.name ?? projectLead.email)[0].toUpperCase()}
+                        </span>
+                        {projectLead.name ?? projectLead.email}
+                      </>
+                    ) : (
+                      '+ Prosjektleder'
+                    )}
+                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 4L6 8L10 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {leadDropdownOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 150,
+                      background: C.surface2, border: `1px solid ${C.border}`,
+                      borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                      minWidth: 200, maxHeight: 260, overflowY: 'auto', padding: '4px 0',
+                    }}>
+                      {projectLead && (
+                        <button
+                          onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                            color: C.danger, background: 'none', border: 'none',
+                            borderBottom: `1px solid ${C.border}`,
+                            padding: '7px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          Fjern leder
+                        </button>
+                      )}
+                      {(profiles as { id: string; name: string | null; email: string }[]).map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                            color: p.id === projectLead?.id ? C.accent : C.text,
+                            background: 'none', border: 'none',
+                            padding: '7px 14px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                          }}
+                          onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
+                          onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+                        >
+                          <span style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: getProfileColor(p.id), color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.65rem', fontWeight: 700,
+                          }}>
+                            {(p.name ?? p.email)[0].toUpperCase()}
+                          </span>
+                          {p.name ?? p.email}
+                          {p.id === projectLead?.id && (
+                            <span style={{ marginLeft: 'auto', color: C.accent, fontSize: '0.65rem' }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button

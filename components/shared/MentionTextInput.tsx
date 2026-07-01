@@ -53,6 +53,25 @@ export function MentionTextInput({
     }
   }
 
+  // Keeps the mention-query state in sync with caret movement that isn't a
+  // text change (click-to-reposition, arrow-key navigation, etc). Without
+  // this, `queryStart` can go stale relative to the caret: the dropdown stays
+  // open (it's anchored to the box, not the caret, so it doesn't visually
+  // reveal a stale state) while `selectMatch` reads a fresh caret position at
+  // click time, splicing text at two unrelated cursor positions.
+  function handleSelect(e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement
+    const caret = target.selectionStart ?? target.value.length
+    const detected = detectMentionQuery(target.value, caret)
+    if (detected) {
+      setQuery(detected.query)
+      setQueryStart(detected.start)
+      setHighlightIdx(0)
+    } else {
+      setQuery(null)
+    }
+  }
+
   function selectMatch(profile: MentionableProfile) {
     if (query === null || !ref.current) return
     const caret = ref.current.selectionStart ?? value.length
@@ -89,6 +108,7 @@ export function MentionTextInput({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onSelect={handleSelect}
           placeholder={placeholder}
           disabled={disabled}
           style={style}
@@ -100,6 +120,7 @@ export function MentionTextInput({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onSelect={handleSelect}
           placeholder={placeholder}
           disabled={disabled}
           style={style}

@@ -738,7 +738,7 @@ export default function ProjectHubPage() {
       setMarkingLost(false)
       return
     }
-    router.push('/admin/pipeline')
+    window.location.href = '/admin/projects'
   }
 
   async function loadContract() {

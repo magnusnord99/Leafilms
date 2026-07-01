@@ -33,14 +33,15 @@ export async function getContractTemplate(): Promise<string> {
   const { data, error } = await supabase
     .from('contract_templates')
     .select('content')
-    .single()
+    .order('updated_at', { ascending: false })
+    .limit(1)
 
   if (error) {
     console.error('getContractTemplate error:', error)
     return ''
   }
 
-  return data?.content ?? ''
+  return data?.[0]?.content ?? ''
 }
 
 // ---------------------------------------------------------------------------
@@ -50,10 +51,12 @@ export async function saveContractTemplate(content: string): Promise<void> {
   const supabase = await createClient()
 
   // Sjekk om det finnes en rad
-  const { data: existing } = await supabase
+  const { data: existingRows } = await supabase
     .from('contract_templates')
     .select('id')
-    .single()
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const existing = existingRows?.[0] ?? null
 
   if (existing?.id) {
     const { error } = await supabase
@@ -140,12 +143,13 @@ export async function getProjectContractData(projectId: string): Promise<{
   }
 
   // Auto-fyll fra mal
-  const { data: templateData } = await supabase
+  const { data: templateRows } = await supabase
     .from('contract_templates')
     .select('content')
-    .single()
+    .order('updated_at', { ascending: false })
+    .limit(1)
 
-  const template = templateData?.content ?? ''
+  const template = templateRows?.[0]?.content ?? ''
 
   const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null }).customers ?? null
 

@@ -577,6 +577,11 @@ export default function ProjectHubPage() {
     if (tab === 'pitch' || tab === 'kontrakt') return tab
     return 'oversikt'
   })
+
+  useEffect(() => {
+    const tab = searchParams?.get('tab')
+    if (tab === 'pitch' || tab === 'kontrakt') setActiveTab(tab)
+  }, [searchParams])
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [, startTransition] = useTransition()

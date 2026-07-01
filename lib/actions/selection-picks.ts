@@ -223,6 +223,14 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
   const service = createServiceClient()
   const now = new Date().toISOString()
 
+  const { data: album } = await service
+    .from('selection_albums')
+    .select('gallery_id, album_status')
+    .eq('id', albumId)
+    .single()
+
+  if (!album || album.album_status !== 'open') return
+
   // Hent alle picks og alle bilder i albumet
   const [{ data: picks }, { data: images }] = await Promise.all([
     service.from('selection_album_picks').select('image_id, selected, comment').eq('album_id', albumId),
@@ -251,14 +259,7 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
     .update({ album_status: 'submitted', album_submitted_at: now, updated_at: now })
     .eq('id', albumId)
 
-  // Hent project_id via gallery
-  const { data: album } = await service
-    .from('selection_albums')
-    .select('gallery_id')
-    .eq('id', albumId)
-    .single()
-
-  if (!album?.gallery_id) return
+  if (!album.gallery_id) return
 
   const { data: gallery } = await service
     .from('selection_galleries')

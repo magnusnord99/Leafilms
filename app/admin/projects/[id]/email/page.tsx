@@ -112,8 +112,8 @@ export default function EmailPage() {
     if (!hubData) return
     setGeneratingDraft(true)
     try {
-      const extraContext = emailType === 'pitch' && hubData.pitchToken
-        ? `Pitch-lenke til kunden: ${window.location.origin}/p/${hubData.pitchToken}`
+      const extraContext = hubData.pitchToken
+        ? `Lenke til prosjektside (pitch, tilbud og signerbar kontrakt): ${window.location.origin}/p/${hubData.pitchToken}`
         : undefined
       const draft = await generateEmailDraft(projectId, emailType, extraContext)
       if (draft) { setSubject(draft.subject ?? ''); setBody(draft.body ?? '') }
@@ -289,15 +289,15 @@ export default function EmailPage() {
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
               </div>
             )}
-            {emailType === 'pitch' && hubData.pitchToken && (
+            {emailType !== 'meeting' && hubData.pitchToken && (
               <div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 6 }}>Pitch-lenke</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 6 }}>Pitch-, tilbud- og kontraktlenke</p>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, wordBreak: 'break-all' }}>
                   {typeof window !== 'undefined' ? `${window.location.origin}/p/${hubData.pitchToken}` : `/p/${hubData.pitchToken}`}
                 </p>
               </div>
             )}
-            {emailType !== 'meeting' && emailType !== 'pitch' && (
+            {emailType !== 'meeting' && !hubData.pitchToken && (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, fontStyle: 'italic' }}>
                 Ingen vedlegg for denne e-posttypen.
               </p>

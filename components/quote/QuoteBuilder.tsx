@@ -897,26 +897,7 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Vår kontakt</label>
-                {teamMembers.length > 0 ? (
-                  <select
-                    style={fieldStyle}
-                    value={teamMembers.find(m => m.name === data.ourContact)?.id ?? ''}
-                    onChange={e => {
-                      const member = teamMembers.find(m => m.id === e.target.value)
-                      if (!member) return
-                      setData(prev => ({
-                        ...prev,
-                        ourContact: member.name,
-                        companyEmail: member.email || prev.companyEmail,
-                      }))
-                    }}
-                  >
-                    <option value="">Velg...</option>
-                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                ) : (
-                  <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
-                )}
+                <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
               </div>
             </div>
             <div>
@@ -1036,10 +1017,10 @@ export function QuoteBuilder({
 
       {/* ── Actions ── */}
       <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
-        <Button variant="secondary" onClick={() => onSave(data)} disabled={saving || generatingPDF} type="button">
+        <Button variant="secondary" onClick={() => onSave(data)} disabled={saving} type="button">
           {saving ? 'Lagrer...' : 'Lagre tilbud'}
         </Button>
-        <Button variant="primary" onClick={() => onGeneratePDF(data)} disabled={saving || generatingPDF} type="button">
+        <Button variant="primary" onClick={() => onGeneratePDF(data)} disabled={generatingPDF} type="button">
           {generatingPDF ? 'Genererer...' : 'Generer PDF'}
         </Button>
       </div>

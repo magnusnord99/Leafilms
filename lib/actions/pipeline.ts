@@ -380,7 +380,7 @@ export async function setProjectType(
 export async function updateTaskStatus(
   taskId: string,
   status: 'todo' | 'in_progress' | 'done'
-): Promise<void> {
+): Promise<{ advanced: boolean; projectId: string | null; nextStage: PipelineStage | null }> {
   try {
     const supabase = await createClient()
 
@@ -398,7 +398,7 @@ export async function updateTaskStatus(
 
     if (error) {
       console.error('updateTaskStatus error:', error)
-      return
+      return { advanced: false, projectId: null, nextStage: null }
     }
 
     // Auto-advance: når alle tasks i current stage er ferdige → flytt til neste stage
@@ -435,6 +435,10 @@ export async function updateTaskStatus(
 
           if (total && done && total === done) {
             await updatePipelineStage(task.project_id, nextStage as PipelineStage)
+            revalidatePath('/admin/pipeline')
+            revalidatePath('/admin/projects')
+            revalidatePath('/admin/postprod')
+            return { advanced: true, projectId: task.project_id, nextStage: nextStage as PipelineStage }
           }
         }
       }
@@ -443,8 +447,10 @@ export async function updateTaskStatus(
     revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
     revalidatePath('/admin/postprod')
+    return { advanced: false, projectId: null, nextStage: null }
   } catch (err) {
     console.error('updateTaskStatus unexpected error:', err)
+    return { advanced: false, projectId: null, nextStage: null }
   }
 }
 
@@ -549,7 +555,7 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 
     const { data, error } = await supabase
       .from('projects')
-      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
+      .select(`*, customers(id, name, company)`)
       .eq('pipeline_stage', 'post_prod')
       .neq('status', 'lost')
       .order('updated_at', { ascending: false })
@@ -671,11 +677,6 @@ export async function getProjectHub(projectId: string): Promise<{
           id,
           name,
           company
-        ),
-        project_lead:profiles!project_lead_id (
-          id,
-          name,
-          email
         )
       `)
       .eq('id', projectId)
@@ -690,7 +691,6 @@ export async function getProjectHub(projectId: string): Promise<{
       ...projectRow,
       customer: projectRow.customers ?? null,
       customers: undefined,
-      project_lead: projectRow.project_lead ?? null,
     } as ProjectWithPipeline
 
     // Hent tasks for current pipeline_stage (eller alle hvis stage mangler)

@@ -1110,7 +1110,12 @@ export default function PipelinePage() {
       }
       return updated
     })
-    await updateTaskStatus(taskId, nextStatus)
+    const result = await updateTaskStatus(taskId, nextStatus)
+    if (result.advanced && result.projectId && result.nextStage) {
+      setProjects(prev => prev.map(p =>
+        p.id === result.projectId ? { ...p, pipeline_stage: result.nextStage! } : p
+      ))
+    }
   }
 
   function handleDragStart(event: DragStartEvent) {

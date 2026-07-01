@@ -19,6 +19,7 @@ export default async function SelectionsOverviewPage() {
   const galleryStatusMap: Record<string, { label: string; color: string }> = {
     open:      { label: 'Åpen',     color: '#4CAF7D' },
     submitted: { label: 'Innsendt', color: '#C49434' },
+    purged:    { label: 'Slettet',  color: '#8484A0' },
   }
 
   return (

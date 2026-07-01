@@ -72,7 +72,7 @@ Finn 5 konkrete norske selskaper og returner dem i JSON-formatet spesifisert i s
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20260209', name: 'web_search' }],
   })
 
   const textBlock = response.content.find((b: Anthropic.ContentBlock) => b.type === 'text')

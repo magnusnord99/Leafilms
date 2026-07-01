@@ -34,8 +34,7 @@ export type QuoteTotals = {
   otherCostsTotal: number
   licensingTotal: number
   subtotal: number
-  crewDiscountAmount: number
-  equipmentDiscountAmount: number
+  discountBase: number
   discountAmount: number
   afterDiscount: number
   vatAmount: number
@@ -54,15 +53,9 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
 
   const subtotal = crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal
 
-  const crewFactor = data.crewDiscountFactor ?? 0
-  const equipmentFactor = data.equipmentDiscountFactor ?? 0
-  const crewDiscountAmount = crewTotal * crewFactor
-  const equipmentDiscountAmount = equipmentTotal * equipmentFactor
-  // Backward compat: use flat discountPercentage only when no separate factors are set
-  const legacyFlatDiscount = (crewFactor === 0 && equipmentFactor === 0)
-    ? subtotal * ((data.discountPercentage ?? 0) / 100)
-    : 0
-  const discountAmount = crewDiscountAmount + equipmentDiscountAmount + legacyFlatDiscount
+  // Én rabatt, kun på opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader
+  const discountBase = crewTotal + postProductionTotal
+  const discountAmount = discountBase * (data.discountFactor ?? 0)
 
   const afterDiscount = subtotal - discountAmount
   const vatAmount = data.includeVat ? afterDiscount * (data.vatRate / 100) : 0
@@ -75,8 +68,7 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
     otherCostsTotal,
     licensingTotal,
     subtotal,
-    crewDiscountAmount,
-    equipmentDiscountAmount,
+    discountBase,
     discountAmount,
     afterDiscount,
     vatAmount,
@@ -106,9 +98,10 @@ function crewToLineItems(crew: CrewMember[], headerLabel: string, lang: 'NO' | '
   const result: QuoteLineItem[] = [{ description: headerLabel, quantity: '', amount: 0 }]
   for (const m of crew) {
     const total = m.dailyRate * m.days
+    const daysStr = new Intl.NumberFormat(lang === 'EN' ? 'en-US' : 'nb-NO').format(m.days)
     const dayLabel = lang === 'EN'
-      ? `${m.days} ${m.days === 1 ? 'day' : 'days'}`
-      : `${m.days} ${m.days === 1 ? 'dag' : 'dager'}`
+      ? `${daysStr} ${m.days === 1 ? 'day' : 'days'}`
+      : `${daysStr} ${m.days === 1 ? 'dag' : 'dager'}`
     result.push({
       description: m.name ? `${m.role} - ${m.name}` : m.role,
       quantity: dayLabel,

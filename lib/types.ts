@@ -116,16 +116,16 @@ export type QuoteBuilderData = {
   otherCosts: QuoteBuilderItem[]
   licensing: QuoteBuilderItem[]
   vatRate: number
-  discountPercentage: number
-  crewDiscountFactor?: number
-  equipmentDiscountFactor?: number
+  /** Rabatt (desimal, 0.1 = 10%) på opptak (inkl. oppstart) og post-produksjon. Gjelder ikke utstyr, lisens eller andre kostnader. */
+  discountFactor: number
   includeVat: boolean
+  /** E-post vist i "Fra oss"-blokken på tilbuds-PDF-en */
+  companyEmail?: string
 }
 
 export type DiscountFactor = {
   shoot_day: number
-  crew_factor: number
-  equipment_factor: number
+  discount_factor: number
   created_at: string
   updated_at: string
 }

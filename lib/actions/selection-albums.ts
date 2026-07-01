@@ -405,15 +405,22 @@ export async function getAllGalleriesOverview(): Promise<{
     return true
   })
 
-  // Hent alle gallerier (ikke purged) for disse prosjektene
+  // Hent alle gallerier for disse prosjektene (inkl. purged)
   const projectIds = uniqueTasks.map(t => t.project_id)
   const { data: galleries } = await supabase
     .from('selection_galleries')
     .select('id, project_id, status, target_count, submitted_at')
     .in('project_id', projectIds)
-    .neq('status', 'purged')
+    .order('created_at', { ascending: false })
 
-  const galleryByProject = Object.fromEntries((galleries ?? []).map(g => [g.project_id, g]))
+  // Foretrekk aktivt galleri (open/submitted) over purged
+  const galleryByProject: Record<string, NonNullable<typeof galleries>[0]> = {}
+  for (const g of galleries ?? []) {
+    const existing = galleryByProject[g.project_id]
+    if (!existing || (existing.status === 'purged' && g.status !== 'purged')) {
+      galleryByProject[g.project_id] = g
+    }
+  }
 
   return Promise.all(
     uniqueTasks.map(async (task) => {

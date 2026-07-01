@@ -2,55 +2,13 @@
 
 import { createClient } from '@/lib/supabase-server'
 import type { QuoteBuilderData } from '@/lib/types'
+import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 
 // ---------------------------------------------------------------------------
 // Intern hjelpefunksjon: erstatt {{variabel}}-plassholdere
 // ---------------------------------------------------------------------------
 function fillTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
-}
-
-// ---------------------------------------------------------------------------
-// Intern hjelpefunksjon: beregn totalpris fra QuoteBuilderData
-// ---------------------------------------------------------------------------
-function calcTotalPrice(quoteData: QuoteBuilderData): number {
-  let total = 0
-
-  // Startup crew
-  for (const m of quoteData.startupCrew ?? []) {
-    total += (m.dailyRate ?? 0) * (m.days ?? 0)
-  }
-
-  // Shoot crew
-  for (const m of quoteData.crew ?? []) {
-    total += (m.dailyRate ?? 0) * (m.days ?? 0)
-  }
-
-  // Post-production crew
-  for (const m of quoteData.postProductionCrew ?? []) {
-    total += (m.dailyRate ?? 0) * (m.days ?? 0)
-  }
-
-  // Line-item lists
-  const itemLists = [
-    quoteData.equipment ?? [],
-    quoteData.postProduction ?? [],
-    quoteData.otherCosts ?? [],
-    quoteData.licensing ?? [],
-  ]
-  for (const list of itemLists) {
-    for (const item of list) {
-      total += (item.quantity ?? 0) * (item.unitPrice ?? 0)
-    }
-  }
-
-  // Rabatt
-  const discount = quoteData.discountPercentage ?? 0
-  if (discount > 0) {
-    total = total * (1 - discount / 100)
-  }
-
-  return Math.round(total)
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +154,7 @@ export async function getProjectContractData(projectId: string): Promise<{
   if (quote?.quote_data) {
     try {
       const qd = quote.quote_data as QuoteBuilderData
-      const total = calcTotalPrice(qd)
+      const total = Math.round(calculateQuoteTotals(qd).afterDiscount)
       totalprIsStr = total.toLocaleString('nb-NO') + ',-'
     } catch (e) {
       console.error('Feil ved beregning av totalpris:', e)

@@ -39,10 +39,9 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     otherCosts: [],
     licensing: [],
     vatRate: 25,
-    discountPercentage: 0,
-    crewDiscountFactor: 0,
-    equipmentDiscountFactor: 0,
+    discountFactor: 0,
     includeVat: true,
+    companyEmail: 'eivind@leafilms.no',
   }
 }
 
@@ -340,7 +339,7 @@ function CrewSection({
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
-                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" min={1} value={m.days || ''} onChange={e => update(m.id, 'days', Number(e.target.value))} /></td>
+                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" min={0.5} step={0.5} value={m.days || ''} onChange={e => update(m.id, 'days', Number(e.target.value))} /></td>
                   <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
                   <td style={{ padding: 4 }}>
                     <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
@@ -458,23 +457,29 @@ function PostProductionSection({
 // ─── Totals panel ──────────────────────────────────────────────────────────────
 function TotalsPanel({ data }: { data: QuoteBuilderData }) {
   const t = calculateQuoteTotals(data)
-  const crewPct = Math.round((data.crewDiscountFactor ?? 0) * 100)
-  const eqPct = Math.round((data.equipmentDiscountFactor ?? 0) * 100)
+  const discountPct = Math.round((data.discountFactor ?? 0) * 100)
   const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
-  const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: C.danger, fontFamily: 'var(--font-dm-sans)', paddingLeft: 12 }
+  const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.danger, fontWeight: 600, fontFamily: 'var(--font-dm-sans)' }
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <p style={{ ...sectionLabelStyle, marginBottom: 12 }}>Totaler</p>
 
       {t.crewTotal > 0 && (
-        <div style={rowStyle}><span>Mannskap</span><span>{formatNOK(t.crewTotal - t.crewDiscountAmount)}</span></div>
+        <div style={rowStyle}><span>Mannskap (opptak)</span><span>{formatNOK(t.crewTotal)}</span></div>
       )}
       {t.equipmentTotal > 0 && (
-        <div style={rowStyle}><span>Utstyrsliste</span><span>{formatNOK(t.equipmentTotal - t.equipmentDiscountAmount)}</span></div>
+        <div style={rowStyle}><span>Utstyrsliste</span><span>{formatNOK(t.equipmentTotal)}</span></div>
       )}
       {t.postProductionTotal > 0 && <div style={rowStyle}><span>Post-produksjon</span><span>{formatNOK(t.postProductionTotal)}</span></div>}
       {t.otherCostsTotal > 0 && <div style={rowStyle}><span>Andre kostnader</span><span>{formatNOK(t.otherCostsTotal)}</span></div>}
       {t.licensingTotal > 0 && <div style={rowStyle}><span>Lisensiering</span><span>{formatNOK(t.licensingTotal)}</span></div>}
+
+      {t.discountAmount > 0 && (
+        <div style={discountRowStyle}>
+          <span>Rabatt ({discountPct}%) på opptak + post-produksjon</span>
+          <span>−{formatNOK(t.discountAmount)}</span>
+        </div>
+      )}
 
       <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text, fontFamily: 'var(--font-dm-sans)' }}>
@@ -564,7 +569,7 @@ function StartupSection({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: '0.72rem', color: C.text2, whiteSpace: 'nowrap', fontFamily: 'var(--font-dm-sans)' }}>Dager:</span>
                     <input
-                      type="number" min={1} value={entry.days || ''}
+                      type="number" min={0.5} step={0.5} value={entry.days || ''}
                       onChange={e => update(role, 'days', Number(e.target.value))}
                       style={{ width: 56, fontSize: '0.72rem', textAlign: 'center', borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, color: C.text, outline: 'none', padding: '4px 8px', fontFamily: 'var(--font-dm-sans)' }}
                     />
@@ -591,13 +596,12 @@ function StartupSection({
 
 // ─── Shoot crew section (Opptak) with shared days control ────────────────────
 function ShootCrewSection({
-  shootDays, crew, teamMembers, catalog, crewDiscountFactor, onShootDaysChange, onCrewChange,
+  shootDays, crew, teamMembers, catalog, onShootDaysChange, onCrewChange,
 }: {
   shootDays: number
   crew: CrewMember[]
   teamMembers: TeamMember[]
   catalog: PriceCatalogItem[]
-  crewDiscountFactor: number
   onShootDaysChange: (days: number) => void
   onCrewChange: (crew: CrewMember[]) => void
 }) {
@@ -664,7 +668,8 @@ function ShootCrewSection({
         </div>
         <input
           type="number"
-          min={1}
+          min={0.5}
+          step={0.5}
           value={shootDays}
           onChange={e => applyShootDays(Number(e.target.value))}
           style={{ width: 56, fontSize: '0.72rem', textAlign: 'center', borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, color: C.text, outline: 'none', padding: '4px 8px', fontFamily: 'var(--font-dm-sans)' }}
@@ -719,12 +724,12 @@ function ShootCrewSection({
                   <td style={{ padding: '4px 8px 4px 0' }}>
                     <input
                       style={{ ...inputBase, textAlign: 'right', color: m.days !== shootDays ? C.accent : C.text }}
-                      type="number" min={1} value={m.days || ''}
+                      type="number" min={0.5} step={0.5} value={m.days || ''}
                       onChange={e => update(m.id, 'days', Number(e.target.value))}
                       title={m.days !== shootDays ? `Avviker fra opptaksdager (${shootDays})` : undefined}
                     />
                   </td>
-                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days * (1 - crewDiscountFactor))}</td>
+                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
                   <td style={{ padding: 4 }}>
                     <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
@@ -772,8 +777,8 @@ export function QuoteBuilder({
     startupCrew: initialData.startupCrew ?? [],
     shootDays: initialData.shootDays ?? 1,
     postProductionCrew: initialData.postProductionCrew ?? [],
-    crewDiscountFactor: initialData.crewDiscountFactor ?? 0,
-    equipmentDiscountFactor: initialData.equipmentDiscountFactor ?? 0,
+    discountFactor: initialData.discountFactor ?? 0,
+    companyEmail: initialData.companyEmail ?? 'eivind@leafilms.no',
   })
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [headerOpen, setHeaderOpen] = useState(true)
@@ -799,8 +804,7 @@ export function QuoteBuilder({
     setData(prev => ({
       ...prev,
       shootDays: days,
-      crewDiscountFactor: factor !== undefined ? Number(factor.crew_factor) : prev.crewDiscountFactor ?? 0,
-      equipmentDiscountFactor: factor !== undefined ? Number(factor.equipment_factor) : prev.equipmentDiscountFactor ?? 0,
+      discountFactor: factor !== undefined ? Number(factor.discount_factor) : prev.discountFactor ?? 0,
     }))
   }, [discountFactors])
 
@@ -910,7 +914,6 @@ export function QuoteBuilder({
           crew={data.crew}
           teamMembers={teamMembers}
           catalog={priceCatalog}
-          crewDiscountFactor={data.crewDiscountFactor ?? 0}
           onShootDaysChange={handleShootDaysChange}
           onCrewChange={v => set('crew', v)}
         />
@@ -963,31 +966,30 @@ export function QuoteBuilder({
             <input style={{ ...fieldStyle, opacity: data.includeVat ? 1 : 0.5 }} type="number" value={data.vatRate} onChange={e => set('vatRate', Number(e.target.value))} disabled={!data.includeVat} />
           </div>
           <div>
-            <label style={labelStyle}>Mannskap-rabatt (%)</label>
+            <label style={labelStyle}>Rabatt (%)</label>
             <input
               style={fieldStyle}
               type="number" min={0} max={100} step={1}
-              value={Math.round((data.crewDiscountFactor ?? 0) * 100)}
-              onChange={e => set('crewDiscountFactor', Number(e.target.value) / 100)}
+              value={Math.round((data.discountFactor ?? 0) * 100)}
+              onChange={e => set('discountFactor', Number(e.target.value) / 100)}
               placeholder="0"
             />
           </div>
           <div>
-            <label style={labelStyle}>Utstyr-rabatt (%)</label>
+            <label style={labelStyle}>E-post (på PDF)</label>
             <input
               style={fieldStyle}
-              type="number" min={0} max={100} step={1}
-              value={Math.round((data.equipmentDiscountFactor ?? 0) * 100)}
-              onChange={e => set('equipmentDiscountFactor', Number(e.target.value) / 100)}
-              placeholder="0"
+              type="email"
+              value={data.companyEmail ?? ''}
+              onChange={e => set('companyEmail', e.target.value)}
+              placeholder="eivind@leafilms.no"
             />
           </div>
         </div>
-        {discountFactors.length > 0 && (
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
-            Rabatter oppdateres automatisk fra flerdagsrabatt-tabellen når opptaksdager endres
-          </p>
-        )}
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
+          Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisensiering eller andre kostnader.
+          {discountFactors.length > 0 && ' Oppdateres automatisk fra flerdagsrabatt-tabellen når opptaksdager endres.'}
+        </p>
       </div>
 
       {/* ── Totals ── */}

@@ -1,5 +1,10 @@
 import PDFDocument from 'pdfkit'
+import fs from 'fs'
+import path from 'path'
 import type { QuoteBuilderData } from '@/lib/types'
+
+const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'leafilms-logo.png')
+const LOGO_ASPECT_RATIO = 446 / 840
 
 type Lang = 'NO' | 'EN'
 
@@ -41,6 +46,8 @@ function getLabels(lang: Lang) {
       totalExclVat: 'Production total (excl. VAT):',
       vat: (rate: number) => `VAT (${rate}%):`,
       totalInclVat: 'Total (incl. VAT):',
+      discount: (pct: number) => `Discount (${pct}%)`,
+      discountNote: 'on production and post-production',
       categories: {
         startup: 'Startup/Planning',
         production: 'Production',
@@ -67,6 +74,8 @@ function getLabels(lang: Lang) {
     totalExclVat: 'Produksjonstotal (eks. MVA):',
     vat: (rate: number) => `MVA (${rate}%):`,
     totalInclVat: 'Total (ink. MVA):',
+    discount: (pct: number) => `Rabatt (${pct}%)`,
+    discountNote: 'på opptak og post-produksjon',
     categories: {
       startup: 'Oppstart/planlegging',
       production: 'Opptak',
@@ -76,22 +85,12 @@ function getLabels(lang: Lang) {
   }
 }
 
-function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number) {
-  doc.font('Helvetica-Bold').fontSize(17).fillColor('#000000')
-  doc.text('L  E  A', x, y, { width: 70, lineBreak: false })
-
-  const iconX = x + 75
-  const iconY = y - 1
-  doc.rect(iconX, iconY, 30, 23).lineWidth(1).stroke('#000000')
-  doc.lineWidth(0.7).strokeColor('#000000')
-  for (let i = 0; i < 4; i++) {
-    doc.moveTo(iconX + 4, iconY + 4 + i * 5)
-      .lineTo(iconX + 26, iconY + 4 + i * 5)
-      .stroke()
+function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, width: number): number {
+  const height = width * LOGO_ASPECT_RATIO
+  if (fs.existsSync(LOGO_PATH)) {
+    doc.image(LOGO_PATH, x, y, { width })
   }
-
-  doc.font('Helvetica').fontSize(7).fillColor('#000000')
-  doc.text('F  I  L  M  S', x, y + 27, { width: 108, lineBreak: false })
+  return height
 }
 
 export async function generateQuotePDF(
@@ -116,9 +115,10 @@ export async function generateQuotePDF(
     const MIDX = W / 2 + 10
 
     // ── LOGO ──────────────────────────────────────────────────────────────────
-    const logoX = MR - 108
-    const logoY = 40
-    drawLogo(doc, logoX, logoY)
+    const logoWidth = 130
+    const logoX = MR - logoWidth
+    const logoY = 35
+    const logoHeight = drawLogo(doc, logoX, logoY, logoWidth)
 
     // ── CLIENT NAME (top left) ─────────────────────────────────────────────────
     const clientLine = [data.clientContact, data.reference].filter(Boolean).join('/')
@@ -128,9 +128,9 @@ export async function generateQuotePDF(
     }
 
     // ── COMPANY INFO ──────────────────────────────────────────────────────────
-    let cy = logoY + 65
-    const ciLabelX = MIDX
-    const ciValueX = MIDX + 75
+    let cy = logoY + logoHeight + 20
+    const ciLabelX = ML
+    const ciValueX = ML + 75
 
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000')
     doc.text('LEA FILMS', ciLabelX, cy)
@@ -141,7 +141,7 @@ export async function generateQuotePDF(
       ['', 'Asker'],
       ['', 'Norway'],
       ['Telefon:', '0047 94989036'],
-      ['Email:', 'magnusbn@hotmail.com'],
+      ['Email:', data.companyEmail || 'eivind@leafilms.no'],
       ['Website:', 'leafilms.no'],
     ]
 
@@ -251,7 +251,9 @@ export async function generateQuotePDF(
     const shootCrewTotal = data.crew.reduce((s, m) => s + m.dailyRate * m.days, 0)
     const equipTotal = data.equipment.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     const productionTotal = shootCrewTotal + equipTotal
-    const shootDays = data.shootDays ?? (data.crew.length > 0 ? data.crew[0].days : 0)
+    // Faktiske dager på mannskapet er fasit (brukes også i pengeberegningen over) —
+    // data.shootDays er kun en UI-snarvei og kan avvike hvis en rad er endret manuelt
+    const shootDays = data.crew.length > 0 ? data.crew[0].days : (data.shootDays ?? 0)
 
     const postCrewList = data.postProductionCrew ?? []
     const postCrewTotal = postCrewList.reduce((s, m) => s + m.dailyRate * m.days, 0)
@@ -263,9 +265,12 @@ export async function generateQuotePDF(
     const licensingTotal = data.licensing.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     const expensesTotal = otherTotal + licensingTotal
 
-    const dayLabel = (days: number) => language === 'EN'
-      ? `${days} ${days === 1 ? 'day' : 'days'}`
-      : `${days} ${days === 1 ? 'dag' : 'dager'}`
+    const dayLabel = (days: number) => {
+      const n = new Intl.NumberFormat(language === 'EN' ? 'en-US' : 'nb-NO').format(days)
+      return language === 'EN'
+        ? `${n} ${days === 1 ? 'day' : 'days'}`
+        : `${n} ${days === 1 ? 'dag' : 'dager'}`
+    }
 
     const categories = [
       { label: labels.categories.startup, total: startupTotal, qty: startupDays > 0 ? dayLabel(startupDays) : '' },
@@ -301,16 +306,23 @@ export async function generateQuotePDF(
     }
 
     const subtotal = startupTotal + productionTotal + postTotal + expensesTotal
-    const discountAmount = subtotal * (data.discountPercentage / 100)
+    // Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader
+    const discountBase = startupTotal + shootCrewTotal + postTotal
+    const discountFactor = data.discountFactor ?? 0
+    const discountAmount = discountBase * discountFactor
     const afterDiscount = subtotal - discountAmount
     const vatRate = data.vatRate ?? 25
     const vatAmount = includeVat ? afterDiscount * (vatRate / 100) : 0
     const totalInclVat = afterDiscount + vatAmount
 
-    if (data.discountPercentage > 0) {
-      doc.font('Helvetica').fontSize(9).fillColor('#555555')
-      doc.text(`Rabatt (${data.discountPercentage}%)`, colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
-      doc.text(`−${fmt(discountAmount, language)} NOK`, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
+    if (discountAmount > 0) {
+      const discountPct = Math.round(discountFactor * 100)
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000000')
+      doc.text(labels.discount(discountPct), colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
+      doc.text(`-${fmt(discountAmount, language)} NOK`, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
+      y += 12
+      doc.font('Helvetica-Oblique').fontSize(7.5).fillColor('#555555')
+      doc.text(labels.discountNote, colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
       y += 14
     }
 

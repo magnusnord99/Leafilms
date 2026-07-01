@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase-server'
 
 export type Notification = {
   id: string
-  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention'
+  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention'
   project_id: string | null
   task_id: string | null
   lead_id: string | null

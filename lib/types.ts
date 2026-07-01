@@ -394,6 +394,7 @@ export type ProjectMessage = {
   user_id: string
   user_name: string | null
   content: string
+  mentions: string[]
   created_at: string
 }
 
@@ -450,6 +451,7 @@ export type TaskMessage = {
   task_id: string
   user_id: string
   message: string
+  mentions: string[]
   created_at: string
   user?: { id: string; name: string | null; email: string } | null
 }

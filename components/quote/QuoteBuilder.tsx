@@ -361,7 +361,7 @@ function CrewSection({
 
 // ─── Item section (equipment, other costs, licensing) ─────────────────────────
 function ItemSection({
-  label, items, catalog, catalogCategories, onChange, addLabel = '+ Legg til',
+  label, items, catalog, catalogCategories, onChange, addLabel = '+ Legg til', defaultQuantity = 1,
 }: {
   label: string
   items: QuoteBuilderItem[]
@@ -369,12 +369,13 @@ function ItemSection({
   catalogCategories?: string[]
   onChange: (items: QuoteBuilderItem[]) => void
   addLabel?: string
+  defaultQuantity?: number
 }) {
   const update = (id: string, field: keyof QuoteBuilderItem, value: string | number) =>
     onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
-  const add = () => onChange([...items, { id: newId(), description: '', quantity: 1, unitPrice: 0 }])
+  const add = () => onChange([...items, { id: newId(), description: '', quantity: defaultQuantity, unitPrice: 0 }])
   const addFromCatalog = (item: PriceCatalogItem) =>
-    onChange([...items, { id: newId(), description: item.name, quantity: 1, unitPrice: item.default_price }])
+    onChange([...items, { id: newId(), description: item.name, quantity: defaultQuantity, unitPrice: item.default_price }])
   const remove = (id: string) => onChange(items.filter(i => i.id !== id))
 
   return (
@@ -643,28 +644,31 @@ function ShootCrewSection({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: 12, borderRadius: 3, background: C.surface, border: `1px solid ${C.border}` }}>
         <span style={{ fontSize: '0.72rem', color: C.text2, whiteSpace: 'nowrap', fontFamily: 'var(--font-dm-sans)' }}>Opptaksdager:</span>
         <div style={{ display: 'flex', gap: 4 }}>
-          {[1, 2, 3, 4, 5, 6, 7].map(d => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => applyShootDays(d)}
-              style={{
-                width: 28,
-                height: 28,
-                fontSize: '0.72rem',
-                borderRadius: 3,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-dm-sans)',
-                transition: 'background 0.1s, color 0.1s',
-                background: shootDays === d ? C.accent : C.surface2,
-                color: shootDays === d ? '#fff' : C.text2,
-                border: `1px solid ${shootDays === d ? C.accent : C.border}`,
-                fontWeight: shootDays === d ? 600 : 400,
-              }}
-            >
-              {d}
-            </button>
-          ))}
+          {([0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7] as number[]).map(d => {
+            const label = d === 0.5 ? '½' : d === 1.5 ? '1½' : d === 2.5 ? '2½' : String(d)
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => applyShootDays(d)}
+                style={{
+                  width: d % 1 === 0 ? 28 : 36,
+                  height: 28,
+                  fontSize: '0.72rem',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-dm-sans)',
+                  transition: 'background 0.1s, color 0.1s',
+                  background: shootDays === d ? C.accent : C.surface2,
+                  color: shootDays === d ? '#fff' : C.text2,
+                  border: `1px solid ${shootDays === d ? C.accent : C.border}`,
+                  fontWeight: shootDays === d ? 600 : 400,
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
         <input
           type="number"
@@ -800,11 +804,12 @@ export function QuoteBuilder({
   }
 
   const handleShootDaysChange = useCallback((days: number) => {
-    const factor = discountFactors.find(f => f.shoot_day === days)
+    const factor = discountFactors.find(f => f.shoot_day === Math.round(days))
     setData(prev => ({
       ...prev,
       shootDays: days,
       discountFactor: factor !== undefined ? Number(factor.discount_factor) : prev.discountFactor ?? 0,
+      equipment: prev.equipment.map(e => ({ ...e, quantity: days })),
     }))
   }, [discountFactors])
 
@@ -892,7 +897,26 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Vår kontakt</label>
-                <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                {teamMembers.length > 0 ? (
+                  <select
+                    style={fieldStyle}
+                    value={teamMembers.find(m => m.name === data.ourContact)?.id ?? ''}
+                    onChange={e => {
+                      const member = teamMembers.find(m => m.id === e.target.value)
+                      if (!member) return
+                      setData(prev => ({
+                        ...prev,
+                        ourContact: member.name,
+                        companyEmail: member.email || prev.companyEmail,
+                      }))
+                    }}
+                  >
+                    <option value="">Velg...</option>
+                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                ) : (
+                  <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                )}
               </div>
             </div>
             <div>
@@ -924,6 +948,7 @@ export function QuoteBuilder({
           catalogCategories={['kamera', 'lys', 'lyd', 'utstyr']}
           onChange={v => set('equipment', v)}
           addLabel="+ Legg til utstyr"
+          defaultQuantity={data.shootDays}
         />
         <PostProductionSection
           crew={data.postProductionCrew ?? []}
@@ -1011,10 +1036,10 @@ export function QuoteBuilder({
 
       {/* ── Actions ── */}
       <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
-        <Button variant="secondary" onClick={() => onSave(data)} disabled={saving} type="button">
+        <Button variant="secondary" onClick={() => onSave(data)} disabled={saving || generatingPDF} type="button">
           {saving ? 'Lagrer...' : 'Lagre tilbud'}
         </Button>
-        <Button variant="primary" onClick={() => onGeneratePDF(data)} disabled={generatingPDF} type="button">
+        <Button variant="primary" onClick={() => onGeneratePDF(data)} disabled={saving || generatingPDF} type="button">
           {generatingPDF ? 'Genererer...' : 'Generer PDF'}
         </Button>
       </div>

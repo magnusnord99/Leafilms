@@ -21,13 +21,25 @@ CREATE INDEX IF NOT EXISTS idx_notifications_project
 -- RLS
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read own notifications"
-  ON notifications FOR SELECT TO authenticated
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'notifications' AND policyname = 'Users can read own notifications'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Users can read own notifications" ON notifications FOR SELECT TO authenticated USING (auth.uid() = user_id)';
+  END IF;
+END$$;
 
-CREATE POLICY "Users can update own notifications"
-  ON notifications FOR UPDATE TO authenticated
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'notifications' AND policyname = 'Users can update own notifications'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE TO authenticated USING (auth.uid() = user_id)';
+  END IF;
+END$$;
 
 -- Trigger 1: prosjekt-melding
 -- Varsler alle med minst én task i prosjektet (unntatt avsender)
@@ -69,7 +81,7 @@ DECLARE
   rec       RECORD;
   proj_id   UUID;
   sndr_name TEXT;
-zBEGIN
+BEGIN
   SELECT project_id INTO proj_id FROM tasks WHERE id = NEW.task_id;
   SELECT COALESCE(name, email, 'Ukjent') INTO sndr_name FROM profiles WHERE id = NEW.user_id;
 

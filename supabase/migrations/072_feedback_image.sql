@@ -4,9 +4,22 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('feedback', 'feedback', true, 5242880, array['image/jpeg','image/jpg','image/png','image/webp','image/gif'])
 on conflict (id) do nothing;
 
-create policy "authenticated_upload_feedback" on storage.objects
-  for insert to authenticated
-  with check (bucket_id = 'feedback');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'objects' AND policyname = 'authenticated_upload_feedback'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated_upload_feedback" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = ''feedback'')';
+  END IF;
+END$$;
 
-create policy "public_read_feedback" on storage.objects
-  for select using (bucket_id = 'feedback');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'objects' AND policyname = 'public_read_feedback'
+  ) THEN
+    EXECUTE 'CREATE POLICY "public_read_feedback" ON storage.objects FOR SELECT USING (bucket_id = ''feedback'')';
+  END IF;
+END$$;

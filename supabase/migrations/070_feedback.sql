@@ -9,11 +9,12 @@ create table if not exists feedback (
 
 alter table feedback enable row level security;
 
-create policy "admins_all_feedback" on feedback
-  for all using (
-    exists (
-      select 1 from profiles
-      where profiles.id = auth.uid()
-      and profiles.role = 'admin'
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'feedback' AND policyname = 'admins_all_feedback'
+  ) THEN
+    EXECUTE 'CREATE POLICY "admins_all_feedback" ON feedback FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = ''admin''))';
+  END IF;
+END$$;

@@ -46,10 +46,22 @@ CREATE INDEX IF NOT EXISTS idx_selection_album_picks_album
 ALTER TABLE selection_album_picks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE selection_albums      ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "authenticated full access albums"
-  ON selection_albums FOR ALL TO authenticated
-  USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'selection_albums' AND policyname = 'authenticated full access albums'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated full access albums" ON selection_albums FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  END IF;
+END$$;
 
-CREATE POLICY "authenticated full access album picks"
-  ON selection_album_picks FOR ALL TO authenticated
-  USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'selection_album_picks' AND policyname = 'authenticated full access album picks'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated full access album picks" ON selection_album_picks FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  END IF;
+END$$;

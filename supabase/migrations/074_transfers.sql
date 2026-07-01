@@ -53,31 +53,52 @@ alter table transfers enable row level security;
 alter table transfer_links enable row level security;
 
 -- Kun innloggede admins kan se alle leveranser
-create policy "Admin kan se alle leveranser"
-  on transfers for select
-  using (auth.uid() is not null);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfers' AND policyname = 'Admin kan se alle leveranser') THEN
+    EXECUTE 'CREATE POLICY "Admin kan se alle leveranser" ON transfers FOR SELECT USING (auth.uid() is not null)';
+  END IF;
+END$$;
 
-create policy "Admin kan opprette leveranser"
-  on transfers for insert
-  with check (auth.uid() is not null);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfers' AND policyname = 'Admin kan opprette leveranser') THEN
+    EXECUTE 'CREATE POLICY "Admin kan opprette leveranser" ON transfers FOR INSERT WITH CHECK (auth.uid() is not null)';
+  END IF;
+END$$;
 
-create policy "Admin kan oppdatere egne leveranser"
-  on transfers for update
-  using (auth.uid() is not null);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfers' AND policyname = 'Admin kan oppdatere egne leveranser') THEN
+    EXECUTE 'CREATE POLICY "Admin kan oppdatere egne leveranser" ON transfers FOR UPDATE USING (auth.uid() is not null)';
+  END IF;
+END$$;
 
-create policy "Admin kan slette egne leveranser"
-  on transfers for delete
-  using (auth.uid() = created_by);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfers' AND policyname = 'Admin kan slette egne leveranser') THEN
+    EXECUTE 'CREATE POLICY "Admin kan slette egne leveranser" ON transfers FOR DELETE USING (auth.uid() = created_by)';
+  END IF;
+END$$;
 
 -- Transfer links: admin kan administrere, anon kan lese via token
-create policy "Admin kan se alle lenker"
-  on transfer_links for select
-  using (auth.uid() is not null);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfer_links' AND policyname = 'Admin kan se alle lenker') THEN
+    EXECUTE 'CREATE POLICY "Admin kan se alle lenker" ON transfer_links FOR SELECT USING (auth.uid() is not null)';
+  END IF;
+END$$;
 
-create policy "Admin kan opprette lenker"
-  on transfer_links for insert
-  with check (auth.uid() is not null);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfer_links' AND policyname = 'Admin kan opprette lenker') THEN
+    EXECUTE 'CREATE POLICY "Admin kan opprette lenker" ON transfer_links FOR INSERT WITH CHECK (auth.uid() is not null)';
+  END IF;
+END$$;
 
-create policy "Anon kan lese lenke via token"
-  on transfer_links for select
-  using (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transfer_links' AND policyname = 'Anon kan lese lenke via token') THEN
+    EXECUTE 'CREATE POLICY "Anon kan lese lenke via token" ON transfer_links FOR SELECT USING (true)';
+  END IF;
+END$$;

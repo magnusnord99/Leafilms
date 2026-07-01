@@ -10,5 +10,5 @@ ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
   CHECK (type IN (
     'project_message', 'task_message', 'selection_submitted',
-    'task_assigned', 'lead_assigned', 'quote_assigned'
+    'task_assigned', 'lead_assigned', 'quote_assigned', 'invoice_assigned'
   ));

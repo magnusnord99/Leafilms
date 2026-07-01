@@ -4,9 +4,15 @@
 -- ---------------------------------------------------------------------------
 -- 1. Utvid notifications type constraint
 -- ---------------------------------------------------------------------------
+-- Delete any rows with invalid type values before updating constraint
+DELETE FROM notifications
+WHERE type NOT IN ('project_message', 'task_message', 'selection_submitted',
+                   'task_assigned', 'lead_assigned', 'quote_assigned', 'invoice_assigned');
+
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
-  CHECK (type IN ('project_message', 'task_message', 'selection_submitted'));
+  CHECK (type IN ('project_message', 'task_message', 'selection_submitted',
+                  'task_assigned', 'lead_assigned', 'quote_assigned', 'invoice_assigned'));
 
 -- ---------------------------------------------------------------------------
 -- 2. Tabeller
@@ -49,13 +55,25 @@ CREATE INDEX IF NOT EXISTS idx_selection_images_gallery    ON selection_images(g
 ALTER TABLE selection_galleries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE selection_images     ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "authenticated full access galleries"
-  ON selection_galleries FOR ALL TO authenticated
-  USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'selection_galleries' AND policyname = 'authenticated full access galleries'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated full access galleries" ON selection_galleries FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  END IF;
+END$$;
 
-CREATE POLICY "authenticated full access images"
-  ON selection_images FOR ALL TO authenticated
-  USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'selection_images' AND policyname = 'authenticated full access images'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated full access images" ON selection_images FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  END IF;
+END$$;
 
 -- ---------------------------------------------------------------------------
 -- 4. Storage bucket (privat)
@@ -70,10 +88,15 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-CREATE POLICY "authenticated manage selections storage"
-  ON storage.objects FOR ALL TO authenticated
-  USING (bucket_id = 'selections')
-  WITH CHECK (bucket_id = 'selections');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'objects' AND policyname = 'authenticated manage selections storage'
+  ) THEN
+    EXECUTE 'CREATE POLICY "authenticated manage selections storage" ON storage.objects FOR ALL TO authenticated USING (bucket_id = ''selections'') WITH CHECK (bucket_id = ''selections'')';
+  END IF;
+END$$;
 
 -- ---------------------------------------------------------------------------
 -- 5. Task-mal for post_prod (photo + mixed prosjekttyper)

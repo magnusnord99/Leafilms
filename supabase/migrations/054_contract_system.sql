@@ -117,7 +117,15 @@ LEAFILMS                                {{bedrift}}$$);
 
 -- 4. RLS på contract_templates
 ALTER TABLE contract_templates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Auth users manage templates" ON contract_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'contract_templates' AND policyname = 'Auth users manage templates'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Auth users manage templates" ON contract_templates FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  END IF;
+END$$;
 
 -- 5. RLS på contracts — policy for anon INSERT (signering)
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;

@@ -7,7 +7,7 @@ import {
   getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
-import { toggleTaskAssignee, setInvoiceAssignee } from '@/lib/actions/pipeline'
+import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead } from '@/lib/actions/pipeline'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 
@@ -961,6 +961,9 @@ export default function PreprodDetailPage() {
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [preprod, setPreprod] = useState<PreprodData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
+  const leadDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -969,10 +972,30 @@ export default function PreprodDetailPage() {
         setTasks(detail.tasks)
         setProfiles(detail.profiles)
         setPreprod(detail.project.preprod)
+        setProjectLead_(detail.project.project_lead ?? null)
       }
       setLoading(false)
     })
   }, [id])
+
+  useEffect(() => {
+    if (!leadDropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (leadDropdownRef.current && !leadDropdownRef.current.contains(e.target as Node)) {
+        setLeadDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [leadDropdownOpen])
+
+  async function handleSetLead(profileId: string | null) {
+    const prev = projectLead
+    const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
+    setProjectLead_(profile)
+    const result = await setProjectLead(id, profileId)
+    if (!result.ok) setProjectLead_(prev)
+  }
 
   function patchPreprod(patch: Partial<PreprodData>) {
     setPreprod(prev => prev ? { ...prev, ...patch } : prev)
@@ -1037,6 +1060,91 @@ export default function PreprodDetailPage() {
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4A9EFF', background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.25)', padding: '3px 10px', borderRadius: 5 }}>
               Pre-produksjon
             </span>
+          </div>
+          {/* Prosjektleder */}
+          <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
+            <button
+              onClick={() => setLeadDropdownOpen(v => !v)}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                background: 'none', border: `1px solid ${C.border}`,
+                color: projectLead ? C.text2 : C.text3,
+              }}
+            >
+              {projectLead ? (
+                <>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    background: profileColor(projectLead.id), color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.58rem', fontWeight: 700,
+                  }}>
+                    {(projectLead.name ?? projectLead.email)[0].toUpperCase()}
+                  </span>
+                  {projectLead.name ?? projectLead.email}
+                </>
+              ) : (
+                '+ Prosjektleder'
+              )}
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                <path d="M2 4L6 8L10 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {leadDropdownOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 150,
+                background: C.surface2, border: `1px solid ${C.border}`,
+                borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                minWidth: 200, maxHeight: 260, overflowY: 'auto', padding: '4px 0',
+              }}>
+                {projectLead && (
+                  <button
+                    onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                      color: C.danger, background: 'none', border: 'none',
+                      borderBottom: `1px solid ${C.border}`,
+                      padding: '7px 14px', cursor: 'pointer',
+                    }}
+                  >
+                    Fjern leder
+                  </button>
+                )}
+                {profiles.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                      color: p.id === projectLead?.id ? C.accent : C.text,
+                      background: 'none', border: 'none',
+                      padding: '7px 14px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
+                    onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+                  >
+                    <span style={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      background: profileColor(p.id), color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.65rem', fontWeight: 700,
+                    }}>
+                      {(p.name ?? p.email)[0].toUpperCase()}
+                    </span>
+                    {p.name ?? p.email}
+                    {p.id === projectLead?.id && (
+                      <span style={{ marginLeft: 'auto', color: C.accent, fontSize: '0.65rem' }}>✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

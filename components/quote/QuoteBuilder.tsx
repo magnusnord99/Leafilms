@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { QuoteBuilderData, CrewMember, QuoteBuilderItem, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
@@ -808,6 +808,7 @@ interface QuoteBuilderProps {
   onGeneratePDF: (data: QuoteBuilderData) => void
   saving?: boolean
   generatingPDF?: boolean
+  profiles?: { id: string; name: string | null }[]
 }
 
 export function QuoteBuilder({
@@ -832,6 +833,20 @@ export function QuoteBuilder({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [headerOpen, setHeaderOpen] = useState(true)
   const [termsOpen, setTermsOpen] = useState(false)
+
+  const REQUIRED_FIELDS: { key: keyof QuoteBuilderData; label: string }[] = [
+    { key: 'clientContact', label: 'Kundekontakt' },
+    { key: 'deliveryDate', label: 'Leveringsdato' },
+    { key: 'ourContact', label: 'Vår kontakt' },
+  ]
+
+  const missingFields = REQUIRED_FIELDS.filter(f => !data[f.key])
+
+  const fieldRefs = {
+    clientContact: useRef<HTMLInputElement>(null),
+    deliveryDate: useRef<HTMLInputElement>(null),
+    ourContact: useRef<HTMLInputElement>(null),
+  }
 
   const set = useCallback(
     <K extends keyof QuoteBuilderData>(field: K, value: QuoteBuilderData[K]) => {
@@ -883,6 +898,39 @@ export function QuoteBuilder({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+      {missingFields.length > 0 && (
+        <div style={{
+          background: 'rgba(240,165,0,0.08)',
+          border: '1px solid rgba(240,165,0,0.3)',
+          borderRadius: 6,
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap' as const,
+          marginBottom: 16,
+        }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#F0A500', fontWeight: 600, flexShrink: 0 }}>
+            Mangler:
+          </span>
+          {missingFields.map(f => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => fieldRefs[f.key as keyof typeof fieldRefs]?.current?.focus()}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                color: '#F0A500', background: 'rgba(240,165,0,0.12)',
+                border: '1px solid rgba(240,165,0,0.25)', borderRadius: 4,
+                padding: '2px 8px', cursor: 'pointer',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Header info ── */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
         {collapsibleHeader('Tilbudsinformasjon', headerOpen, () => setHeaderOpen(o => !o))}
@@ -899,7 +947,7 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Leveringsdato</label>
-                <input style={fieldStyle} type="date" value={data.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} />
+                <input ref={fieldRefs.deliveryDate} style={fieldStyle} type="date" value={data.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} />
               </div>
               <div>
                 <label style={labelStyle}>Språk</label>
@@ -934,7 +982,7 @@ export function QuoteBuilder({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
                 <label style={labelStyle}>Kundekontakt</label>
-                <input style={fieldStyle} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
+                <input ref={fieldRefs.clientContact} style={fieldStyle} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
               </div>
               <div>
                 <label style={labelStyle}>Kundenummer</label>
@@ -942,7 +990,7 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Vår kontakt</label>
-                <input style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                <input ref={fieldRefs.ourContact} style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
               </div>
             </div>
             <div>

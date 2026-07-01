@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor } from '@/lib/types'
@@ -27,6 +27,9 @@ export default function ProjectQuotePage({ params }: Props) {
   const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
+  // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
+  // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
+  const savingRef = useRef(false)
 
   useEffect(() => {
     loadAll()
@@ -35,7 +38,7 @@ export default function ProjectQuotePage({ params }: Props) {
   async function loadAll() {
     setLoading(true)
     try {
-      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, discountFactorsRes] = await Promise.all([
+      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, discountFactorsRes, profilesRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
@@ -45,6 +48,7 @@ export default function ProjectQuotePage({ params }: Props) {
           .eq('type', 'team').maybeSingle(),
         supabase.from('price_catalog').select('*').order('category').order('name'),
         supabase.from('discount_factors').select('*').order('shoot_day'),
+        supabase.from('profiles').select('id, name').returns<{ id: string; name: string | null }[]>(),
       ])
 
       const proj = projectRes.data as Project | null
@@ -106,6 +110,39 @@ export default function ProjectQuotePage({ params }: Props) {
           }
         }
 
+        const profiles = (profilesRes.data ?? []) as { id: string; name: string | null }[]
+        const projAny = proj as typeof proj & {
+          shoot_end?: string | null
+          project_lead_id?: string | null
+          quote_assignee_id?: string | null
+        }
+
+        // ourContact: project_lead → quote_assignee → fallback
+        if (!initial.ourContact || initial.ourContact === 'Bea Valand') {
+          const leadId = projAny.project_lead_id ?? projAny.quote_assignee_id
+          const lead = leadId ? profiles.find(p => p.id === leadId) : null
+          if (lead?.name) initial.ourContact = lead.name
+        }
+
+        // deliveryDate: shoot_end
+        if (!initial.deliveryDate && projAny.shoot_end) {
+          initial.deliveryDate = projAny.shoot_end
+        }
+
+        // language
+        if (proj?.language === 'en') initial.language = 'EN'
+        else initial.language = 'NO'
+
+        // reference
+        const typeMap: Record<string, string> = {
+          video: 'Video produksjon',
+          photo: 'Fotoproduksjon',
+          mixed: 'Video og fotoproduksjon',
+        }
+        if (proj?.project_type && typeMap[proj.project_type]) {
+          initial.reference = typeMap[proj.project_type]
+        }
+
         setBuilderData(initial)
       }
     } catch (err) {
@@ -116,6 +153,8 @@ export default function ProjectQuotePage({ params }: Props) {
   }
 
   async function handleSave(data: QuoteBuilderData) {
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setSaveMessage(null)
     try {
@@ -150,6 +189,7 @@ export default function ProjectQuotePage({ params }: Props) {
       console.error('Save error:', err)
       setSaveMessage('Feil ved lagring')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }

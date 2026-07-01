@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, sendTilbudToKunde, setProjectLead } from '@/lib/actions/pipeline'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead } from '@/lib/actions/pipeline'
 import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
 import { updateProjectShootDates } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
@@ -251,8 +251,6 @@ function TilbudStepper({
   customerId,
   projectTitle,
   isContractPublished,
-  onSend,
-  sending,
 }: {
   projectId: string
   hasSections: boolean
@@ -261,8 +259,6 @@ function TilbudStepper({
   customerId: string | null
   projectTitle: string
   isContractPublished: boolean
-  onSend: () => void
-  sending: boolean
 }) {
   const step1Done = hasSections
   const step2QuoteDone = quote != null
@@ -352,22 +348,36 @@ function TilbudStepper({
 
       {/* Send-knapp */}
       <div style={{ marginTop: 10 }}>
-        <button
-          onClick={onSend}
-          disabled={!allDone || sending}
-          style={{
-            fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
-            padding: '12px 20px', borderRadius: 8, cursor: allDone && !sending ? 'pointer' : 'not-allowed',
-            border: 'none', width: '100%',
-            background: allDone ? C.accent : C.surface2,
-            color: allDone ? '#fff' : C.text3,
-            opacity: sending ? 0.7 : 1,
-            transition: 'background 0.15s, box-shadow 0.15s',
-            boxShadow: allDone ? '0 0 24px rgba(124,92,252,0.3)' : 'none',
-          }}
-        >
-          {sending ? 'Sender...' : 'Send e-post til kunde →'}
-        </button>
+        {allDone ? (
+          <Link href={`/admin/projects/${projectId}/email`} style={{ textDecoration: 'none', display: 'block' }}>
+            <button
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+                padding: '12px 20px', borderRadius: 8, cursor: 'pointer',
+                border: 'none', width: '100%',
+                background: C.accent,
+                color: '#fff',
+                transition: 'background 0.15s, box-shadow 0.15s',
+                boxShadow: '0 0 24px rgba(124,92,252,0.3)',
+              }}
+            >
+              Send e-post til kunde →
+            </button>
+          </Link>
+        ) : (
+          <button
+            disabled
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+              padding: '12px 20px', borderRadius: 8, cursor: 'not-allowed',
+              border: 'none', width: '100%',
+              background: C.surface2,
+              color: C.text3,
+            }}
+          >
+            Send e-post til kunde →
+          </button>
+        )}
         {!allDone && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textAlign: 'center', marginTop: 8 }}>
             Fullfør begge stegene for å sende tilbudet
@@ -579,7 +589,6 @@ export default function ProjectHubPage() {
   const [savingShoot, setSavingShoot] = useState(false)
 
   const [stepperContractPublished, setStepperContractPublished] = useState(false)
-  const [sendingTilbud, setSendingTilbud] = useState(false)
   const [contractText, setContractText] = useState('')
   const [contractIsPublished, setContractIsPublished] = useState(false)
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
@@ -641,18 +650,6 @@ export default function ProjectHubPage() {
   }
 
   useEffect(() => { if (projectId) fetchHub() }, [projectId])
-
-  async function handleSendTilbud() {
-    if (!hubData) return
-    setSendingTilbud(true)
-    const result = await sendTilbudToKunde(projectId, hubData.pitchToken)
-    setSendingTilbud(false)
-    if (result.ok) {
-      await fetchHub()
-    } else {
-      alert(result.error ?? 'Noe gikk galt')
-    }
-  }
 
   function handleNotesChange(value: string) {
     setNotesValue(value)
@@ -1170,8 +1167,6 @@ export default function ProjectHubPage() {
                   customerId={project.customer_id ?? null}
                   projectTitle={project.title}
                   isContractPublished={stepperContractPublished}
-                  onSend={handleSendTilbud}
-                  sending={sendingTilbud}
                 />
               </div>
             ) : project.pipeline_stage === 'kontrakt' ? (

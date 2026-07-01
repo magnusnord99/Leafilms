@@ -23,6 +23,17 @@ function parseMessage(msg: string): React.ReactNode[] {
   )
 }
 
+function resolveMentions(text: string, profiles: Profile[]): string[] {
+  const tokens = text.match(/@(\S+)/g) ?? []
+  const ids: string[] = []
+  for (const token of tokens) {
+    const name = token.slice(1) // strip @
+    const profile = profiles.find(p => (p.name ?? '') === name)
+    if (profile && !ids.includes(profile.id)) ids.push(profile.id)
+  }
+  return ids
+}
+
 export default function QuoteChat({
   quoteId,
   projectId,
@@ -74,19 +85,22 @@ export default function QuoteChat({
   async function handleSend() {
     if (!text.trim() || sending) return
     setSending(true)
-    const result = await sendQuoteMessage({
-      quoteId,
-      projectId,
-      message: text.trim(),
-      mentionedUserIds: mentionedIds,
-    })
-    if (result.ok) {
-      setText('')
-      setMentionedIds([])
-      const fresh = await getQuoteMessages(quoteId)
-      setMessages(fresh)
+    try {
+      const result = await sendQuoteMessage({
+        quoteId,
+        projectId,
+        message: text.trim(),
+        mentionedUserIds: resolveMentions(text.trim(), profiles),
+      })
+      if (result.ok) {
+        setText('')
+        setMentionedIds([])
+        const fresh = await getQuoteMessages(quoteId)
+        setMessages(fresh)
+      }
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {

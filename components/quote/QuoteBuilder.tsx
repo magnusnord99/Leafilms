@@ -864,7 +864,7 @@ export function QuoteBuilder({
   }
 
   const handleShootDaysChange = useCallback((days: number) => {
-    const factor = discountFactors.find(f => f.shoot_day === Math.round(days))
+    const factor = discountFactors.find(f => f.shoot_day === days)
     setData(prev => ({
       ...prev,
       shootDays: days,

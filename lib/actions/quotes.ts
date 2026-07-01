@@ -9,7 +9,7 @@ export async function getQuoteMessages(quoteId: string): Promise<QuoteMessage[]>
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('quote_messages')
-      .select('*, user:profiles!quote_messages_user_id_fkey(id, name, email)')
+      .select('*, user:profiles(id, name, email)')
       .eq('quote_id', quoteId)
       .order('created_at', { ascending: true })
 

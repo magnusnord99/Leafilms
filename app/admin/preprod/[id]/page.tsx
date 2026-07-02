@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
-import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead } from '@/lib/actions/pipeline'
+import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts } from '@/lib/actions/pipeline'
+import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 
@@ -719,11 +720,14 @@ function PostCrewSection({
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
 function TaskList({
-  tasks, profiles, onStatusChange,
+  tasks, profiles, onStatusChange, currentUserId, messageCounts, deepLinkTaskId,
 }: {
   tasks: Task[]
   profiles: { id: string; name: string | null; email: string }[]
   onStatusChange: (taskId: string, status: Task['status']) => void
+  currentUserId: string | null
+  messageCounts: Record<string, number>
+  deepLinkTaskId: string | null
 }) {
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
@@ -763,7 +767,7 @@ function TaskList({
 
         return (
           <div key={task.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', flexWrap: 'wrap' }}>
               {/* Status toggle */}
               <button
                 onClick={() => {
@@ -815,6 +819,15 @@ function TaskList({
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.04em', color: s.color, flexShrink: 0 }}>
                 {s.label}
               </span>
+
+              <TaskChatToggle
+                taskId={task.id}
+                taskTitle={task.title}
+                currentUserId={currentUserId}
+                profiles={profiles}
+                messageCount={messageCounts[task.id] ?? 0}
+                forceOpen={deepLinkTaskId === task.id}
+              />
             </div>
 
             {/* Assignee picker */}
@@ -955,6 +968,8 @@ function InvoiceAssigneeCard({
 
 export default function PreprodDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const deepLinkTaskId = searchParams?.get('task') ?? null
 
   const [project, setProject] = useState<PreprodDetail['project'] | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -964,6 +979,8 @@ export default function PreprodDetailPage() {
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -973,9 +990,13 @@ export default function PreprodDetailPage() {
         setProfiles(detail.profiles)
         setPreprod(detail.project.preprod)
         setProjectLead_(detail.project.project_lead ?? null)
+        if (detail.tasks.length > 0) {
+          getTaskMessageCounts(detail.tasks.map(t => t.id)).then(setMessageCounts)
+        }
       }
       setLoading(false)
     })
+    getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
   }, [id])
 
   useEffect(() => {
@@ -1161,6 +1182,9 @@ export default function PreprodDetailPage() {
                 tasks={tasks}
                 profiles={profiles}
                 onStatusChange={handleTaskStatusChange}
+                currentUserId={currentUserId}
+                messageCounts={messageCounts}
+                deepLinkTaskId={deepLinkTaskId}
               />
             </div>
 

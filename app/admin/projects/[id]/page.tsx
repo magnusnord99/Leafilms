@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead } from '@/lib/actions/pipeline'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts } from '@/lib/actions/pipeline'
 import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
 import { updateProjectShootDates } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
 import type { Quote } from '@/lib/types'
+import { TaskChatToggle } from '@/components/task/TaskChatToggle'
+import { ProjectChat } from '@/components/project/ProjectChat'
 
 const C = {
   bg:       '#181920',
@@ -502,6 +504,9 @@ function TaskChecklist({
   togglingId,
   hasSections,
   quote,
+  currentUserId,
+  messageCounts,
+  deepLinkTaskId,
 }: {
   tasks: Task[]
   profiles: Profile[]
@@ -510,6 +515,9 @@ function TaskChecklist({
   togglingId: string | null
   hasSections: boolean
   quote: Quote | null
+  currentUserId: string | null
+  messageCounts: Record<string, number>
+  deepLinkTaskId: string | null
 }) {
   if (tasks.length === 0) {
     return (
@@ -527,7 +535,7 @@ function TaskChecklist({
         return (
           <div
             key={task.id}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: C.surface, border: `1px solid ${isDone ? 'rgba(76,175,125,0.2)' : C.border}`, borderRadius: 6, opacity: isToggling ? 0.5 : 1, transition: 'opacity 0.15s, border-color 0.2s', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: C.surface, border: `1px solid ${isDone ? 'rgba(76,175,125,0.2)' : C.border}`, borderRadius: 6, opacity: isToggling ? 0.5 : 1, transition: 'opacity 0.15s, border-color 0.2s', gap: 8, flexWrap: 'wrap' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
               <button
@@ -554,6 +562,14 @@ function TaskChecklist({
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: isDone ? C.success : task.status === 'in_progress' ? '#F0A500' : C.text3 }}>
                 {isDone ? 'Ferdig' : task.status === 'in_progress' ? 'Pågår' : 'Todo'}
               </span>
+              <TaskChatToggle
+                taskId={task.id}
+                taskTitle={task.title}
+                currentUserId={currentUserId}
+                profiles={profiles}
+                messageCount={messageCounts[task.id] ?? 0}
+                forceOpen={deepLinkTaskId === task.id}
+              />
             </div>
           </div>
         )
@@ -625,6 +641,9 @@ export default function ProjectHubPage() {
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
+  const deepLinkTaskId = searchParams?.get('task') ?? null
 
   async function fetchHub() {
     setLoading(true)
@@ -651,10 +670,16 @@ export default function ProjectHubPage() {
 
     }
     setProfiles(allProfiles)
+    if (data && data.tasks.length > 0) {
+      getTaskMessageCounts(data.tasks.map(t => t.id)).then(setMessageCounts)
+    }
     setLoading(false)
   }
 
   useEffect(() => { if (projectId) fetchHub() }, [projectId])
+  useEffect(() => {
+    getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
+  }, [])
 
   function handleNotesChange(value: string) {
     setNotesValue(value)
@@ -1202,6 +1227,9 @@ export default function ProjectHubPage() {
                   togglingId={togglingTaskId}
                   hasSections={hasSections}
                   quote={quote}
+                  currentUserId={currentUserId}
+                  messageCounts={messageCounts}
+                  deepLinkTaskId={deepLinkTaskId}
                 />
                 {project.pipeline_stage === 'post_prod' && (
                   <div style={{ marginTop: 20 }}>
@@ -1512,6 +1540,8 @@ export default function ProjectHubPage() {
             </div>
           </div>
         )}
+
+        <ProjectChat projectId={projectId} />
       </div>
     </div>
   )

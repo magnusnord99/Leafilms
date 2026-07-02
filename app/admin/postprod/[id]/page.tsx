@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   getPostProdProjects, getTasksForProject, updateTaskStatus,
@@ -174,6 +174,8 @@ function StepItem({
 export default function PostProdDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const deepLinkTaskId = searchParams?.get('task') ?? null
   const projectId = params.id as string
 
   const [projects, setProjects] = useState<PostProdProject[]>([])
@@ -308,7 +310,7 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      setSelectedIdx(getInitialIdx(seeded))
+      setSelectedIdx(getInitialIdx(seeded, deepLinkTaskId))
       setLoading(false)
       return
     }
@@ -317,7 +319,7 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    setSelectedIdx(getInitialIdx(projectTasks))
+    setSelectedIdx(getInitialIdx(projectTasks, deepLinkTaskId))
     if (currentProj) {
       setDeliveryVideo(currentProj.delivery_video ?? '')
       setDeliveryPhoto(currentProj.delivery_photo ?? '')
@@ -364,7 +366,11 @@ export default function PostProdDetailPage() {
     pendingTaskDataRef.current = { ...map }
   }
 
-  function getInitialIdx(taskList: Task[]): number {
+  function getInitialIdx(taskList: Task[], preferredTaskId?: string | null): number {
+    if (preferredTaskId) {
+      const preferredIdx = taskList.findIndex(t => t.id === preferredTaskId)
+      if (preferredIdx !== -1) return preferredIdx
+    }
     const idx = taskList.findIndex(t => t.status !== 'done')
     return idx === -1 ? 0 : idx
   }

@@ -17,6 +17,9 @@ import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline, TaskMessage } from '@/lib/types'
+import { supabase } from '@/lib/supabase-client'
+import { extractMentionIds, splitMentionSegments } from '@/lib/mentions'
+import { MentionTextInput } from '@/components/shared/MentionTextInput'
 
 const C = {
   bg:       '#181920',
@@ -412,6 +415,26 @@ export default function PostProdDetailPage() {
     }
   }, [selectedTask?.id])
 
+  // Realtime: nye meldinger på valgt oppgave fra andre brukere
+  useEffect(() => {
+    if (!selectedTask) return
+    const taskId = selectedTask.id
+    const channel = supabase
+      .channel(`task-messages-${taskId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'task_messages', filter: `task_id=eq.${taskId}` },
+        () => {
+          loadMessages(taskId)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedTask?.id])
+
   function handleSelectTask(idx: number) {
     if (selectedTask && notesTimerRef.current) {
       clearTimeout(notesTimerRef.current)
@@ -481,7 +504,8 @@ export default function PostProdDetailPage() {
   async function handleSendMessage() {
     if (!newMessage.trim() || sendingMsg || !selectedTask) return
     setSendingMsg(true)
-    const result = await sendTaskMessage(selectedTask.id, newMessage.trim())
+    const mentions = extractMentionIds(newMessage.trim(), profiles)
+    const result = await sendTaskMessage(selectedTask.id, newMessage.trim(), mentions)
     if (result.ok) {
       setNewMessage('')
       await loadMessages(selectedTask.id)
@@ -1764,7 +1788,11 @@ export default function PostProdDetailPage() {
                           border: `1px solid ${isMe ? 'rgba(124,92,252,0.2)' : C.border}`,
                         }}>
                           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            {msg.message}
+                            {splitMentionSegments(msg.message).map((seg, i) =>
+                              seg.isMention
+                                ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
+                                : <span key={i}>{seg.text}</span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -1776,25 +1804,21 @@ export default function PostProdDetailPage() {
 
               {/* Message input */}
               <div style={{ flexShrink: 0, padding: '12px 16px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                <textarea
+                <MentionTextInput
                   value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  placeholder="Skriv en melding... (Enter for å sende)"
+                  onChange={setNewMessage}
+                  onEnter={handleSendMessage}
+                  profiles={profiles}
+                  as="textarea"
                   rows={2}
+                  placeholder="Skriv en melding... (Enter for å sende)"
                   style={{
                     flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: '9px 12px', resize: 'none', outline: 'none', lineHeight: 1.5,
+                    width: '100%',
                   }}
-                  onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                  onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
                 <button
                   onClick={handleSendMessage}

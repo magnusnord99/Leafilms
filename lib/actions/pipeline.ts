@@ -1054,7 +1054,8 @@ export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
  */
 export async function sendTaskMessage(
   taskId: string,
-  message: string
+  message: string,
+  mentions: string[] = []
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
@@ -1064,7 +1065,7 @@ export async function sendTaskMessage(
 
     const { error } = await supabase
       .from('task_messages')
-      .insert({ task_id: taskId, user_id: user.id, message: message.trim() })
+      .insert({ task_id: taskId, user_id: user.id, message: message.trim(), mentions })
 
     if (error) {
       console.error('sendTaskMessage error:', error)

@@ -1,7 +1,8 @@
 'use client'
 
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
+import { createClient } from '@/lib/supabase-client'
 import { markAsRead, markAllAsRead, type Notification } from '@/lib/actions/notifications'
 import { C } from '@/lib/admin-theme'
 
@@ -17,9 +18,60 @@ function timeAgo(iso: string): string {
   return `${days} dager siden`
 }
 
-export default function VarslerClient({ notifications }: { notifications: Notification[] }) {
+export default function VarslerClient({ notifications: initialNotifications }: { notifications: Notification[] }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
+  const [notifications, setNotifications] = useState(initialNotifications)
+
+  useEffect(() => {
+    setNotifications(initialNotifications)
+  }, [initialNotifications])
+
+  useEffect(() => {
+    const supabase = createClient()
+    let channelName = ''
+
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      channelName = `varsler-page-${user.id}`
+
+      supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          async (payload) => {
+            const { data } = await supabase
+              .from('notifications')
+              .select('*, projects(title), tasks(title), leads(name, company)')
+              .eq('id', (payload.new as { id: string }).id)
+              .single()
+            if (data) {
+              setNotifications((prev) => {
+                if (prev.some((n) => n.id === data.id)) return prev
+                return [data as Notification, ...prev]
+              })
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            const updated = payload.new as Notification
+            setNotifications((prev) => prev.map((n) => (n.id === updated.id ? { ...n, read: updated.read } : n)))
+          }
+        )
+        .subscribe()
+    }
+
+    init()
+
+    return () => {
+      if (channelName) supabase.removeChannel(supabase.channel(channelName))
+    }
+  }, [])
 
   async function handleClick(n: Notification) {
     if (!n.read) {
@@ -27,7 +79,7 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
     }
     if (n.type === 'lead_assigned') {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
-    } else if (n.type === 'task_assigned' || n.type === 'project_message') {
+    } else if (n.type === 'task_assigned' || n.type === 'project_message' || n.type === 'project_message_mention') {
       router.push(`/admin/projects/${n.project_id}`)
     } else if (n.type === 'quote_mention') {
       router.push(`/admin/projects/${n.project_id}/quote`)
@@ -39,7 +91,7 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
   async function handleMarkAll() {
     startTransition(async () => {
       await markAllAsRead()
-      router.refresh()
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     })
   }
 
@@ -101,7 +153,12 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                     </svg>
-                  ) : n.type === 'project_message' || n.type === 'quote_mention' ? (
+                  ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5" />
+                    </svg>
+                  ) : n.type === 'project_message' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
@@ -121,6 +178,8 @@ export default function VarslerClient({ notifications }: { notifications: Notifi
                     </span>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
                       {n.type === 'project_message' ? 'i prosjekt-chatten'
+                        : n.type === 'project_message_mention' ? 'nevnte deg i prosjekt-chatten'
+                        : n.type === 'task_message_mention' ? 'nevnte deg i en oppgave'
                         : n.type === 'task_assigned' ? 'tildelte deg en oppgave'
                         : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
                         : n.type === 'selection_submitted' ? 'sendte inn bildevalg'

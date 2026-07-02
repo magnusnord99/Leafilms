@@ -1079,6 +1079,31 @@ export async function sendTaskMessage(
   }
 }
 
+export async function getTaskMessageCounts(taskIds: string[]): Promise<Record<string, number>> {
+  if (taskIds.length === 0) return {}
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('task_messages')
+      .select('task_id')
+      .in('task_id', taskIds)
+
+    if (error) {
+      console.error('getTaskMessageCounts error:', error)
+      return {}
+    }
+
+    const counts: Record<string, number> = {}
+    for (const row of data ?? []) {
+      counts[row.task_id] = (counts[row.task_id] ?? 0) + 1
+    }
+    return counts
+  } catch (err) {
+    console.error('getTaskMessageCounts unexpected error:', err)
+    return {}
+  }
+}
+
 /**
  * Oppdaterer task_data JSONB-feltet på en task (linkdata per steg).
  */

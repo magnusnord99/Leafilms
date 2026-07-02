@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase-client'
+import { getAllProfiles } from '@/lib/actions/pipeline'
+import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
+import { MentionTextInput } from '@/components/shared/MentionTextInput'
 import type { ProjectMessage } from '@/lib/types'
 
 type Props = {
@@ -14,8 +17,13 @@ export function ProjectChat({ projectId }: Props) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [profiles, setProfiles] = useState<MentionableProfile[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
+
+  useEffect(() => {
+    getAllProfiles().then(setProfiles)
+  }, [])
 
   useEffect(() => {
     openRef.current = open
@@ -78,16 +86,16 @@ export function ProjectChat({ projectId }: Props) {
     fetchMessages()
   }, [open, projectId])
 
-  async function sendMessage(e: React.FormEvent) {
-    e.preventDefault()
+  async function sendMessage() {
     if (!input.trim() || sending) return
     setSending(true)
     const content = input.trim()
+    const mentions = extractMentionIds(content, profiles)
     setInput('')
     const res = await fetch(`/api/projects/${projectId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, mentions }),
     })
     if (res.ok) {
       const { message } = await res.json()
@@ -256,7 +264,11 @@ export function ProjectChat({ projectId }: Props) {
                   margin: 0,
                   wordBreak: 'break-word',
                 }}>
-                  {msg.content}
+                  {splitMentionSegments(msg.content).map((seg, i) =>
+                    seg.isMention
+                      ? <span key={i} style={{ color: '#C49434', fontWeight: 600 }}>{seg.text}</span>
+                      : <span key={i}>{seg.text}</span>
+                  )}
                 </p>
               </div>
             ))}
@@ -265,16 +277,19 @@ export function ProjectChat({ projectId }: Props) {
 
           {/* Input */}
           <form
-            onSubmit={sendMessage}
+            onSubmit={(e) => { e.preventDefault(); sendMessage() }}
             style={{
               borderTop: '1px solid #2A261F',
               display: 'flex',
               gap: 0,
             }}
           >
-            <input
+            <MentionTextInput
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={setInput}
+              onEnter={sendMessage}
+              profiles={profiles}
+              as="input"
               placeholder="Skriv en melding..."
               disabled={sending}
               style={{
@@ -287,6 +302,7 @@ export function ProjectChat({ projectId }: Props) {
                 fontSize: '0.7rem',
                 color: '#E8E1D5',
                 letterSpacing: '0.03em',
+                width: '100%',
               }}
             />
             <button

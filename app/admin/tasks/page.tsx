@@ -52,9 +52,12 @@ const STATUS_CONFIG = {
 function taskHref(task: TaskWithProject): string {
   if (!task.project) return '/admin/projects'
   if (task.project.pipeline_stage === 'post_prod') {
-    return `/admin/postprod/${task.project.id}`
+    return `/admin/postprod/${task.project.id}?task=${task.id}`
   }
-  return `/admin/projects/${task.project.id}`
+  if (task.project.pipeline_stage === 'pre_prod') {
+    return `/admin/preprod/${task.project.id}?task=${task.id}`
+  }
+  return `/admin/projects/${task.project.id}?task=${task.id}`
 }
 
 function formatDate(dateStr: string | null): string | null {

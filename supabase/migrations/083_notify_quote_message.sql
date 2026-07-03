@@ -25,7 +25,6 @@ RETURNS TRIGGER AS $$
 DECLARE
   rec       RECORD;
   preview   TEXT;
-  notified  BOOLEAN := false;
   assignee  UUID;
   sndr_name TEXT;
 BEGIN
@@ -37,14 +36,12 @@ BEGIN
     FROM unnest(NEW.mentions) AS m
     WHERE m != NEW.user_id
   LOOP
-    notified := true;
     INSERT INTO notifications (user_id, type, project_id, message_preview, sender_name)
     VALUES (rec.profile_id, 'quote_mention', NEW.project_id, preview, sndr_name);
   END LOOP;
 
   SELECT quote_assignee_id INTO assignee FROM projects WHERE id = NEW.project_id;
   IF assignee IS NOT NULL AND assignee != NEW.user_id AND assignee != ALL(NEW.mentions) THEN
-    notified := true;
     INSERT INTO notifications (user_id, type, project_id, message_preview, sender_name)
     VALUES (assignee, 'quote_message', NEW.project_id, preview, sndr_name);
   END IF;

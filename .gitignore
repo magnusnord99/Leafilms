@@ -44,3 +44,6 @@ next-env.d.ts
 .superpowers/brainstorm/
 .superpowers/sdd/
 supabase/.temp/
+
+# Git worktrees
+.worktrees/

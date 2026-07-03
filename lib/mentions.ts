@@ -25,8 +25,6 @@ export function extractMentionIds(text: string, profiles: MentionableProfile[]):
   return Array.from(ids)
 }
 
-export const MENTION_DISPLAY_PATTERN = /@[\wæøåÆØÅ.-]+/g
-
 export type MentionSegment = { text: string; isMention: boolean }
 
 export function splitMentionSegments(
@@ -34,18 +32,22 @@ export function splitMentionSegments(
   resolvedMentionIds: string[],
   profiles: MentionableProfile[]
 ): MentionSegment[] {
-  const resolvedTokens = new Set(
-    profiles
-      .filter(p => resolvedMentionIds.includes(p.id))
-      .map(p => mentionToken(p).toLowerCase())
-  )
+  const resolvedProfiles = profiles.filter(p => resolvedMentionIds.includes(p.id))
+  const tokens = resolvedProfiles.map(p => mentionToken(p)).filter(Boolean)
+
+  if (tokens.length === 0) {
+    return [{ text, isMention: false }]
+  }
+
+  const tokenPattern = tokens.map(escapeRegExp).join('|')
+  const pattern = new RegExp(`@(?:${tokenPattern})(?![\\wæøåÆØÅ])`, 'gi')
+
   const segments: MentionSegment[] = []
   let lastIndex = 0
-  for (const match of text.matchAll(MENTION_DISPLAY_PATTERN)) {
+  for (const match of text.matchAll(pattern)) {
     const index = match.index ?? 0
     if (index > lastIndex) segments.push({ text: text.slice(lastIndex, index), isMention: false })
-    const token = match[0].slice(1) // strip leading @
-    segments.push({ text: match[0], isMention: resolvedTokens.has(token.toLowerCase()) })
+    segments.push({ text: match[0], isMention: true })
     lastIndex = index + match[0].length
   }
   if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex), isMention: false })

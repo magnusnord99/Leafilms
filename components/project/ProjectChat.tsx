@@ -7,6 +7,18 @@ import { extractMentionIds, splitMentionSegments, type MentionableProfile } from
 import { MentionTextInput } from '@/components/shared/MentionTextInput'
 import type { ProjectMessage } from '@/lib/types'
 
+const C = {
+  bg:       '#181920',
+  surface:  '#21212D',
+  surface2: '#2A2A38',
+  border:   '#3C3C52',
+  text:     '#EEEEF2',
+  text2:    '#B4B4CC',
+  text3:    '#8484A0',
+  accent:   '#7C5CFC',
+  accentBg: 'rgba(124,92,252,0.08)',
+}
+
 type Props = {
   projectId: string
 }
@@ -122,7 +134,7 @@ export function ProjectChat({ projectId }: Props) {
 
   return (
     <>
-      {/* Floating toggle button */}
+      {/* Trigger button — fast plassert øverst til høyre, rett under global toppbar */}
       <button
         onClick={() => {
           setOpen((o) => !o)
@@ -131,30 +143,30 @@ export function ProjectChat({ projectId }: Props) {
         title="Prosjektchat"
         style={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 50,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: open ? '#C49434' : '#1A1710',
-          border: '1px solid #C49434',
-          color: open ? '#0C0B09' : '#C49434',
+          top: 58,
+          right: 16,
+          zIndex: 51,
+          width: 40,
+          height: 40,
+          borderRadius: 8,
+          background: open ? C.accent : C.surface,
+          border: `1px solid ${open ? C.accent : C.border}`,
+          color: open ? '#fff' : C.text2,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-          transition: 'background 0.15s, color 0.15s',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
         }}
       >
         {unread > 0 && !open && (
           <span style={{
             position: 'absolute',
-            top: -4,
-            right: -4,
-            background: '#C49434',
-            color: '#0C0B09',
+            top: -5,
+            right: -5,
+            background: C.accent,
+            color: '#fff',
             borderRadius: '50%',
             width: 18,
             height: 18,
@@ -168,164 +180,189 @@ export function ProjectChat({ projectId }: Props) {
             {unread}
           </span>
         )}
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M2 6a2 2 0 012-2h12a2 2 0 012 2v7a2 2 0 01-2 2H7l-4 3V6z" />
         </svg>
       </button>
 
-      {/* Chat panel */}
+      {/* Backdrop */}
       {open && (
         <div
+          onClick={() => setOpen(false)}
           style={{
             position: 'fixed',
-            bottom: 84,
-            right: 16,
-            left: 16,
-            zIndex: 50,
-            maxHeight: 480,
-            display: 'flex',
-            flexDirection: 'column',
-            background: '#0E0D0B',
-            border: '1px solid #2A261F',
-            borderRadius: 8,
-            boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
-            overflow: 'hidden',
+            inset: 0,
+            zIndex: 48,
+            background: 'rgba(0,0,0,0.4)',
           }}
-          className="sm:left-auto sm:w-80"
-        >
-          {/* Header */}
-          <div style={{
-            padding: '10px 14px',
-            borderBottom: '1px solid #2A261F',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <span style={{
-              fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.6rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: '#C49434',
-              fontWeight: 500,
-            }}>
-              Prosjektchat
-            </span>
-            <button
-              onClick={() => setOpen(false)}
-              style={{ color: '#62594E', lineHeight: 0, padding: 2 }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" d="M1 1l10 10M11 1L1 11" />
-              </svg>
-            </button>
-          </div>
+        />
+      )}
 
-          {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {messages.length === 0 && (
-              <p style={{
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.65rem',
-                color: '#3D3829',
-                textAlign: 'center',
-                marginTop: 24,
-                letterSpacing: '0.04em',
+      {/* Chat panel — fullhøyde slide-in fra høyre kant */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 48,
+          right: 0,
+          zIndex: 49,
+          height: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
+          background: C.bg,
+          borderLeft: `1px solid ${C.border}`,
+          boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
+          transform: open ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.22s ease',
+          pointerEvents: open ? 'auto' : 'none',
+        }}
+        className="w-full sm:w-[360px]"
+      >
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px 12px',
+          borderBottom: `1px solid ${C.border}`,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <p style={{
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.72rem',
+            fontWeight: 600,
+            color: C.text2,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}>
+            Prosjektchat
+          </p>
+          <button
+            onClick={() => setOpen(false)}
+            style={{ color: C.text3, lineHeight: 0, padding: 2, background: 'none', border: 'none', cursor: 'pointer' }}
+            aria-label="Lukk"
+          >
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" d="M1 1l10 10M11 1L1 11" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {messages.length === 0 && (
+            <p style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.72rem',
+              color: C.text3,
+              textAlign: 'center',
+              marginTop: 32,
+            }}>
+              Ingen meldinger ennå
+            </p>
+          )}
+          {messages.map((msg) => (
+            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  color: C.text3,
+                }}>
+                  {msg.user_name || 'Ukjent'}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.6rem',
+                  color: C.text3,
+                }}>
+                  {formatDate(msg.created_at)} {formatTime(msg.created_at)}
+                </span>
+              </div>
+              <div style={{
+                maxWidth: '90%',
+                padding: '8px 12px',
+                borderRadius: '12px 12px 12px 4px',
+                background: C.surface,
+                border: `1px solid ${C.border}`,
               }}>
-                Ingen meldinger ennå
-              </p>
-            )}
-            {messages.map((msg) => (
-              <div key={msg.id}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.6rem',
-                    color: '#C49434',
-                    fontWeight: 500,
-                    letterSpacing: '0.06em',
-                  }}>
-                    {msg.user_name || 'Ukjent'}
-                  </span>
-                  <span style={{
-                    fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.55rem',
-                    color: '#3D3829',
-                    letterSpacing: '0.04em',
-                  }}>
-                    {formatDate(msg.created_at)} {formatTime(msg.created_at)}
-                  </span>
-                </div>
                 <p style={{
                   fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.7rem',
-                  color: '#B5AFA5',
+                  fontSize: '0.78rem',
+                  color: C.text,
                   lineHeight: 1.5,
                   margin: 0,
                   wordBreak: 'break-word',
                 }}>
                   {splitMentionSegments(msg.content).map((seg, i) =>
                     seg.isMention
-                      ? <span key={i} style={{ color: '#C49434', fontWeight: 600 }}>{seg.text}</span>
+                      ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
                       : <span key={i}>{seg.text}</span>
                   )}
                 </p>
               </div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
 
-          {/* Input */}
-          <form
-            onSubmit={(e) => { e.preventDefault(); sendMessage() }}
+        {/* Input */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); sendMessage() }}
+          style={{
+            flexShrink: 0,
+            padding: '12px 16px',
+            borderTop: `1px solid ${C.border}`,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+          }}
+        >
+          <MentionTextInput
+            value={input}
+            onChange={setInput}
+            onEnter={sendMessage}
+            profiles={profiles}
+            as="input"
+            placeholder="Skriv en melding..."
+            disabled={sending}
             style={{
-              borderTop: '1px solid #2A261F',
+              flex: 1,
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              color: C.text,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: '9px 12px',
+              outline: 'none',
+              width: '100%',
+            }}
+          />
+          <button
+            type="submit"
+            disabled={sending || !input.trim()}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              flexShrink: 0,
+              background: input.trim() ? C.accent : C.surface2,
+              border: 'none',
+              cursor: input.trim() && !sending ? 'pointer' : 'default',
               display: 'flex',
-              gap: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: !input.trim() || sending ? 0.5 : 1,
+              transition: 'background 0.15s, opacity 0.15s',
             }}
           >
-            <MentionTextInput
-              value={input}
-              onChange={setInput}
-              onEnter={sendMessage}
-              profiles={profiles}
-              as="input"
-              placeholder="Skriv en melding..."
-              disabled={sending}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.7rem',
-                color: '#E8E1D5',
-                letterSpacing: '0.03em',
-                width: '100%',
-              }}
-            />
-            <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              style={{
-                padding: '8px 12px',
-                background: 'transparent',
-                border: 'none',
-                borderLeft: '1px solid #2A261F',
-                color: input.trim() ? '#C49434' : '#2A261F',
-                cursor: input.trim() ? 'pointer' : 'default',
-                lineHeight: 0,
-                transition: 'color 0.15s',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14 8L2 2l3 6-3 6 12-6z" />
-              </svg>
-            </button>
-          </form>
-        </div>
-      )}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M14 8L2 3L5.5 8L2 13L14 8Z" fill="white" />
+            </svg>
+          </button>
+        </form>
+      </div>
     </>
   )
 }

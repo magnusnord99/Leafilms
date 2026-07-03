@@ -81,7 +81,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
     } else if (n.type === 'task_assigned' || n.type === 'project_message' || n.type === 'project_message_mention') {
       router.push(`/admin/projects/${n.project_id}`)
-    } else if (n.type === 'quote_mention' || n.type === 'quote_assigned') {
+    } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message') {
       router.push(`/admin/projects/${n.project_id}/quote`)
     } else if (n.type === 'invoice_assigned') {
       router.push(`/admin/faktura/${n.project_id}`)
@@ -171,7 +171,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                       <circle cx="12" cy="12" r="4" />
                       <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5" />
                     </svg>
-                  ) : n.type === 'project_message' ? (
+                  ) : n.type === 'project_message' || n.type === 'quote_message' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
@@ -197,6 +197,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
                         : n.type === 'selection_submitted' ? 'sendte inn bildevalg'
                         : n.type === 'quote_mention' ? 'tagget deg i tilbud'
+                        : n.type === 'quote_message' ? 'i tilbudschatten'
                         : 'i en oppgave'}
                     </span>
                   </div>

@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
-import { notifyAssignment } from '@/lib/notify-assignment'
 import type { QuoteMessage } from '@/lib/types'
 
 export async function getQuoteMessages(quoteId: string): Promise<QuoteMessage[]> {
@@ -65,20 +64,9 @@ export async function sendQuoteMessage(opts: {
       return { ok: false }
     }
 
-    // Send varsel til alle taggede brukere (feil svelges)
-    const preview = opts.message.slice(0, 120)
-    // fire-and-forget — errors must never affect the ok return
-    Promise.all(
-      opts.mentionedUserIds.map(id =>
-        notifyAssignment({
-          recipientId: id,
-          type: 'quote_mention',
-          projectId: opts.projectId,
-          preview,
-        })
-          .catch(() => {})
-      )
-    )
+    // Varsling håndteres nå av DB-triggeren notify_quote_message
+    // (083_notify_quote_message.sql) — den leser mentions-kolonnen
+    // direkte og varsler både @nevnte brukere og quote_assignee_id.
 
     return { ok: true }
   } catch (err) {

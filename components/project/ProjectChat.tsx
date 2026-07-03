@@ -102,21 +102,24 @@ export function ProjectChat({ projectId }: Props) {
     setSending(true)
     const content = input.trim()
     const mentions = extractMentionIds(content, profiles)
-    setInput('')
-    const res = await fetch(`/api/projects/${projectId}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, mentions }),
-    })
-    if (res.ok) {
-      const { message } = await res.json()
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.id === message.id)
-        if (exists) return prev
-        return [...prev, message]
+    try {
+      const res = await fetch(`/api/projects/${projectId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, mentions }),
       })
+      if (res.ok) {
+        const { message } = await res.json()
+        setInput('')
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === message.id)
+          if (exists) return prev
+          return [...prev, message]
+        })
+      }
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   const formatTime = (ts: string) => {

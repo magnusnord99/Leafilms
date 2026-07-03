@@ -83,13 +83,16 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
   async function handleSendMessage() {
     if (!newMessage.trim() || sendingMsg) return
     setSendingMsg(true)
-    const mentions = extractMentionIds(newMessage.trim(), profiles)
-    const result = await sendTaskMessage(taskId, newMessage.trim(), mentions)
-    if (result.ok) {
-      setNewMessage('')
-      await loadMessages()
+    try {
+      const mentions = extractMentionIds(newMessage.trim(), profiles)
+      const result = await sendTaskMessage(taskId, newMessage.trim(), mentions)
+      if (result.ok) {
+        setNewMessage('')
+        await loadMessages()
+      }
+    } finally {
+      setSendingMsg(false)
     }
-    setSendingMsg(false)
   }
 
   return (

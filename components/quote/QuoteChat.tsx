@@ -4,34 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import { getQuoteMessages, sendQuoteMessage } from '@/lib/actions/quotes'
 import type { QuoteMessage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
-
-type Profile = { id: string; name: string | null }
+import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
+import { MentionTextInput } from '@/components/shared/MentionTextInput'
+import { supabase } from '@/lib/supabase-client'
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString('nb-NO', {
     day: '2-digit', month: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
-}
-
-function parseMessage(msg: string): React.ReactNode[] {
-  const parts = msg.split(/(@\S+)/g)
-  return parts.map((part, i) =>
-    part.startsWith('@')
-      ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{part}</span>
-      : <span key={i}>{part}</span>
-  )
-}
-
-function resolveMentions(text: string, profiles: Profile[]): string[] {
-  const tokens = text.match(/@(\S+)/g) ?? []
-  const ids: string[] = []
-  for (const token of tokens) {
-    const name = token.slice(1) // strip @
-    const profile = profiles.find(p => (p.name ?? '') === name)
-    if (profile && !ids.includes(profile.id)) ids.push(profile.id)
-  }
-  return ids
 }
 
 export default function QuoteChat({
@@ -41,46 +22,44 @@ export default function QuoteChat({
 }: {
   quoteId: string
   projectId: string
-  profiles: Profile[]
+  profiles: MentionableProfile[]
 }) {
   const [messages, setMessages] = useState<QuoteMessage[]>([])
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
-  const [mentionedIds, setMentionedIds] = useState<string[]>([])
-  const [mentionSearch, setMentionSearch] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  async function loadMessages() {
+    const msgs = await getQuoteMessages(quoteId)
+    setMessages(msgs)
+  }
+
   useEffect(() => {
-    getQuoteMessages(quoteId).then(setMessages)
+    loadMessages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const val = e.target.value
-    setText(val)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`quote-messages-${quoteId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'quote_messages', filter: `quote_id=eq.${quoteId}` },
+        () => {
+          loadMessages()
+        }
+      )
+      .subscribe()
 
-    // Detect @mention trigger
-    const cursor = e.target.selectionStart
-    const before = val.slice(0, cursor)
-    const match = before.match(/@(\w*)$/)
-    setMentionSearch(match ? match[1] : null)
-  }
-
-  function insertMention(profile: Profile) {
-    const name = profile.name ?? profile.id
-    const cursor = textareaRef.current?.selectionStart ?? text.length
-    const before = text.slice(0, cursor)
-    const after = text.slice(cursor)
-    const replaced = before.replace(/@(\w*)$/, `@${name} `)
-    setText(replaced + after)
-    setMentionedIds(prev => prev.includes(profile.id) ? prev : [...prev, profile.id])
-    setMentionSearch(null)
-    textareaRef.current?.focus()
-  }
+    return () => {
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteId])
 
   async function handleSend() {
     if (!text.trim() || sending) return
@@ -90,31 +69,16 @@ export default function QuoteChat({
         quoteId,
         projectId,
         message: text.trim(),
-        mentionedUserIds: resolveMentions(text.trim(), profiles),
+        mentionedUserIds: extractMentionIds(text.trim(), profiles),
       })
       if (result.ok) {
         setText('')
-        setMentionedIds([])
-        const fresh = await getQuoteMessages(quoteId)
-        setMessages(fresh)
+        await loadMessages()
       }
     } finally {
       setSending(false)
     }
   }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  const mentionSuggestions = mentionSearch !== null
-    ? profiles.filter(p =>
-        (p.name ?? '').toLowerCase().includes(mentionSearch.toLowerCase())
-      ).slice(0, 5)
-    : []
 
   return (
     <div style={{ marginTop: 24 }}>
@@ -149,7 +113,11 @@ export default function QuoteChat({
               </span>
             </div>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, margin: 0, lineHeight: 1.5 }}>
-              {parseMessage(msg.message)}
+              {splitMentionSegments(msg.message).map((seg, i) =>
+                seg.isMention
+                  ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
+                  : <span key={i}>{seg.text}</span>
+              )}
             </p>
           </div>
         ))}
@@ -157,38 +125,14 @@ export default function QuoteChat({
       </div>
 
       {/* Input */}
-      <div style={{ position: 'relative', marginTop: 8 }}>
-        {mentionSuggestions.length > 0 && (
-          <div style={{
-            position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
-            background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
-            zIndex: 20, minWidth: 180, overflow: 'hidden',
-          }}>
-            {mentionSuggestions.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onMouseDown={e => { e.preventDefault(); insertMention(p) }}
-                style={{
-                  width: '100%', display: 'block', textAlign: 'left',
-                  padding: '8px 12px', background: 'transparent', border: 'none',
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
-                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
-              >
-                {p.name ?? p.id}
-              </button>
-            ))}
-          </div>
-        )}
+      <div style={{ marginTop: 8 }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <textarea
-            ref={textareaRef}
+          <MentionTextInput
             value={text}
-            onChange={handleTextChange}
-            onKeyDown={handleKeyDown}
+            onChange={setText}
+            onEnter={handleSend}
+            profiles={profiles}
+            as="textarea"
             rows={2}
             placeholder="Skriv en melding... Bruk @navn for å tagge"
             style={{

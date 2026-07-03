@@ -28,7 +28,7 @@ export default function ProjectQuotePage({ params }: Props) {
   const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
-  const [profiles, setProfiles] = useState<{ id: string; name: string | null }[]>([])
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
   const savingRef = useRef(false)
@@ -50,7 +50,7 @@ export default function ProjectQuotePage({ params }: Props) {
           .eq('type', 'team').maybeSingle(),
         supabase.from('price_catalog').select('*').order('category').order('name'),
         supabase.from('discount_factors').select('*').order('shoot_day'),
-        supabase.from('profiles').select('id, name').returns<{ id: string; name: string | null }[]>(),
+        supabase.from('profiles').select('id, name, email').returns<{ id: string; name: string | null; email: string }[]>(),
       ])
 
       const proj = projectRes.data as Project | null
@@ -63,7 +63,7 @@ export default function ProjectQuotePage({ params }: Props) {
       setCustomers(custs)
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
       setDiscountFactors((discountFactorsRes.data || []) as DiscountFactor[])
-      setProfiles((profilesRes.data ?? []) as { id: string; name: string | null }[])
+      setProfiles((profilesRes.data ?? []) as { id: string; name: string | null; email: string }[])
 
       if (existingQuote?.quote_data && existingQuote.quote_data.crew !== undefined) {
         // Existing quote — backfill deliveryDescription from project if missing
@@ -113,7 +113,7 @@ export default function ProjectQuotePage({ params }: Props) {
           }
         }
 
-        const profiles = (profilesRes.data ?? []) as { id: string; name: string | null }[]
+        const profiles = (profilesRes.data ?? []) as { id: string; name: string | null; email: string }[]
         const projAny = proj as typeof proj & {
           shoot_end?: string | null
           project_lead_id?: string | null

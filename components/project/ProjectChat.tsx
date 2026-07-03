@@ -16,7 +16,6 @@ const C = {
   text2:    '#B4B4CC',
   text3:    '#8484A0',
   accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
 }
 
 type Props = {
@@ -222,9 +221,6 @@ export function ProjectChat({ projectId }: Props) {
           padding: '16px 20px 12px',
           borderBottom: `1px solid ${C.border}`,
           flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
         }}>
           <p style={{
             fontFamily: 'var(--font-dm-sans)',
@@ -236,15 +232,6 @@ export function ProjectChat({ projectId }: Props) {
           }}>
             Prosjektchat
           </p>
-          <button
-            onClick={() => setOpen(false)}
-            style={{ color: C.text3, lineHeight: 0, padding: 2, background: 'none', border: 'none', cursor: 'pointer' }}
-            aria-label="Lukk"
-          >
-            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" d="M1 1l10 10M11 1L1 11" />
-            </svg>
-          </button>
         </div>
 
         {/* Messages */}

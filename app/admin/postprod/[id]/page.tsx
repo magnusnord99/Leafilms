@@ -310,7 +310,7 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      setSelectedIdx(getInitialIdx(seeded, deepLinkTaskId))
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed'))
       setLoading(false)
       return
     }
@@ -319,7 +319,7 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    setSelectedIdx(getInitialIdx(projectTasks, deepLinkTaskId))
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed'))
     if (currentProj) {
       setDeliveryVideo(currentProj.delivery_video ?? '')
       setDeliveryPhoto(currentProj.delivery_photo ?? '')
@@ -373,6 +373,19 @@ export default function PostProdDetailPage() {
     }
     const idx = taskList.findIndex(t => t.status !== 'done')
     return idx === -1 ? 0 : idx
+  }
+
+  // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
+  // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
+  // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean): number {
+    const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
+    if (isMixedProject && deepTask?.sub_type) {
+      setActiveTab(deepTask.sub_type)
+      return getInitialIdx(list.filter(t => t.sub_type === deepTask.sub_type), deepLinkTaskId)
+    }
+    const filtered = isMixedProject ? list.filter(t => t.sub_type === activeTab) : list
+    return getInitialIdx(filtered, deepLinkTaskId)
   }
 
   useEffect(() => { fetchAll() }, [projectId])

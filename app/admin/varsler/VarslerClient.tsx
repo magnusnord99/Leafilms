@@ -81,8 +81,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
     } else if (n.type === 'task_assigned' || n.type === 'project_message' || n.type === 'project_message_mention') {
       router.push(`/admin/projects/${n.project_id}`)
-    } else if (n.type === 'quote_mention') {
+    } else if (n.type === 'quote_mention' || n.type === 'quote_assigned') {
       router.push(`/admin/projects/${n.project_id}/quote`)
+    } else if (n.type === 'invoice_assigned') {
+      router.push(`/admin/faktura/${n.project_id}`)
     } else if (n.type === 'task_message' || n.type === 'task_message_mention') {
       const stage = n.tasks?.pipeline_stage
       if (!n.task_id) {

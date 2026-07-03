@@ -58,6 +58,7 @@ export function TaskChatToggle({ taskId, taskTitle, currentUserId, profiles, mes
         <div
           ref={panelRef}
           style={{
+            display: 'flex', flexDirection: 'column',
             flexBasis: '100%', width: '100%', height: 360, marginTop: 8,
             border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden',
           }}

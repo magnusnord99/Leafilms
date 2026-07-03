@@ -113,7 +113,7 @@ export default function QuoteChat({
               </span>
             </div>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, margin: 0, lineHeight: 1.5 }}>
-              {splitMentionSegments(msg.message).map((seg, i) =>
+              {splitMentionSegments(msg.message, msg.mentions, profiles).map((seg, i) =>
                 seg.isMention
                   ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
                   : <span key={i}>{seg.text}</span>

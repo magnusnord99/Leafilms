@@ -284,7 +284,7 @@ export function ProjectChat({ projectId }: Props) {
                   margin: 0,
                   wordBreak: 'break-word',
                 }}>
-                  {splitMentionSegments(msg.content).map((seg, i) =>
+                  {splitMentionSegments(msg.content, msg.mentions, profiles).map((seg, i) =>
                     seg.isMention
                       ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
                       : <span key={i}>{seg.text}</span>

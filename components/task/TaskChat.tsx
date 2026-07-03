@@ -142,7 +142,7 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
                   border: `1px solid ${isMe ? 'rgba(124,92,252,0.2)' : C.border}`,
                 }}>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {splitMentionSegments(msg.message).map((seg, i) =>
+                    {splitMentionSegments(msg.message, msg.mentions, profiles).map((seg, i) =>
                       seg.isMention
                         ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
                         : <span key={i}>{seg.text}</span>

@@ -29,13 +29,23 @@ export const MENTION_DISPLAY_PATTERN = /@[\wæøåÆØÅ.-]+/g
 
 export type MentionSegment = { text: string; isMention: boolean }
 
-export function splitMentionSegments(text: string): MentionSegment[] {
+export function splitMentionSegments(
+  text: string,
+  resolvedMentionIds: string[],
+  profiles: MentionableProfile[]
+): MentionSegment[] {
+  const resolvedTokens = new Set(
+    profiles
+      .filter(p => resolvedMentionIds.includes(p.id))
+      .map(p => mentionToken(p).toLowerCase())
+  )
   const segments: MentionSegment[] = []
   let lastIndex = 0
   for (const match of text.matchAll(MENTION_DISPLAY_PATTERN)) {
     const index = match.index ?? 0
     if (index > lastIndex) segments.push({ text: text.slice(lastIndex, index), isMention: false })
-    segments.push({ text: match[0], isMention: true })
+    const token = match[0].slice(1) // strip leading @
+    segments.push({ text: match[0], isMention: resolvedTokens.has(token.toLowerCase()) })
     lastIndex = index + match[0].length
   }
   if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex), isMention: false })

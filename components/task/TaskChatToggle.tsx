@@ -24,11 +24,14 @@ export function TaskChatToggle({ taskId, taskTitle, currentUserId, profiles, mes
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (forceOpen) {
-      setExpanded(true)
+    if (forceOpen) setExpanded(true)
+  }, [forceOpen])
+
+  useEffect(() => {
+    if (forceOpen && expanded) {
       panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
-  }, [forceOpen])
+  }, [expanded, forceOpen])
 
   return (
     <>

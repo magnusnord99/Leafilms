@@ -562,15 +562,15 @@ function TaskChecklist({
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: isDone ? C.success : task.status === 'in_progress' ? '#F0A500' : C.text3 }}>
                 {isDone ? 'Ferdig' : task.status === 'in_progress' ? 'Pågår' : 'Todo'}
               </span>
-              <TaskChatToggle
-                taskId={task.id}
-                taskTitle={task.title}
-                currentUserId={currentUserId}
-                profiles={profiles}
-                messageCount={messageCounts[task.id] ?? 0}
-                forceOpen={deepLinkTaskId === task.id}
-              />
             </div>
+            <TaskChatToggle
+              taskId={task.id}
+              taskTitle={task.title}
+              currentUserId={currentUserId}
+              profiles={profiles}
+              messageCount={messageCounts[task.id] ?? 0}
+              forceOpen={deepLinkTaskId === task.id}
+            />
           </div>
         )
       })}
@@ -643,6 +643,7 @@ export default function ProjectHubPage() {
   const leadDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
+  const [deepLinkNoticeDismissed, setDeepLinkNoticeDismissed] = useState(false)
   const deepLinkTaskId = searchParams?.get('task') ?? null
 
   async function fetchHub() {
@@ -1216,6 +1217,20 @@ export default function ProjectHubPage() {
               </div>
             ) : (
               <>
+                {deepLinkTaskId && !deepLinkNoticeDismissed && !tasks.some(t => t.id === deepLinkTaskId) && (
+                  <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 6, background: 'rgba(124,92,252,0.08)', border: '1px solid rgba(124,92,252,0.3)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                    <p style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.accent }}>
+                      Oppgaven fra varselet tilhører et tidligere steg og vises ikke lenger her.
+                    </p>
+                    <button
+                      onClick={() => setDeepLinkNoticeDismissed(true)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.accent, padding: 2, lineHeight: 0, flexShrink: 0 }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 2l8 8M10 2L2 10" /></svg>
+                    </button>
+                  </div>
+                )}
                 <h3 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
                   Oppgaver — {currentStageLabel}
                 </h3>

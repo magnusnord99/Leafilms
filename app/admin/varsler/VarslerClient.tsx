@@ -44,7 +44,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
           async (payload) => {
             const { data } = await supabase
               .from('notifications')
-              .select('*, projects(title), tasks(title), leads(name, company)')
+              .select('*, projects(title), tasks(title, pipeline_stage), leads(name, company)')
               .eq('id', (payload.new as { id: string }).id)
               .single()
             if (data) {
@@ -83,6 +83,17 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/projects/${n.project_id}`)
     } else if (n.type === 'quote_mention') {
       router.push(`/admin/projects/${n.project_id}/quote`)
+    } else if (n.type === 'task_message' || n.type === 'task_message_mention') {
+      const stage = n.tasks?.pipeline_stage
+      if (!n.task_id) {
+        router.push(`/admin/postprod/${n.project_id}`)
+      } else if (stage === 'post_prod') {
+        router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}`)
+      } else if (stage === 'pre_prod') {
+        router.push(`/admin/preprod/${n.project_id}?task=${n.task_id}`)
+      } else {
+        router.push(`/admin/projects/${n.project_id}?task=${n.task_id}`)
+      }
     } else {
       router.push(`/admin/postprod/${n.project_id}`)
     }

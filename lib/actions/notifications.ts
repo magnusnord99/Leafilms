@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import type { PipelineStage } from '@/lib/types'
 
 export type Notification = {
   id: string
@@ -14,7 +15,7 @@ export type Notification = {
   read: boolean
   created_at: string
   projects: { title: string } | null
-  tasks: { title: string } | null
+  tasks: { title: string; pipeline_stage: PipelineStage | null } | null
   leads: { name: string; company: string | null } | null
 }
 
@@ -26,7 +27,7 @@ export async function getNotifications(): Promise<Notification[]> {
 
     const { data, error } = await supabase
       .from('notifications')
-      .select('*, projects(title), tasks(title), leads(name, company)')
+      .select('*, projects(title), tasks(title, pipeline_stage), leads(name, company)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50)

@@ -320,8 +320,25 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <Btn href={`/admin/projects/${project.id}`}>Oversikt</Btn>
                     <Btn href={`/admin/projects/${project.id}/edit`} variant="secondary">Pitch</Btn>
-                    {shareLinks[project.id] && (
+                    {shareLinks[project.id] ? (
                       <Btn variant="ghost" onClick={() => window.open(shareLinks[project.id], '_blank')}>↗</Btn>
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          visibility: 'hidden',
+                        }}
+                      >
+                        ↗
+                      </span>
                     )}
                   </div>
                 </div>

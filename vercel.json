@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/market-analysis",
       "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/advance-produksjon",
+      "schedule": "0 4 * * *"
     }
   ]
 }

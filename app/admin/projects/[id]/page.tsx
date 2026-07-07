@@ -657,9 +657,8 @@ export default function ProjectHubPage() {
     else {
       setHubData(data)
       setDeliveryValue(data.project.delivery_description ?? '')
-      const projDates = data.project as unknown as { shoot_start?: string | null; shoot_end?: string | null }
-      setShootStart(projDates.shoot_start ?? '')
-      setShootEnd(projDates.shoot_end ?? '')
+      setShootStart(data.project.shoot_start ?? '')
+      setShootEnd(data.project.shoot_end ?? '')
       setNotesValue(data.project.meeting_notes ?? '')
       setSummary(data.project.meeting_summary ?? null)
       setProjectLead_(data.project.project_lead ?? null)

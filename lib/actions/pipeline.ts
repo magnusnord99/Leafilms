@@ -54,10 +54,11 @@ export async function getProjectsForPipeline(): Promise<ProjectWithPipeline[]> {
  */
 export async function updatePipelineStage(
   projectId: string,
-  stage: PipelineStage
+  stage: PipelineStage,
+  client?: SupabaseServerClient
 ): Promise<void> {
   try {
-    const supabase = await createClient()
+    const supabase = client ?? await createClient()
 
     const { error } = await supabase
       .from('projects')
@@ -69,7 +70,7 @@ export async function updatePipelineStage(
       return
     }
 
-    await seedTasksFromTemplates(projectId, stage)
+    await seedTasksFromTemplates(projectId, stage, supabase)
 
     revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
@@ -163,10 +164,11 @@ export async function getProjectStageTasks(projectId: string): Promise<{
  */
 export async function seedTasksFromTemplates(
   projectId: string,
-  stage: PipelineStage
+  stage: PipelineStage,
+  client?: SupabaseServerClient
 ): Promise<void> {
   try {
-    const supabase = await createClient()
+    const supabase = client ?? await createClient()
 
     // Hent eksisterende oppgavetitler for dette steget for å unngå duplikater
     const { data: existingTasks, error: countError } = await supabase
@@ -698,11 +700,12 @@ export async function getProjectHub(projectId: string): Promise<{
       ? await getTasksForProject(projectId, project.pipeline_stage)
       : await getTasksForProject(projectId)
 
-    // Hent siste quote for prosjektet
+    // Hent gjeldende quote-versjon for prosjektet
     const { data: quoteRow, error: quoteError } = await supabase
       .from('quotes')
       .select('*')
       .eq('project_id', projectId)
+      .eq('is_current', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()

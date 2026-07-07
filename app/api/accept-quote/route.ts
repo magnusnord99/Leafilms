@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
 
     const projectTitle = project.title || 'Ukjent'
 
-    // 1. Opprett quote i databasen
+    // 1. Opprett quote i databasen (blir gjeldende versjon, andre nedgraderes)
+    await supabase.from('quotes').update({ is_current: false }).eq('project_id', projectId)
     const { data: quote, error: quoteError } = await supabase
       .from('quotes')
       .insert({
@@ -59,7 +60,8 @@ export async function POST(req: NextRequest) {
         status: 'accepted',
         accepted_at: new Date().toISOString(),
         accepted_by: acceptedBy || null,
-        quote_data: quoteData
+        quote_data: quoteData,
+        is_current: true,
       })
       .select()
       .single()

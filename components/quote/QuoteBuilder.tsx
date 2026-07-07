@@ -387,10 +387,10 @@ function CrewSection({
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" min={0.5} step={0.5} value={m.days || ''} onChange={e => update(m.id, 'days', Number(e.target.value))} /></td>
                   <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
                   <td style={{ padding: 4 }}>
-                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                      className="group-hover:opacity-100"
+                      className="opacity-0 group-hover:opacity-100"
                       title="Fjern">×</button>
                   </td>
                 </tr>
@@ -451,10 +451,10 @@ function ItemSection({
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={item.unitPrice || ''} onChange={e => update(item.id, 'unitPrice', Number(e.target.value))} placeholder="0" /></td>
                   <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(item.quantity * item.unitPrice)}</td>
                   <td style={{ padding: 4 }}>
-                    <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                    <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                      className="group-hover:opacity-100"
+                      className="opacity-0 group-hover:opacity-100"
                       title="Fjern">×</button>
                   </td>
                 </tr>
@@ -780,10 +780,10 @@ function ShootCrewSection({
                   </td>
                   <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
                   <td style={{ padding: 4 }}>
-                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, opacity: 0, transition: 'opacity 0.1s, color 0.1s' }}
+                    <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                      className="group-hover:opacity-100"
+                      className="opacity-0 group-hover:opacity-100"
                       title="Fjern">×</button>
                   </td>
                 </tr>
@@ -830,7 +830,10 @@ export function QuoteBuilder({
     discountFactor: initialData.discountFactor ?? 0,
     companyEmail: initialData.companyEmail ?? 'eivind@leafilms.no',
   })
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
+    if (!initialData.customerNumber) return ''
+    return customers.find(c => String(c.customer_number) === initialData.customerNumber)?.id ?? ''
+  })
   const [headerOpen, setHeaderOpen] = useState(true)
   const [termsOpen, setTermsOpen] = useState(false)
 

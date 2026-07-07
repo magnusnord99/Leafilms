@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
-import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts } from '@/lib/actions/pipeline'
+import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
@@ -969,6 +969,7 @@ function InvoiceAssigneeCard({
 export default function PreprodDetailPage() {
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const deepLinkTaskId = searchParams?.get('task') ?? null
 
   const [project, setProject] = useState<PreprodDetail['project'] | null>(null)
@@ -981,6 +982,7 @@ export default function PreprodDetailPage() {
   const leadDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
+  const [advancing, setAdvancing] = useState(false)
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -1038,6 +1040,12 @@ export default function PreprodDetailPage() {
     ))
   }
 
+  async function handleAdvanceToProduction() {
+    setAdvancing(true)
+    await updatePipelineStage(id, 'produksjon')
+    router.push(`/admin/projects/${id}`)
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -1050,6 +1058,21 @@ export default function PreprodDetailPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>Fant ikke prosjektet.</p>
+      </div>
+    )
+  }
+
+  if (project.pipeline_stage !== 'pre_prod') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet er ikke lenger i pre-produksjon
+          </p>
+          <button onClick={() => router.push('/admin/preprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+            ← Tilbake
+          </button>
+        </div>
       </div>
     )
   }
@@ -1081,6 +1104,18 @@ export default function PreprodDetailPage() {
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4A9EFF', background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.25)', padding: '3px 10px', borderRadius: 5 }}>
               Pre-produksjon
             </span>
+            <button
+              onClick={handleAdvanceToProduction}
+              disabled={advancing}
+              style={{
+                marginLeft: 'auto', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+                padding: '7px 16px', borderRadius: 7, cursor: advancing ? 'default' : 'pointer',
+                background: C.accent, color: '#fff', border: 'none',
+                opacity: advancing ? 0.6 : 1, transition: 'opacity 0.15s',
+              }}
+            >
+              {advancing ? 'Sender...' : '→ Send til produksjon'}
+            </button>
           </div>
           {/* Prosjektleder */}
           <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>

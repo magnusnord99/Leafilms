@@ -147,7 +147,7 @@ export function ProjectChat({ projectId }: Props) {
           position: 'fixed',
           top: 58,
           right: 16,
-          zIndex: 51,
+          zIndex: 96,
           width: 40,
           height: 40,
           borderRadius: 8,
@@ -194,7 +194,7 @@ export function ProjectChat({ projectId }: Props) {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 48,
+            zIndex: 94,
             background: 'rgba(0,0,0,0.4)',
           }}
         />
@@ -206,7 +206,7 @@ export function ProjectChat({ projectId }: Props) {
           position: 'fixed',
           top: 48,
           right: 0,
-          zIndex: 49,
+          zIndex: 95,
           height: 'calc(100vh - 48px)',
           display: 'flex',
           flexDirection: 'column',

@@ -46,6 +46,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Finans',
     items: [
+      { href: '/admin/prices',          label: 'Priskatalog' },
       { href: '/admin/okonomi',         label: 'Økonomi' },
       { href: '/admin/market-analysis', label: 'Markedsanalyse' },
     ],

@@ -55,6 +55,8 @@ export type Project = {
   delivery_video?: string | null
   delivery_photo?: string | null
   post_prod_days?: number | null
+  shoot_start?: string | null
+  shoot_end?: string | null
   meeting_notes?: string | null
   meeting_summary?: Record<string, unknown> | null
   pipeline_data?: PipelineData | null
@@ -75,6 +77,8 @@ export type Quote = {
   accepted_by: string | null
   pdf_path: string | null
   quote_data: Record<string, unknown> | null
+  label: string | null
+  is_current: boolean
   created_at: string
   updated_at: string
 }

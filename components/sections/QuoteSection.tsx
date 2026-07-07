@@ -80,6 +80,7 @@ export function QuoteSection({
       .from('quotes')
       .select('id, quote_data')
       .eq('project_id', project.id)
+      .eq('is_current', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()

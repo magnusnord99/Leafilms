@@ -75,12 +75,14 @@ Finn 5 konkrete norske selskaper og returner dem i JSON-formatet spesifisert i s
     tools: [{ type: 'web_search_20260209', name: 'web_search' }],
   })
 
-  const textBlock = response.content.find((b: Anthropic.ContentBlock) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
+  const textBlocks = response.content.filter(
+    (b: Anthropic.ContentBlock): b is Anthropic.TextBlock => b.type === 'text'
+  )
+  if (textBlocks.length === 0) {
     throw new Error('Ingen tekstrespons fra Claude')
   }
 
-  const raw = textBlock.text.trim()
+  const raw = textBlocks.map((b) => b.text).join('\n').trim()
 
   let parsed: { customers: MarketLead[]; generated_at: string }
   try {

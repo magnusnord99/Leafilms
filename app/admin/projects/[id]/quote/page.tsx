@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor } from '@/lib/types'
+import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
@@ -28,6 +28,7 @@ export default function ProjectQuotePage({ params }: Props) {
   const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
+  const [quotes, setQuotes] = useState<Quote[]>([])
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
@@ -45,7 +46,7 @@ export default function ProjectQuotePage({ params }: Props) {
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
         supabase.from('quotes').select('*').eq('project_id', projectId)
-          .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+          .order('created_at', { ascending: true }),
         supabase.from('sections').select('id, type').eq('project_id', projectId)
           .eq('type', 'team').maybeSingle(),
         supabase.from('price_catalog').select('*').order('category').order('name'),
@@ -56,9 +57,11 @@ export default function ProjectQuotePage({ params }: Props) {
       const proj = projectRes.data as Project | null
       const members = (teamRes.data || []) as TeamMember[]
       const custs = (customersRes.data || []) as Customer[]
-      const existingQuote = quoteRes.data
+      const allQuotes = (quoteRes.data || []) as Quote[]
+      const existingQuote = allQuotes.find(q => q.is_current) ?? allQuotes[allQuotes.length - 1] ?? null
 
       setProject(proj)
+      setQuotes(allQuotes)
       setTeamMembers(members)
       setCustomers(custs)
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
@@ -172,9 +175,14 @@ export default function ProjectQuotePage({ params }: Props) {
 
       if (existingQuoteId) {
         await supabase.from('quotes').update({ ...record, quote_data: data }).eq('id', existingQuoteId)
+        setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data } : q))
       } else {
-        const { data: newQuote } = await supabase.from('quotes').insert(record).select('id').single()
-        if (newQuote) setExistingQuoteId(newQuote.id)
+        // Første tilbud for prosjektet — blir automatisk gjeldende versjon
+        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, is_current: true }).select('*').single()
+        if (newQuote) {
+          setExistingQuoteId(newQuote.id)
+          setQuotes(prev => [...prev, newQuote as Quote])
+        }
       }
 
       // Synkroniser leveransebeskrivelse til prosjektet
@@ -195,6 +203,81 @@ export default function ProjectQuotePage({ params }: Props) {
       savingRef.current = false
       setSaving(false)
     }
+  }
+
+  function handleSwitchVersion(quoteId: string) {
+    if (quoteId === existingQuoteId) return
+    const target = quotes.find(q => q.id === quoteId)
+    if (!target?.quote_data) return
+    setExistingQuoteId(quoteId)
+    setBuilderData(target.quote_data as unknown as QuoteBuilderData)
+    setSaveMessage(null)
+  }
+
+  async function handleDuplicateVersion() {
+    if (!builderData) return
+    setSaving(true)
+    try {
+      const newVersion = `V${quotes.length + 1}`
+      const newData: QuoteBuilderData = { ...builderData, version: newVersion }
+
+      await supabase.from('quotes').update({ is_current: false }).eq('project_id', projectId)
+      const { data: newQuote, error } = await supabase.from('quotes').insert({
+        project_id: projectId,
+        sheet_url: '',
+        version: newVersion,
+        status: 'draft' as const,
+        quote_data: newData,
+        is_current: true,
+      }).select('*').single()
+
+      if (error || !newQuote) {
+        console.error('Duplicate version error:', error)
+        setSaveMessage('Feil ved oppretting av ny versjon')
+        return
+      }
+
+      setQuotes(prev => [...prev.map(q => ({ ...q, is_current: false })), newQuote as Quote])
+      setExistingQuoteId(newQuote.id)
+      setBuilderData(newData)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSetCurrentVersion(quoteId: string) {
+    await supabase.from('quotes').update({ is_current: false }).eq('project_id', projectId)
+    await supabase.from('quotes').update({ is_current: true }).eq('id', quoteId)
+    setQuotes(prev => prev.map(q => ({ ...q, is_current: q.id === quoteId })))
+  }
+
+  async function handleLabelChange(quoteId: string, label: string) {
+    const trimmed = label.trim() || null
+    setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, label: trimmed } : q))
+    await supabase.from('quotes').update({ label: trimmed }).eq('id', quoteId)
+  }
+
+  async function handleDeleteVersion(quoteId: string) {
+    if (quotes.length <= 1) return
+    const target = quotes.find(q => q.id === quoteId)
+    if (!target || target.status !== 'draft') return
+    if (!confirm(`Slette ${target.label ? `${target.version} — ${target.label}` : target.version}? Dette kan ikke angres.`)) return
+
+    await supabase.from('quotes').delete().eq('id', quoteId)
+    const remaining = quotes.filter(q => q.id !== quoteId)
+
+    if (existingQuoteId === quoteId) {
+      const fallback = remaining[remaining.length - 1]
+      if (fallback && target.is_current) {
+        await supabase.from('quotes').update({ is_current: true }).eq('id', fallback.id)
+        fallback.is_current = true
+      }
+      if (fallback) {
+        setExistingQuoteId(fallback.id)
+        setBuilderData(fallback.quote_data as unknown as QuoteBuilderData)
+      }
+    }
+    setQuotes(remaining)
   }
 
   async function handleGeneratePDF(data: QuoteBuilderData) {
@@ -300,9 +383,84 @@ export default function ProjectQuotePage({ params }: Props) {
           )}
         </div>
 
+        {/* Versjoner */}
+        {quotes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            {quotes.map(q => {
+              const active = q.id === existingQuoteId
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => handleSwitchVersion(q.id)}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                    padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
+                    background: active ? C.accent : C.surface,
+                    color: active ? C.bg : C.text2,
+                    border: `1px solid ${active ? C.accent : C.border}`,
+                  }}
+                >
+                  {q.version}{q.label ? ` — ${q.label}` : ''}{q.is_current ? ' · gjeldende' : ''}
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              onClick={handleDuplicateVersion}
+              disabled={saving}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
+                background: 'transparent', color: C.accent, border: `1px dashed ${C.accent}`,
+              }}
+            >
+              + Nytt tilbud
+            </button>
+
+            {existingQuoteId && (() => {
+              const active = quotes.find(q => q.id === existingQuoteId)
+              if (!active) return null
+              return (
+                <div className="flex items-center gap-2 ml-2">
+                  <input
+                    defaultValue={active.label ?? ''}
+                    placeholder="Notat (f.eks. 2 filmer)"
+                    onBlur={e => handleLabelChange(active.id, e.target.value)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                      padding: '5px 8px', borderRadius: 3, background: C.surface,
+                      border: `1px solid ${C.border}`, color: C.text, width: 160,
+                    }}
+                  />
+                  {!active.is_current && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetCurrentVersion(active.id)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Sett som gjeldende
+                    </button>
+                  )}
+                  {quotes.length > 1 && active.status === 'draft' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteVersion(active.id)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#B84040', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                    >
+                      Slett
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         {/* Builder */}
         {builderData && (
           <QuoteBuilder
+            key={existingQuoteId ?? 'new'}
             initialData={builderData}
             teamMembers={teamMembers}
             customers={customers}

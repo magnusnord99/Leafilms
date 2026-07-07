@@ -108,12 +108,15 @@ export async function getProjectContractData(projectId: string): Promise<{
     throw new Error('Fant ikke prosjekt')
   }
 
-  // Hent quote
+  // Hent gjeldende quote-versjon
   const { data: quote } = await supabase
     .from('quotes')
     .select('*')
     .eq('project_id', projectId)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   // Hent kontrakt
   const { data: contract } = await supabase
@@ -214,12 +217,15 @@ export async function getProjectContractData(projectId: string): Promise<{
 export async function publishContract(projectId: string, contractText: string): Promise<void> {
   const supabase = await createClient()
 
-  // Hent quote_id
+  // Hent gjeldende quote_id
   const { data: quote } = await supabase
     .from('quotes')
     .select('id')
     .eq('project_id', projectId)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   const quoteId = quote?.id ?? null
   const publishedAt = new Date().toISOString()

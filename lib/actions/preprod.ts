@@ -113,11 +113,12 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
       .select('id, name, email')
       .order('name', { ascending: true })
 
-    // Hent utstyr fra siste quote
+    // Hent utstyr fra gjeldende quote-versjon
     const { data: quotes } = await supabase
       .from('quotes')
       .select('quote_data')
       .eq('project_id', projectId)
+      .eq('is_current', true)
       .not('quote_data', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1)

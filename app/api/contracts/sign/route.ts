@@ -161,11 +161,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sett quote til accepted
+    // Sett gjeldende quote-versjon til accepted
     const { error: updateQuoteError } = await supabase
       .from('quotes')
       .update({ status: 'accepted', updated_at: signedAt })
       .eq('project_id', projectId)
+      .eq('is_current', true)
 
     if (updateQuoteError) {
       console.error('sign contract quote update error:', updateQuoteError)

@@ -157,13 +157,19 @@ export async function updateReviewSettings(projectId: string, settings: {
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('projects')
       .update({ ...settings, updated_at: new Date().toISOString() })
       .eq('id', projectId)
+      .select('id')
 
     if (error) {
       console.error('updateReviewSettings error:', error)
+      return { ok: false, error: 'Kunne ikke oppdatere review-innstillinger' }
+    }
+
+    if (!data || data.length === 0) {
+      console.error('updateReviewSettings: no rows updated for projectId:', projectId)
       return { ok: false, error: 'Kunne ikke oppdatere review-innstillinger' }
     }
 

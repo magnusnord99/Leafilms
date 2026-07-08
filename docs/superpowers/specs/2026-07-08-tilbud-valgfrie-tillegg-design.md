@@ -21,7 +21,7 @@ Samme enkle form som eksisterende linjeposter, men uten `quantity`/`unitPrice`-s
 
 Rabatt (`discountFactor`) gjelder **ikke** valgfrie tillegg — samme regel som i dag for utstyr/lisens/andre kostnader (kun opptak inkl. oppstart + post-produksjon rabatteres). MVA (`vatRate`) gjelder som for resten av tilbudet.
 
-`calculateQuoteTotals()` i `lib/quote-builder-utils.ts` utvides med `addonsTotal` (sum av `optionalAddons[].price`, kun de faktisk valgt av kunden — se punkt 3) lagt til `subtotal`/`afterDiscount` uten å inngå i `discountBase`.
+`lib/quote-builder-utils.ts` **røres ikke i det hele tatt.** `calculateQuoteTotals()` regner ut grunnprisen uavhengig av hvilke tillegg som er valgt, og brukes av admin sitt `TotalsPanel` i tilbudsbyggeren, som skal vise grunnprisen (ingen tillegg er "valgt" i byggeren, de er bare definert som muligheter). `QuoteSection.tsx` henter allerede hele den rå `QuoteBuilderData` (inkl. det nye `optionalAddons`-feltet) i `dbBuilderData`-state — samme state som i dag brukes til PDF-nedlastingsknappen — så ingen ny henting eller gjennomsendt felt trengs. Selve regnestykket "grunnpris + valgte tillegg, med MVA, uten rabatt" gjøres separat de to stedene det trengs: klientside i `QuoteSection.tsx` (kun visning) og server-side i `/api/contracts/sign` (autoritativ, se punkt 5) — samme formel, uavhengige implementasjoner siden den ene kun er til visning og den andre er det som faktisk lagres.
 
 ### 2. Admin — tilbudsbyggeren
 
@@ -58,7 +58,6 @@ Ruten utvides til å ta imot `selectedAddonIds: string[]` i tillegg til eksister
 ## Berørte filer
 
 - `lib/types.ts` — `optionalAddons`-felt på `QuoteBuilderData`
-- `lib/quote-builder-utils.ts` — `calculateQuoteTotals()` utvidet med `addonsTotal`
 - `components/quote/QuoteBuilder.tsx` — admin-seksjon for å definere tillegg
 - `components/sections/QuoteSection.tsx` — avkrysningsbokser + live totalsum, `selectedAddonIds`-prop
 - `app/p/[token]/PublicProjectClient.tsx` — løfter `selectedAddonIds`-state, sender til begge søskenkomponenter

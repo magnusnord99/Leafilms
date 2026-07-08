@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Project } from '@/lib/types'
+import { getLatestReview } from '@/lib/actions/reviews'
 
 export function usePublishing(
   project: Project | null,
@@ -40,7 +41,24 @@ export function usePublishing(
         // Prosjekt avpublisert
       } else {
         // PUBLISER
-        const token = Math.random().toString(36).substring(2, 15) + 
+        if (project?.pitch_review_enabled) {
+          const latest = await getLatestReview(projectId, 'pitch')
+          if (latest?.status !== 'approved') {
+            alert(`Pitchen må godkjennes${latest?.reviewer ? ' av ' + (latest.reviewer.name ?? latest.reviewer.email) : ''} først.`)
+            setPublishing(false)
+            return
+          }
+        }
+        if (project?.quote_review_enabled) {
+          const latest = await getLatestReview(projectId, 'quote')
+          if (latest?.status !== 'approved') {
+            alert(`Tilbudet må godkjennes${latest?.reviewer ? ' av ' + (latest.reviewer.name ?? latest.reviewer.email) : ''} først.`)
+            setPublishing(false)
+            return
+          }
+        }
+
+        const token = Math.random().toString(36).substring(2, 15) +
                       Math.random().toString(36).substring(2, 15)
 
         const { data: existingShare } = await supabase

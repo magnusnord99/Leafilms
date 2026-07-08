@@ -151,43 +151,42 @@ rader — én for pitch, én for tilbud:
 Verdiene sendes med i `.insert()`-kallet til `projects`. Valgfritt — default av, ingen krav om
 utfylling.
 
-### 2. Endre senere — `app/admin/projects/[id]/page.tsx`
+### 2. Endre senere — `app/admin/projects/[id]/page.tsx`, "Pitch & Tilbud"-fanen
 
-Samme kontroller (av/på + reviewer-dropdown, ett par per type) legges i et nytt lite panel i
-prosjektoversikten, ved siden av det eksisterende assignee-picker-mønsteret (rundt linje
-140–193, som allerede henter og viser `profiles`-liste for `quote_assignee_id`/
-`project_lead_id`). Kaller `updateReviewSettings`.
+Samme kontroller (av/på + reviewer-dropdown, ett par per type) legges øverst i
+`activeTab === 'pitch'`-blokken (rundt linje 1363), over de to eksisterende kortene
+("Pitch-dokument" / "Tilbud"). Bruker `profiles`-state som allerede er hentet i denne
+komponenten (linje 603, fylt via `getAllProfiles` i `useEffect`, samme kilde som
+Prosjektleder-velgeren rundt linje 940–1024 bruker). Kaller `updateReviewSettings`.
 
-### 3. "Send til review"-knapp og statusbadge
+### 3. Ett samlet sted: "Pitch & Tilbud"-fanen i prosjekthub-en
 
-**Pitch** — `components/project/EditProjectTopBar.tsx`, ved siden av "Publiser"-knappen:
+`app/admin/projects/[id]/page.tsx` har allerede en `activeTab === 'pitch'`-fane ("Pitch & Tilbud")
+som viser to kort — "Pitch-dokument" (lenke til `/edit`) og "Tilbud" (lenke til `/quote`, med
+statusbadge for `quote.status`) — rundt linje 1363–1400. Dette er det naturlige, allerede
+eksisterende stedet for all review-UI, i stedet for å spre det ut over redigeringssidene:
 
-- Ny prop `pitchReview: Review | null` og `onRequestPitchReview: () => void`.
-- Vises kun når `project.pitch_review_enabled`.
-- Badge-tekst avledet av `pitchReview?.status`: `Ikke sendt til review` (grå) / `Venter på review`
-  (gul) / `Godkjent` (grønn) / `Endringer ønsket` (rød). Klikk på "Send til review"-knappen kaller
-  `requestReview(projectId, 'pitch')` og oppdaterer lokal state.
+- Én ny gjenbrukbar komponent, `components/project/ReviewPanel.tsx`, tar
+  `projectId, subjectType: 'pitch' | 'quote', enabled: boolean, reviewerId: string | null,
+  currentUserId: string, profiles: {id, name, email}[]` som props.
+- Den henter selv sin `getReviewHistory`/siste review ved mount, og rendres to ganger i
+  "Pitch & Tilbud"-fanen — én gang inni "Pitch-dokument"-kortet, én gang inni "Tilbud"-kortet
+  (samme sted som `item.badge` for `quote.status` allerede vises i dag).
+- Viser: statusbadge (`Ikke sendt til review` grå / `Venter på review` gul / `Godkjent` grønn /
+  `Endringer ønsket` rød), en "Send til review"-knapp (kaller `requestReview`), og — når
+  innlogget bruker er reviewer og siste review er `pending` — en liten banner med
+  **Godkjenn** (`respondToReview(id, 'approved')`) og **Be om endringer** (åpner tekstboks,
+  kommentar påkrevd, `respondToReview(id, 'changes_requested', comment)`).
+- Komponenten vises kun når `enabled` er `true` for den aktuelle typen.
 
-**Tilbud** — samme mønster som eget element på `app/admin/projects/[id]/quote/page.tsx`, nær
-resten av tilbuds-handlingene. Kaller `requestReview(projectId, 'quote')`.
+Varselet i `/admin/varsler` (`VarslerClient.tsx`, `handleClick`) ruter alle fire nye typene til
+samme sted: `/admin/projects/[id]?tab=pitch` — `activeTab` leses allerede fra `?tab=`-query
+param ved mount (linje 592–596), så ingen endring trengs i hub-siden for at lenken skal treffe
+riktig fane.
 
-### 4. Reviewer-banner
+### 4. Historikk
 
-På samme to sider: hvis innlogget bruker er `pitch_reviewer_id`/`quote_reviewer_id` **og** siste
-review har status `pending`, vis en banner øverst: *"[Navn] ber deg godkjenne pitchen/tilbudet"*
-med to knapper:
-
-- **Godkjenn** → `respondToReview(id, 'approved')` direkte.
-- **Be om endringer** → åpner en liten tekstboks (kommentar påkrevd), deretter
-  `respondToReview(id, 'changes_requested', comment)`.
-
-Varselet i `/admin/varsler` (`VarslerClient.tsx`, `handleClick`) ruter de fire nye typene:
-`pitch_review_requested`/`pitch_review_responded` → `/admin/projects/[id]/edit`,
-`quote_review_requested`/`quote_review_responded` → `/admin/projects/[id]/quote`.
-
-### 5. Historikk
-
-Utvidbar seksjon ("Review-historikk") på begge sider, under statusbadgen — viser
+`ReviewPanel` har en utvidbar seksjon ("Review-historikk") under statusbadgen — viser
 `getReviewHistory`-resultatet: hver runde med requester → reviewer, status, kommentar (hvis
 `changes_requested`), tidspunkt. Skjult som standard, ekspanderes ved klikk (samme
 disclosure-mønster som andre paneler i appen).

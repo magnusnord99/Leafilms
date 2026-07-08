@@ -31,6 +31,7 @@ type QuoteData = {
   subtotalExclVat?: number
   subtotalInclVat?: number
   totalDiscount?: number
+  discountPercent?: number
   finalPriceExclVat?: number
   finalPriceInclVat?: number
   vatRate?: number
@@ -71,10 +72,38 @@ export function QuoteSection({
   const [dbBuilderData, setDbBuilderData] = useState<QuoteBuilderData | null>(null)
   const [acceptingQuote, setAcceptingQuote] = useState(false)
   const [quoteAccepted, setQuoteAccepted] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
 
-  // Fetch quote from DB for display (both edit preview and public view)
+  // Fetch quote from DB for display (both edit preview and public view).
+  // Offentlig visning (shareToken satt) har ikke lenger anon RLS-tilgang til quotes —
+  // går via et token-verifisert API-endepunkt i stedet for direkte klientspørring.
   useEffect(() => {
     if (!project.id) return
+
+    const applyQuote = (data: { id: string; quote_data: unknown } | null) => {
+      if (!data) return
+      setQuoteId(data.id)
+      if (data.quote_data) {
+        if (isBuilderData(data.quote_data)) {
+          setDbBuilderData(data.quote_data as QuoteBuilderData)
+          setDbQuoteData(convertBuilderDataToQuoteData(data.quote_data as QuoteBuilderData))
+        } else {
+          setDbQuoteData(data.quote_data as QuoteData)
+        }
+      }
+    }
+
+    if (shareToken) {
+      fetch('/api/quotes/current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id, shareToken }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => applyQuote(json?.quote ?? null))
+      return
+    }
 
     supabase
       .from('quotes')
@@ -85,18 +114,9 @@ export function QuoteSection({
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        if (!data) return
-        setQuoteId(data.id)
-        if (data.quote_data) {
-          if (isBuilderData(data.quote_data)) {
-            setDbBuilderData(data.quote_data as QuoteBuilderData)
-            setDbQuoteData(convertBuilderDataToQuoteData(data.quote_data as QuoteBuilderData))
-          } else {
-            setDbQuoteData(data.quote_data as QuoteData)
-          }
-        }
+        applyQuote(data)
       })
-  }, [project.id])
+  }, [project.id, shareToken])
 
   const quoteData: QuoteData | null = dbQuoteData
 
@@ -115,7 +135,7 @@ export function QuoteSection({
       const response = await fetch('/api/accept-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: project.id, quoteData, acceptedBy: project.client_name || 'Kunde' }),
+        body: JSON.stringify({ projectId: project.id, shareToken, quoteData, acceptedBy: project.client_name || 'Kunde' }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -131,6 +151,41 @@ export function QuoteSection({
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 2 }).format(amount)
+
+  const handleDownloadPdf = async () => {
+    if (!dbBuilderData) return
+    setDownloadingPdf(true)
+    try {
+      const response = await fetch('/api/generate-quote-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          builderData: dbBuilderData,
+          language: dbBuilderData.language,
+          mva: dbBuilderData.includeVat ? 'y' : 'n',
+        }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || 'Kunne ikke laste ned tilbud')
+      }
+      const blob = await response.blob()
+      const xFilename = response.headers.get('X-Filename')
+      const filename = xFilename || `Pristilbud_${project.title || 'Prosjekt'}.pdf`
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      alert('Kunne ikke laste ned tilbud: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   // ── Edit mode: show summary + link to dedicated quote page ────────────────
   if (editMode) {
@@ -298,6 +353,42 @@ export function QuoteSection({
             </div>
           </div>
 
+          {/* Terms */}
+          {quoteData.terms && (
+            <div
+              className="px-8 md:px-12 py-5"
+              style={{ borderBottom: '1px solid #2A261F' }}
+              data-quote-section="terms"
+            >
+              <button
+                onClick={() => setShowTerms((v) => !v)}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.68rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: '#C49434',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                {showTerms ? 'Skjul vilkår ↑' : 'Se vilkår ↓'}
+              </button>
+
+              {showTerms && (
+                <div className="space-y-3 mt-4">
+                  {quoteData.terms.split('\n').filter((p) => p.trim()).map((para, idx) => (
+                    <p key={idx} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287', lineHeight: 1.7 }}>
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Line items */}
           {quoteData.lineItems && quoteData.lineItems.length > 0 && (
             <div className="overflow-x-auto" data-quote-section="line_items">
@@ -350,6 +441,21 @@ export function QuoteSection({
             style={{ borderTop: '1px solid #2A261F' }}
             data-quote-section="totals"
           >
+            {!!quoteData.totalDiscount && quoteData.totalDiscount > 0 && (
+              <div>
+                <div className="flex justify-between items-baseline">
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', fontWeight: 500 }}>
+                    Rabatt {quoteData.discountPercent ? `(${quoteData.discountPercent}%)` : ''}
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434', fontWeight: 500 }}>
+                    -{formatCurrency(quoteData.totalDiscount)}
+                  </p>
+                </div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#62594E', fontStyle: 'italic', marginTop: 2 }}>
+                  på opptak og post-produksjon
+                </p>
+              </div>
+            )}
             {quoteData.finalPriceExclVat !== undefined && (
               <div className="flex justify-between items-baseline pt-3" style={{ borderTop: '1px solid #2A261F' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris eksl. MVA</p>
@@ -360,12 +466,10 @@ export function QuoteSection({
               <div className="flex justify-between items-baseline">
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris inkl. MVA</p>
                 <p style={{
-                  fontFamily: 'var(--font-cormorant)',
-                  fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-                  fontWeight: 400,
-                  fontStyle: 'italic',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '1.2rem',
+                  fontWeight: 600,
                   color: '#E8E1D5',
-                  letterSpacing: '-0.01em',
                 }}>{formatCurrency(quoteData.finalPriceInclVat)}</p>
               </div>
             )}
@@ -378,7 +482,7 @@ export function QuoteSection({
             data-quote-section="actions"
           >
             {hasPublishedContract ? (
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <a
                   href="#kontrakt"
                   style={{
@@ -401,14 +505,56 @@ export function QuoteSection({
                 >
                   Gå til signering ↓
                 </a>
+                {dbBuilderData && (
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={downloadingPdf}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '0.72rem',
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      background: 'transparent',
+                      border: '1px solid #38332A',
+                      color: '#E8E1D5',
+                      padding: '13px 24px',
+                      cursor: downloadingPdf ? 'default' : 'pointer',
+                      opacity: downloadingPdf ? 0.6 : 1,
+                    }}
+                  >
+                    {downloadingPdf ? 'Laster ned…' : 'Last ned PDF ↓'}
+                  </button>
+                )}
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#62594E' }}>
                   Les og signer produksjonsavtalen nedenfor
                 </p>
               </div>
             ) : (
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#62594E', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                Tilbud sendt — avtale følger
-              </p>
+              <div className="flex flex-wrap items-center gap-4">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#62594E', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  Tilbud sendt — avtale følger
+                </p>
+                {dbBuilderData && (
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={downloadingPdf}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '0.72rem',
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      background: 'transparent',
+                      border: '1px solid #38332A',
+                      color: '#E8E1D5',
+                      padding: '13px 24px',
+                      cursor: downloadingPdf ? 'default' : 'pointer',
+                      opacity: downloadingPdf ? 0.6 : 1,
+                    }}
+                  >
+                    {downloadingPdf ? 'Laster ned…' : 'Last ned PDF ↓'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

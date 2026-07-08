@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase-server'
  */
 export async function notifyAssignment(opts: {
   recipientId: string
-  type: 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention'
+  type: 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded'
   projectId: string | null
   taskId?: string | null
   leadId?: string | null

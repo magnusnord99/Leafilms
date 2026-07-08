@@ -63,6 +63,10 @@ export type Project = {
   quote_assignee_id?: string | null
   invoice_assignee_id?: string | null
   project_lead_id?: string | null
+  pitch_review_enabled?: boolean
+  pitch_reviewer_id?: string | null
+  quote_review_enabled?: boolean
+  quote_reviewer_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -92,6 +96,24 @@ export type QuoteMessage = {
   mentions: string[]
   created_at: string
   user: { id: string; name: string | null; email: string } | null
+}
+
+export type ReviewSubjectType = 'pitch' | 'quote'
+export type ReviewStatus = 'pending' | 'approved' | 'changes_requested'
+
+export type Review = {
+  id: string
+  project_id: string
+  subject_type: ReviewSubjectType
+  status: ReviewStatus
+  requested_by: string
+  reviewer_id: string
+  comment: string | null
+  requested_at: string
+  responded_at: string | null
+  created_at: string
+  requester: { id: string; name: string | null; email: string } | null
+  reviewer: { id: string; name: string | null; email: string } | null
 }
 
 export type CrewMember = {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
@@ -42,6 +42,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     discountFactor: 0,
     includeVat: true,
     companyEmail: 'eivind@leafilms.no',
+    optionalAddons: [],
   }
 }
 
@@ -468,6 +469,65 @@ function ItemSection({
   )
 }
 
+// ─── Valgfrie tillegg (kunden haker av selv på det publiserte tilbudet) ────────
+function AddonsSection({
+  items, onChange,
+}: {
+  items: OptionalAddon[]
+  onChange: (items: OptionalAddon[]) => void
+}) {
+  const update = (id: string, field: 'description' | 'price', value: string | number) =>
+    onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
+  const add = () => onChange([...items, { id: newId(), description: '', price: 0 }])
+  const remove = (id: string) => onChange(items.filter(i => i.id !== id))
+
+  return (
+    <div>
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>Valgfrie tillegg</span>
+        <Button size="sm" variant="ghost" onClick={add} type="button">+ Legg til tillegg</Button>
+      </div>
+
+      {items.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {['Tittel', 'Pris', ''].map((h, i) => (
+                  <th key={h} style={{ textAlign: i === 1 ? 'right' : i === 2 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 2 ? 24 : 'auto' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id} className="group">
+                  <td style={{ padding: '4px 8px 4px 0' }}>
+                    <input style={inputBase} value={item.description} onChange={e => update(item.id, 'description', e.target.value)} placeholder="F.eks. VFX-pakke" />
+                  </td>
+                  <td style={{ padding: '4px 8px 4px 0' }}>
+                    <input style={{ ...inputBase, textAlign: 'right' }} type="number" value={item.price || ''} onChange={e => update(item.id, 'price', Number(e.target.value))} placeholder="0" />
+                  </td>
+                  <td style={{ padding: 4 }}>
+                    <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                      className="opacity-0 group-hover:opacity-100"
+                      title="Fjern">×</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {items.length === 0 && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen tillegg lagt til ennå</p>}
+      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
+        Vises som avkrysningsbokser for kunden på det publiserte tilbudet. Rabatten over gjelder ikke disse — kun MVA legges på hvis kunden haker av.
+      </p>
+    </div>
+  )
+}
+
 // ─── Post-produksjon (combined crew + items) ──────────────────────────────────
 function PostProductionSection({
   crew, items, teamMembers, catalog, onCrewChange, onItemsChange,
@@ -829,6 +889,7 @@ export function QuoteBuilder({
     postProductionCrew: initialData.postProductionCrew ?? [],
     discountFactor: initialData.discountFactor ?? 0,
     companyEmail: initialData.companyEmail ?? 'eivind@leafilms.no',
+    optionalAddons: initialData.optionalAddons ?? [],
   })
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     if (!initialData.customerNumber) return ''
@@ -1050,6 +1111,10 @@ export function QuoteBuilder({
           catalogCategories={['annet']}
           onChange={v => set('licensing', v)}
           addLabel="+ Legg til lisens"
+        />
+        <AddonsSection
+          items={data.optionalAddons ?? []}
+          onChange={v => set('optionalAddons', v)}
         />
       </div>
 

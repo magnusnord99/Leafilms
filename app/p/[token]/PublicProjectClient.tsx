@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
+import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature } from '@/lib/types'
 
 const ContractSigningSection = dynamic(() => import('./ContractSigningSection'), { ssr: false })
 import { Text } from '@/components/ui'
@@ -48,6 +48,7 @@ type PublicProjectClientProps = {
     contractText: string
     isSigned: boolean
     signedBy: string | null
+    ourSignature?: OurSignature | null
   } | null
   projectId?: string
 }
@@ -168,16 +169,15 @@ export function PublicProjectClient({
     if (!exampleWorkSection) return
   }, [exampleWorkSection, sectionImageData, collageImages])
 
+  // "Har du noen spørsmål" (contact) rendres separat helt nederst, under kontrakten — ikke i denne listen
   const sortedNonHeroSections = useMemo(() =>
     sections
-      .filter(s => s.type !== 'hero')
-      .sort((a, b) => {
-        if (a.type === 'contact' && b.type !== 'contact') return 1
-        if (a.type !== 'contact' && b.type === 'contact') return -1
-        return a.order_index - b.order_index
-      }),
+      .filter(s => s.type !== 'hero' && s.type !== 'contact')
+      .sort((a, b) => a.order_index - b.order_index),
     [sections]
   )
+
+  const contactSection = useMemo(() => sections.find(s => s.type === 'contact'), [sections])
 
   // selectedTeamMemberIds og selectedCaseIds skal komme fra props, ikke fra section.content
   // (de er allerede filtrert i page.tsx)
@@ -454,10 +454,29 @@ export function PublicProjectClient({
       {publishedContract && projectId && (
         <ContractSigningSection
           projectId={projectId}
+          shareToken={shareToken}
           contractText={publishedContract.contractText}
           isSigned={publishedContract.isSigned}
           signedBy={publishedContract.signedBy}
+          ourSignature={publishedContract.ourSignature}
         />
+      )}
+
+      {/* Contact Section — alltid helt nederst, under kontrakten */}
+      {contactSection && contactSection.visible && (
+        <section
+          data-section-id={contactSection.id}
+          className="px-0 bg-background relative section-reveal"
+        >
+          <div className="w-full">
+            <ContactSection
+              section={contactSection}
+              editMode={false}
+              getSectionTitle={getSectionTitle}
+              updateSectionContent={noop}
+            />
+          </div>
+        </section>
       )}
 
       {/* Footer */}

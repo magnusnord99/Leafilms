@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Section, Project, QuoteBuilderData } from '@/lib/types'
+import { Section, Project, QuoteBuilderData, OptionalAddon } from '@/lib/types'
 // Heading/Text/Button imported for potential future use in edit mode expansions
 import { useQuoteAnalytics } from '@/hooks/useQuoteAnalytics'
 import { supabase } from '@/lib/supabase'
@@ -44,6 +44,9 @@ type QuoteSectionProps = {
   updateSectionContent: (sectionId: string, key: string, value: unknown) => void
   shareToken?: string
   hasPublishedContract?: boolean
+  selectedAddonIds?: Set<string>
+  onToggleAddon?: (id: string) => void
+  onAddonsLoaded?: (addons: OptionalAddon[]) => void
 }
 
 function isBuilderData(data: unknown): data is QuoteBuilderData {
@@ -66,6 +69,9 @@ export function QuoteSection({
   updateSectionContent,
   shareToken,
   hasPublishedContract = false,
+  selectedAddonIds = new Set<string>(),
+  onToggleAddon = () => {},
+  onAddonsLoaded = () => {},
 }: QuoteSectionProps) {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [dbQuoteData, setDbQuoteData] = useState<QuoteData | null>(null)
@@ -86,8 +92,10 @@ export function QuoteSection({
       setQuoteId(data.id)
       if (data.quote_data) {
         if (isBuilderData(data.quote_data)) {
-          setDbBuilderData(data.quote_data as QuoteBuilderData)
-          setDbQuoteData(convertBuilderDataToQuoteData(data.quote_data as QuoteBuilderData))
+          const builderData = data.quote_data as QuoteBuilderData
+          setDbBuilderData(builderData)
+          setDbQuoteData(convertBuilderDataToQuoteData(builderData))
+          onAddonsLoaded(builderData.optionalAddons ?? [])
         } else {
           setDbQuoteData(data.quote_data as QuoteData)
         }
@@ -116,7 +124,7 @@ export function QuoteSection({
       .then(({ data }) => {
         applyQuote(data)
       })
-  }, [project.id, shareToken])
+  }, [project.id, shareToken, onAddonsLoaded])
 
   const quoteData: QuoteData | null = dbQuoteData
 
@@ -248,6 +256,15 @@ export function QuoteSection({
   }
 
   // ── Display mode (public view for client) ─────────────────────────────────
+  const optionalAddons = dbBuilderData?.optionalAddons ?? []
+  const selectedAddonsTotal = optionalAddons
+    .filter((a) => selectedAddonIds.has(a.id))
+    .reduce((sum, a) => sum + a.price, 0)
+  const vatRate = quoteData?.vatRate ?? 0
+  const addonsInclVat = dbBuilderData?.includeVat ? selectedAddonsTotal * (1 + vatRate / 100) : selectedAddonsTotal
+  const liveFinalExclVat = (quoteData?.finalPriceExclVat ?? 0) + selectedAddonsTotal
+  const liveFinalInclVat = (quoteData?.finalPriceInclVat ?? 0) + addonsInclVat
+
   return (
     <div className="max-w-full mx-auto py-16 md:py-24 px-4 md:px-8" style={{ background: '#0C0B09' }}>
       {quoteData ? (
@@ -435,6 +452,44 @@ export function QuoteSection({
             </div>
           )}
 
+          {/* Valgfrie tillegg */}
+          {optionalAddons.length > 0 && (
+            <div
+              className="px-8 md:px-12 py-8 space-y-3"
+              style={{ borderTop: '1px solid #2A261F' }}
+              data-quote-section="addons"
+            >
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 8 }}>
+                Valgfrie tillegg
+              </p>
+              {optionalAddons.map((addon) => {
+                const checked = selectedAddonIds.has(addon.id)
+                return (
+                  <label
+                    key={addon.id}
+                    className="flex items-center justify-between gap-4"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => onToggleAddon(addon.id)}
+                        style={{ accentColor: '#C49434', width: 16, height: 16, flexShrink: 0 }}
+                      />
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: checked ? '#E8E1D5' : '#9E9287' }}>
+                        {addon.description}
+                      </span>
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: checked ? '#C49434' : '#62594E', whiteSpace: 'nowrap' }}>
+                      +{formatCurrency(addon.price)}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+
           {/* Totals */}
           <div
             className="px-8 md:px-12 py-8 space-y-3"
@@ -456,10 +511,18 @@ export function QuoteSection({
                 </p>
               </div>
             )}
+            {selectedAddonsTotal > 0 && (
+              <div className="flex justify-between items-baseline">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434' }}>Valgte tillegg</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434', fontWeight: 500 }}>
+                  +{formatCurrency(selectedAddonsTotal)}
+                </p>
+              </div>
+            )}
             {quoteData.finalPriceExclVat !== undefined && (
               <div className="flex justify-between items-baseline pt-3" style={{ borderTop: '1px solid #2A261F' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris eksl. MVA</p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: '#E8E1D5', fontWeight: 500 }}>{formatCurrency(quoteData.finalPriceExclVat)}</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: '#E8E1D5', fontWeight: 500 }}>{formatCurrency(liveFinalExclVat)}</p>
               </div>
             )}
             {quoteData.finalPriceInclVat !== undefined && (
@@ -470,7 +533,7 @@ export function QuoteSection({
                   fontSize: '1.2rem',
                   fontWeight: 600,
                   color: '#E8E1D5',
-                }}>{formatCurrency(quoteData.finalPriceInclVat)}</p>
+                }}>{formatCurrency(liveFinalInclVat)}</p>
               </div>
             )}
           </div>

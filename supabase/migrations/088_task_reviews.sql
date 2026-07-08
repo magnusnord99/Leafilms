@@ -54,24 +54,13 @@ BEGIN
   END IF;
 END$$;
 
--- Ensure notifications type-constraint includes all types (cumulative from earlier migrations + new review types)
--- Use error-tolerant approach since earlier migrations may have already created this constraint
-DO $$
-BEGIN
-  -- First, try to drop the old constraint if it exists
-  ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
-
-  -- Then add the comprehensive constraint with all types
-  ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
-    CHECK (type IN (
-      'project_message', 'task_message', 'selection_submitted',
-      'task_assigned', 'lead_assigned', 'quote_assigned', 'invoice_assigned',
-      'quote_mention', 'project_message_mention', 'task_message_mention', 'quote_message',
-      'pitch_review_requested', 'pitch_review_responded',
-      'quote_review_requested', 'quote_review_responded'
-    ));
-EXCEPTION WHEN OTHERS THEN
-  -- If constraint operation fails, log but don't fail the migration
-  -- This can happen if migration 081/083 was already applied with data
-  RAISE NOTICE 'Constraint operation completed: %', SQLERRM;
-END$$;
+-- Utvid notifications type-constraint med de 4 nye review-typene
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
+  CHECK (type IN (
+    'project_message', 'task_message', 'selection_submitted',
+    'task_assigned', 'lead_assigned', 'quote_assigned', 'invoice_assigned',
+    'quote_mention', 'project_message_mention', 'task_message_mention', 'quote_message',
+    'pitch_review_requested', 'pitch_review_responded',
+    'quote_review_requested', 'quote_review_responded'
+  ));

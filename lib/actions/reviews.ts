@@ -111,6 +111,10 @@ export async function respondToReview(reviewId: string, decision: 'approved' | '
 
     if (fetchError || !review) return { ok: false, error: 'Fant ikke review-forespørselen' }
 
+    if (user.id !== review.reviewer_id) {
+      return { ok: false, error: 'Du er ikke satt som reviewer for denne forespørselen' }
+    }
+
     const { error: updateError } = await supabase
       .from('reviews')
       .update({

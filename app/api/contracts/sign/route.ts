@@ -1,16 +1,17 @@
 import { NextRequest } from 'next/server'
-import PDFDocument from 'pdfkit'
 import { createServiceClient } from '@/lib/supabase-server'
+import type { OurSignature } from '@/lib/types'
+import { generateContractPDF } from '../pdf-generator'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { projectId, signerName, signerEmail, contractSnapshot, signatureImage } = body
+    const { projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage } = body
 
     // Valider påkrevde felt
-    if (!projectId || !signerName || !signerEmail || !contractSnapshot || !signatureImage) {
+    if (!projectId || !shareToken || !signerName || !signerEmail || !contractSnapshot || !signatureImage) {
       return Response.json(
-        { error: 'Manglende felt: projectId, signerName, signerEmail, contractSnapshot, signatureImage' },
+        { error: 'Manglende felt: projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage' },
         { status: 400 }
       )
     }
@@ -24,10 +25,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
+    // Verifiser at delelenken faktisk peker på dette prosjektet før vi lar noen signere —
+    // uten dette kan hvem som helst signere et vilkårlig prosjekts kontrakt via projectId alene.
+    const { data: share, error: shareError } = await supabase
+      .from('project_shares')
+      .select('project_id')
+      .eq('token', shareToken)
+      .eq('project_id', projectId)
+      .single()
+
+    if (shareError || !share) {
+      return Response.json({ error: 'Ugyldig delelenke for dette prosjektet' }, { status: 403 })
+    }
+
     // Hent kontrakt for prosjektet
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
-      .select('id, published_at, status, contract_text')
+      .select('id, published_at, status, contract_text, our_signature')
       .eq('project_id', projectId)
       .single()
 
@@ -83,48 +97,12 @@ export async function POST(request: NextRequest) {
     // Generer PDF i minnet (ikke-fatal — kontrakt er allerede signert)
     let pdfBuffer: Buffer | null = null
     try {
-      pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 60, size: 'A4' })
-        const chunks: Buffer[] = []
-        doc.on('data', (chunk: Buffer) => chunks.push(chunk))
-        doc.on('end', () => resolve(Buffer.concat(chunks)))
-        doc.on('error', reject)
-
-        // Tittel
-        doc.fontSize(16).font('Helvetica-Bold').text('Produksjonsavtale', { align: 'center' })
-        doc.moveDown(0.5)
-        doc.fontSize(9).font('Helvetica').fillColor('#666666')
-          .text(`Generert: ${new Date(signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'center' })
-        doc.fillColor('#000000')
-        doc.moveDown(1.5)
-
-        // Kontrakttekst
-        doc.fontSize(9).font('Courier').text(contract.contract_text ?? contractSnapshot, {
-          lineGap: 2,
-          paragraphGap: 4,
-        })
-
-        doc.moveDown(2)
-
-        // Signeringsseksjon
-        doc.moveTo(60, doc.y).lineTo(doc.page.width - 60, doc.y).strokeColor('#cccccc').lineWidth(0.5).stroke()
-        doc.strokeColor('#000000').lineWidth(1)
-        doc.moveDown(1)
-
-        doc.fontSize(9).font('Helvetica-Bold').text('Signatur')
-        doc.font('Helvetica').moveDown(0.3)
-        doc.text(`Signert av: ${signerName} (${signerEmail})`)
-        doc.text(`Dato: ${new Date(signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
-        doc.text(`IP: ${ip}`)
-        doc.moveDown(0.8)
-
-        // Signaturbilde
-        const imgBase64 = signatureImage.replace('data:image/png;base64,', '')
-        const imgBuffer = Buffer.from(imgBase64, 'base64')
-        doc.image(imgBuffer, { width: 220, height: 55 })
-
-        doc.end()
-      })
+      const ourSignature = contract.our_signature as OurSignature | null
+      pdfBuffer = await generateContractPDF(
+        contract.contract_text ?? contractSnapshot,
+        ourSignature,
+        { signerName, signerEmail, signedAt, ip, signatureImage }
+      )
     } catch (pdfErr) {
       console.error('sign contract PDF generation error:', pdfErr)
     }

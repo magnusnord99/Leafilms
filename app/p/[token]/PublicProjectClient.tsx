@@ -1,12 +1,12 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature } from '@/lib/types'
+import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature, OptionalAddon } from '@/lib/types'
 
 const ContractSigningSection = dynamic(() => import('./ContractSigningSection'), { ssr: false })
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
-import { useMemo, useCallback, useEffect } from 'react'
+import { useMemo, useCallback, useEffect, useState } from 'react'
 import {
   HeroSection,
   ConceptSection,
@@ -70,7 +70,23 @@ export function PublicProjectClient({
 }: PublicProjectClientProps) {
   // Always call hooks in the same order - useMemo to ensure stable sectionIds
   const sectionIds = useMemo(() => sections.map(s => s.id), [sections])
-  
+
+  const [optionalAddons, setOptionalAddons] = useState<OptionalAddon[]>([])
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(new Set())
+
+  const handleToggleAddon = useCallback((id: string) => {
+    setSelectedAddonIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleAddonsLoaded = useCallback((addons: OptionalAddon[]) => {
+    setOptionalAddons(addons)
+  }, [])
+
   // Check if user is admin - must be called before other hooks that depend on it
   const { isAdmin, loading: authLoading } = useAuth()
 
@@ -366,6 +382,9 @@ export function PublicProjectClient({
                       updateSectionContent={noop}
                       shareToken={shareToken}
                       hasPublishedContract={!!publishedContract}
+                      selectedAddonIds={selectedAddonIds}
+                      onToggleAddon={handleToggleAddon}
+                      onAddonsLoaded={handleAddonsLoaded}
                     />
                   )}
 
@@ -459,6 +478,8 @@ export function PublicProjectClient({
           isSigned={publishedContract.isSigned}
           signedBy={publishedContract.signedBy}
           ourSignature={publishedContract.ourSignature}
+          optionalAddons={optionalAddons}
+          selectedAddonIds={selectedAddonIds}
         />
       )}
 

@@ -109,6 +109,12 @@ export type QuoteBuilderItem = {
   unitPrice: number
 }
 
+export type OptionalAddon = {
+  id: string
+  description: string
+  price: number
+}
+
 export type QuoteBuilderData = {
   version: string
   quoteDate: string
@@ -136,6 +142,8 @@ export type QuoteBuilderData = {
   includeVat: boolean
   /** E-post vist i "Fra oss"-blokken på tilbuds-PDF-en */
   companyEmail?: string
+  /** Valgfrie tillegg kunden kan hake av på det publiserte tilbudet — fast pris, ikke underlagt discountFactor. */
+  optionalAddons: OptionalAddon[]
 }
 
 export type DiscountFactor = {

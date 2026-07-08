@@ -14,7 +14,7 @@
 - Server actions med `'use server'` bruker `createClient()` for brukerautentiserte operasjoner. `createServiceClient()` brukes kun for notification-inserts (service-level bypass), aldri direkte i denne planen — vi gjenbruker `notifyAssignment` som allerede gjør dette internt.
 - Alle nye tabeller trenger RLS med idempotente `DO $$ ... IF NOT EXISTS ... END$$`-blokker rundt `CREATE POLICY` (se `supabase/migrations/080_quote_messages.sql`).
 - `notifications_type_check`-constraint må drop+recreate ved utvidelse med nye typer.
-- Neste migrasjons-prefix er `086_` (mappen er allerede oppe i `085_`, ikke `065_` som CLAUDE.md sier).
+- Neste migrasjons-prefix er `088_` (mappen har `085_` committet, pluss uncommittede `086_`/`087_` fra en annen parallell arbeidsøkt på tidspunktet planen ble laget — ikke `065_` som CLAUDE.md sier. Sjekk `ls supabase/migrations/` på nytt før du starter Task 1 i tilfelle nummeret har endret seg igjen.)
 - Design-system i `app/admin/projects/[id]/page.tsx` og `app/admin/projects/new/page.tsx`: inline styles med `C`-farger fra `lib/admin-theme.ts`, font `var(--font-dm-sans)` — ingen Tailwind-klasser, ingen `components/ui`-bruk i disse filene. Følg dette i `ReviewPanel.tsx` også, for visuell konsistens med resten av hub-siden.
 - Migrasjoner kjøres med `npx supabase db push`.
 - Ingen automatisert testsuite i prosjektet — verifisering er `npx tsc --noEmit`, `npm run lint`, `npm run build`, og manuell test i dev-server.
@@ -25,7 +25,7 @@
 
 | Fil | Status | Ansvar |
 |---|---|---|
-| `supabase/migrations/086_task_reviews.sql` | Ny | `reviews`-tabell + RLS, 4 nye `projects`-kolonner, utvidet `notifications_type_check` |
+| `supabase/migrations/088_task_reviews.sql` | Ny | `reviews`-tabell + RLS, 4 nye `projects`-kolonner, utvidet `notifications_type_check` |
 | `lib/types.ts` | Endre | `Review`, `ReviewSubjectType`, `ReviewStatus`-typer, nye felter på `Project`, ny type i `Notification['type']` |
 | `lib/actions/notifications.ts` | Endre | Utvid `Notification['type']`-union |
 | `lib/notify-assignment.ts` | Endre | Utvid `type`-parameter med de 4 nye review-typene |
@@ -41,7 +41,7 @@
 ## Task 1: Database — reviews-tabell, projects-kolonner, types
 
 **Files:**
-- Create: `supabase/migrations/086_task_reviews.sql`
+- Create: `supabase/migrations/088_task_reviews.sql`
 - Modify: `lib/types.ts`
 - Modify: `lib/actions/notifications.ts`
 - Modify: `lib/notify-assignment.ts`
@@ -55,10 +55,10 @@
 
 - [ ] **Steg 1: Skriv migrasjonen**
 
-Opprett `/Users/magnusnordmo/Prosjektbeskrivelse_leafilms/leafilms-pitch/supabase/migrations/086_task_reviews.sql`:
+Opprett `/Users/magnusnordmo/Prosjektbeskrivelse_leafilms/leafilms-pitch/supabase/migrations/088_task_reviews.sql`:
 
 ```sql
--- 086_task_reviews.sql
+-- 088_task_reviews.sql
 -- Review-flyt: krev godkjenning av en kollega før pitch/tilbud kan publiseres.
 
 ALTER TABLE projects
@@ -204,7 +204,7 @@ Forventet: ingen feil.
 - [ ] **Steg 7: Commit**
 
 ```bash
-git add supabase/migrations/086_task_reviews.sql lib/types.ts lib/actions/notifications.ts lib/notify-assignment.ts
+git add supabase/migrations/088_task_reviews.sql lib/types.ts lib/actions/notifications.ts lib/notify-assignment.ts
 git commit -m "feat: add reviews table and review settings columns for pitch/quote review flow"
 ```
 

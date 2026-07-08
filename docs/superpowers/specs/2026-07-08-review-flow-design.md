@@ -25,10 +25,12 @@ en del av pitch-publiseringen. Derfor sperrer både pitch- og tilbud-review den 
 
 ## Datamodell
 
-### Migrasjon `086_task_reviews.sql`
+### Migrasjon `088_task_reviews.sql`
 
-(Neste ledige nummer — `supabase/migrations/` er allerede oppe i `085_`, selv om CLAUDE.md
-fortsatt sier `065_` er neste.)
+(Neste ledige nummer på tidspunktet planen skrives — `085_` er committet, og en parallell
+arbeidsøkt har uncommittede `086_`/`087_` liggende i samme working directory. Sjekk
+`ls supabase/migrations/` på nytt før migrasjonen opprettes, i tilfelle nummeret har endret seg.
+CLAUDE.md sier fortsatt `065_`, som er utdatert.)
 
 ```sql
 ALTER TABLE projects

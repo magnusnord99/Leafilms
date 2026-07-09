@@ -124,7 +124,8 @@ export function QuoteSection({
       .then(({ data }) => {
         applyQuote(data)
       })
-  }, [project.id, shareToken, onAddonsLoaded])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, shareToken])
 
   const quoteData: QuoteData | null = dbQuoteData
 

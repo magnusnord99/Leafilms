@@ -110,6 +110,10 @@ export async function POST(request: NextRequest) {
 
     const signedAt = new Date().toISOString()
 
+    // Endelig kontrakttekst — base + eventuelt addendum. Brukes både i DB-oppdateringen
+    // og som input til PDF-generering under, slik at de aldri kan divergere.
+    const finalContractText = (contract.contract_text ?? contractSnapshot) + contractAddendum
+
     // Oppdater kontrakt til signert
     const { error: updateContractError } = await supabase
       .from('contracts')
@@ -126,7 +130,7 @@ export async function POST(request: NextRequest) {
           signatureImage,
         },
         updated_at: signedAt,
-        ...(contractAddendum ? { contract_text: (contract.contract_text ?? contractSnapshot) + contractAddendum } : {}),
+        ...(contractAddendum ? { contract_text: finalContractText } : {}),
       })
       .eq('id', contract.id)
 
@@ -140,7 +144,7 @@ export async function POST(request: NextRequest) {
     try {
       const ourSignature = contract.our_signature as OurSignature | null
       pdfBuffer = await generateContractPDF(
-        contract.contract_text ?? contractSnapshot,
+        finalContractText,
         ourSignature,
         { signerName, signerEmail, signedAt, ip, signatureImage }
       )

@@ -1,12 +1,14 @@
 import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
-import type { OurSignature } from '@/lib/types'
+import type { OurSignature, QuoteBuilderData } from '@/lib/types'
+import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 import { generateContractPDF } from '../pdf-generator'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage } = body
+    const { projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage, selectedAddonIds: rawSelectedAddonIds } = body
+    const selectedAddonIds: string[] = Array.isArray(rawSelectedAddonIds) ? rawSelectedAddonIds : []
 
     // Valider påkrevde felt
     if (!projectId || !shareToken || !signerName || !signerEmail || !contractSnapshot || !signatureImage) {
@@ -68,6 +70,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Hent gjeldende tilbud for å beregne valgte tillegg — server-side, aldri klientens tall.
+    let quoteData: QuoteBuilderData | null = null
+    let quoteRowId: string | null = null
+    if (selectedAddonIds.length > 0) {
+      const { data: quote } = await supabase
+        .from('quotes')
+        .select('id, quote_data')
+        .eq('project_id', projectId)
+        .eq('is_current', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew)) {
+        quoteData = quote.quote_data as QuoteBuilderData
+        quoteRowId = quote.id
+      }
+    }
+
+    const selectedAddons = (quoteData?.optionalAddons ?? []).filter((a) => selectedAddonIds.includes(a.id))
+
+    let addonsTotal = 0
+    let finalPriceExclVatWithAddons: number | null = null
+    let finalPriceInclVatWithAddons: number | null = null
+    let contractAddendum = ''
+
+    if (quoteData && selectedAddons.length > 0) {
+      addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
+      const baseTotals = calculateQuoteTotals(quoteData)
+      const addonsInclVat = quoteData.includeVat ? addonsTotal * (1 + quoteData.vatRate / 100) : addonsTotal
+      finalPriceExclVatWithAddons = baseTotals.afterDiscount + addonsTotal
+      finalPriceInclVatWithAddons = baseTotals.finalInclVat + addonsInclVat
+
+      const fmt = (n: number) => `${new Intl.NumberFormat('nb-NO').format(Math.round(n))} kr`
+      const addonLines = selectedAddons.map((a) => `${a.description} — ${fmt(a.price)}`).join('\n')
+      contractAddendum = `\n\nTillegg valgt av kunde ved signering:\n${addonLines}\n\nNy totalsum inkl. tillegg: ${fmt(finalPriceExclVatWithAddons)} eks. MVA`
+    }
+
     const signedAt = new Date().toISOString()
 
     // Oppdater kontrakt til signert
@@ -86,6 +126,7 @@ export async function POST(request: NextRequest) {
           signatureImage,
         },
         updated_at: signedAt,
+        ...(contractAddendum ? { contract_text: (contract.contract_text ?? contractSnapshot) + contractAddendum } : {}),
       })
       .eq('id', contract.id)
 
@@ -139,10 +180,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sett gjeldende quote-versjon til accepted
+    // Sett gjeldende quote-versjon til accepted, og lagre valgte tillegg hvis noen ble valgt
+    const quoteUpdatePayload: Record<string, unknown> = { status: 'accepted', updated_at: signedAt }
+    if (quoteData && selectedAddons.length > 0 && quoteRowId) {
+      quoteUpdatePayload.quote_data = {
+        ...quoteData,
+        selectedAddonIds: selectedAddons.map((a) => a.id),
+        addonsTotal,
+        finalPriceExclVatWithAddons,
+        finalPriceInclVatWithAddons,
+      }
+    }
+
     const { error: updateQuoteError } = await supabase
       .from('quotes')
-      .update({ status: 'accepted', updated_at: signedAt })
+      .update(quoteUpdatePayload)
       .eq('project_id', projectId)
       .eq('is_current', true)
 

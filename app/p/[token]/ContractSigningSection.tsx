@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared/SignatureCanvas'
-import type { OurSignature } from '@/lib/types'
+import type { OurSignature, OptionalAddon } from '@/lib/types'
 
 type ContractSigningSectionProps = {
   projectId: string
@@ -11,6 +11,8 @@ type ContractSigningSectionProps = {
   isSigned: boolean
   signedBy: string | null
   ourSignature?: OurSignature | null
+  optionalAddons?: OptionalAddon[]
+  selectedAddonIds?: Set<string>
 }
 
 export default function ContractSigningSection({
@@ -20,6 +22,8 @@ export default function ContractSigningSection({
   isSigned: initialIsSigned,
   signedBy,
   ourSignature,
+  optionalAddons = [],
+  selectedAddonIds = new Set<string>(),
 }: ContractSigningSectionProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -47,6 +51,7 @@ export default function ContractSigningSection({
           signerEmail: email,
           contractSnapshot: contractText,
           signatureImage: sigRef.current?.getDataUrl() ?? '',
+          selectedAddonIds: Array.from(selectedAddonIds),
         }),
       })
       if (res.ok) {
@@ -174,6 +179,26 @@ export default function ContractSigningSection({
           ) : (
             /* Signing form */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {selectedAddonIds.size > 0 && (
+                <div
+                  style={{
+                    padding: '1rem 1.25rem',
+                    border: '1px solid rgba(196,148,52,0.25)',
+                    background: 'rgba(196,148,52,0.05)',
+                  }}
+                >
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C49434', marginBottom: 8 }}>
+                    Valgte tillegg
+                  </p>
+                  {optionalAddons
+                    .filter((a) => selectedAddonIds.has(a.id))
+                    .map((a) => (
+                      <p key={a.id} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: '2px 0' }}>
+                        {a.description} — +{new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0 }).format(a.price)}
+                      </p>
+                    ))}
+                </div>
+              )}
               {/* Name input */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <label

@@ -1151,12 +1151,12 @@ export async function updateTaskNotes(taskId: string, notes: string): Promise<vo
 /**
  * Returnerer alle brukerprofiler i systemet — brukes til assignee-picker.
  */
-export async function getAllProfiles(): Promise<{ id: string; name: string | null; email: string }[]> {
+export async function getAllProfiles(): Promise<{ id: string; name: string | null; email: string; color: string | null }[]> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email')
+      .select('id, name, email, color')
       .order('name', { ascending: true })
 
     if (error) {
@@ -1281,6 +1281,7 @@ export async function getCurrentUserProfile(): Promise<{
   id: string
   name: string | null
   email: string
+  color: string | null
 } | null> {
   try {
     const supabase = await createClient()
@@ -1289,11 +1290,11 @@ export async function getCurrentUserProfile(): Promise<{
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, name, email')
+      .select('id, name, email, color')
       .eq('id', user.id)
       .single()
 
-    return profile ?? { id: user.id, name: null, email: user.email ?? '' }
+    return profile ?? { id: user.id, name: null, email: user.email ?? '', color: null }
   } catch {
     return null
   }

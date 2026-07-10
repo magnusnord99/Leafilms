@@ -12,6 +12,7 @@ import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
 import type { Quote } from '@/lib/types'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { ProjectChat } from '@/components/project/ProjectChat'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
   bg:       '#181920',
@@ -25,13 +26,6 @@ const C = {
   accentBg: 'rgba(124,92,252,0.08)',
   success:  '#4CAF7D',
   danger:   '#E05555',
-}
-
-const PROFILE_COLORS = ['#7C5CFC', '#4A9AC4', '#4CAF7D', '#F0A500', '#E8529A', '#E07C3A', '#50C8C8']
-function getProfileColor(id: string): string {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fffffff
-  return PROFILE_COLORS[h % PROFILE_COLORS.length]
 }
 
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
@@ -69,7 +63,7 @@ function PipelineProgress({ currentStage }: { currentStage: PipelineStage }) {
   )
 }
 
-type Profile = { id: string; name: string | null; email: string }
+type Profile = { id: string; name: string | null; email: string; color: string | null }
 
 function AssigneePicker({
   task,
@@ -638,7 +632,7 @@ export default function ProjectHubPage() {
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -661,7 +655,9 @@ export default function ProjectHubPage() {
       setShootEnd(data.project.shoot_end ?? '')
       setNotesValue(data.project.meeting_notes ?? '')
       setSummary(data.project.meeting_summary ?? null)
-      setProjectLead_(data.project.project_lead ?? null)
+      setProjectLead_(data.project.project_lead
+        ? { ...data.project.project_lead, color: allProfiles.find(p => p.id === data.project.project_lead!.id)?.color ?? null }
+        : null)
       // Hent kontrakt-status for stepper (tilbud_sendt) og kontrakt-steg
       if (data.project.pipeline_stage === 'tilbud_sendt' || data.project.pipeline_stage === 'kontrakt') {
         const cs = await getContractStatus(projectId)
@@ -795,7 +791,7 @@ export default function ProjectHubPage() {
 
   async function handleSetLead(profileId: string | null) {
     const prev = projectLead
-    const profile = profileId ? profiles.find((p: { id: string; name: string | null; email: string }) => p.id === profileId) ?? null : null
+    const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
     const result = await setProjectLead(projectId, profileId)
     if (!result.ok) setProjectLead_(prev)
@@ -862,7 +858,7 @@ export default function ProjectHubPage() {
                       <>
                         <span style={{
                           width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                          background: getProfileColor(projectLead.id), color: '#fff',
+                          background: getAvatarColor(projectLead), color: '#fff',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: '0.58rem', fontWeight: 700,
                         }}>
@@ -916,7 +912,7 @@ export default function ProjectHubPage() {
                         >
                           <span style={{
                             width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                            background: getProfileColor(p.id), color: '#fff',
+                            background: getAvatarColor(p), color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '0.65rem', fontWeight: 700,
                           }}>

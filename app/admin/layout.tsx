@@ -8,6 +8,7 @@ import { NotificationBell } from '@/components/admin/NotificationBell'
 import { FeedbackButton } from '@/components/admin/FeedbackButton'
 import { AIChatButton } from '@/components/ai/AIChatButton'
 import { C } from '@/lib/admin-theme'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
 type NavItem = { href: string; label: string; exact?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }
@@ -213,9 +214,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <NotificationBell />
           {profile && (
-            <span className="hidden sm:block" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-              {profile.name || profile.email}
-            </span>
+            <Link
+              href="/admin/profile"
+              className="hidden sm:flex"
+              style={{ alignItems: 'center', gap: 8, textDecoration: 'none' }}
+            >
+              <span style={{
+                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                background: getAvatarColor(profile), color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700,
+              }}>
+                {(profile.name || profile.email)[0].toUpperCase()}
+              </span>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                {profile.name || profile.email}
+              </span>
+            </Link>
           )}
           <button
             onClick={logout}

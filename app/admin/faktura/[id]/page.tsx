@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, setInvoiceAssignee, updatePipelineStage } from '@/lib/actions/pipeline'
 import { getPreprodDetail } from '@/lib/actions/preprod'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
   bg:       '#181920',
@@ -19,29 +20,22 @@ const C = {
   danger:   '#E05555',
 }
 
-const AVATAR_COLORS = ['#7C5CFC','#4A8FA8','#4CAF7D','#E07B54','#C49434','#B85C8A','#5C9E6B','#6B7EC4']
-function avatarColor(id: string): string {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
-}
-
-function Avatar({ id, name, size = 28 }: { id: string; name: string | null; size?: number }) {
+function Avatar({ id, name, color, size = 28 }: { id: string; name: string | null; color?: string | null; size?: number }) {
   const initials = (name ?? 'U').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
-  const color = avatarColor(id)
+  const resolvedColor = getAvatarColor({ id, color })
   return (
     <div title={name ?? 'Ukjent'} style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: `${color}22`, border: `1.5px solid ${color}55`,
+      background: `${resolvedColor}22`, border: `1.5px solid ${resolvedColor}55`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-dm-sans)', fontSize: size * 0.38, fontWeight: 700, color,
+      fontFamily: 'var(--font-dm-sans)', fontSize: size * 0.38, fontWeight: 700, color: resolvedColor,
     }}>
       {initials}
     </div>
   )
 }
 
-type Profile = { id: string; name: string | null; email: string }
+type Profile = { id: string; name: string | null; email: string; color: string | null }
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
 
 export default function FakturaPage() {
@@ -180,7 +174,7 @@ export default function FakturaPage() {
               </p>
               {assignee ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Avatar id={assignee.id} name={assignee.name} size={24} />
+                  <Avatar id={assignee.id} name={assignee.name} color={assignee.color} size={24} />
                   <span style={{ fontSize: '0.85rem', color: C.text }}>{assignee.name}</span>
                 </div>
               ) : (
@@ -227,7 +221,7 @@ export default function FakturaPage() {
                         display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-dm-sans)',
                       }}
                     >
-                      <Avatar id={p.id} name={p.name} size={22} />
+                      <Avatar id={p.id} name={p.name} color={p.color} size={22} />
                       <div>
                         <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: p.id === assigneeId ? 600 : 400, color: C.text }}>{p.name}</p>
                         <p style={{ margin: 0, fontSize: '0.7rem', color: C.text3 }}>{p.email}</p>

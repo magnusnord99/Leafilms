@@ -22,27 +22,11 @@ import {
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
-type Profile = { id: string; name: string | null; email: string }
+type Profile = { id: string; name: string | null; email: string; color: string | null }
 
 const accentBorder = 'rgba(124,92,252,0.35)'
-
-const AVATAR_COLORS = [
-  '#7C5CFC', // lilla
-  '#4A8FA8', // stålblå
-  '#4CAF7D', // grønn
-  '#E07B54', // terrakotta
-  '#C49434', // gull
-  '#B85C8A', // rosa
-  '#5C9E6B', // mosegrønn
-  '#6B7EC4', // lavendel
-]
-
-function avatarColor(id: string): string {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
-}
 
 // Gruppe 1: Lead → Tilbud (før kontrakt) — stålblå
 // Gruppe 2: Kontrakt → Produksjon — gull
@@ -298,7 +282,7 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
             {task.assignees.slice(0, 3).map((a, i) => (
               <span key={a.id} style={{
                 width: 16, height: 16, borderRadius: '50%',
-                background: avatarColor(a.id), color: '#fff',
+                background: getAvatarColor(a), color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.5rem', fontWeight: 700,
                 marginLeft: i > 0 ? -4 : 0,
@@ -346,8 +330,8 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
               >
                 <span style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                  background: isAssigned ? avatarColor(p.id) : C.surface,
-                  border: `1px solid ${isAssigned ? avatarColor(p.id) : C.border}`,
+                  background: isAssigned ? getAvatarColor(p) : C.surface,
+                  border: `1px solid ${isAssigned ? getAvatarColor(p) : C.border}`,
                   color: isAssigned ? '#fff' : C.text2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.6rem', fontWeight: 700,
@@ -417,7 +401,7 @@ function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
         {assignee ? (
           <span style={{
             width: 18, height: 18, borderRadius: '50%',
-            background: avatarColor(assignee.id), color: '#fff',
+            background: getAvatarColor(assignee), color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '0.52rem', fontWeight: 700, flexShrink: 0,
           }}>
@@ -428,7 +412,7 @@ function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
           </svg>
         )}
-        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? avatarColor(assignee.id) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? getAvatarColor(assignee) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {assignee ? (assignee.name ?? assignee.email).split(' ')[0] : 'Tildel'}
         </span>
         <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
@@ -464,15 +448,15 @@ function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
                 onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
                 onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
               >
-                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? avatarColor(p.id) : C.surface, border: `1px solid ${isSelected ? avatarColor(p.id) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? getAvatarColor(p) : C.surface, border: `1px solid ${isSelected ? getAvatarColor(p) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
                   {(p.name ?? p.email)[0].toUpperCase()}
                 </span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? avatarColor(p.id) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? getAvatarColor(p) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.name ?? p.email}
                 </span>
                 {isSelected && (
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={avatarColor(p.id)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={getAvatarColor(p)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </button>
@@ -528,7 +512,7 @@ function InvoiceAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
         }}
       >
         {assignee ? (
-          <span style={{ width: 18, height: 18, borderRadius: '50%', background: avatarColor(assignee.id), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.52rem', fontWeight: 700, flexShrink: 0 }}>
+          <span style={{ width: 18, height: 18, borderRadius: '50%', background: getAvatarColor(assignee), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.52rem', fontWeight: 700, flexShrink: 0 }}>
             {(assignee.name ?? assignee.email)[0].toUpperCase()}
           </span>
         ) : (
@@ -536,7 +520,7 @@ function InvoiceAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
           </svg>
         )}
-        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? avatarColor(assignee.id) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? getAvatarColor(assignee) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {assignee ? (assignee.name ?? assignee.email).split(' ')[0] : 'Tildel'}
         </span>
         <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
@@ -558,15 +542,15 @@ function InvoiceAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
             const isSelected = p.id === assignee?.id
             return (
               <button key={p.id} onClick={() => select(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: isSelected ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? avatarColor(p.id) : C.surface, border: `1px solid ${isSelected ? avatarColor(p.id) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? getAvatarColor(p) : C.surface, border: `1px solid ${isSelected ? getAvatarColor(p) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
                   {(p.name ?? p.email)[0].toUpperCase()}
                 </span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? avatarColor(p.id) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? getAvatarColor(p) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.name ?? p.email}
                 </span>
                 {isSelected && (
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={avatarColor(p.id)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={getAvatarColor(p)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </button>
@@ -837,7 +821,7 @@ function DraggableCard({
                 {allAssignees.slice(0, 5).map((a, i) => (
                   <span key={a.id} title={a.name ?? a.email} style={{
                     width: 16, height: 16, borderRadius: '50%',
-                    background: avatarColor(a.id), color: '#fff',
+                    background: getAvatarColor(a), color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.5rem', fontWeight: 700,
                     marginLeft: i > 0 ? -4 : 0,

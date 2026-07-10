@@ -86,7 +86,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
 export type PreprodDetail = {
   project: ProjectWithPipeline & { preprod: PreprodData; quote_equipment: { name: string }[] }
   tasks: Task[]
-  profiles: { id: string; name: string | null; email: string }[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
 }
 
 export async function getPreprodDetail(projectId: string): Promise<PreprodDetail | null> {
@@ -110,7 +110,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, name, email')
+      .select('id, name, email, color')
       .order('name', { ascending: true })
 
     // Hent utstyr fra gjeldende quote-versjon
@@ -148,7 +148,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
           .map((ta) => ta.profile)
           .filter((pr): pr is NonNullable<typeof pr> => pr !== null),
       })),
-      profiles: (profiles ?? []) as { id: string; name: string | null; email: string }[],
+      profiles: (profiles ?? []) as { id: string; name: string | null; email: string; color: string | null }[],
     }
   } catch (err) {
     console.error('getPreprodDetail error:', err)

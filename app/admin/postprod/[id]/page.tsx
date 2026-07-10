@@ -18,6 +18,7 @@ import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline } from '@/lib/types'
 import { TaskChat } from '@/components/task/TaskChat'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
   bg:       '#181920',
@@ -36,13 +37,6 @@ const C = {
 }
 
 type PostProdProject = ProjectWithPipeline & { task_count: number; done_count: number }
-
-const PROFILE_COLORS = ['#7C5CFC', '#4A9AC4', '#4CAF7D', '#F0A500', '#E8529A', '#E07C3A', '#50C8C8']
-function getProfileColor(id: string): string {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) & 0x7fffffff
-  return PROFILE_COLORS[hash % PROFILE_COLORS.length]
-}
 
 const TASK_LINK_FIELDS: Record<string, { key: string; label: string }[]> = {
   'Logging': [
@@ -197,7 +191,7 @@ export default function PostProdDetailPage() {
   const [rejectionNoteError, setRejectionNoteError] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
-  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
@@ -206,7 +200,7 @@ export default function PostProdDetailPage() {
 
   const [dueDates, setDueDates] = useState<Record<string, string>>({})
 
-  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -323,7 +317,9 @@ export default function PostProdDetailPage() {
     if (currentProj) {
       setDeliveryVideo(currentProj.delivery_video ?? '')
       setDeliveryPhoto(currentProj.delivery_photo ?? '')
-      setProjectLead_(currentProj.project_lead ?? null)   // ← ny linje
+      setProjectLead_(currentProj.project_lead
+        ? { ...currentProj.project_lead, color: allProfiles.find(p => p.id === currentProj.project_lead!.id)?.color ?? null }
+        : null)   // ← ny linje
     }
     setLoading(false)
   }
@@ -696,7 +692,7 @@ export default function PostProdDetailPage() {
                       <>
                         <span style={{
                           width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                          background: getProfileColor(projectLead.id), color: '#fff',
+                          background: getAvatarColor(projectLead), color: '#fff',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: '0.58rem', fontWeight: 700,
                         }}>
@@ -750,7 +746,7 @@ export default function PostProdDetailPage() {
                         >
                           <span style={{
                             width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                            background: getProfileColor(p.id), color: '#fff',
+                            background: getAvatarColor(p), color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '0.65rem', fontWeight: 700,
                           }}>
@@ -1350,7 +1346,7 @@ export default function PostProdDetailPage() {
                           {selectedTask.assignees.slice(0, 3).map((a, i) => (
                             <span key={a.id} style={{
                               width: 22, height: 22, borderRadius: '50%',
-                              background: getProfileColor(a.id), color: '#fff',
+                              background: getAvatarColor(a), color: '#fff',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,
                               marginLeft: i > 0 ? -6 : 0,
@@ -1416,8 +1412,8 @@ export default function PostProdDetailPage() {
                           >
                             <span style={{
                               width: 22, height: 22, borderRadius: '50%',
-                              background: isAssigned ? getProfileColor(profile.id) : C.surface,
-                              border: `1px solid ${isAssigned ? getProfileColor(profile.id) : C.border}`,
+                              background: isAssigned ? getAvatarColor(profile) : C.surface,
+                              border: `1px solid ${isAssigned ? getAvatarColor(profile) : C.border}`,
                               color: isAssigned ? '#fff' : C.text2,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,

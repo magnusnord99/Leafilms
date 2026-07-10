@@ -11,6 +11,7 @@ interface Profile {
   role: 'admin' | 'customer'
   name: string | null
   customer_id: string | null
+  color: string | null
 }
 
 export function useAuth() {

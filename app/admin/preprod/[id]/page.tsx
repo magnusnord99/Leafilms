@@ -11,6 +11,7 @@ import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserP
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
+import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
   bg:       '#181920',
@@ -27,22 +28,15 @@ const C = {
   danger:   '#E05555',
 }
 
-const PROFILE_COLORS = ['#7C5CFC', '#4A9AC4', '#4CAF7D', '#F0A500', '#E8529A', '#E07C3A']
-function profileColor(id: string) {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fffffff
-  return PROFILE_COLORS[h % PROFILE_COLORS.length]
-}
-
-function Avatar({ id, name, size = 26 }: { id: string; name: string | null; size?: number }) {
+function Avatar({ id, name, color, size = 26 }: { id: string; name: string | null; color?: string | null; size?: number }) {
   const initials = (name ?? 'U').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
-  const color = profileColor(id)
+  const resolvedColor = getAvatarColor({ id, color })
   return (
     <div title={name ?? 'Ukjent'} style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: `${color}22`, border: `1.5px solid ${color}55`,
+      background: `${resolvedColor}22`, border: `1.5px solid ${resolvedColor}55`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-dm-sans)', fontSize: size * 0.38, fontWeight: 700, color,
+      fontFamily: 'var(--font-dm-sans)', fontSize: size * 0.38, fontWeight: 700, color: resolvedColor,
     }}>
       {initials}
     </div>
@@ -281,7 +275,7 @@ function CrewSection({
   crew: PreprodCrewMember[]
   projectId: string
   field: 'prod_crew' | 'post_crew'
-  profiles: { id: string; name: string | null; email: string }[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onChange: (crew: PreprodCrewMember[]) => void
   onCrewAdded?: (updated: PreprodCrewMember[]) => void
 }) {
@@ -554,7 +548,7 @@ function PostCrewSection({
 }: {
   crew: PreprodCrewMember[]
   projectId: string
-  profiles: { id: string; name: string | null; email: string }[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
   projectType: string | null | undefined
   onChange: (crew: PreprodCrewMember[]) => void
   onCrewAdded?: (updated: PreprodCrewMember[]) => void
@@ -614,7 +608,7 @@ function PostCrewSection({
                 const member = crew.find(c => c.role === key)
                 const isOpen = openKey === key
                 const assigned = member
-                  ? profiles.find(p => p.id === member.profile_id) ?? { id: member.profile_id, name: member.name, email: member.name }
+                  ? profiles.find(p => p.id === member.profile_id) ?? { id: member.profile_id, name: member.name, email: member.name, color: null }
                   : null
 
                 return (
@@ -631,7 +625,7 @@ function PostCrewSection({
                       </span>
                       {assigned ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <Avatar id={assigned.id} name={assigned.name} size={22} />
+                          <Avatar id={assigned.id} name={assigned.name} color={assigned.color} size={22} />
                           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text }}>
                             {assigned.name ?? assigned.email}
                           </span>
@@ -692,7 +686,7 @@ function PostCrewSection({
                               onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
                               onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
                             >
-                              <Avatar id={p.id} name={p.name} size={22} />
+                              <Avatar id={p.id} name={p.name} color={p.color} size={22} />
                               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: isCurrent ? C.accent : C.text, flex: 1 }}>
                                 {p.name ?? p.email}
                               </span>
@@ -723,7 +717,7 @@ function TaskList({
   tasks, profiles, onStatusChange, currentUserId, messageCounts, deepLinkTaskId,
 }: {
   tasks: Task[]
-  profiles: { id: string; name: string | null; email: string }[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onStatusChange: (taskId: string, status: Task['status']) => void
   currentUserId: string | null
   messageCounts: Record<string, number>
@@ -874,7 +868,7 @@ function InvoiceAssigneeCard({
 }: {
   projectId: string
   currentAssigneeId: string | null
-  profiles: { id: string; name: string | null; email: string }[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
 }) {
   const [assigneeId, setAssigneeId] = useState<string | null>(currentAssigneeId)
   const [open, setOpen] = useState(false)
@@ -906,7 +900,7 @@ function InvoiceAssigneeCard({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         {assignee ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Avatar id={assignee.id} name={assignee.name} size={22} />
+            <Avatar id={assignee.id} name={assignee.name} color={assignee.color} size={22} />
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text }}>{assignee.name ?? assignee.email}</span>
           </div>
         ) : (
@@ -952,7 +946,7 @@ function InvoiceAssigneeCard({
                     display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-dm-sans)',
                   }}
                 >
-                  <Avatar id={p.id} name={p.name} size={18} />
+                  <Avatar id={p.id} name={p.name} color={p.color} size={18} />
                   <span style={{ fontSize: '0.78rem', color: C.text, fontWeight: p.id === assigneeId ? 600 : 400 }}>{p.name ?? p.email}</span>
                 </button>
               ))}
@@ -974,10 +968,10 @@ export default function PreprodDetailPage() {
 
   const [project, setProject] = useState<PreprodDetail['project'] | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
-  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [preprod, setPreprod] = useState<PreprodData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string } | null>(null)
+  const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -991,7 +985,9 @@ export default function PreprodDetailPage() {
         setTasks(detail.tasks)
         setProfiles(detail.profiles)
         setPreprod(detail.project.preprod)
-        setProjectLead_(detail.project.project_lead ?? null)
+        setProjectLead_(detail.project.project_lead
+          ? { ...detail.project.project_lead, color: detail.profiles.find(p => p.id === detail.project.project_lead!.id)?.color ?? null }
+          : null)
         if (detail.tasks.length > 0) {
           getTaskMessageCounts(detail.tasks.map(t => t.id)).then(setMessageCounts)
         }
@@ -1133,7 +1129,7 @@ export default function PreprodDetailPage() {
                 <>
                   <span style={{
                     width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                    background: profileColor(projectLead.id), color: '#fff',
+                    background: getAvatarColor(projectLead), color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.58rem', fontWeight: 700,
                   }}>
@@ -1187,7 +1183,7 @@ export default function PreprodDetailPage() {
                   >
                     <span style={{
                       width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                      background: profileColor(p.id), color: '#fff',
+                      background: getAvatarColor(p), color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '0.65rem', fontWeight: 700,
                     }}>

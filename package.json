@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.80.0",
+    "@xyflow/react": "^12.11.2",
     "next": "^16.2.6",
     "openai": "^6.8.1",
     "pdfkit": "^0.18.0",

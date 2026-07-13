@@ -499,4 +499,60 @@ export type AssigneeJoin = { profile: { id: string; name: string | null; email: 
 export type TaskRow = Task & { task_assignees?: AssigneeJoin[] }
 export type ProjectRow = ProjectWithPipeline & { customers?: ProjectWithPipeline['customer'] }
 
+// ---------------------------------------------------------------------------
+// Boards (intern Milanote-erstatning) — 098_boards.sql
+// ---------------------------------------------------------------------------
+
+export type BoardCardType = 'note' | 'image' | 'video' | 'link' | 'color' | 'todo' | 'column' | 'board'
+
+export type NoteContent = { text: string }
+export type ImageContent = { url: string; caption?: string }
+/** Enten embed_url (YouTube/Vimeo iframe-URL) eller url (opplastet fil i board-images) */
+export type VideoContent = { embed_url?: string; url?: string }
+export type LinkContent = { url: string; title?: string; description?: string; image_url?: string }
+export type ColorContent = { hex: string }
+export type TodoItem = { id: string; text: string; checked: boolean }
+export type TodoContent = { title?: string; items: TodoItem[] }
+export type ColumnContent = { title: string }
+/** title er denormalisert fra boards.title for enkel rendering (holdes i sync av renameBoard) */
+export type BoardRefContent = { child_board_id: string; title: string }
+
+export type BoardCardContent =
+  | NoteContent | ImageContent | VideoContent | LinkContent
+  | ColorContent | TodoContent | ColumnContent | BoardRefContent
+
+export type Board = {
+  id: string
+  project_id: string
+  parent_board_id: string | null
+  title: string
+  share_token: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BoardCard = {
+  id: string
+  board_id: string
+  type: BoardCardType
+  x: number
+  y: number
+  width: number | null
+  z_index: number
+  column_id: string | null
+  sort_order: number
+  content: BoardCardContent
+  created_at: string
+  updated_at: string
+}
+
+export type BoardEdge = {
+  id: string
+  board_id: string
+  from_card_id: string
+  to_card_id: string
+  label: string | null
+  created_at: string
+}
 

@@ -25,7 +25,9 @@ export function cardToNode(card: BoardCard, childMeta: Record<string, ChildBoard
         : undefined,
     },
     zIndex: isColumn ? 0 : card.z_index + 1,
-    ...(card.column_id ? { parentId: card.column_id, extent: 'parent' as const } : {}),
+    // Ikke sett extent: 'parent' her — det ville låst kortet permanent inne i kolonnen
+    // og gjort det umulig å dra det ut igjen (se onNodeDragStop i BoardCanvas.tsx).
+    ...(card.column_id ? { parentId: card.column_id } : {}),
     style: {
       width: card.width ?? (isColumn ? COLUMN_WIDTH : CARD_WIDTH),
       ...(card.column_id ? { width: COLUMN_WIDTH - COLUMN_PAD * 2 } : {}),

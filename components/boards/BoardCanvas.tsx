@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap,
   useNodesState, useEdgesState, useReactFlow,
@@ -13,7 +13,8 @@ import {
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
-import { cardsToNodes, cardToNode, edgesToFlow, CARD_WIDTH, type CardNode } from './toFlow'
+import { cardsToNodes, cardToNode, edgesToFlow, CARD_WIDTH, COLUMN_WIDTH, COLUMN_PAD, type CardNode } from './toFlow'
+import { restackColumn } from './columnLayout'
 import { nodeTypes } from './nodes'
 import Toolbar from './Toolbar'
 import { uploadBoardFile } from './upload'
@@ -21,7 +22,7 @@ import { parseVideoEmbed } from './videoUrl'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
-const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo'] // utvides per task
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo', 'column'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {
@@ -68,6 +69,13 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     const ok = await saveCardPositions(patches)
     setSaveError(ok ? null : SAVE_ERROR_MSG)
   }, [markLocalOp])
+
+  // Hjelpere for kolonnestabling (Task 9)
+  const nodeHeight = useCallback((n: CardNode) => n.measured?.height ?? 100, [])
+  const absPos = useCallback((nodeId: string) => {
+    const internal = rf.getInternalNode(nodeId)
+    return internal ? internal.internals.positionAbsolute : { x: 0, y: 0 }
+  }, [rf])
 
   // Laster opp valgt fil til boardId-mappen og oppretter et bilde-/videokort på lagret klikkposisjon
   const handleFileUpload = useCallback(async (type: 'image' | 'video', file: File) => {
@@ -155,13 +163,86 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     setNodes(ns => ns.map(n => n.id === node.id ? { ...n, zIndex: n.data.card.type === 'column' ? 0 : z + 1 } : n))
   }, [setNodes, maxZ])
 
+  // Utvidet ved Task 9: kort kan festes til / løsrives fra kolonner ved slipp,
+  // og berørte kolonner restables (barn stables vertikalt, kolonnehøyden justeres).
   const onNodeDragStop: OnNodeDrag<CardNode> = useCallback((_e, node, dragged) => {
-    const moved = dragged.length > 0 ? dragged : [node]
-    persist(moved.map(n => ({
-      id: n.id, x: n.position.x, y: n.position.y,
-      z_index: (n as CardNode).data.card.z_index,
-    })))
-  }, [persist])
+    const moved = (dragged.length > 0 ? dragged : [node]) as CardNode[]
+    let next = rf.getNodes() as CardNode[]
+    const patches: CardPositionPatch[] = []
+    const dirtyColumns = new Set<string>()
+
+    for (const m of moved) {
+      const current = next.find(n => n.id === m.id)
+      if (!current) continue
+      const type = current.data.card.type
+      const canJoinColumn = type !== 'column' && type !== 'board'
+
+      const intersectingColumn = canJoinColumn
+        ? (rf.getIntersectingNodes(current) as CardNode[]).find(n => n.data.card.type === 'column')
+        : undefined
+
+      if (intersectingColumn && current.parentId !== intersectingColumn.id) {
+        // Fest til kolonne: posisjon relativt til kolonnen, restack etterpå
+        const a = absPos(current.id)
+        const colA = absPos(intersectingColumn.id)
+        next = next.map(n => n.id === current.id ? {
+          ...n,
+          parentId: intersectingColumn.id,
+          position: { x: a.x - colA.x, y: a.y - colA.y },
+          style: { ...n.style, width: COLUMN_WIDTH - COLUMN_PAD * 2 },
+        } : n)
+        dirtyColumns.add(intersectingColumn.id)
+        if (current.parentId) dirtyColumns.add(current.parentId)
+      } else if (current.parentId && !intersectingColumn) {
+        // Dratt ut av kolonnen: tilbake til absolutt posisjon
+        const a = absPos(current.id)
+        next = next.map(n => n.id === current.id ? {
+          ...n,
+          parentId: undefined,
+          position: a,
+          style: { ...n.style, width: current.data.card.width ?? CARD_WIDTH },
+        } : n)
+        patches.push({ id: current.id, x: a.x, y: a.y, column_id: null, sort_order: 0 })
+        dirtyColumns.add(current.parentId)
+      } else if (current.data.card.type === 'column') {
+        patches.push({ id: current.id, x: current.position.x, y: current.position.y })
+      } else {
+        patches.push({
+          id: current.id, x: current.position.x, y: current.position.y,
+          z_index: current.data.card.z_index,
+          ...(current.parentId ? { column_id: current.parentId } : {}),
+        })
+      }
+    }
+
+    for (const colId of dirtyColumns) {
+      const result = restackColumn(colId, next, nodeHeight)
+      next = result.nodes
+      result.patches.forEach(p => {
+        const idx = patches.findIndex(q => q.id === p.id)
+        if (idx >= 0) patches[idx] = { ...patches[idx], ...p }
+        else patches.push(p)
+      })
+    }
+
+    setNodes(next)
+    if (patches.length) persist(patches)
+  }, [rf, absPos, nodeHeight, persist, setNodes])
+
+  // Etter innlasting: restack kolonner én gang når alle noder er målt, så lagret
+  // stabling/høyde vises korrekt fra start (uten dette blir kolonnehøyden feil ved refresh).
+  const restackedOnce = useRef(false)
+  useEffect(() => {
+    if (restackedOnce.current) return
+    const all = rf.getNodes() as CardNode[]
+    if (all.length === 0 || all.some(n => !n.measured?.height)) return // vent til målt
+    restackedOnce.current = true
+    let next = all
+    for (const col of all.filter(n => n.data.card.type === 'column')) {
+      next = restackColumn(col.id, next, nodeHeight).nodes // uten persist — bare visuelt
+    }
+    setNodes(next)
+  }, [nodes, rf, nodeHeight, setNodes])
 
   // Slett valgte med Delete-tast (bekreftelse for board-kort kommer i Task 10)
   const onBeforeDelete: OnBeforeDelete<CardNode, Edge> = useCallback(async ({ nodes: delNodes, edges: delEdges }) => {

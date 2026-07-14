@@ -71,9 +71,10 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   // Laster opp valgt fil til boardId-mappen og oppretter et bilde-/videokort på lagret klikkposisjon
   const handleFileUpload = useCallback(async (type: 'image' | 'video', file: File) => {
+    // Fang posisjonen FØR await — en ny plassering kan overskrive ref-en mens opplastingen pågår
+    const pos = pendingPosRef.current
     const res = await uploadBoardFile(boardId, file)
     if ('error' in res) { setSaveError(res.error); return }
-    const pos = pendingPosRef.current
     const card = await createBoardCard({
       board_id: boardId, type, x: pos.x, y: pos.y,
       content: { url: res.url }, z_index: maxZ() + 1,

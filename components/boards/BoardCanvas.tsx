@@ -9,7 +9,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { BoardCard, BoardCardContent, BoardCardType } from '@/lib/types'
 import {
-  createBoardCard, deleteBoardCards, deleteBoardEdges, saveCardPositions,
+  createBoardCard, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent,
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
@@ -21,7 +21,7 @@ import { parseVideoEmbed } from './videoUrl'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
-const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video'] // utvides per task
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {
@@ -112,6 +112,28 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       } else {
         pendingPosRef.current = pos
         videoInputRef.current?.click()
+      }
+      return
+    }
+
+    if (type === 'link') {
+      const url = window.prompt('Lim inn lenke:')
+      if (url) {
+        const card = await createBoardCard({
+          board_id: boardId, type: 'link', x: pos.x, y: pos.y,
+          content: { url }, z_index: maxZ() + 1,
+        })
+        if (!card) { setSaveError(SAVE_ERROR_MSG); return }
+        markLocalOp(card.id)
+        setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
+        // Fire-and-forget metadata fetch
+        fetchLinkMetadata(url).then(meta => {
+          markLocalOp(card.id)
+          updateCardContent(card.id, meta)
+          setNodes(ns => ns.map(n => n.id === card.id
+            ? { ...n, data: { ...n.data, card: { ...n.data.card, content: meta } } }
+            : n))
+        })
       }
       return
     }

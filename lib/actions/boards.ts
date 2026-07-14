@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
-import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent } from '@/lib/types'
+import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
@@ -296,5 +296,32 @@ export async function renameBoard(boardId: string, title: string): Promise<boole
   } catch (err) {
     console.error('renameBoard:', err)
     return false
+  }
+}
+
+export async function fetchLinkMetadata(url: string): Promise<LinkContent> {
+  const safeHost = (() => { try { return new URL(url).hostname } catch { return url } })()
+  const fallback: LinkContent = { url, title: safeHost }
+  try {
+    const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol)) return fallback
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(5000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeafilmsBoards/1.0)' },
+    })
+    if (!res.ok) return fallback
+    const html = (await res.text()).slice(0, 300_000)
+    const pick = (re: RegExp) => re.exec(html)?.[1]?.trim()
+    const og = (prop: string) =>
+      pick(new RegExp(`<meta[^>]+property=["']og:${prop}["'][^>]*content=["']([^"']+)["']`, 'i')) ??
+      pick(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:${prop}["']`, 'i'))
+    return {
+      url,
+      title: og('title') ?? pick(/<title[^>]*>([^<]+)<\/title>/i) ?? safeHost,
+      description: og('description'),
+      image_url: og('image'),
+    }
+  } catch {
+    return fallback
   }
 }

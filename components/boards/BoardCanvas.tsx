@@ -117,8 +117,9 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     }
 
     if (type === 'link') {
-      const url = window.prompt('Lim inn lenke:')
+      const url = window.prompt('Lim inn lenke:')?.trim()
       if (url) {
+        if (!/^https?:\/\//i.test(url)) { setSaveError('Lenken må starte med http:// eller https://'); return }
         const card = await createBoardCard({
           board_id: boardId, type: 'link', x: pos.x, y: pos.y,
           content: { url }, z_index: maxZ() + 1,

@@ -62,7 +62,7 @@ function ProjectCard({ project }: { project: PreprodProject }) {
 
         {/* Status indicators */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <StatusPill done={millanote} label="Millanote" />
+          <StatusPill done={millanote} label="Moodboard/planlegging" />
           <StatusPill done={prodCrew > 0} label={`Prod-crew ${prodCrew > 0 ? `(${prodCrew})` : ''}`} />
           <StatusPill done={postCrew > 0} label={`Post-crew ${postCrew > 0 ? `(${postCrew})` : ''}`} />
           {packingTotal > 0 && (

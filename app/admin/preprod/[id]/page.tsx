@@ -9,6 +9,7 @@ import {
 } from '@/lib/actions/preprod'
 import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
+import BoardsButton from './BoardsButton'
 import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -51,74 +52,52 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ─── Millanote ────────────────────────────────────────────────────────────────
+// ─── Moodboard/planlegging (boards) ───────────────────────────────────────────
 
-function MillanoteCard({
+function MoodboardCard({
   url, done, projectId, onChange,
 }: {
   url: string; done: boolean; projectId: string; onChange: (patch: Partial<PreprodData>) => void
 }) {
-  const [localUrl, setLocalUrl] = useState(url)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function handleUrlChange(val: string) {
-    setLocalUrl(val)
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      onChange({ millanote_url: val })
-      updatePreprodData(projectId, { millanote_url: val })
-    }, 700)
-  }
-
   function toggleDone() {
     const next = !done
     onChange({ millanote_done: next })
     updatePreprodData(projectId, { millanote_done: next })
   }
 
+  const oldUrl = (url || '').trim()
+
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <SectionTitle>Millanote</SectionTitle>
-        <button
-          onClick={toggleDone}
-          style={{
-            fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
-            padding: '3px 10px', borderRadius: 5, cursor: 'pointer', border: 'none',
-            background: done ? 'rgba(76,175,125,0.15)' : C.surface2,
-            color: done ? C.success : C.text3,
-            transition: 'all 0.12s',
-          }}
-        >
-          {done ? '✓ Satt opp' : 'Ikke satt opp'}
-        </button>
-      </div>
+      <SectionTitle>Moodboard/planlegging</SectionTitle>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input
-          value={localUrl}
-          onChange={e => handleUrlChange(e.target.value)}
-          placeholder="Lim inn Millanote-lenke..."
-          style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
-            color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
-            borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
-          }}
-          onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-          onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-        />
-        {localUrl && (
-          <a href={localUrl.startsWith('http') ? localUrl : `https://${localUrl}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button style={{
-              fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500,
-              padding: '7px 12px', borderRadius: 6, cursor: 'pointer',
-              background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)',
-            }}>
-              Åpne →
-            </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <BoardsButton projectId={projectId} />
+        {oldUrl && (
+          <a
+            href={oldUrl.startsWith('http') ? oldUrl : `https://${oldUrl}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, textDecoration: 'none' }}
+          >
+            Åpne gammel Millanote ↗
           </a>
         )}
       </div>
+
+      <label style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, cursor: 'pointer',
+        fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+        color: done ? C.success : C.text2,
+      }}>
+        <input
+          type="checkbox"
+          checked={done}
+          onChange={toggleDone}
+          style={{ width: 14, height: 14, accentColor: C.success, cursor: 'pointer' }}
+        />
+        Moodboard/planlegging ferdig
+      </label>
     </div>
   )
 }
@@ -1237,9 +1216,9 @@ export default function PreprodDetailPage() {
             />
           </div>
 
-          {/* Right: Millanote + Pakkeliste */}
+          {/* Right: Moodboard/planlegging + Pakkeliste */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <MillanoteCard
+            <MoodboardCard
               url={preprod.millanote_url}
               done={preprod.millanote_done}
               projectId={id}

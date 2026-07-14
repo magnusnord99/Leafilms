@@ -16,8 +16,12 @@ import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './board
 import { cardsToNodes, cardToNode, edgesToFlow, CARD_WIDTH, type CardNode } from './toFlow'
 import { nodeTypes } from './nodes'
 import Toolbar from './Toolbar'
+import { uploadBoardFile } from './upload'
+import { parseVideoEmbed } from './videoUrl'
 
-const ENABLED_TYPES: BoardCardType[] = ['note'] // utvides per task
+const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
+
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {
@@ -42,7 +46,10 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   const [nodes, setNodes, onNodesChange] = useNodesState<CardNode>(cardsToNodes(initial.cards, initial.childMeta))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(edgesToFlow(initial.edges))
   const [pendingType, setPendingType] = useState<BoardCardType | null>(null)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const pendingPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Egen skriving siste 5 s → ignorer realtime-echo (Task 12)
   const localOps = useRef<Map<string, number>>(new Map())
@@ -59,8 +66,22 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   const persist = useCallback(async (patches: CardPositionPatch[]) => {
     patches.forEach(p => markLocalOp(p.id))
     const ok = await saveCardPositions(patches)
-    setSaveError(!ok)
+    setSaveError(ok ? null : SAVE_ERROR_MSG)
   }, [markLocalOp])
+
+  // Laster opp valgt fil til boardId-mappen og oppretter et bilde-/videokort på lagret klikkposisjon
+  const handleFileUpload = useCallback(async (type: 'image' | 'video', file: File) => {
+    const res = await uploadBoardFile(boardId, file)
+    if ('error' in res) { setSaveError(res.error); return }
+    const pos = pendingPosRef.current
+    const card = await createBoardCard({
+      board_id: boardId, type, x: pos.x, y: pos.y,
+      content: { url: res.url }, z_index: maxZ() + 1,
+    })
+    if (!card) { setSaveError(SAVE_ERROR_MSG); return }
+    markLocalOp(card.id)
+    setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
+  }, [boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
 
   // Opprette kort ved klikk på canvas i plasseringsmodus
   const onPaneClick = useCallback(async (event: React.MouseEvent) => {
@@ -68,11 +89,37 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     const type = pendingType
     setPendingType(null)
     const pos = rf.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+
+    if (type === 'image') {
+      pendingPosRef.current = pos
+      imageInputRef.current?.click()
+      return
+    }
+
+    if (type === 'video') {
+      const url = window.prompt('Lim inn YouTube/Vimeo-lenke (eller Avbryt for å laste opp fil):')
+      if (url) {
+        const embed_url = parseVideoEmbed(url)
+        if (!embed_url) { setSaveError('Fant ikke gyldig YouTube/Vimeo-lenke'); return }
+        const card = await createBoardCard({
+          board_id: boardId, type: 'video', x: pos.x, y: pos.y,
+          content: { embed_url }, z_index: maxZ() + 1,
+        })
+        if (!card) { setSaveError(SAVE_ERROR_MSG); return }
+        markLocalOp(card.id)
+        setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
+      } else {
+        pendingPosRef.current = pos
+        videoInputRef.current?.click()
+      }
+      return
+    }
+
     const card = await createBoardCard({
       board_id: boardId, type, x: pos.x, y: pos.y,
       content: defaultContent(type), z_index: maxZ() + 1,
     })
-    if (!card) { setSaveError(true); return }
+    if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
     setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
   }, [pendingType, readOnly, rf, boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
@@ -100,24 +147,65 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   const onNodesDelete = useCallback((deleted: CardNode[]) => {
     deleted.forEach(n => markLocalOp(n.id))
-    deleteBoardCards(deleted.map(n => n.id)).then(ok => setSaveError(!ok))
+    deleteBoardCards(deleted.map(n => n.id)).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
   }, [markLocalOp])
 
   const onEdgesDelete = useCallback((deleted: Edge[]) => {
     deleted.forEach(e => markLocalOp(e.id))
-    deleteBoardEdges(deleted.map(e => e.id)).then(ok => setSaveError(!ok))
+    deleteBoardEdges(deleted.map(e => e.id)).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
   }, [markLocalOp])
+
+  // Drop fra Finder/Explorer direkte på lerretet — laster opp alle bilde-/videofiler på slippunktet
+  const onDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    if (readOnly) return
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+    let pos = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    for (const file of files) {
+      const res = await uploadBoardFile(boardId, file)
+      if ('error' in res) { setSaveError(res.error); continue }
+      const isVideo = file.type.startsWith('video/')
+      const card = await createBoardCard({
+        board_id: boardId, type: isVideo ? 'video' : 'image', x: pos.x, y: pos.y,
+        content: { url: res.url }, z_index: maxZ() + 1,
+      })
+      if (card) { markLocalOp(card.id); setNodes(ns => [...ns, cardToNode(card, initial.childMeta)]) }
+      pos = { x: pos.x + 40, y: pos.y + 40 }
+    }
+  }, [readOnly, rf, boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
 
   return (
     <BoardUiProvider value={{ palette, readOnly, markLocalOp }}>
-      <div style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}>
+      <div
+        style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}
+        onDrop={onDrop}
+        onDragOver={e => { if (!readOnly) e.preventDefault() }}
+      >
         {!readOnly && (
           <Toolbar pending={pendingType} onPick={setPendingType} enabledTypes={ENABLED_TYPES} />
         )}
+        {!readOnly && (
+          <>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFileUpload('image', f) }}
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFileUpload('video', f) }}
+            />
+          </>
+        )}
         {saveError && (
           <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 20, background: '#3a1d1d', color: '#f0b0b0', border: '1px solid #E05555', borderRadius: 8, padding: '8px 14px', fontSize: '0.78rem', fontFamily: 'var(--font-dm-sans)' }}>
-            Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.
-            <button onClick={() => setSaveError(false)} style={{ marginLeft: 10, background: 'none', border: 'none', color: '#f0b0b0', cursor: 'pointer' }}>✕</button>
+            {saveError}
+            <button onClick={() => setSaveError(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: '#f0b0b0', cursor: 'pointer' }}>✕</button>
           </div>
         )}
         <ReactFlow

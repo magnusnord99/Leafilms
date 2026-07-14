@@ -16,9 +16,24 @@ export const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'produksjon', label: 'Produksjon' },
   { value: 'post_prod', label: 'Post-produksjon' },
   { value: 'levering', label: 'Levering' },
-  { value: 'fakturert', label: 'Fakturert' },
+  { value: 'fakturert', label: 'Fakturering' },
   { value: 'videresalg', label: 'Videresalg' },
 ]
+
+// Kortform brukt i tettpakkede lister/dashboards (pipeline-chips, tasklister) —
+// samme verdier som var kopiert inn separat i 5 admin-filer.
+export const PIPELINE_STAGE_LABELS_SHORT: Record<PipelineStage, string> = {
+  lead: 'Lead',
+  møte: 'Møte',
+  tilbud_sendt: 'Sende tilbud',
+  kontrakt: 'Kontrakt',
+  pre_prod: 'Pre-prod',
+  produksjon: 'Produksjon',
+  post_prod: 'Post-prod',
+  levering: 'Levering',
+  fakturert: 'Fakturering',
+  videresalg: 'Videresalg',
+}
 
 export type PipelineData = {
   meeting_link?: string
@@ -35,6 +50,7 @@ export type Customer = {
   address: string | null
   notes: string | null
   customer_number: number
+  org_nummer: string | null
   created_at: string
   updated_at: string
 }
@@ -57,11 +73,13 @@ export type Project = {
   post_prod_days?: number | null
   shoot_start?: string | null
   shoot_end?: string | null
+  shoot_confirmed?: boolean
   meeting_notes?: string | null
   meeting_summary?: Record<string, unknown> | null
   pipeline_data?: PipelineData | null
   quote_assignee_id?: string | null
   invoice_assignee_id?: string | null
+  resale_assignee_id?: string | null
   project_lead_id?: string | null
   created_at: string
   updated_at: string
@@ -109,10 +127,26 @@ export type QuoteBuilderItem = {
   unitPrice: number
 }
 
+export type OptionalAddonCategory = 'startup' | 'production' | 'post' | 'expenses'
+
 export type OptionalAddon = {
   id: string
   description: string
-  price: number
+  /**
+   * Beløp fordelt på tilbudskategori(er) — de fleste tillegg bruker kun én, men et tillegg
+   * kan spres over flere (f.eks. fotografering som krever mer i både Opptak og Post-produksjon).
+   * Summen av alle verdier er tillegget totalpris. Mangler på gamle rader (se `price`/`category`
+   * under) — les alltid via getAddonAmounts() i lib/quote-builder-utils.ts, ikke direkte.
+   */
+  amounts?: Partial<Record<OptionalAddonCategory, number>>
+  /** Skal tillegget rabatteres sammen med resten av kategorien(e) (gjelder ikke 'expenses' — den rabatteres aldri)? Default true. Skru av f.eks. for innleide eksterne eksperter vi ikke kan gi rabatt på. */
+  discountable?: boolean
+  /** Fritekst som beskriver hvordan tillegget endrer leveransen (f.eks. "+ 10 bilder") — settes inn som eget avsnitt i kontrakten når kunden velger tillegget. Tomt/uspesifisert = tillegget påvirker ikke leveransen (f.eks. ekstra VFX). */
+  deliveryImpact?: string
+  /** @deprecated Erstattet av `amounts`. Beholdt kun for å lese gamle rader i quote_data — se getAddonAmounts i lib/quote-builder-utils.ts. */
+  price?: number
+  /** @deprecated Erstattet av `amounts`. */
+  category?: OptionalAddonCategory
 }
 
 export type QuoteBuilderData = {
@@ -172,8 +206,30 @@ export type Contract = {
   signed_at: string | null
   signed_by: string | null
   signature_data: Record<string, unknown> | null
+  form_fields: ContractFormFields | null
+  our_signature: OurSignature | null
   created_at: string
   updated_at: string
+}
+
+export type ContractFormFields = {
+  orgNummerOverride?: string
+  produksjonsPeriode?: string
+  signeringsSted?: string
+  signeringsDato?: string
+  bedriftOverride?: string
+  kundeKontaktOverride?: string
+  oppstartDatoOverride?: string
+  opptakDatoerOverride?: string
+  leveranseOverride?: string
+  totalprisOverride?: string
+}
+
+export type OurSignature = {
+  profileId: string
+  signerName: string
+  signatureImage: string
+  signedAt: string
 }
 
 // Innholdsfelter for seksjoner (lagres som JSONB i `sections.content`).
@@ -456,6 +512,23 @@ export type Task = {
   created_at: string
   updated_at: string
   assignees: { id: string; name: string | null; email: string }[]
+}
+
+export type TaskStatus = Task['status']
+
+// Delt kilde for oppgavestatus-tekst — var tidligere "Todo"/"Å gjøre"/"Ikke startet"
+// for samme status i ulike admin-sider.
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: 'Ikke startet',
+  in_progress: 'Pågår',
+  done: 'Ferdig',
+}
+
+// Rekkefølgen et klikk på status-chippen sykler gjennom.
+export const TASK_STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
+  todo: 'in_progress',
+  in_progress: 'done',
+  done: 'todo',
 }
 
 export type TaskMessage = {

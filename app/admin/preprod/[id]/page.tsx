@@ -9,7 +9,7 @@ import {
 } from '@/lib/actions/preprod'
 import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
-import type { Task } from '@/lib/types'
+import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
@@ -732,16 +732,12 @@ function TaskList({
     setToggling(null)
   }
 
-  const STATUS_CYCLE: Record<Task['status'], Task['status']> = {
-    todo: 'in_progress',
-    in_progress: 'done',
-    done: 'todo',
-  }
+  const STATUS_CYCLE = TASK_STATUS_CYCLE
 
   const STATUS_STYLE: Record<Task['status'], { label: string; color: string }> = {
-    todo:        { label: 'Å gjøre',  color: C.text3   },
-    in_progress: { label: 'Pågår',    color: C.warning  },
-    done:        { label: 'Ferdig',   color: C.success  },
+    todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3   },
+    in_progress: { label: TASK_STATUS_LABELS.in_progress, color: C.warning  },
+    done:        { label: TASK_STATUS_LABELS.done,        color: C.success  },
   }
 
   if (tasks.length === 0) {

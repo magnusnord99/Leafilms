@@ -7,9 +7,9 @@ import {
   type Edge, type OnNodeDrag, type OnBeforeDelete,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { BoardCard, BoardCardContent, BoardCardType } from '@/lib/types'
+import type { BoardCard, BoardCardContent, BoardCardType, BoardRefContent } from '@/lib/types'
 import {
-  createBoardCard, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent,
+  createBoardCard, createSubBoard, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent,
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
@@ -22,7 +22,7 @@ import { parseVideoEmbed } from './videoUrl'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
-const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo', 'column'] // utvides per task
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo', 'column', 'board'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {
@@ -147,6 +147,17 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       return
     }
 
+    if (type === 'board') {
+      const title = window.prompt('Navn på nytt board:')?.trim()
+      if (!title) return
+      const res = await createSubBoard(boardId, title, pos.x, pos.y)
+      if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+      markLocalOp(res.card.id)
+      const node = cardToNode(res.card, initial.childMeta)
+      setNodes(ns => [...ns, { ...node, data: { ...node.data, meta: { title, cardCount: 0 } } }])
+      return
+    }
+
     const card = await createBoardCard({
       board_id: boardId, type, x: pos.x, y: pos.y,
       content: defaultContent(type), z_index: maxZ() + 1,
@@ -247,9 +258,22 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     setNodes(next)
   }, [nodes, rf, nodeHeight, setNodes])
 
-  // Slett valgte med Delete-tast (bekreftelse for board-kort kommer i Task 10)
+  // Dobbeltklikk på et board-kort navigerer inn i underboardet — ikke gatet på
+  // readOnly, siden offentlige delingssider også skal kunne navigere i boardhierarkiet.
+  const onNodeDoubleClick = useCallback((_e: React.MouseEvent, n: CardNode) => {
+    const c = n.data.card
+    if (c.type === 'board') onOpenBoard((c.content as BoardRefContent).child_board_id)
+  }, [onOpenBoard])
+
+  // Slett valgte med Delete-tast — bekreftelse kreves når board-kort er involvert,
+  // siden det kaskaderer til sletting av hele underboardet (Task 3).
   const onBeforeDelete: OnBeforeDelete<CardNode, Edge> = useCallback(async ({ nodes: delNodes, edges: delEdges }) => {
     if (readOnly) return false
+    const boardCards = delNodes.filter(n => n.data.card.type === 'board')
+    if (boardCards.length > 0) {
+      const names = boardCards.map(n => (n.data.card.content as BoardRefContent).title).join(', ')
+      if (!window.confirm(`Slette underboard(ene) «${names}» med alt innhold? Dette kan ikke angres.`)) return false
+    }
     return { nodes: delNodes, edges: delEdges }
   }, [readOnly])
 
@@ -323,6 +347,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onPaneClick={onPaneClick}
+          onNodeDoubleClick={onNodeDoubleClick}
           onNodeDragStart={readOnly ? undefined : onNodeDragStart}
           onNodeDragStop={readOnly ? undefined : onNodeDragStop}
           onBeforeDelete={onBeforeDelete}

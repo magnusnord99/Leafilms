@@ -6,6 +6,7 @@ import LinkNode from './LinkNode'
 import ColorNode from './ColorNode'
 import TodoNode from './TodoNode'
 import ColumnNode from './ColumnNode'
+import BoardNode from './BoardNode'
 
 export const nodeTypes: NodeTypes = {
   note: NoteNode,
@@ -15,4 +16,5 @@ export const nodeTypes: NodeTypes = {
   color: ColorNode,
   todo: TodoNode,
   column: ColumnNode,
+  board: BoardNode,
 }

@@ -21,7 +21,7 @@ import { parseVideoEmbed } from './videoUrl'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
-const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link'] // utvides per task
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {

@@ -212,6 +212,9 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           z_index: current.data.card.z_index,
           ...(current.parentId ? { column_id: current.parentId } : {}),
         })
+        // Fortsatt i samme kolonne (omplassert blant søsken) — restack for å
+        // reflektere ny rekkefølge og lukke evt. mellomrom.
+        if (current.parentId) dirtyColumns.add(current.parentId)
       }
     }
 

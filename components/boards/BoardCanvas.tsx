@@ -4,16 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap,
   useNodesState, useEdgesState, useReactFlow,
-  type Edge, type OnNodeDrag, type OnBeforeDelete,
+  type Edge, type OnNodeDrag, type OnBeforeDelete, type Connection,
+  MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { BoardCard, BoardCardContent, BoardCardType, BoardRefContent } from '@/lib/types'
 import {
-  createBoardCard, createSubBoard, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent,
+  createBoardCard, createSubBoard, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel,
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
-import { cardsToNodes, cardToNode, edgesToFlow, CARD_WIDTH, COLUMN_WIDTH, COLUMN_PAD, type CardNode } from './toFlow'
+import { cardsToNodes, cardToNode, edgesToFlow, edgeToFlow, CARD_WIDTH, COLUMN_WIDTH, COLUMN_PAD, type CardNode } from './toFlow'
 import { restackColumn } from './columnLayout'
 import { nodeTypes } from './nodes'
 import Toolbar from './Toolbar'
@@ -287,6 +288,23 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     deleteBoardEdges(deleted.map(e => e.id)).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
   }, [markLocalOp])
 
+  const onConnect = useCallback(async (conn: Connection) => {
+    if (!conn.source || !conn.target || conn.source === conn.target) return
+    const edge = await createBoardEdge({ board_id: boardId, from_card_id: conn.source, to_card_id: conn.target })
+    if (!edge) { setSaveError('Kunne ikke lagre pilen'); return }
+    markLocalOp(edge.id)
+    setEdges(es => [...es, edgeToFlow(edge)])
+  }, [boardId, setEdges, markLocalOp])
+
+  const onEdgeDoubleClick = useCallback((_e: React.MouseEvent, edge: Edge) => {
+    if (readOnly) return
+    const label = window.prompt('Tekst på pilen (tom for å fjerne):', (edge.label as string) ?? '')
+    if (label === null) return
+    markLocalOp(edge.id)
+    updateBoardEdgeLabel(edge.id, label.trim() || null)
+    setEdges(es => es.map(e => e.id === edge.id ? { ...e, label: label.trim() || undefined } : e))
+  }, [readOnly, setEdges, markLocalOp])
+
   // Drop fra Finder/Explorer direkte på lerretet — laster opp alle bilde-/videofiler på slippunktet
   const onDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
@@ -353,10 +371,13 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           onBeforeDelete={onBeforeDelete}
           onNodesDelete={onNodesDelete}
           onEdgesDelete={onEdgesDelete}
+          onConnect={onConnect}
+          onEdgeDoubleClick={onEdgeDoubleClick}
           nodesDraggable={!readOnly}
-          nodesConnectable={false /* aktiveres i Task 11 */}
+          nodesConnectable={!readOnly}
           elementsSelectable={!readOnly}
           deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+          defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: palette.border, strokeWidth: 1.5 } }}
           fitView
           minZoom={0.1}
           maxZoom={2}

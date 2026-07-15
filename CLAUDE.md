@@ -21,7 +21,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - Next.js App Router — server components by default, `"use client"` kun når nødvendig
 - Tailwind CSS v4 — ingen `@apply` der det ikke er nødvendig
 - Supabase med RLS — **alltid** sett opp RLS på nye tabeller
-- Migrasjoner i `supabase/migrations/` med nummerert prefix — neste er `065_`
+- Migrasjoner i `supabase/migrations/` med nummerert prefix — neste er `099_` (sjekk `ls supabase/migrations | tail` først; tallet her blir fort utdatert)
 - Eksisterende services i `lib/services/` — ikke dupliser logikk
 - Types i `lib/types.ts` — hold oppdatert ved endringer
 

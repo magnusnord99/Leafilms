@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase-server'
+import { randomBytes } from 'crypto'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
@@ -323,5 +324,108 @@ export async function fetchLinkMetadata(url: string): Promise<LinkContent> {
     }
   } catch {
     return fallback
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deling — /b/[token] (Task 13)
+// ---------------------------------------------------------------------------
+
+export async function enableBoardShare(boardId: string): Promise<string | null> {
+  try {
+    const supabase = await createClient()
+    const { data: existing } = await supabase.from('boards').select('share_token').eq('id', boardId).single()
+    if (existing?.share_token) return existing.share_token
+    const token = randomBytes(16).toString('hex')
+    const { error } = await supabase.from('boards')
+      .update({ share_token: token, updated_at: now() }).eq('id', boardId)
+    return error ? null : token
+  } catch (err) {
+    console.error('enableBoardShare:', err)
+    return null
+  }
+}
+
+export async function disableBoardShare(boardId: string): Promise<boolean> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase.from('boards')
+      .update({ share_token: null, updated_at: now() }).eq('id', boardId)
+    return !error
+  } catch (err) {
+    console.error('disableBoardShare:', err)
+    return false
+  }
+}
+
+export type SharedBoardData = Omit<BoardData, 'projectId' | 'projectTitle'> & { rootBoardId: string }
+
+export async function getSharedBoard(token: string, childBoardId?: string): Promise<SharedBoardData | null> {
+  try {
+    if (!token || token.length < 16) return null
+    const service = createServiceClient()
+
+    const { data: root } = await service.from('boards').select('*').eq('share_token', token).single()
+    if (!root) return null
+
+    // Hvilket board skal vises? Rot, eller et underboard som må ligge i rotens tre.
+    let target = root as Board
+    if (childBoardId && childBoardId !== root.id) {
+      const { data: child } = await service.from('boards').select('*').eq('id', childBoardId).single()
+      if (!child) return null
+      let cursor: Board | null = child as Board
+      let ok = false
+      let guard = 0
+      while (cursor && guard++ < 20) {
+        if (cursor.id === root.id) { ok = true; break }
+        if (!cursor.parent_board_id) break
+        const { data: parent } = await service.from('boards').select('*').eq('id', cursor.parent_board_id).single()
+        cursor = parent as Board | null
+      }
+      if (!ok) return null
+      target = child as Board
+    }
+
+    const [{ data: cards }, { data: edges }] = await Promise.all([
+      service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
+      service.from('board_edges').select('*').eq('board_id', target.id),
+    ])
+
+    // Brødsmuler begrenset til det delte treet (stopp ved root)
+    const crumbs = [{ id: target.id, title: target.title }]
+    let parentId = target.id === root.id ? null : target.parent_board_id
+    let guard2 = 0
+    while (parentId && guard2++ < 20) {
+      const { data: p } = await service.from('boards').select('id, title, parent_board_id').eq('id', parentId).single()
+      if (!p) break
+      crumbs.unshift({ id: p.id, title: p.title })
+      if (p.id === root.id) break
+      parentId = p.parent_board_id
+    }
+
+    const childMeta: Record<string, ChildBoardMeta> = {}
+    const childIds = ((cards ?? []) as BoardCard[])
+      .filter(c => c.type === 'board')
+      .map(c => (c.content as BoardRefContent).child_board_id)
+    if (childIds.length) {
+      const [{ data: children }, { data: counts }] = await Promise.all([
+        service.from('boards').select('id, title').in('id', childIds),
+        service.from('board_cards').select('board_id').in('board_id', childIds),
+      ])
+      for (const ch of children ?? []) childMeta[ch.id] = { title: ch.title, cardCount: 0 }
+      for (const row of counts ?? []) if (childMeta[row.board_id]) childMeta[row.board_id].cardCount++
+    }
+
+    return {
+      board: target,
+      cards: (cards ?? []) as BoardCard[],
+      edges: (edges ?? []) as BoardEdge[],
+      breadcrumbs: crumbs,
+      childMeta,
+      rootBoardId: root.id,
+    }
+  } catch (err) {
+    console.error('getSharedBoard:', err)
+    return null
   }
 }

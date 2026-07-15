@@ -1,0 +1,42 @@
+'use client'
+
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { S } from '@/lib/client-theme'
+import type { SharedBoardData } from '@/lib/actions/boards'
+import BoardCanvas from '@/components/boards/BoardCanvas'
+import type { BoardPalette } from '@/components/boards/boardContext'
+
+const CINEMATIC_PALETTE: BoardPalette = {
+  surface: S.surface2, surface2: S.surface3, border: S.border,
+  text: S.text, text2: S.text2, accent: S.gold, canvasBg: S.bg,
+}
+
+export default function SharedBoardClient({ token, data }: { token: string; data: SharedBoardData }) {
+  const router = useRouter()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: S.bg }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: `1px solid ${S.border}` }}>
+        <span style={{ fontFamily: 'var(--font-cormorant)', color: S.gold, fontSize: '1.05rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Leafilms</span>
+        <span style={{ color: S.text3 }}>·</span>
+        {data.breadcrumbs.map((b, i) => (
+          <span key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem' }}>
+            {i > 0 && <span style={{ color: S.text3 }}>/</span>}
+            {i === data.breadcrumbs.length - 1
+              ? <span style={{ color: S.text, fontWeight: 600 }}>{b.title}</span>
+              : <Link href={b.id === data.rootBoardId ? `/b/${token}` : `/b/${token}?board=${b.id}`} style={{ color: S.text2, textDecoration: 'none' }}>{b.title}</Link>}
+          </span>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <BoardCanvas
+          boardId={data.board.id}
+          initial={{ ...data, projectId: '', projectTitle: '' }}
+          readOnly
+          palette={CINEMATIC_PALETTE}
+          onOpenBoard={id => router.push(`/b/${token}?board=${id}`)}
+        />
+      </div>
+    </div>
+  )
+}

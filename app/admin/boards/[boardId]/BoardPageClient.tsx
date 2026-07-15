@@ -6,10 +6,12 @@ import { useRouter } from 'next/navigation'
 import { C } from '@/lib/admin-theme'
 import { renameBoard, type BoardData } from '@/lib/actions/boards'
 import BoardCanvas from '@/components/boards/BoardCanvas'
+import ShareDialog from '@/components/boards/ShareDialog'
 
 export default function BoardPageClient({ initial }: { initial: BoardData }) {
   const router = useRouter()
   const [title, setTitle] = useState(initial.board.title)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const saveTitle = () => {
     const t = title.trim()
@@ -40,7 +42,12 @@ export default function BoardPageClient({ initial }: { initial: BoardData }) {
           </span>
         ))}
         <div style={{ flex: 1 }} />
-        {/* Del-knapp kommer i Task 13 */}
+        <button
+          onClick={() => setShareOpen(true)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: C.accentBg, color: C.accent, border: `1px solid ${C.accent}40`, borderRadius: 8, padding: '9px 16px', fontSize: '0.82rem', fontWeight: 600, fontFamily: 'var(--font-dm-sans)', cursor: 'pointer' }}
+        >
+          ⇪ Del
+        </button>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         <BoardCanvas
@@ -49,6 +56,9 @@ export default function BoardPageClient({ initial }: { initial: BoardData }) {
           onOpenBoard={id => router.push(`/admin/boards/${id}`)}
         />
       </div>
+      {shareOpen && (
+        <ShareDialog boardId={initial.board.id} initialToken={initial.board.share_token} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   )
 }

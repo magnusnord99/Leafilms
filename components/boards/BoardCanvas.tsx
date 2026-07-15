@@ -8,7 +8,7 @@ import {
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { BoardCard, BoardCardContent, BoardCardType, BoardRefContent } from '@/lib/types'
+import type { BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent } from '@/lib/types'
 import {
   createBoardCard, createSubBoard, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel,
   type BoardData, type CardPositionPatch,
@@ -20,6 +20,7 @@ import { nodeTypes } from './nodes'
 import Toolbar from './Toolbar'
 import { uploadBoardFile } from './upload'
 import { parseVideoEmbed } from './videoUrl'
+import { useBoardRealtime } from '@/hooks/useBoardRealtime'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
@@ -258,6 +259,40 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     }
     setNodes(next)
   }, [nodes, rf, nodeHeight, setNodes])
+
+  // Realtime: reflekter kort/piler opprettet/endret/slettet av andre klienter (Task 12).
+  // isLocalOp filtrerer bort vårt eget echo innen 5 s-vinduet.
+  const onRemoteCard = useCallback((evt: 'INSERT' | 'UPDATE' | 'DELETE', row: Partial<BoardCard> & { id: string }) => {
+    if (evt === 'DELETE') {
+      setNodes(ns => ns.filter(n => n.id !== row.id))
+      return
+    }
+    const card = row as BoardCard
+    setNodes(ns => {
+      const exists = ns.some(n => n.id === card.id)
+      const fresh = cardToNode(card, initial.childMeta)
+      if (card.type === 'board' && !initial.childMeta[(card.content as BoardRefContent).child_board_id]) {
+        fresh.data.meta = { title: (card.content as BoardRefContent).title, cardCount: 0 }
+      }
+      if (!exists) return [...ns, fresh]
+      return ns.map(n => n.id === card.id ? { ...fresh, selected: n.selected } : n)
+    })
+    // Kortet kan ha byttet/fått kolonne fra en annen klient — restack-effekten over
+    // kjører kun én gang per last, så vi nullstiller guarden for å trigge en ny visuell
+    // restack av kolonnen (uten persist, se effekten).
+    if (card.column_id) restackedOnce.current = false
+  }, [setNodes, initial.childMeta])
+
+  const onRemoteEdge = useCallback((evt: 'INSERT' | 'UPDATE' | 'DELETE', row: Partial<BoardEdge> & { id: string }) => {
+    if (evt === 'DELETE') { setEdges(es => es.filter(e => e.id !== row.id)); return }
+    const edge = row as BoardEdge
+    setEdges(es => {
+      const flow = edgeToFlow(edge)
+      return es.some(e => e.id === edge.id) ? es.map(e => e.id === edge.id ? flow : e) : [...es, flow]
+    })
+  }, [setEdges])
+
+  useBoardRealtime(boardId, { enabled: !readOnly, isLocalOp, onCard: onRemoteCard, onEdge: onRemoteEdge })
 
   // Dobbeltklikk på et board-kort navigerer inn i underboardet — ikke gatet på
   // readOnly, siden offentlige delingssider også skal kunne navigere i boardhierarkiet.

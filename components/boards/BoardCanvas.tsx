@@ -410,7 +410,21 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           onEdgeDoubleClick={onEdgeDoubleClick}
           nodesDraggable={!readOnly}
           nodesConnectable={!readOnly}
-          elementsSelectable={!readOnly}
+          // Alltid true (også readOnly): React Flow gater pointer-events på noder til
+          // isSelectable || isDraggable || onClick/... — uten dette blir dobbeltklikk
+          // (board-navigasjon, lightbox) usynlig for DOM-en på delingssiden, siden
+          // pointer-events: none stopper alle museevents inkl. onDoubleClick.
+          // Selection er ufarlig i readOnly: deleteKeyCode er null og onBeforeDelete
+          // returnerer false, så ingenting kan faktisk slettes/redigeres.
+          elementsSelectable={true}
+          // Ikke-draggbare noder får ikke React Flows interne "nopan"-klasse (den
+          // settes kun når isDraggable er true), så d3-zoom sin egen
+          // dblclick.zoom-handler fanger opp museeventet på nodene og kaller
+          // stopPropagation FØR det når Reacts rot-delegerte lytter — da når
+          // onNodeDoubleClick aldri fram i readOnly. Slår derfor av
+          // zoomOnDoubleClick i readOnly (kun for lerretet/panen; zoom med
+          // hjul/knapper/pinch fungerer fortsatt).
+          zoomOnDoubleClick={!readOnly}
           deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
           defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: palette.border, strokeWidth: 1.5 } }}
           fitView

@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import type { User } from '@supabase/supabase-js'
+import { isStaffRole, type StaffRole } from '@/lib/permissions'
 
 interface Profile {
   id: string
   email: string
-  role: 'admin' | 'customer'
+  role: StaffRole | 'customer'
   name: string | null
   customer_id: string | null
   color: string | null
@@ -119,12 +120,14 @@ export function useAuth() {
   }
 
   const isAdmin = profile?.role === 'admin'
+  const isStaff = isStaffRole(profile?.role)
 
   return {
     user,
     profile,
     loading,
     isAdmin,
+    isStaff,
     logout,
   }
 }

@@ -1,14 +1,16 @@
 'use client'
 
 import { useAuth } from '@/hooks/useAuth'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/admin/NotificationBell'
+import { MeldingerBadge } from '@/components/admin/MeldingerBadge'
 import { FeedbackButton } from '@/components/admin/FeedbackButton'
 import { AIChatButton } from '@/components/ai/AIChatButton'
 import { C } from '@/lib/admin-theme'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { isPathAllowedForRole, isStaffRole } from '@/lib/permissions'
 
 type NavItem = { href: string; label: string; exact?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }
@@ -18,15 +20,17 @@ const navGroups: NavGroup[] = [
     label: null,
     items: [
       { href: '/admin',         label: 'Dashboard', exact: true },
+      { href: '/admin/projects', label: 'Prosjekter' },
+      { href: '/admin/pipeline', label: 'Pipeline' },
       { href: '/admin/tasks',   label: 'Mine oppgaver' },
       { href: '/admin/varsler', label: 'Varsler' },
+      { href: '/admin/meldinger', label: 'Meldinger' },
     ],
   },
   {
     label: 'Salg & CRM',
     items: [
       { href: '/admin/leads',     label: 'Leads' },
-      { href: '/admin/pipeline',  label: 'Pipeline' },
       { href: '/admin/pitches',   label: 'Pitcher' },
       { href: '/admin/tapte',     label: 'Tapte prosjekter' },
       { href: '/admin/customers', label: 'Kunder' },
@@ -36,7 +40,6 @@ const navGroups: NavGroup[] = [
   {
     label: 'Produksjon',
     items: [
-      { href: '/admin/projects', label: 'Prosjekter' },
       { href: '/admin/calendar', label: 'Kalender' },
       { href: '/admin/preprod',    label: 'Pre-prod' },
       { href: '/admin/postprod',   label: 'Post-prod' },
@@ -63,15 +66,30 @@ const navGroups: NavGroup[] = [
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, isAdmin, logout } = useAuth()
-  const router = useRouter()
+  const { user, profile, loading, isStaff, logout } = useAuth()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) router.push('/login')
-  }, [loading, user, isAdmin, router])
+    // Hard redirect, samme begrunnelse som RBAC-guarden under — router.push() kan bli stille
+    // droppet ved en fersk mount av layouten. middleware.ts fanger det vanlige tilfellet
+    // (ikke innlogget) allerede server-side; dette er et sekundært sikkerhetsnett for når
+    // profilen blir ugyldig mens man allerede er inne på en admin-side.
+    if (!loading && (!user || !isStaff)) window.location.href = '/login'
+  }, [loading, user, isStaff])
+
+  // Sperre for direkte URL-navigasjon til sider rollen ikke skal ha tilgang til, forbi
+  // menyfiltreringen — meny skjuler kun lenken, denne håndhever den faktisk.
+  useEffect(() => {
+    if (loading || !isStaffRole(profile?.role)) return
+    // Hard redirect (ikke router.push) — dette kjører rett etter en fersk mount av layouten
+    // (typisk direkte URL-navigasjon forbi menyen), der en client-side push kan bli stille
+    // droppet mens routeren fortsatt er i ferd med å bli klar. window.location.href garanterer
+    // at siden faktisk skifter, i tillegg til at det gir en ren re-hydrering uten at data fra
+    // den utilgjengelige siden rekker å bli værende i klienttilstand.
+    if (!isPathAllowedForRole(profile.role, pathname)) window.location.href = '/admin'
+  }, [loading, profile, pathname])
 
   // Lukk mobilmenyen ved navigasjon (state-justering under render, jf. react.dev)
   const [prevPathname, setPrevPathname] = useState(pathname)
@@ -95,7 +113,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  if (!user || !isAdmin) return null
+  if (!user || !isStaff) return null
+
+  const role = isStaffRole(profile?.role) ? profile.role : 'sales'
+  // Filtreres på selve lenken (isPathAllowedForRole) — samme kilde som redirect-guarden under,
+  // slik at meny og faktisk håndheving aldri kan divergere (item-nivå, ikke bare gruppe-nivå,
+  // siden f.eks. "Brukere" er admin-only mens resten av samme (ugrupperte) seksjon ikke er det).
+  const visibleNavGroups = navGroups
+    .map(group => ({ ...group, items: group.items.filter(item => isPathAllowedForRole(role, item.href)) }))
+    .filter(group => group.items.length > 0)
 
   const isActive = (item: NavItem) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -136,6 +162,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }}
         >
           {col ? item.label.substring(0, 2) : item.label}
+          {item.href === '/admin/meldinger' && <MeldingerBadge />}
         </div>
       </Link>
     )
@@ -143,7 +170,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const renderNav = (col: boolean) => (
     <nav style={{ flex: 1, paddingTop: 4, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {navGroups.map((group, gi) => (
+      {visibleNavGroups.map((group, gi) => (
         <div key={gi}>
           {/* Skillelinje mellom grupper (ikke første) */}
           {gi > 0 && (

@@ -68,15 +68,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // Check if user is admin
+    // Sjekk at brukeren er en intern staff-rolle (admin/salg/produksjon) — 'customer'-brukere
+    // skal aldri inn i /admin, men alle staff-roller slipper forbi her. Finmasket
+    // sidetilgang (meny, pipeline-steg, økonomi-sider) håndteres i app/admin/layout.tsx og
+    // den enkelte siden, ikke her.
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    if (!profile || profile.role !== 'admin') {
-      // User is not admin, redirect to login
+    if (!profile || !['admin', 'sales', 'production'].includes(profile.role)) {
+      // Ikke en gyldig staff-rolle, redirect til login
       const redirectUrl = new URL('/login', request.url)
       redirectUrl.searchParams.set('error', 'unauthorized')
       return NextResponse.redirect(redirectUrl)

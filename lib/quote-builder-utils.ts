@@ -1,4 +1,46 @@
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem } from './types'
+import { QuoteBuilderData, OptionalAddon, OptionalAddonCategory } from './types'
+
+const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']
+
+// Leser et tillegg sine beløp per kategori — normaliserer gamle rader (price+category, fra før
+// 'amounts' fantes) til samme form. Les alltid via denne, aldri addon.amounts direkte.
+export function getAddonAmounts(
+  addon: Pick<OptionalAddon, 'amounts' | 'price' | 'category'>
+): Partial<Record<OptionalAddonCategory, number>> {
+  if (addon.amounts) return addon.amounts
+  if (addon.price) return { [addon.category ?? 'expenses']: addon.price }
+  return {}
+}
+
+export function addonTotalPrice(addon: Pick<OptionalAddon, 'amounts' | 'price' | 'category'>): number {
+  return Object.values(getAddonAmounts(addon)).reduce((sum: number, v) => sum + (v ?? 0), 0)
+}
+
+// Delt mellom PDF-generering, pristilbudsvisning og kontraktstekst (§5.1) — skal aldri
+// divergere. Beløp i startup/production/post-postene rabatteres sammen med resten av
+// kategorien med mindre discountable er satt til false. 'expenses'-posten rabatteres aldri.
+export function addonDiscountedPrice(
+  addon: Pick<OptionalAddon, 'amounts' | 'price' | 'category' | 'discountable'>,
+  discountFactor: number
+): number {
+  const amounts = getAddonAmounts(addon)
+  return ADDON_CATEGORIES.reduce((sum, cat) => {
+    const amt = amounts[cat] ?? 0
+    if (!amt) return sum
+    const discountable = cat !== 'expenses' && addon.discountable !== false
+    return sum + (discountable ? amt * (1 - discountFactor) : amt)
+  }, 0)
+}
+
+// Har tillegget minst én rabatterbar post? Brukes for å avgjøre om vi i det hele tatt skal
+// vise "opprinnelig pris"-gjennomstreking på pristilbudssiden (QuoteSection.tsx).
+export function isAddonDiscountable(
+  addon: Pick<OptionalAddon, 'amounts' | 'price' | 'category' | 'discountable'>
+): boolean {
+  if (addon.discountable === false) return false
+  const amounts = getAddonAmounts(addon)
+  return ADDON_CATEGORIES.some((cat) => cat !== 'expenses' && (amounts[cat] ?? 0) > 0)
+}
 
 type QuoteLineItem = {
   description: string
@@ -22,17 +64,25 @@ type QuoteData = {
   subtotalExclVat?: number
   subtotalInclVat?: number
   totalDiscount?: number
+  discountPercent?: number
   finalPriceExclVat?: number
   finalPriceInclVat?: number
   vatRate?: number
 }
 
 export type QuoteTotals = {
+  startupTotal: number
+  startupDays: number
+  shootCrewTotal: number
+  shootDays: number
   crewTotal: number
   equipmentTotal: number
+  postCrewDays: number
   postProductionTotal: number
   otherCostsTotal: number
   licensingTotal: number
+  /** Valgte tillegg (kun de i selectedAddonIds) summert per kategori — 0 for alle hvis selectedAddonIds ikke er oppgitt. */
+  addonTotalsByCategory: Record<OptionalAddonCategory, number>
   subtotal: number
   discountBase: number
   discountAmount: number
@@ -41,20 +91,56 @@ export type QuoteTotals = {
   finalInclVat: number
 }
 
-export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
-  const startupTotal = (data.startupCrew ?? []).reduce((sum, m) => sum + m.dailyRate * m.days, 0)
-  const crewTotal = data.crew.reduce((sum, m) => sum + m.dailyRate * m.days, 0) + startupTotal
+// selectedAddonIds er valgfri: uoppgitt = ingen tillegg inkludert (dagens oppførsel, brukt av
+// admin-byggeren og alle andre kallere). Når oppgitt (kundens avkryssede tillegg på den
+// offentlige pristilbudssiden) summeres tilleggenes poster inn i riktig kategori — samme
+// mønster som PDF-eksporten (app/api/generate-quote-pdf/pdf-generator.ts), slik at
+// visningene aldri divergerer. Et tillegg kan ha poster i flere kategorier samtidig.
+export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: string[]): QuoteTotals {
+  const startupCrewList = data.startupCrew ?? []
+  const startupTotal = startupCrewList.reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+  const startupDays = startupCrewList.reduce((sum, m) => sum + m.days, 0)
+
+  const shootCrewTotal = data.crew.reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+  // Faktiske dager på mannskapet er fasit — data.shootDays er kun en UI-snarvei og kan avvike hvis en rad er endret manuelt
+  const shootDays = data.crew.length > 0 ? data.crew[0].days : (data.shootDays ?? 0)
+  const crewTotal = shootCrewTotal + startupTotal
+
   const equipmentTotal = data.equipment.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
-  const postCrewTotal = (data.postProductionCrew ?? []).reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+
+  const postCrewList = data.postProductionCrew ?? []
+  const postCrewTotal = postCrewList.reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+  const postCrewDays = postCrewList.reduce((sum, m) => sum + m.days, 0)
   const postItemsTotal = data.postProduction.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
   const postProductionTotal = postCrewTotal + postItemsTotal
+
   const otherCostsTotal = data.otherCosts.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
   const licensingTotal = data.licensing.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
 
-  const subtotal = crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal
+  const includedAddons = (data.optionalAddons ?? []).filter(
+    (a) => selectedAddonIds !== undefined && selectedAddonIds.includes(a.id)
+  )
+  const addonTotalsByCategory = includedAddons.reduce(
+    (acc, a) => {
+      const amounts = getAddonAmounts(a)
+      for (const cat of ADDON_CATEGORIES) acc[cat] += amounts[cat] ?? 0
+      return acc
+    },
+    { startup: 0, production: 0, post: 0, expenses: 0 } as Record<OptionalAddonCategory, number>
+  )
+  const addonDiscountableTotal = includedAddons.reduce((sum, a) => {
+    if (a.discountable === false) return sum
+    const amounts = getAddonAmounts(a)
+    return sum + ADDON_CATEGORIES.filter((c) => c !== 'expenses').reduce((s, c) => s + (amounts[c] ?? 0), 0)
+  }, 0)
 
-  // Én rabatt, kun på opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader
-  const discountBase = crewTotal + postProductionTotal
+  const subtotal =
+    crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal +
+    addonTotalsByCategory.startup + addonTotalsByCategory.production + addonTotalsByCategory.post + addonTotalsByCategory.expenses
+
+  // Én rabatt, kun på opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre
+  // kostnader — pluss rabatterbare tillegg-poster i disse kategoriene
+  const discountBase = crewTotal + postProductionTotal + addonDiscountableTotal
   const discountAmount = discountBase * (data.discountFactor ?? 0)
 
   const afterDiscount = subtotal - discountAmount
@@ -62,11 +148,17 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
   const finalInclVat = afterDiscount + vatAmount
 
   return {
+    startupTotal,
+    startupDays,
+    shootCrewTotal,
+    shootDays,
     crewTotal,
     equipmentTotal,
+    postCrewDays,
     postProductionTotal,
     otherCostsTotal,
     licensingTotal,
+    addonTotalsByCategory,
     subtotal,
     discountBase,
     discountAmount,
@@ -76,71 +168,50 @@ export function calculateQuoteTotals(data: QuoteBuilderData): QuoteTotals {
   }
 }
 
-function itemsToLineItems(
-  items: QuoteBuilderItem[],
-  headerLabel: string,
-  lang: 'NO' | 'EN'
-): QuoteLineItem[] {
-  if (items.length === 0) return []
-  const result: QuoteLineItem[] = [{ description: headerLabel, quantity: '', amount: 0 }]
-  for (const item of items) {
-    const total = item.quantity * item.unitPrice
-    const qtyLabel = lang === 'EN'
-      ? `${item.quantity} ${item.quantity === 1 ? 'unit' : 'units'}`
-      : `${item.quantity} stk`
-    result.push({ description: item.description, quantity: qtyLabel, amount: total })
-  }
-  return result
+function dayLabel(days: number, lang: 'NO' | 'EN'): string {
+  const n = new Intl.NumberFormat(lang === 'EN' ? 'en-US' : 'nb-NO').format(days)
+  return lang === 'EN'
+    ? `${n} ${days === 1 ? 'day' : 'days'}`
+    : `${n} ${days === 1 ? 'dag' : 'dager'}`
 }
 
-function crewToLineItems(crew: CrewMember[], headerLabel: string, lang: 'NO' | 'EN'): QuoteLineItem[] {
-  if (crew.length === 0) return []
-  const result: QuoteLineItem[] = [{ description: headerLabel, quantity: '', amount: 0 }]
-  for (const m of crew) {
-    const total = m.dailyRate * m.days
-    const daysStr = new Intl.NumberFormat(lang === 'EN' ? 'en-US' : 'nb-NO').format(m.days)
-    const dayLabel = lang === 'EN'
-      ? `${daysStr} ${m.days === 1 ? 'day' : 'days'}`
-      : `${daysStr} ${m.days === 1 ? 'dag' : 'dager'}`
-    result.push({
-      description: m.name ? `${m.role} - ${m.name}` : m.role,
-      quantity: dayLabel,
-      amount: total,
-    })
-  }
-  return result
-}
-
-export function convertBuilderDataToQuoteData(data: QuoteBuilderData): QuoteData {
+// Samme gruppering som PDF-eksporten (app/api/generate-quote-pdf/pdf-generator.ts) —
+// 4 kategorier med sum, ikke per-rad-detalj, slik at tilbudet vist på pitchen matcher PDF-en.
+// selectedAddonIds (kundens avkryssede tillegg) summeres inn i kategorien(e) sin(e) — feltene
+// Oppstart/Opptak/Post-produksjon/Produksjonsutgifter endrer seg dermed dynamisk når
+// kunden haker av tillegg på den offentlige pristilbudssiden.
+export function convertBuilderDataToQuoteData(data: QuoteBuilderData, selectedAddonIds?: string[]): QuoteData {
   const lang = data.language
   const labels = lang === 'EN'
     ? {
-        crew: 'CREW',
-        equipment: 'EQUIPMENT',
-        postCrew: 'POST PRODUCTION — TEAM',
-        post: 'POST PRODUCTION',
-        other: 'OTHER COSTS',
-        licensing: 'LICENSING',
+        startup: 'Startup/Planning',
+        production: 'Production',
+        post: 'Post-Production',
+        expenses: 'Production Expenses',
       }
     : {
-        crew: 'MANNSKAP',
-        equipment: 'UTSTYRSLISTE',
-        postCrew: 'POST-PRODUKSJON — TEAM',
-        post: 'POST-PRODUKSJON',
-        other: 'ANDRE KOSTNADER',
-        licensing: 'LISENSIERING',
+        startup: 'Oppstart/planlegging',
+        production: 'Opptak',
+        post: 'Post-produksjon',
+        expenses: 'Produksjonsutgifter',
       }
 
-  const lineItems: QuoteLineItem[] = [
-    ...crewToLineItems(data.crew, labels.crew, lang),
-    ...itemsToLineItems(data.equipment, labels.equipment, lang),
-    ...crewToLineItems(data.postProductionCrew ?? [], labels.postCrew, lang),
-    ...itemsToLineItems(data.postProduction, labels.post, lang),
-    ...itemsToLineItems(data.otherCosts, labels.other, lang),
-    ...itemsToLineItems(data.licensing, labels.licensing, lang),
-  ]
+  const totals = calculateQuoteTotals(data, selectedAddonIds)
+  const startupTotal = totals.startupTotal + totals.addonTotalsByCategory.startup
+  const productionTotal = totals.shootCrewTotal + totals.equipmentTotal + totals.addonTotalsByCategory.production
+  const postProductionTotal = totals.postProductionTotal + totals.addonTotalsByCategory.post
+  const expensesTotal = totals.otherCostsTotal + totals.licensingTotal + totals.addonTotalsByCategory.expenses
 
-  const totals = calculateQuoteTotals(data)
+  const lineItems: QuoteLineItem[] = [
+    { label: labels.startup, total: startupTotal, qty: totals.startupDays > 0 ? dayLabel(totals.startupDays, lang) : '' },
+    { label: labels.production, total: productionTotal, qty: totals.shootDays > 0 ? dayLabel(totals.shootDays, lang) : '' },
+    { label: labels.post, total: postProductionTotal, qty: totals.postCrewDays > 0 ? dayLabel(totals.postCrewDays, lang) : '' },
+    { label: labels.expenses, total: expensesTotal, qty: '' },
+  ]
+    .filter((c) => c.total > 0)
+    .map((c) => ({ description: c.label, quantity: c.qty, amount: c.total }))
+
+  const discountPercent = Math.round((data.discountFactor ?? 0) * 100)
 
   return {
     version: data.version,
@@ -157,6 +228,7 @@ export function convertBuilderDataToQuoteData(data: QuoteBuilderData): QuoteData
     subtotalExclVat: totals.subtotal,
     subtotalInclVat: totals.subtotal + (data.includeVat ? totals.subtotal * (data.vatRate / 100) : 0),
     totalDiscount: totals.discountAmount,
+    discountPercent,
     finalPriceExclVat: totals.afterDiscount,
     finalPriceInclVat: totals.finalInclVat,
     vatRate: data.vatRate,

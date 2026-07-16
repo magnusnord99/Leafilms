@@ -436,3 +436,51 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
     return null
   }
 }
+
+export type BoardOverviewItem = {
+  id: string
+  title: string
+  projectId: string
+  projectTitle: string
+  cardCount: number
+  subBoardCount: number
+  shared: boolean
+  updated_at: string
+}
+
+export async function getAllBoards(): Promise<BoardOverviewItem[]> {
+  try {
+    const supabase = await createClient()
+    const { data: roots } = await supabase
+      .from('boards')
+      .select('id, title, project_id, share_token, updated_at, projects(title)')
+      .is('parent_board_id', null)
+      .order('updated_at', { ascending: false })
+    if (!roots || roots.length === 0) return []
+
+    const rootIds = roots.map(r => r.id)
+    const projectIds = roots.map(r => r.project_id)
+    const [{ data: cards }, { data: subs }] = await Promise.all([
+      supabase.from('board_cards').select('board_id').in('board_id', rootIds),
+      supabase.from('boards').select('project_id').in('project_id', projectIds).not('parent_board_id', 'is', null),
+    ])
+    const cardCounts: Record<string, number> = {}
+    for (const c of cards ?? []) cardCounts[c.board_id] = (cardCounts[c.board_id] ?? 0) + 1
+    const subCounts: Record<string, number> = {}
+    for (const s of subs ?? []) subCounts[s.project_id] = (subCounts[s.project_id] ?? 0) + 1
+
+    return roots.map(r => ({
+      id: r.id,
+      title: r.title,
+      projectId: r.project_id,
+      projectTitle: (r.projects as unknown as { title: string } | null)?.title ?? r.title,
+      cardCount: cardCounts[r.id] ?? 0,
+      subBoardCount: subCounts[r.project_id] ?? 0,
+      shared: !!r.share_token,
+      updated_at: r.updated_at,
+    }))
+  } catch (err) {
+    console.error('getAllBoards:', err)
+    return []
+  }
+}

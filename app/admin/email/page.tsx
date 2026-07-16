@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
-import { PipelineStage } from '@/lib/types'
+import { PipelineStage, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
 const borderHover  = '#3A3328'
@@ -11,13 +11,7 @@ const accentBorder = 'rgba(124,92,252,0.35)'
 
 const STAGE_ORDER: PipelineStage[] = ['tilbud_sendt', 'møte', 'kontrakt', 'levering', 'videresalg']
 
-const STAGE_LABEL: Record<string, string> = {
-  tilbud_sendt: 'Sende tilbud',
-  møte:         'Møte',
-  kontrakt:     'Kontrakt',
-  levering:     'Levering',
-  videresalg:   'Videresalg',
-}
+const STAGE_LABEL: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
 const STAGE_COLOR: Record<string, { text: string; bg: string; border: string }> = {
   tilbud_sendt: { text: C.accent, bg: C.accentBg, border: 'rgba(124,92,252,0.30)' },

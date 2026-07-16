@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import { useAuth } from '@/hooks/useAuth'
+import { ROLE_LABELS, STAFF_ROLES, type StaffRole } from '@/lib/permissions'
 
 const C = {
   bg:      '#181920',
@@ -26,20 +28,23 @@ interface UserProfile {
 }
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [inviting, setInviting] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
+  const [inviteRole, setInviteRole] = useState<StaffRole>('sales')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null)
 
   useEffect(() => { fetchUsers() }, [])
 
   async function fetchUsers() {
     const supabase = createClient()
-    const { data, error } = await supabase.from('profiles').select('*').eq('role', 'admin').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('profiles').select('*').in('role', STAFF_ROLES).order('created_at', { ascending: false })
     if (!error) setUsers((data || []) as UserProfile[])
     else setError('Kunne ikke hente brukere')
     setLoading(false)
@@ -54,13 +59,14 @@ export default function UsersPage() {
       const res = await fetch('/api/auth/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, name: inviteName || null }),
+        body: JSON.stringify({ email: inviteEmail, name: inviteName || null, role: inviteRole }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Kunne ikke sende invitasjon')
       setSuccess(`Invitasjon sendt til ${inviteEmail}`)
       setInviteEmail('')
       setInviteName('')
+      setInviteRole('sales')
       setShowInviteForm(false)
       fetchUsers()
     } catch (err) {
@@ -68,6 +74,15 @@ export default function UsersPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  async function handleRoleChange(userId: string, role: StaffRole) {
+    setSavingRoleFor(userId)
+    const supabase = createClient()
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', userId)
+    if (error) alert('Kunne ikke oppdatere rolle')
+    else setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role } : u)))
+    setSavingRoleFor(null)
   }
 
   async function handleDelete(userId: string, userEmail: string) {
@@ -105,10 +120,10 @@ export default function UsersPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-              Admin-brukere
+              Brukere
             </h1>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
-              {users.length} bruker{users.length !== 1 ? 'e' : ''} med admin-tilgang
+              {users.length} bruker{users.length !== 1 ? 'e' : ''} med tilgang
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -121,7 +136,7 @@ export default function UsersPage() {
               onClick={() => setShowInviteForm(v => !v)}
               style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '7px 16px', borderRadius: 7, cursor: 'pointer', background: showInviteForm ? C.surface2 : C.accent, color: showInviteForm ? C.text2 : '#fff', border: showInviteForm ? `1px solid ${C.border}` : 'none' }}
             >
-              {showInviteForm ? 'Avbryt' : '+ Ny admin'}
+              {showInviteForm ? 'Avbryt' : '+ Ny bruker'}
             </button>
           </div>
         </div>
@@ -138,6 +153,9 @@ export default function UsersPage() {
             <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <input type="email" placeholder="E-post" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required disabled={inviting} style={inputStyle} />
               <input type="text" placeholder="Navn (valgfritt)" value={inviteName} onChange={e => setInviteName(e.target.value)} disabled={inviting} style={inputStyle} />
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value as StaffRole)} disabled={inviting} style={inputStyle}>
+                {STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
               <button
                 type="submit"
                 disabled={inviting}
@@ -180,6 +198,15 @@ export default function UsersPage() {
                     Opprettet {new Date(user.created_at).toLocaleDateString('nb-NO')}
                   </p>
                 </div>
+                <select
+                  value={user.role}
+                  onChange={e => handleRoleChange(user.id, e.target.value as StaffRole)}
+                  disabled={savingRoleFor === user.id || user.id === currentUser?.id}
+                  title={user.id === currentUser?.id ? 'Kan ikke endre egen rolle' : undefined}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', padding: '6px 10px', borderRadius: 7, background: C.surface2, color: C.text2, border: `1px solid ${C.border}`, flexShrink: 0 }}
+                >
+                  {STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                </select>
                 <button
                   onClick={() => handleDelete(user.id, user.email)}
                   style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 14px', borderRadius: 7, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: `1px solid rgba(224,85,85,0.25)`, flexShrink: 0 }}

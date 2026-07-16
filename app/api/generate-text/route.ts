@@ -71,13 +71,13 @@ export async function POST(req: NextRequest) {
     const sectionPrompts: Record<string, { length: string, style: string, description: string }> = {
       goal: {
         length: '1-2 avsnitt, ca 50-80 ord totalt',
-        style: 'Kortfattet, målrettet og konkret. Fokuser på hva vi skal oppnå.',
-        description: 'Mål-seksjonen skal være kort og presis. Den skal tydelig kommunisere hva prosjektet skal oppnå.'
+        style: 'Kortfattet, målrettet og konkret. Fokuser på hva vi skal oppnå. Begynn ALDRI med "Målet for/med prosjektet er..." eller "Hovedmålet er...". Gå rett på selve målet, f.eks. "Fremme [kunde] sitt/sin ..." eller start direkte med et verb.',
+        description: 'Mål-seksjonen skal være kort og presis, og åpne direkte med selve målet — ikke en innledende setning om at prosjektet har et mål.'
       },
       concept: {
-        length: '2-3 avsnitt, ca 100-150 ord totalt',
-        style: 'Utfyllende, kreativ og engasjerende. Beskriv ideen og konseptet i detalj.',
-        description: 'Konsept-seksjonen skal være mer utfyllende og beskrive ideen, kreativiteten og tilnærmingen til prosjektet.'
+        length: '1-2 korte avsnitt, maks 60-90 ord totalt',
+        style: 'Kort og konkret. Maks ett beskrivende adjektiv per setning — unngå adjektiv-par ("unik og engasjerende") og superlativer ("fantastisk", "magisk"). Beskriv hva vi gjør og hvordan, ikke hvor bra det blir.',
+        description: 'Konsept-seksjonen skal beskrive den kreative tilnærmingen presist og uten fyllord — rett på sak, ikke utbrodert.'
       }
     }
 
@@ -114,7 +114,7 @@ Nå, skriv en ny "${sectionNames[sectionType]}"-seksjon for dette prosjektet. F�
       messages: [
         {
           role: 'system',
-          content: `Du er en erfaren tekstforfatter som spesialiserer deg på prosjektbeskrivelser for film- og fotoproduksjon. Du skriver på norsk med profesjonell, men tilgjengelig språk. Du unngår å bruke overdrevent mange adjektiver. For "${sectionNames[sectionType]}"-seksjoner skal du følge lengde- og stilkravene nøye: ${sectionConfig.length}. ${sectionConfig.style}`
+          content: `Du er en erfaren tekstforfatter som spesialiserer deg på prosjektbeskrivelser for film- og fotoproduksjon. Du skriver på norsk med profesjonell, men tilgjengelig språk. Skriv kort og konkret — maks ett beskrivende adjektiv per setning, ingen adjektiv-par eller superlativer. Eksemplene under viser stil og struktur, men hvis et eksempel er lengre, mer adjektivtungt, eller åpner på en måte kravene under sier du skal unngå, skal DU likevel følge kravene under — ikke eksempelet. For "${sectionNames[sectionType]}"-seksjoner skal du følge lengde- og stilkravene nøye: ${sectionConfig.length}. ${sectionConfig.style}`
         },
         {
           role: 'user',

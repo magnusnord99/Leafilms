@@ -79,13 +79,21 @@ export default function VarslerClient({ notifications: initialNotifications }: {
     }
     if (n.type === 'lead_assigned') {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
-    } else if (n.type === 'task_assigned' || n.type === 'project_message' || n.type === 'project_message_mention') {
+    } else if (n.type === 'task_assigned') {
       router.push(`/admin/projects/${n.project_id}`)
-    } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message') {
-      router.push(`/admin/projects/${n.project_id}/quote`)
+    } else if (n.type === 'project_message' || n.type === 'project_message_mention' || n.type === 'project_message_reaction') {
+      router.push(`/admin/projects/${n.project_id}?chat=1`)
+    } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message' || n.type === 'quote_message_reaction') {
+      router.push(`/admin/projects/${n.project_id}/quote${n.type === 'quote_assigned' ? '' : '?chat=1'}`)
     } else if (n.type === 'invoice_assigned') {
       router.push(`/admin/faktura/${n.project_id}`)
-    } else if (n.type === 'task_message' || n.type === 'task_message_mention') {
+    } else if (n.type === 'resale_assigned') {
+      router.push(`/admin/projects/${n.project_id}`)
+    } else if (n.type === 'contract_signed') {
+      router.push(`/admin/projects/${n.project_id}?tab=kontrakt`)
+    } else if (n.type === 'feedback_reply') {
+      // Ingen egen visningsside — svaret vises allerede i varselteksten under
+    } else if (n.type === 'task_message' || n.type === 'task_message_mention' || n.type === 'task_message_reaction') {
       const stage = n.tasks?.pipeline_stage
       if (!n.task_id) {
         router.push(`/admin/postprod/${n.project_id}`)
@@ -162,9 +170,15 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               >
                 {/* Ikon */}
                 <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                  {n.type === 'task_assigned' || n.type === 'lead_assigned' ? (
+                  {n.type === 'project_message_reaction' || n.type === 'task_message_reaction' || n.type === 'quote_message_reaction' ? (
+                    <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>{n.message_preview}</span>
+                  ) : n.type === 'task_assigned' || n.type === 'lead_assigned' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                    </svg>
+                  ) : n.type === 'contract_signed' ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
                     </svg>
                   ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -195,15 +209,23 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         : n.type === 'task_message_mention' ? 'nevnte deg i en oppgave'
                         : n.type === 'task_assigned' ? 'tildelte deg en oppgave'
                         : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
+                        : n.type === 'resale_assigned' ? 'satte deg som ansvarlig for videresalg'
                         : n.type === 'selection_submitted' ? 'sendte inn bildevalg'
                         : n.type === 'quote_mention' ? 'tagget deg i tilbud'
                         : n.type === 'quote_message' ? 'i tilbudschatten'
+                        : n.type === 'feedback_reply' ? 'svarte på tilbakemeldingen din'
+                        : n.type === 'contract_signed' ? 'signerte kontrakten'
+                        : n.type === 'project_message_reaction' ? 'reagerte på meldingen din i prosjekt-chatten'
+                        : n.type === 'task_message_reaction' ? 'reagerte på meldingen din i en oppgave'
+                        : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
                         : 'i en oppgave'}
                     </span>
                   </div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, fontStyle: 'italic', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    &ldquo;{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}&rdquo;
-                  </p>
+                  {n.type !== 'project_message_reaction' && n.type !== 'task_message_reaction' && n.type !== 'quote_message_reaction' && (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, fontStyle: 'italic', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      &ldquo;{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}&rdquo;
+                    </p>
+                  )}
                   <div style={{ display: 'flex', gap: 8 }}>
                     {n.projects?.title && (
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>

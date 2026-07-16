@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getPostProdProjects, getPostProdAssignedTasks } from '@/lib/actions/pipeline'
-import type { ProjectWithPipeline, Task } from '@/lib/types'
+import { TASK_STATUS_LABELS, type ProjectWithPipeline, type Task } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
@@ -35,9 +35,9 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
 }
 
 const STATUS_CONFIG = {
-  todo:        { label: 'Todo',   color: C.text3   },
-  in_progress: { label: 'Pågår',  color: C.warning  },
-  done:        { label: 'Ferdig', color: C.success  },
+  todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3   },
+  in_progress: { label: TASK_STATUS_LABELS.in_progress, color: C.warning  },
+  done:        { label: TASK_STATUS_LABELS.done,        color: C.success  },
 }
 
 function ProjectCard({ project }: { project: PostProdProject }) {

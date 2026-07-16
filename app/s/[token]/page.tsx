@@ -28,6 +28,7 @@ export default async function SelectionPage({
         token={token}
         album={albumData.album}
         images={albumData.images}
+        videos={albumData.videos}
         isDirectAlbumLink
       />
     )

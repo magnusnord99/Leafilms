@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getQuoteApiToken } from '@/lib/auth/quote-api-auth'
 import { createClient } from '@/lib/supabase-server'
 
+// Denne ruten proxyer det eldre Google Sheets/Python-baserte tilbudsflyten
+// (grouped_sums/total_excl_mva) — ikke QuoteBuilderData, så calculateQuoteTotals()
+// fra lib/quote-builder-utils.ts gjelder ikke her. Definert ett sted i stedet
+// for å hardkode 25 % to steder i samme fil.
+const QUOTE_VAT_RATE = 25
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -207,7 +213,7 @@ Hvis curl fungerer, men Next.js ikke fungerer, er token-en i .env.local feil.`
       finalPriceExclVat: data.total_excl_mva || 0,
       finalPriceInclVat: data.total_incl_mva || 0,
       totalDiscount: 0, // Beregnes senere hvis discount_percent er satt
-      vatRate: 25,
+      vatRate: QUOTE_VAT_RATE,
       
       // Vilkår (kan legges til i details hvis tilgjengelig)
       terms: data.details?.Vilkår || data.details?.terms || '',
@@ -221,7 +227,9 @@ Hvis curl fungerer, men Next.js ikke fungerer, er token-en i .env.local feil.`
       const discountAmount = (transformedData.subtotalExclVat * discount_percent) / 100
       transformedData.totalDiscount = discountAmount
       transformedData.finalPriceExclVat = transformedData.subtotalExclVat - discountAmount
-      transformedData.finalPriceInclVat = transformedData.finalPriceExclVat * 1.25
+      transformedData.finalPriceInclVat = mva === 'y'
+        ? transformedData.finalPriceExclVat * (1 + QUOTE_VAT_RATE / 100)
+        : transformedData.finalPriceExclVat
     }
 
     return NextResponse.json(transformedData)

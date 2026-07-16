@@ -26,6 +26,7 @@ export default async function AlbumPage({
       galleryToken={token}
       album={album}
       images={album.images}
+      videos={album.videos}
       totalSelected={data.albums.reduce((s, a) => s + a.selectedCount, 0)}
       targetCount={data.gallery.target_count}
       isDirectAlbumLink={false}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,12 +42,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    const authClient = await createClient()
 
     // Reject analytics from authenticated admin users (server-side guard)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await authClient.auth.getUser()
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile } = await authClient
         .from('profiles')
         .select('role')
         .eq('id', user.id)
@@ -56,6 +56,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, skipped: true })
       }
     }
+
+    // Service-klient — project_shares/project_analytics har ikke lenger anon RLS-tilgang;
+    // token-sjekken under er den faktiske autorisasjonsgrensen.
+    const supabase = createServiceClient()
 
     // Verify that the share token exists and belongs to the project
     const { data: share, error: shareError } = await supabase
@@ -73,11 +77,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (sessionId) {
-      // First, fetch existing session to merge section_times
+      // First, fetch existing session to merge section_times — scopet til prosjektet
+      // vi nettopp verifiserte, slik at en gyldig token ikke kan brukes til å lese/endre
+      // en annen prosjekts analytics-sesjon via en gjettet sessionId.
       const { data: existingSession, error: fetchError } = await supabase
         .from('project_analytics')
         .select('section_times')
         .eq('id', sessionId)
+        .eq('project_id', projectId)
         .single()
 
       if (fetchError) {
@@ -128,6 +135,7 @@ export async function POST(request: NextRequest) {
         .from('project_analytics')
         .update(updateData)
         .eq('id', sessionId)
+        .eq('project_id', projectId)
         .select()
         .single()
 

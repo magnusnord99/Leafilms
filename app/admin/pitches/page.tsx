@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
+import { PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
+import { timeAgo } from '@/lib/format'
 
 type PitchProject = {
   id: string
@@ -17,11 +19,7 @@ type PitchProject = {
   customer_name?: string | null
 }
 
-const PIPELINE_LABEL: Record<string, string> = {
-  lead: 'Lead', møte: 'Møte', tilbud_sendt: 'Tilbud sendt',
-  kontrakt: 'Kontrakt', pre_prod: 'Pre-prod', produksjon: 'Produksjon',
-  post_prod: 'Post-prod', levering: 'Levering', fakturert: 'Fakturert', videresalg: 'Videresalg',
-}
+const PIPELINE_LABEL: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
 const PIPELINE_COLOR: Record<string, string> = {
   lead: C.text3,
@@ -40,17 +38,6 @@ const PROJECT_TYPE_LABEL: Record<string, string> = {
   video: 'Film',
   photo: 'Bilder',
   mixed: 'Film & Bilder',
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'I dag'
-  if (days === 1) return 'I går'
-  if (days < 7) return `${days} dager siden`
-  if (days < 30) return `${Math.floor(days / 7)} uker siden`
-  if (days < 365) return `${Math.floor(days / 30)} mnd siden`
-  return `${Math.floor(days / 365)} år siden`
 }
 
 export default function PitchesPage() {

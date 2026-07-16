@@ -43,6 +43,7 @@ export type AlbumForCustomer = {
   slug: string
   parent_album_id: string | null
   images: (SelectionImage & { signedUrl: string })[]
+  videos: GalleryVideo[]
   selectedCount: number
 }
 
@@ -83,6 +84,24 @@ export async function createGallery(
   }
 
   return { token, pinCode, galleryId: data.id }
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN: Hent kun galleri-id + status for et prosjekt — brukt av videoadmin
+// for å tilby "vis i seleksjonsgalleri" uten å hente bilder/signerte URL-er.
+// ---------------------------------------------------------------------------
+export async function getGalleryIdForProject(projectId: string): Promise<{ id: string; status: SelectionGallery['status'] } | null> {
+  const supabase = await createClient()
+
+  const { data: gallery } = await supabase
+    .from('selection_galleries')
+    .select('id, status')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return gallery ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +406,7 @@ export async function getGalleryForCustomer(token: string): Promise<{
 
   const albumList = (albumRows ?? []) as { id: string; name: string; slug: string; sort_order: number; parent_album_id: string | null }[]
 
-  const videos = await fetchGalleryVideos(service, gallery.id)
+  const videos = await fetchGalleryVideos(service, gallery.id, null)
 
   if (albumList.length === 0) {
     return {
@@ -398,14 +417,16 @@ export async function getGalleryForCustomer(token: string): Promise<{
     }
   }
 
-  const albums: AlbumForCustomer[] = albumList.map(album => {
+  const albums: AlbumForCustomer[] = await Promise.all(albumList.map(async album => {
     const albumImages = withUrl.filter(i => i.album_id === album.id)
+    const albumVideos = await fetchGalleryVideos(service, gallery.id, album.id)
     return {
       ...album,
       images: albumImages,
+      videos: albumVideos,
       selectedCount: albumImages.filter(i => i.selected).length,
     }
-  })
+  }))
 
   return {
     gallery: gallery as SelectionGallery,
@@ -415,15 +436,20 @@ export async function getGalleryForCustomer(token: string): Promise<{
   }
 }
 
+// albumId: null henter kun videoer uten album (galleriets toppnivå),
+// en id henter videoene plassert i nettopp det albumet.
 async function fetchGalleryVideos(
   service: ReturnType<typeof createServiceClient>,
   galleryId: string,
+  albumId: string | null,
 ): Promise<GalleryVideo[]> {
-  const { data: vids } = await service
+  let query = service
     .from('video_reviews')
     .select('id, title, status')
     .eq('gallery_id', galleryId)
     .order('created_at', { ascending: true })
+  query = albumId ? query.eq('album_id', albumId) : query.is('album_id', null)
+  const { data: vids } = await query
 
   if (!vids || vids.length === 0) return []
 

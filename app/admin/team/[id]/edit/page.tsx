@@ -62,8 +62,14 @@ export default function EditTeamMember({ params }: Props) {
 
   useEffect(() => {
     if (id) {
+      // Nullstill valgt-men-ikke-lagret bilde fra forrige team-medlem — ellers kan det
+      // bli lastet opp og lagret som profilbilde for FEIL team-medlem ved navigering.
+      setProfileImageFile(null)
+      setProfileImagePreview(null)
+      setExistingProfileImage(null)
       fetchTeamMember()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {

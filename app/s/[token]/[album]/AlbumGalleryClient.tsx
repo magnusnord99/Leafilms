@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { toggleImageSelection, addImageComment } from '@/lib/actions/selections'
 import { toggleAlbumImagePick, submitAlbumPicks, addAlbumImagePickComment } from '@/lib/actions/selection-picks'
 import type { SelectionAlbum } from '@/lib/actions/selection-albums'
-import type { AlbumForCustomer } from '@/lib/actions/selections'
+import type { AlbumForCustomer, GalleryVideo } from '@/lib/actions/selections'
 import type { AlbumImageWithPick } from '@/lib/actions/selection-picks'
 
 const STYLES = `
@@ -61,6 +62,7 @@ export default function AlbumGalleryClient({
   galleryToken,
   album,
   images: initialImages,
+  videos = [],
   totalSelected: initialTotal,
   targetCount,
   isDirectAlbumLink,
@@ -70,6 +72,7 @@ export default function AlbumGalleryClient({
   galleryToken?: string
   album: SelectionAlbum | AlbumForCustomer
   images: AnyImage[]
+  videos?: GalleryVideo[]
   totalSelected?: number
   targetCount?: number | null
   isDirectAlbumLink: boolean
@@ -348,6 +351,26 @@ export default function AlbumGalleryClient({
                   </div>
                 )
               })}
+              {videos.map(video => (
+                <Link
+                  key={video.id}
+                  href={`/s/${token}/video/${video.id}`}
+                  style={{
+                    borderRadius: 7, overflow: 'hidden', textDecoration: 'none',
+                    border: '2px solid transparent', background: S.surface2, display: 'block',
+                  }}
+                >
+                  <div style={{ position: 'relative', aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(196,148,52,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill={S.gold}><path d="M4 2l10 6-10 6V2z" /></svg>
+                    </div>
+                    <span style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text, padding: '0 8px', textAlign: 'center', wordBreak: 'break-word' }}>{video.title}</span>
+                    <span style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: video.status === 'submitted' ? S.green : S.text2 }}>
+                      {video.status === 'submitted' ? 'Sendt inn' : video.comment_count > 0 ? `${video.comment_count} kommentar${video.comment_count === 1 ? '' : 'er'}` : 'Video'}
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
             <div className="ag-send-mobile">
               <button

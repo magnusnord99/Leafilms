@@ -14,6 +14,7 @@ export type VideoReview = {
   id: string
   project_id: string
   gallery_id: string | null
+  album_id: string | null
   title: string
   storage_path: string
   duration_seconds: number | null
@@ -55,6 +56,7 @@ export async function createVideoReview(
   title: string,
   storagePath: string,
   galleryId?: string,
+  albumId?: string,
 ): Promise<VideoReview> {
   const service = createServiceClient()
 
@@ -63,6 +65,7 @@ export async function createVideoReview(
     .insert({
       project_id: projectId,
       gallery_id: galleryId ?? null,
+      album_id: albumId ?? null,
       title,
       storage_path: storagePath,
       token: generateToken(),
@@ -75,12 +78,25 @@ export async function createVideoReview(
   return data as VideoReview
 }
 
+// Videoer på galleriets toppnivå — ekskluderer videoer plassert i et spesifikt album
+// (de vises der i stedet, se getAlbumVideos, på samme måte som bilder ikke vises dobbelt).
 export async function getGalleryVideos(galleryId: string): Promise<VideoReview[]> {
   const service = createServiceClient()
   const { data } = await service
     .from('video_reviews')
     .select('*')
     .eq('gallery_id', galleryId)
+    .is('album_id', null)
+    .order('created_at', { ascending: true })
+  return (data ?? []) as VideoReview[]
+}
+
+export async function getAlbumVideos(albumId: string): Promise<VideoReview[]> {
+  const service = createServiceClient()
+  const { data } = await service
+    .from('video_reviews')
+    .select('*')
+    .eq('album_id', albumId)
     .order('created_at', { ascending: true })
   return (data ?? []) as VideoReview[]
 }
@@ -88,6 +104,31 @@ export async function getGalleryVideos(galleryId: string): Promise<VideoReview[]
 // Gallery-scoped video auth — bruker seksjonsgalleriets cookie (sel_...)
 const GALLERY_COOKIE_PREFIX = 'sel_'
 function galleryCookieKey(token: string) { return `${GALLERY_COOKIE_PREFIX}${token.slice(0, 16)}` }
+
+async function loadReviewWithCommentsAndUrl(
+  service: ReturnType<typeof createServiceClient>,
+  review: VideoReview,
+): Promise<{ review: VideoReview; comments: VideoComment[]; signedUrl: string } | null> {
+  const [commentsResult, signedUrlResult] = await Promise.all([
+    service
+      .from('video_comments')
+      .select('*')
+      .eq('review_id', review.id)
+      .order('timestamp_seconds', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true }),
+    service.storage
+      .from('videos')
+      .createSignedUrl(review.storage_path, SIGNED_URL_EXPIRY),
+  ])
+
+  if (!signedUrlResult.data?.signedUrl) return null
+
+  return {
+    review,
+    comments: (commentsResult.data ?? []) as VideoComment[],
+    signedUrl: signedUrlResult.data.signedUrl,
+  }
+}
 
 export async function getVideoForGallery(
   galleryToken: string,
@@ -107,26 +148,34 @@ export async function getVideoForGallery(
     .single()
 
   if (!review) return null
+  return loadReviewWithCommentsAndUrl(service, review as VideoReview)
+}
 
-  const [commentsResult, signedUrlResult] = await Promise.all([
-    service
-      .from('video_comments')
-      .select('*')
-      .eq('review_id', reviewId)
-      .order('timestamp_seconds', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: true }),
-    service.storage
-      .from('videos')
-      .createSignedUrl((review as VideoReview).storage_path, SIGNED_URL_EXPIRY),
-  ])
+// Album-scoped video auth — brukes når en video er plassert inni et spesifikt
+// album og kunden aksesserer via en direkte albumlenke (egen "salb_"-cookie,
+// ikke galleriets "sel_"-cookie).
+const ALBUM_COOKIE_PREFIX = 'salb_'
+function albumCookieKey(albumToken: string) { return `${ALBUM_COOKIE_PREFIX}${albumToken.slice(0, 16)}` }
 
-  if (!signedUrlResult.data?.signedUrl) return null
+export async function getVideoForAlbum(
+  albumToken: string,
+  reviewId: string,
+): Promise<{ review: VideoReview; comments: VideoComment[]; signedUrl: string } | null> {
+  const cookieStore = await cookies()
+  const albumId = cookieStore.get(albumCookieKey(albumToken))?.value
+  if (!albumId) return null
 
-  return {
-    review: review as VideoReview,
-    comments: (commentsResult.data ?? []) as VideoComment[],
-    signedUrl: signedUrlResult.data.signedUrl,
-  }
+  const service = createServiceClient()
+
+  const { data: review } = await service
+    .from('video_reviews')
+    .select('*')
+    .eq('id', reviewId)
+    .eq('album_id', albumId)
+    .single()
+
+  if (!review) return null
+  return loadReviewWithCommentsAndUrl(service, review as VideoReview)
 }
 
 export async function addVideoCommentViaGallery(
@@ -196,6 +245,22 @@ export async function getAdminVideoReviews(projectId: string): Promise<VideoRevi
 
   if (error) throw new Error(error.message)
   return (data ?? []) as VideoReview[]
+}
+
+// Knytter (eller fjerner) en video til kundens seleksjonsgalleri, slik at den
+// dukker opp side om side med bilde-albumene på /s/[token].
+export async function setVideoReviewGallery(
+  reviewId: string,
+  galleryId: string | null
+): Promise<void> {
+  const service = createServiceClient()
+
+  const { error } = await service
+    .from('video_reviews')
+    .update({ gallery_id: galleryId, updated_at: new Date().toISOString() })
+    .eq('id', reviewId)
+
+  if (error) throw new Error(error.message)
 }
 
 export async function getAdminVideoComments(reviewId: string): Promise<VideoComment[]> {

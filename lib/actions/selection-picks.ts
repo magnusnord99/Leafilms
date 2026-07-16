@@ -3,6 +3,8 @@
 import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { SelectionAlbum } from './selection-albums'
+import { getAlbumVideos } from './video-reviews'
+import type { GalleryVideo } from './selections'
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIGNED_URL_EXPIRY = 60 * 60 * 2
@@ -29,6 +31,7 @@ export type AlbumImageWithPick = {
 export type CustomerAlbumData = {
   album: SelectionAlbum
   images: AlbumImageWithPick[]
+  videos: GalleryVideo[]
   selectedCount: number
 }
 
@@ -129,9 +132,23 @@ export async function getAlbumForCustomer(
     pick: pickMap[img.id] ?? null,
   }))
 
+  const albumVideos = await getAlbumVideos(albumId)
+  const { data: videoCommentCounts } = albumVideos.length > 0
+    ? await service.from('video_comments').select('review_id').in('review_id', albumVideos.map(v => v.id))
+    : { data: [] as { review_id: string }[] }
+  const videoCountMap: Record<string, number> = {}
+  for (const c of videoCommentCounts ?? []) videoCountMap[c.review_id] = (videoCountMap[c.review_id] ?? 0) + 1
+  const videos: GalleryVideo[] = albumVideos.map(v => ({
+    id: v.id,
+    title: v.title,
+    status: v.status,
+    comment_count: videoCountMap[v.id] ?? 0,
+  }))
+
   return {
     album: album as SelectionAlbum,
     images: imagesWithPicks,
+    videos,
     selectedCount: imagesWithPicks.filter(i => i.pick?.selected).length,
   }
 }

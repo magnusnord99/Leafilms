@@ -65,8 +65,13 @@ export default function EditCase({ params }: Props) {
 
   useEffect(() => {
     if (id) {
+      // Nullstill valgt-men-ikke-lagret fil fra forrige case — ellers kan den
+      // bli lastet opp og lagret som miniatyrbilde for FEIL case ved navigering.
+      setThumbnailFile(null)
+      setThumbnailPreview(null)
       fetchCase()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
@@ -97,9 +102,7 @@ export default function EditCase({ params }: Props) {
         }
         setFormData(loaded)
         initialDataRef.current = loaded
-        if (caseStudy.thumbnail_path) {
-          setExistingThumbnail(caseStudy.thumbnail_path)
-        }
+        setExistingThumbnail(caseStudy.thumbnail_path || null)
       }
     } catch (err) {
       console.error('Error fetching case:', err)

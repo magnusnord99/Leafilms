@@ -11,6 +11,7 @@ import {
   deleteVideoReview,
   resolveVideoComment,
   deleteVideoComment,
+  setVideoReviewGallery,
 } from '@/lib/actions/video-reviews'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,8 +189,11 @@ function ReviewCard({
   expanded,
   comments,
   loadingComments,
+  hasGallery,
+  inGallery,
   onToggle,
   onDelete,
+  onToggleGallery,
   onResolveComment,
   onDeleteComment,
 }: {
@@ -197,13 +201,24 @@ function ReviewCard({
   expanded: boolean
   comments: VideoComment[] | null
   loadingComments: boolean
+  hasGallery: boolean
+  inGallery: boolean
   onToggle: () => void
   onDelete: () => void
+  onToggleGallery: () => Promise<void>
   onResolveComment: (id: string, resolved: boolean) => Promise<void>
   onDeleteComment: (id: string) => Promise<void>
 }) {
   const [deleting, setDeleting] = useState(false)
+  const [togglingGallery, setTogglingGallery] = useState(false)
   const status = statusMap[review.status] ?? statusMap.open
+
+  async function handleToggleGallery(e: React.MouseEvent) {
+    e.stopPropagation()
+    setTogglingGallery(true)
+    await onToggleGallery()
+    setTogglingGallery(false)
+  }
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
@@ -265,6 +280,27 @@ function ReviewCard({
         }}>
           {status.label}
         </span>
+
+        {/* Galleri-tilknytning */}
+        {hasGallery && (
+          <button
+            onClick={handleToggleGallery}
+            disabled={togglingGallery}
+            title={inGallery ? 'Fjern fra kundens seleksjonsgalleri' : 'Vis i kundens seleksjonsgalleri'}
+            style={{
+              padding: '2px 9px', borderRadius: 10,
+              fontSize: '0.65rem', fontWeight: 700,
+              fontFamily: 'var(--font-dm-sans)',
+              border: `1px solid ${inGallery ? 'rgba(196,148,52,0.35)' : C.border}`,
+              background: inGallery ? 'rgba(196,148,52,0.1)' : 'none',
+              color: inGallery ? '#C49434' : C.text3,
+              cursor: 'pointer',
+              opacity: togglingGallery ? 0.5 : 1,
+            }}
+          >
+            {togglingGallery ? '...' : inGallery ? 'I galleri ✓' : 'Ikke i galleri'}
+          </button>
+        )}
 
         {/* Date */}
         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
@@ -348,10 +384,12 @@ export default function VideoAdminClient({
   projectId,
   projectName,
   initialReviews,
+  galleryId,
 }: {
   projectId: string
   projectName: string
   initialReviews: VideoReview[]
+  galleryId: string | null
 }) {
   const router = useRouter()
 
@@ -366,6 +404,7 @@ export default function VideoAdminClient({
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [addToGallery, setAddToGallery] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Toggle review expansion ───────────────────────────────────────────────
@@ -405,7 +444,12 @@ export default function VideoAdminClient({
         .from('videos')
         .upload(path, file, { contentType: file.type, upsert: false })
       if (uploadErr) throw uploadErr
-      const review = await createVideoReview(projectId, newTitle.trim(), path)
+      const review = await createVideoReview(
+        projectId,
+        newTitle.trim(),
+        path,
+        addToGallery && galleryId ? galleryId : undefined
+      )
       setReviews(prev => [review, ...prev])
       setNewTitle('')
       setFile(null)
@@ -421,6 +465,14 @@ export default function VideoAdminClient({
     await deleteVideoReview(review.id, review.storage_path)
     setReviews(prev => prev.filter(r => r.id !== review.id))
     if (expandedId === review.id) setExpandedId(null)
+  }
+
+  // ── Attach/detach fra kundens seleksjonsgalleri ───────────────────────────
+  async function handleToggleGallery(review: VideoReview) {
+    if (!galleryId) return
+    const nextGalleryId = review.gallery_id === galleryId ? null : galleryId
+    await setVideoReviewGallery(review.id, nextGalleryId)
+    setReviews(prev => prev.map(r => r.id === review.id ? { ...r, gallery_id: nextGalleryId } : r))
   }
 
   // ── Resolve / delete comment ──────────────────────────────────────────────
@@ -556,6 +608,28 @@ export default function VideoAdminClient({
             onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0]) }}
           />
 
+          {galleryId ? (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              marginBottom: 14, cursor: 'pointer',
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2,
+            }}>
+              <input
+                type="checkbox"
+                checked={addToGallery}
+                onChange={e => setAddToGallery(e.target.checked)}
+              />
+              Vis i kundens seleksjonsgalleri (sammen med bildealbumene)
+            </label>
+          ) : (
+            <p style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+              color: C.text3, marginBottom: 14, fontStyle: 'italic',
+            }}>
+              Ingen seleksjonsgalleri opprettet for dette prosjektet ennå — videoen får en egen delelenke.
+            </p>
+          )}
+
           {uploadError && (
             <p style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
@@ -614,8 +688,11 @@ export default function VideoAdminClient({
               expanded={expandedId === review.id}
               comments={commentsByReview[review.id] ?? null}
               loadingComments={loadingCommentsFor === review.id}
+              hasGallery={!!galleryId}
+              inGallery={!!galleryId && review.gallery_id === galleryId}
               onToggle={() => toggleExpand(review.id)}
               onDelete={() => handleDeleteReview(review)}
+              onToggleGallery={() => handleToggleGallery(review)}
               onResolveComment={(commentId, resolved) =>
                 handleResolveComment(review.id, commentId, resolved)
               }

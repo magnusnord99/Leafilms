@@ -1,7 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { mentionToken, type MentionableProfile } from '@/lib/mentions'
+
+const TEXTAREA_MAX_HEIGHT = 160
 
 type Props = {
   value: string
@@ -38,6 +40,14 @@ export function MentionTextInput({
   const matches = query === null
     ? []
     : profiles.filter(p => mentionToken(p).toLowerCase().startsWith(query.toLowerCase())).slice(0, 6)
+
+  // Grows the textarea to fit its content (up to a cap) instead of scrolling internally.
+  useEffect(() => {
+    if (as !== 'textarea' || !ref.current) return
+    const el = ref.current
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`
+  }, [value, as])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const next = e.target.value
@@ -111,7 +121,7 @@ export function MentionTextInput({
           onSelect={handleSelect}
           placeholder={placeholder}
           disabled={disabled}
-          style={style}
+          style={{ ...style, maxHeight: TEXTAREA_MAX_HEIGHT, overflowY: 'auto' }}
           className={className}
         />
       ) : (

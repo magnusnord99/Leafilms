@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
+import { calculateQuoteTotals, getAddonAmounts, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
-const DEFAULT_TERMS = `Leafilms vil være ansvarlig for planleggingen, produksjonen og leveringen av prosjektet slik det er beskrevet i dette tilbudet.
-Prosjektets omfang, tidslinje og leveranser avtales før produksjonen starter. Eventuelle endringer i omfanget underveis kan medføre ekstra kostnader.
+const DEFAULT_TERMS = `Leafilms vil være ansvarlig for planleggingen, produksjonen og leveringen av prosjektet slik det er beskrevet i dette tilbudet. Prosjektets omfang, tidslinje og leveranser avtales før produksjonen starter. Eventuelle endringer i omfanget underveis kan medføre ekstra kostnader.
 Reise-, overnattings- og oppholdsutgifter for teamet er inkludert i budsjettet med mindre annet er spesifisert.
 Dersom uforutsette omstendigheter (f.eks. ekstremvær eller andre faktorer utenfor Leafilms' kontroll) hindrer produksjonen i å gjennomføres som planlagt, vil alternative løsninger utarbeides i samråd med kunden. Eventuelle forsinkelser eller omlegginger kan medføre ekstra kostnader.
 Kansellering innen 14 dager før startdato: 50 % av den avtalte prisen vil bli fakturert.
@@ -470,15 +469,24 @@ function ItemSection({
 }
 
 // ─── Valgfrie tillegg (kunden haker av selv på det publiserte tilbudet) ────────
+const ADDON_CATEGORY_SHORT_LABELS: Record<OptionalAddonCategory, string> = {
+  startup: 'Oppstart',
+  production: 'Opptak',
+  post: 'Post',
+  expenses: 'Utgifter',
+}
+
 function AddonsSection({
   items, onChange,
 }: {
   items: OptionalAddon[]
   onChange: (items: OptionalAddon[]) => void
 }) {
-  const update = (id: string, field: 'description' | 'price', value: string | number) =>
+  const update = (id: string, field: 'description' | 'discountable' | 'deliveryImpact', value: string | boolean) =>
     onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
-  const add = () => onChange([...items, { id: newId(), description: '', price: 0 }])
+  const updateAmount = (id: string, cat: OptionalAddonCategory, value: number) =>
+    onChange(items.map(i => (i.id === id ? { ...i, amounts: { ...(i.amounts ?? {}), [cat]: value || undefined } } : i)))
+  const add = () => onChange([...items, { id: newId(), description: '', amounts: {}, discountable: true }])
   const remove = (id: string) => onChange(items.filter(i => i.id !== id))
 
   return (
@@ -489,40 +497,71 @@ function AddonsSection({
       </div>
 
       {items.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Tittel', 'Pris', ''].map((h, i) => (
-                  <th key={h} style={{ textAlign: i === 1 ? 'right' : i === 2 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 2 ? 24 : 'auto' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(item => (
-                <tr key={item.id} className="group">
-                  <td style={{ padding: '4px 8px 4px 0' }}>
-                    <input style={inputBase} value={item.description} onChange={e => update(item.id, 'description', e.target.value)} placeholder="F.eks. VFX-pakke" />
-                  </td>
-                  <td style={{ padding: '4px 8px 4px 0' }}>
-                    <input style={{ ...inputBase, textAlign: 'right' }} type="number" value={item.price || ''} onChange={e => update(item.id, 'price', Number(e.target.value))} placeholder="0" />
-                  </td>
-                  <td style={{ padding: 4 }}>
-                    <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                      className="opacity-0 group-hover:opacity-100"
-                      title="Fjern">×</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map(item => {
+            const amounts = getAddonAmounts(item)
+            const total = addonTotalPrice(item)
+            return (
+              <div key={item.id} className="group" style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <input
+                    style={{ ...inputBase, flex: 1 }}
+                    value={item.description}
+                    onChange={e => update(item.id, 'description', e.target.value)}
+                    placeholder="F.eks. Fotografering"
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', color: C.text3, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={item.discountable ?? true}
+                      onChange={e => update(item.id, 'discountable', e.target.checked)}
+                      title="Skal tillegget rabatteres sammen med kategorien(e)? (Utgifter rabatteres uansett aldri)"
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Rabatterbar
+                  </label>
+                  <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                    className="opacity-0 group-hover:opacity-100"
+                    title="Fjern">×</button>
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  {(Object.keys(ADDON_CATEGORY_SHORT_LABELS) as OptionalAddonCategory[]).map(cat => (
+                    <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <label style={{ fontSize: '0.6rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>{ADDON_CATEGORY_SHORT_LABELS[cat]}</label>
+                      <input
+                        style={{ ...inputBase, width: 80, textAlign: 'right' }}
+                        type="number"
+                        value={amounts[cat] || ''}
+                        onChange={e => updateAmount(item.id, cat, Number(e.target.value))}
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                  <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <p style={{ fontSize: '0.6rem', color: C.text3, fontFamily: 'var(--font-dm-sans)', marginBottom: 2 }}>Totalt</p>
+                    <p style={{ fontSize: '0.85rem', color: C.text, fontFamily: 'var(--font-dm-sans)', fontWeight: 600 }}>{formatNOK(total)}</p>
+                  </div>
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <label style={{ fontSize: '0.6rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Endring i leveranse (valgfritt)</label>
+                  <input
+                    style={inputBase}
+                    value={item.deliveryImpact ?? ''}
+                    onChange={e => update(item.id, 'deliveryImpact', e.target.value)}
+                    placeholder="F.eks. + 10 bilder — la stå tom hvis tillegget ikke endrer leveransen"
+                  />
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
       {items.length === 0 && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen tillegg lagt til ennå</p>}
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
-        Vises som avkrysningsbokser for kunden på det publiserte tilbudet. Rabatten over gjelder ikke disse — kun MVA legges på hvis kunden haker av.
+        Vises som avkrysningsbokser for kunden på det publiserte tilbudet. Et tillegg kan fordeles på flere poster samtidig
+        (f.eks. Opptak + Post-produksjon) — kun MVA legges på hvis kunden haker av.
       </p>
     </div>
   )
@@ -869,6 +908,7 @@ interface QuoteBuilderProps {
   saving?: boolean
   generatingPDF?: boolean
   profiles?: { id: string; name: string | null }[]
+  autosaveEnabled?: boolean
 }
 
 export function QuoteBuilder({
@@ -881,6 +921,7 @@ export function QuoteBuilder({
   onGeneratePDF,
   saving = false,
   generatingPDF = false,
+  autosaveEnabled = true,
 }: QuoteBuilderProps) {
   const [data, setData] = useState<QuoteBuilderData>({
     ...initialData,
@@ -917,6 +958,19 @@ export function QuoteBuilder({
       setData(prev => ({ ...prev, [field]: value }))
     }, []
   )
+
+  // Autolagre 2 sekunder etter siste endring — hopper over selve mounten,
+  // så vi ikke lagrer på nytt rett etter at data ble lastet inn.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    if (!autosaveEnabled) return
+    const timeout = setTimeout(() => onSave(data), 2000)
+    return () => clearTimeout(timeout)
+  }, [data, autosaveEnabled, onSave])
 
   const handleCustomerSelect = (customer: Customer | null) => {
     setSelectedCustomerId(customer?.id ?? '')

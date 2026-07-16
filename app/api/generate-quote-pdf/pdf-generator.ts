@@ -1,7 +1,8 @@
 import PDFDocument from 'pdfkit'
 import fs from 'fs'
 import path from 'path'
-import type { QuoteBuilderData } from '@/lib/types'
+import type { QuoteBuilderData, OptionalAddonCategory } from '@/lib/types'
+import { getAddonAmounts, addonTotalPrice, addonDiscountedPrice, isAddonDiscountable } from '@/lib/quote-builder-utils'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'leafilms-logo.png')
 const LOGO_ASPECT_RATIO = 446 / 840
@@ -48,6 +49,7 @@ function getLabels(lang: Lang) {
       totalInclVat: 'Total (incl. VAT):',
       discount: (pct: number) => `Discount (${pct}%)`,
       discountNote: 'on production and post-production',
+      addonsHeader: 'Optional add-ons included',
       categories: {
         startup: 'Startup/Planning',
         production: 'Production',
@@ -76,6 +78,7 @@ function getLabels(lang: Lang) {
     totalInclVat: 'Total (ink. MVA):',
     discount: (pct: number) => `Rabatt (${pct}%)`,
     discountNote: 'på opptak og post-produksjon',
+    addonsHeader: 'Inkluderte valgfrie tillegg',
     categories: {
       startup: 'Oppstart/planlegging',
       production: 'Opptak',
@@ -95,7 +98,9 @@ function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, width: number):
 
 export async function generateQuotePDF(
   data: QuoteBuilderData,
-  options: GenerateOptions
+  options: GenerateOptions,
+  /** Kun disse addon-id-ene tas med (kundens avkryssede valg). `undefined` = ta med alle (admin-forhåndsvisning). */
+  selectedAddonIds?: string[]
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, compress: true })
@@ -263,7 +268,34 @@ export async function generateQuotePDF(
 
     const otherTotal = data.otherCosts.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     const licensingTotal = data.licensing.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-    const expensesTotal = otherTotal + licensingTotal
+
+    // Valgfrie tillegg — hver post (kategori+beløp) summeres inn i sin kategori for visning. Et
+    // tillegg kan ha poster i flere kategorier samtidig (f.eks. fotografering som koster mer i
+    // både Opptak og Post-produksjon). Poster i startup/production/post rabatteres sammen med
+    // resten av kategorien med mindre discountable er satt til false (f.eks. innleide eksterne
+    // eksperter). 'expenses'-poster rabatteres aldri, uansett discountable-flagg.
+    const includedAddons = (data.optionalAddons ?? []).filter(
+      a => selectedAddonIds === undefined || selectedAddonIds.includes(a.id)
+    )
+    const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']
+    const addonTotalsByCategory = includedAddons.reduce(
+      (acc, a) => {
+        const amounts = getAddonAmounts(a)
+        for (const cat of ADDON_CATEGORIES) acc[cat] += amounts[cat] ?? 0
+        return acc
+      },
+      { startup: 0, production: 0, post: 0, expenses: 0 } as Record<OptionalAddonCategory, number>
+    )
+    const addonDiscountableTotal = includedAddons.reduce((sum, a) => {
+      if (a.discountable === false) return sum
+      const amounts = getAddonAmounts(a)
+      return sum + ADDON_CATEGORIES.filter(c => c !== 'expenses').reduce((s, c) => s + (amounts[c] ?? 0), 0)
+    }, 0)
+    // Hoistet hit (brukes både av addon-linjene og TOTALS-seksjonen under) slik at
+    // rabatterte tillegg kan vises linje for linje, ikke bare som én samlet rabattsum nederst.
+    const discountFactor = data.discountFactor ?? 0
+
+    const expensesTotal = otherTotal + licensingTotal + addonTotalsByCategory.expenses
 
     const dayLabel = (days: number) => {
       const n = new Intl.NumberFormat(language === 'EN' ? 'en-US' : 'nb-NO').format(days)
@@ -272,10 +304,15 @@ export async function generateQuotePDF(
         : `${n} ${days === 1 ? 'dag' : 'dager'}`
     }
 
+    // Visningstotaler inkl. addons per kategori.
+    const startupDisplayTotal = startupTotal + addonTotalsByCategory.startup
+    const productionDisplayTotal = productionTotal + addonTotalsByCategory.production
+    const postDisplayTotal = postTotal + addonTotalsByCategory.post
+
     const categories = [
-      { label: labels.categories.startup, total: startupTotal, qty: startupDays > 0 ? dayLabel(startupDays) : '' },
-      { label: labels.categories.production, total: productionTotal, qty: shootDays > 0 ? dayLabel(shootDays) : '' },
-      { label: labels.categories.post, total: postTotal, qty: postDays > 0 ? dayLabel(postDays) : '' },
+      { label: labels.categories.startup, total: startupDisplayTotal, qty: startupDays > 0 ? dayLabel(startupDays) : '' },
+      { label: labels.categories.production, total: productionDisplayTotal, qty: shootDays > 0 ? dayLabel(shootDays) : '' },
+      { label: labels.categories.post, total: postDisplayTotal, qty: postDays > 0 ? dayLabel(postDays) : '' },
       { label: labels.categories.expenses, total: expensesTotal, qty: '' },
     ].filter(c => c.total > 0)
 
@@ -293,6 +330,62 @@ export async function generateQuotePDF(
       y += 14
     }
 
+    // ── Valgfrie tillegg — egne linjer ───────────────────────────────────────
+    // Kategori-radene over inkluderer allerede tillegg-beløpene i totalen (uten dette ville
+    // summene vært feil), men uten en egen liste her er det usynlig for leseren AT et tillegg
+    // er inkludert i prisen — samme problem som ble meldt inn fra kunder som ikke skjønte at
+    // f.eks. aftermovie var et tilvalg. Speiler visningen i det interaktive tilbudet (QuoteSection.tsx).
+    if (includedAddons.length > 0) {
+      if (y > doc.page.height - 100) {
+        doc.addPage()
+        y = 50
+      }
+      y += 4
+      doc.font('Helvetica-Oblique').fontSize(8.5).fillColor('#555555')
+      doc.text(labels.addonsHeader, colDescX, y, { width: colDescW, lineBreak: false })
+      y += 13
+
+      for (const addon of includedAddons) {
+        if (y > doc.page.height - 80) {
+          doc.addPage()
+          y = 50
+        }
+        doc.font('Helvetica').fontSize(9).fillColor('#000000')
+        doc.text(`• ${addon.description}`, colDescX + 8, y, { width: colDescW - 8, lineBreak: false })
+
+        // Speiler strikethrough-visningen i det interaktive tilbudet (QuoteSection.tsx) — uten
+        // dette ser tillegget dyrere ut i PDF-en enn det faktisk blir siden rabatten kun vises
+        // som én samlet sum lenger ned.
+        const discounted = isAddonDiscountable(addon) && discountFactor > 0
+        const finalPrice = discounted ? addonDiscountedPrice(addon, discountFactor) : addonTotalPrice(addon)
+        const finalText = `+${fmt(finalPrice, language)} NOK`
+
+        if (discounted) {
+          const originalText = `${fmt(addonTotalPrice(addon), language)} NOK`
+          doc.font('Helvetica').fontSize(7.5).fillColor('#777777')
+          const originalWidth = doc.widthOfString(originalText)
+          doc.font('Helvetica-Bold').fontSize(9)
+          const finalWidth = doc.widthOfString(finalText)
+          const gap = 6
+          const finalX = MR - finalWidth
+          const originalX = finalX - gap - originalWidth
+
+          doc.font('Helvetica').fontSize(7.5).fillColor('#777777')
+          doc.text(originalText, originalX, y + 1.5, { lineBreak: false })
+          doc.strokeColor('#777777').lineWidth(0.5)
+          doc.moveTo(originalX, y + 5).lineTo(originalX + originalWidth, y + 5).stroke()
+
+          doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000')
+          doc.text(finalText, finalX, y, { lineBreak: false })
+        } else {
+          doc.font('Helvetica').fontSize(9).fillColor('#000000')
+          doc.text(finalText, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
+        }
+        y += 13
+      }
+      y += 4
+    }
+
     // Table bottom line
     y += 4
     doc.strokeColor('#000000').lineWidth(0.5)
@@ -305,10 +398,10 @@ export async function generateQuotePDF(
       y = 50
     }
 
-    const subtotal = startupTotal + productionTotal + postTotal + expensesTotal
-    // Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader
-    const discountBase = startupTotal + shootCrewTotal + postTotal
-    const discountFactor = data.discountFactor ?? 0
+    const subtotal = startupDisplayTotal + productionDisplayTotal + postDisplayTotal + expensesTotal
+    // Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader —
+    // pluss rabatterbare tillegg i disse kategoriene
+    const discountBase = startupTotal + shootCrewTotal + postTotal + addonDiscountableTotal
     const discountAmount = discountBase * discountFactor
     const afterDiscount = subtotal - discountAmount
     const vatRate = data.vatRate ?? 25

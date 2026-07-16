@@ -49,6 +49,7 @@ export default function EditCustomer() {
     name: '',
     email: '',
     company: '',
+    org_nummer: '',
     phone: '',
     address: '',
     notes: ''
@@ -82,6 +83,7 @@ export default function EditCustomer() {
         name: data.name || '',
         email: data.email || '',
         company: data.company || '',
+        org_nummer: data.org_nummer || '',
         phone: data.phone || '',
         address: data.address || '',
         notes: data.notes || ''
@@ -286,6 +288,17 @@ export default function EditCustomer() {
               value={formData.company}
               onChange={(e) => setFormData({ ...formData, company: e.target.value })}
               placeholder="Firmanavn"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            {fieldLabel('Org.nummer')}
+            <input
+              type="text"
+              value={formData.org_nummer}
+              onChange={(e) => setFormData({ ...formData, org_nummer: e.target.value })}
+              placeholder="923 456 789"
               style={inputStyle}
             />
           </div>

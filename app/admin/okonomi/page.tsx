@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
-import { QuoteBuilderData, PipelineStage } from '@/lib/types'
+import { QuoteBuilderData, PipelineStage, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
 const green = '#4CAF7D'
@@ -15,6 +15,7 @@ type QuoteRow = {
   id: string
   status: string
   quote_data: QuoteBuilderData | null
+  selected_addon_ids: string[] | null
   created_at: string
 }
 
@@ -34,22 +35,11 @@ type ProjectWithAmount = {
   amount: number | null
 }
 
-const POTENTIAL_STAGES: PipelineStage[] = ['lead', 'møte', 'tilbud_sendt']
-const UPCOMING_STAGES: PipelineStage[] = ['kontrakt', 'pre_prod', 'produksjon', 'post_prod', 'levering']
+const POTENTIAL_STAGES: PipelineStage[] = ['lead', 'møte', 'tilbud_sendt', 'kontrakt']
+const UPCOMING_STAGES: PipelineStage[] = ['pre_prod', 'produksjon', 'post_prod', 'levering']
 const EARNED_STAGES: PipelineStage[] = ['fakturert', 'videresalg']
 
-const STAGE_LABELS: Record<string, string> = {
-  lead:        'Lead',
-  møte:        'Møte',
-  tilbud_sendt:'Tilbud sendt',
-  kontrakt:    'Kontrakt',
-  pre_prod:    'Pre-prod',
-  produksjon:  'Produksjon',
-  post_prod:   'Post-prod',
-  levering:    'Levering',
-  fakturert:   'Fakturert',
-  videresalg:  'Videresalg',
-}
+const STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
 function pickBestQuote(quotes: QuoteRow[]): QuoteRow | null {
   const withData = quotes.filter(q => q.quote_data)
@@ -62,7 +52,9 @@ function pickBestQuote(quotes: QuoteRow[]): QuoteRow | null {
 function getAmount(quote: QuoteRow | null): number | null {
   if (!quote?.quote_data) return null
   try {
-    const totals = calculateQuoteTotals(quote.quote_data)
+    // Kundens avkryssede tillegg fra pitch-siden telles med, slik at beløpet her
+    // matcher det kunden faktisk ser og signerer på.
+    const totals = calculateQuoteTotals(quote.quote_data, quote.selected_addon_ids ?? [])
     return totals.afterDiscount
   } catch {
     return null
@@ -227,8 +219,9 @@ export default function OkonomiPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('projects')
-      .select('id, title, pipeline_stage, customers(name), quotes(id, status, quote_data, created_at)')
+      .select('id, title, pipeline_stage, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at)')
       .neq('status', 'archived')
+      .neq('status', 'lost')
       .order('created_at', { ascending: false })
 
     const rows = (data ?? []) as unknown as ProjectRow[]

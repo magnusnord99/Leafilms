@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
-import type { QuoteBuilderData } from '@/lib/types'
+import type { QuoteBuilderData, ContractFormFields, OurSignature } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,113 @@ function formatNorwegianDate(isoDate: string | null | undefined): string {
   } catch {
     return isoDate
   }
+}
+
+// ---------------------------------------------------------------------------
+// Intern hjelpefunksjon: foreslå produksjonsperiode ut fra opptaksdatoer
+// ("juli 2026", eller "juli–august 2026" hvis start og slutt er ulike måneder)
+// ---------------------------------------------------------------------------
+function deriveProduksjonsPeriode(shootStart?: string | null, shootEnd?: string | null): string {
+  if (!shootStart) return ''
+  try {
+    const start = new Date(shootStart)
+    const end = shootEnd ? new Date(shootEnd) : start
+    const startLabel = start.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
+    const endLabel = end.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
+    if (startLabel === endLabel) return startLabel
+    return `${start.toLocaleDateString('nb-NO', { month: 'long' })}–${endLabel}`
+  } catch {
+    return ''
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Intern hjelpefunksjon: hent mal, auto-variabler og skjema-default-verdier
+// for et prosjekt. Delt mellom getProjectContractData og generateContractText.
+// ---------------------------------------------------------------------------
+async function buildContractContext(projectId: string) {
+  const supabase = await createClient()
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('*, customers(*)')
+    .eq('id', projectId)
+    .single()
+
+  if (projectError) {
+    console.error('buildContractContext project error:', projectError)
+    throw new Error('Fant ikke prosjekt')
+  }
+
+  const { data: quote } = await supabase
+    .from('quotes')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { data: contract } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('project_id', projectId)
+    .single()
+
+  const { data: templateRows } = await supabase
+    .from('contract_templates')
+    .select('content')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const template = templateRows?.[0]?.content ?? ''
+
+  const customer = (project as unknown as { customers?: { name: string | null; company: string | null; org_nummer: string | null } | null }).customers ?? null
+  const proj = project as unknown as { shoot_start?: string | null; shoot_end?: string | null; delivery_description?: string | null }
+
+  let totalprisStr = '___'
+  if (quote?.quote_data) {
+    try {
+      const qd = quote.quote_data as QuoteBuilderData
+      const total = Math.round(calculateQuoteTotals(qd).afterDiscount)
+      totalprisStr = total.toLocaleString('nb-NO') + ',-'
+    } catch (e) {
+      console.error('Feil ved beregning av totalpris:', e)
+    }
+  }
+
+  const shootStart = proj.shoot_start ?? null
+  const shootEnd = proj.shoot_end ?? null
+  const oppstartDato = formatNorwegianDate(shootStart)
+  const opptakDatoer =
+    shootStart && shootEnd
+      ? `${formatNorwegianDate(shootStart)} – ${formatNorwegianDate(shootEnd)}`
+      : oppstartDato
+
+  const autoVars = {
+    bedrift: customer?.company || customer?.name || '',
+    kunde_kontakt: customer?.name || '',
+    oppstart_dato: oppstartDato,
+    opptak_datoer: opptakDatoer,
+    leveranse: proj.delivery_description || '___',
+    totalpris: totalprisStr,
+  }
+
+  const savedFields = (contract?.form_fields ?? null) as ContractFormFields | null
+
+  const formDefaults = {
+    orgNummer: savedFields?.orgNummerOverride ?? customer?.org_nummer ?? '',
+    produksjonsPeriode: savedFields?.produksjonsPeriode ?? deriveProduksjonsPeriode(shootStart, shootEnd),
+    signeringsSted: savedFields?.signeringsSted ?? 'Asker',
+    signeringsDato: savedFields?.signeringsDato ?? new Date().toISOString().split('T')[0],
+    bedrift: savedFields?.bedriftOverride ?? autoVars.bedrift,
+    kundeKontakt: savedFields?.kundeKontaktOverride ?? autoVars.kunde_kontakt,
+    oppstartDato: savedFields?.oppstartDatoOverride ?? autoVars.oppstart_dato,
+    opptakDatoer: savedFields?.opptakDatoerOverride ?? autoVars.opptak_datoer,
+    leveranse: savedFields?.leveranseOverride ?? autoVars.leveranse,
+    totalpris: savedFields?.totalprisOverride ?? autoVars.totalpris,
+  }
+
+  return { template, autoVars, formDefaults, contract }
 }
 
 // ---------------------------------------------------------------------------
@@ -81,10 +188,12 @@ export async function saveContractTemplate(content: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Hent kontraktdata for prosjekt (auto-fyller variabler)
+// Hent kontraktdata for prosjekt: lagret tekst (hvis noen) + auto-variabler
+// og skjema-default-verdier til det nye kontraktskjemaet.
 // ---------------------------------------------------------------------------
 export async function getProjectContractData(projectId: string): Promise<{
   contractText: string
+  hasContractText: boolean
   isPublished: boolean
   contractId: string | null
   pdfUrl: string | null
@@ -93,105 +202,31 @@ export async function getProjectContractData(projectId: string): Promise<{
     signerEmail: string
     signedAt: string
   } | null
+  autoVars: {
+    bedrift: string
+    kunde_kontakt: string
+    oppstart_dato: string
+    opptak_datoer: string
+    leveranse: string
+    totalpris: string
+  }
+  formDefaults: {
+    orgNummer: string
+    produksjonsPeriode: string
+    signeringsSted: string
+    signeringsDato: string
+    bedrift: string
+    kundeKontakt: string
+    oppstartDato: string
+    opptakDatoer: string
+    leveranse: string
+    totalpris: string
+  }
+  ourSignature: OurSignature | null
+  mySignatureImage: string | null
+  myName: string
 }> {
-  const supabase = await createClient()
-
-  // Hent prosjekt med kunde
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('*, customers(*)')
-    .eq('id', projectId)
-    .single()
-
-  if (projectError) {
-    console.error('getProjectContractData project error:', projectError)
-    throw new Error('Fant ikke prosjekt')
-  }
-
-  // Hent gjeldende quote-versjon
-  const { data: quote } = await supabase
-    .from('quotes')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('is_current', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // Hent kontrakt
-  const { data: contract } = await supabase
-    .from('contracts')
-    .select('*')
-    .eq('project_id', projectId)
-    .single()
-
-  // Returner lagret tekst hvis kontrakt allerede har contract_text
-  if (contract?.contract_text) {
-    const signature =
-      contract.status === 'signed' && contract.signature_data
-        ? {
-            signerName: contract.signature_data.signerName ?? '',
-            signerEmail: contract.signed_by ?? '',
-            signedAt: contract.signed_at ?? '',
-          }
-        : null
-
-    return {
-      contractText: contract.contract_text,
-      isPublished: !!contract.published_at,
-      contractId: contract.id,
-      pdfUrl: contract.pdf_url ?? null,
-      signature,
-    }
-  }
-
-  // Auto-fyll fra mal
-  const { data: templateRows } = await supabase
-    .from('contract_templates')
-    .select('content')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-
-  const template = templateRows?.[0]?.content ?? ''
-
-  const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null }).customers ?? null
-
-  // Beregn totalpris
-  let totalprIsStr = '___'
-  if (quote?.quote_data) {
-    try {
-      const qd = quote.quote_data as QuoteBuilderData
-      const total = Math.round(calculateQuoteTotals(qd).afterDiscount)
-      totalprIsStr = total.toLocaleString('nb-NO') + ',-'
-    } catch (e) {
-      console.error('Feil ved beregning av totalpris:', e)
-    }
-  }
-
-  // Formater datoer
-  const proj = project as unknown as { shoot_start?: string | null; shoot_end?: string | null; delivery_description?: string | null }
-  const shootStart = proj.shoot_start ?? null
-  const shootEnd = proj.shoot_end ?? null
-  const oppstartDato = formatNorwegianDate(shootStart)
-  const opptakDatoer =
-    shootStart && shootEnd
-      ? `${formatNorwegianDate(shootStart)} – ${formatNorwegianDate(shootEnd)}`
-      : oppstartDato
-
-  const vars: Record<string, string> = {
-    bedrift: customer?.company || customer?.name || '',
-    kunde_kontakt: customer?.name || '',
-    oppstart_dato: oppstartDato,
-    opptak_datoer: opptakDatoer,
-    leveranse: proj.delivery_description || '___',
-    totalpris: totalprIsStr,
-    signerings_dato: formatNorwegianDate(new Date().toISOString()),
-    signerings_sted: 'Asker',
-    org_nummer: '',
-    produksjons_periode: '',
-  }
-
-  const contractText = fillTemplate(template, vars)
+  const { autoVars, formDefaults, contract } = await buildContractContext(projectId)
 
   const signature =
     contract?.status === 'signed' && contract.signature_data
@@ -202,19 +237,68 @@ export async function getProjectContractData(projectId: string): Promise<{
         }
       : null
 
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let mySignatureImage: string | null = null
+  let myName = ''
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name, signature_image')
+      .eq('id', user.id)
+      .single()
+    mySignatureImage = profile?.signature_image ?? null
+    myName = profile?.name ?? user.email ?? ''
+  }
+
   return {
-    contractText,
+    contractText: contract?.contract_text ?? '',
+    hasContractText: !!contract?.contract_text,
     isPublished: !!contract?.published_at,
     contractId: contract?.id ?? null,
     pdfUrl: contract?.pdf_url ?? null,
     signature,
+    autoVars,
+    formDefaults,
+    ourSignature: (contract?.our_signature ?? null) as OurSignature | null,
+    mySignatureImage,
+    myName,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Generer kontraktteksten fra mal + auto-variabler + skjemaverdier.
+// Ren beregning — lagrer ingenting (det gjør publishContract).
+// ---------------------------------------------------------------------------
+export async function generateContractText(projectId: string, formFields: ContractFormFields): Promise<string> {
+  const { template, autoVars } = await buildContractContext(projectId)
+
+  const vars: Record<string, string> = {
+    ...autoVars,
+    bedrift: formFields.bedriftOverride ?? autoVars.bedrift,
+    kunde_kontakt: formFields.kundeKontaktOverride ?? autoVars.kunde_kontakt,
+    oppstart_dato: formFields.oppstartDatoOverride ?? autoVars.oppstart_dato,
+    opptak_datoer: formFields.opptakDatoerOverride ?? autoVars.opptak_datoer,
+    leveranse: formFields.leveranseOverride ?? autoVars.leveranse,
+    totalpris: formFields.totalprisOverride ?? autoVars.totalpris,
+    org_nummer: formFields.orgNummerOverride ?? '',
+    produksjons_periode: formFields.produksjonsPeriode ?? '',
+    signerings_sted: formFields.signeringsSted ?? '',
+    signerings_dato: formFields.signeringsDato ? formatNorwegianDate(formFields.signeringsDato) : '',
+  }
+
+  return fillTemplate(template, vars)
 }
 
 // ---------------------------------------------------------------------------
 // Publiser kontrakt for prosjekt (opprett eller oppdater)
 // ---------------------------------------------------------------------------
-export async function publishContract(projectId: string, contractText: string): Promise<void> {
+export async function publishContract(
+  projectId: string,
+  contractText: string,
+  formFields?: ContractFormFields,
+  newSignature?: { signatureImage: string; saveToProfile: boolean }
+): Promise<void> {
   const supabase = await createClient()
 
   // Hent gjeldende quote_id
@@ -230,10 +314,29 @@ export async function publishContract(projectId: string, contractText: string): 
   const quoteId = quote?.id ?? null
   const publishedAt = new Date().toISOString()
 
+  // Bygg vår signatur hvis dette er første gang kontrakten signeres internt
+  let ourSignaturePayload: OurSignature | null = null
+  if (newSignature) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user.id).single()
+      const signerName = profile?.name ?? user.email ?? 'Leafilms'
+      if (newSignature.saveToProfile) {
+        await supabase.from('profiles').update({ signature_image: newSignature.signatureImage }).eq('id', user.id)
+      }
+      ourSignaturePayload = {
+        profileId: user.id,
+        signerName,
+        signatureImage: newSignature.signatureImage,
+        signedAt: publishedAt,
+      }
+    }
+  }
+
   // Sjekk om kontrakt allerede eksisterer
   const { data: existing } = await supabase
     .from('contracts')
-    .select('id')
+    .select('id, our_signature')
     .eq('project_id', projectId)
     .single()
 
@@ -242,6 +345,8 @@ export async function publishContract(projectId: string, contractText: string): 
       .from('contracts')
       .update({
         contract_text: contractText,
+        form_fields: formFields ?? null,
+        our_signature: existing.our_signature ?? ourSignaturePayload ?? null,
         published_at: publishedAt,
         updated_at: publishedAt,
       })
@@ -258,6 +363,8 @@ export async function publishContract(projectId: string, contractText: string): 
         project_id: projectId,
         quote_id: quoteId,
         contract_text: contractText,
+        form_fields: formFields ?? null,
+        our_signature: ourSignaturePayload,
         published_at: publishedAt,
         status: 'sent',
       })
@@ -284,6 +391,42 @@ export async function unpublishContract(projectId: string): Promise<void> {
   if (error) {
     console.error('unpublishContract error:', error)
     throw new Error('Kunne ikke fjerne kontrakten')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Angre signering — åpner en signert kontrakt for redigering igjen (f.eks. hvis
+// tilbudet/kontrakten må endres og kunden skal signere på nytt). Signatur, tidsstempel,
+// og tidligere generert PDF beholdes som historikk til kontrakten faktisk signeres på
+// nytt (da overskriver sign-flyten dem naturlig) — vi nullstiller kun status, slik at
+// admin-UI-et åpner for redigering igjen og kunden ser signeringsskjemaet på nytt.
+export async function unsignContract(projectId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('contracts')
+    .update({ status: 'sent', updated_at: new Date().toISOString() })
+    .eq('project_id', projectId)
+    .eq('status', 'signed')
+
+  if (error) {
+    console.error('unsignContract error:', error)
+    throw new Error('Kunne ikke angre signeringen')
+  }
+
+  // Speiler oppdateringen sign-flyten gjør motsatt vei (app/api/contracts/sign/route.ts) —
+  // uten dette blir tilbudet stående som "akseptert" i prosjektoversikten selv om
+  // signeringen er nullstilt.
+  const { error: quoteError } = await supabase
+    .from('quotes')
+    .update({ status: 'sent', accepted_at: null, accepted_by: null, updated_at: new Date().toISOString() })
+    .eq('project_id', projectId)
+    .eq('is_current', true)
+    .eq('status', 'accepted')
+
+  if (quoteError) {
+    console.error('unsignContract quote reset error:', quoteError)
+    throw new Error('Kunne ikke angre signeringen')
   }
 }
 

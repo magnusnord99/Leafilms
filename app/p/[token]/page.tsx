@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
-import { createPublicClient } from '@/lib/supabase-server'
-import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset } from '@/lib/types'
+import { createServiceClient } from '@/lib/supabase-server'
+import { Project, Section, CaseStudy, TeamMember, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature } from '@/lib/types'
 import { CollageImages } from '@/components/sections'
 import PublicProjectClient from './PublicProjectClientNoSSR'
 
@@ -20,7 +20,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Leafilms' }
   }
 
-  const supabase = createPublicClient()
+  // Service-klient — token-sjekket under er den faktiske autorisasjonsgrensen for denne siden;
+  // anon-nøkkelen skal ikke ha direkte RLS-tilgang til project_shares/contracts/quotes lenger.
+  const supabase = createServiceClient()
 
   const { data: share } = await supabase
     .from('project_shares')
@@ -88,7 +90,9 @@ export default async function PublicProjectView({ params }: Props) {
     notFound()
   }
 
-  const supabase = createPublicClient()
+  // Service-klient — token-sjekket under er den faktiske autorisasjonsgrensen for denne siden;
+  // anon-nøkkelen skal ikke ha direkte RLS-tilgang til project_shares/contracts/quotes lenger.
+  const supabase = createServiceClient()
 
   // Finn prosjekt fra token
   const { data: share, error: shareError } = await supabase
@@ -340,7 +344,7 @@ export default async function PublicProjectView({ params }: Props) {
   // Hent publisert kontrakt
   const { data: contractData } = await supabase
     .from('contracts')
-    .select('contract_text, published_at, status, signed_at, signed_by')
+    .select('contract_text, published_at, status, signed_at, signed_by, our_signature, pdf_url')
     .eq('project_id', share.project_id)
     .single()
 
@@ -350,6 +354,8 @@ export default async function PublicProjectView({ params }: Props) {
     contractText: contractData.contract_text ?? '',
     isSigned: contractData.status === 'signed',
     signedBy: contractData.signed_by ?? null,
+    ourSignature: (contractData.our_signature as OurSignature | null) ?? null,
+    pdfUrl: contractData.pdf_url ?? null,
   } : null
 
   return (

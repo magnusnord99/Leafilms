@@ -79,8 +79,8 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!profile || profile.role !== 'admin') {
-      // Not admin, sign out and redirect to login with error
+    if (!profile || !['admin', 'sales', 'production'].includes(profile.role)) {
+      // Ikke en gyldig staff-rolle, sign out og redirect til login
       await supabase.auth.signOut()
       return NextResponse.redirect(
         new URL(`/login?error=unauthorized`, request.url)

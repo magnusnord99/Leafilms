@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    // Service-klient — project_shares/quotes/quote_analytics har ikke lenger anon
+    // RLS-tilgang; token-sjekken under er den faktiske autorisasjonsgrensen.
+    const supabase = createServiceClient()
 
     // Verify that the share token exists and belongs to the project
     const { data: share, error: shareError } = await supabase
@@ -77,10 +79,12 @@ export async function POST(request: NextRequest) {
         updateData.session_ended_at = new Date().toISOString()
       }
 
+      // Scopet til quote_id vi nettopp verifiserte — samme IDOR-hensyn som prosjekt-analytics.
       const { data, error } = await supabase
         .from('quote_analytics')
         .update(updateData)
         .eq('id', sessionId)
+        .eq('quote_id', quoteId)
         .select()
         .single()
 

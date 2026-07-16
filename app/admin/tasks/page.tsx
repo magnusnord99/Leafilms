@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getMyTasks, updateTaskStatus } from '@/lib/actions/pipeline'
-import type { Task } from '@/lib/types'
+import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, type Task } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
@@ -31,11 +31,7 @@ type TaskWithProject = Task & {
 
 type Filter = 'all' | 'active' | 'done'
 
-const PIPELINE_STAGE_LABELS: Record<string, string> = {
-  lead: 'Lead', møte: 'Møte', tilbud_sendt: 'Tilbud sendt',
-  kontrakt: 'Kontrakt', pre_prod: 'Pre-prod', produksjon: 'Produksjon',
-  post_prod: 'Post-prod', levering: 'Levering', fakturert: 'Fakturert', videresalg: 'Videresalg',
-}
+const PIPELINE_STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
 const PRIORITY_CONFIG = {
   high:   { label: 'Høy',    color: C.danger  },
@@ -44,9 +40,9 @@ const PRIORITY_CONFIG = {
 }
 
 const STATUS_CONFIG = {
-  todo:        { label: 'Ikke startet', color: C.text3   },
-  in_progress: { label: 'Pågår',        color: C.warning  },
-  done:        { label: 'Ferdig',       color: C.success  },
+  todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3   },
+  in_progress: { label: TASK_STATUS_LABELS.in_progress, color: C.warning  },
+  done:        { label: TASK_STATUS_LABELS.done,        color: C.success  },
 }
 
 function taskHref(task: TaskWithProject): string {

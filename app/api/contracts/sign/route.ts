@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { OurSignature, QuoteBuilderData } from '@/lib/types'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, addonDiscountedPrice } from '@/lib/quote-builder-utils'
+import { buildContractTextWithAddons } from '@/lib/contract-addendum'
 import { generateContractPDF } from '../pdf-generator'
 
 export async function POST(request: NextRequest) {
@@ -94,25 +95,24 @@ export async function POST(request: NextRequest) {
     let addonsTotal = 0
     let finalPriceExclVatWithAddons: number | null = null
     let finalPriceInclVatWithAddons: number | null = null
-    let contractAddendum = ''
+
+    const baseContractText = contract.contract_text ?? contractSnapshot
+    let finalContractText = baseContractText
 
     if (quoteData && selectedAddons.length > 0) {
-      addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
+      const discountFactor = quoteData.discountFactor ?? 0
+      addonsTotal = selectedAddons.reduce((sum, a) => sum + addonDiscountedPrice(a, discountFactor), 0)
       const baseTotals = calculateQuoteTotals(quoteData)
       const addonsInclVat = quoteData.includeVat ? addonsTotal * (1 + quoteData.vatRate / 100) : addonsTotal
       finalPriceExclVatWithAddons = baseTotals.afterDiscount + addonsTotal
       finalPriceInclVatWithAddons = baseTotals.finalInclVat + addonsInclVat
 
-      const fmt = (n: number) => `${new Intl.NumberFormat('nb-NO').format(Math.round(n))} kr`
-      const addonLines = selectedAddons.map((a) => `${a.description} — ${fmt(a.price)}`).join('\n')
-      contractAddendum = `\n\nTillegg valgt av kunde ved signering:\n${addonLines}\n\nNy totalsum inkl. tillegg: ${fmt(finalPriceExclVatWithAddons)} eks. MVA`
+      // Oppdaterer totalsummen i punkt 5.1 direkte (samme funksjon som forhåndsvisningen
+      // bruker før signering, app/p/[token]/ContractSigningSection.tsx) — aldri divergerende.
+      finalContractText = buildContractTextWithAddons(baseContractText, baseTotals.afterDiscount, selectedAddons, discountFactor)
     }
 
     const signedAt = new Date().toISOString()
-
-    // Endelig kontrakttekst — base + eventuelt addendum. Brukes både i DB-oppdateringen
-    // og som input til PDF-generering under, slik at de aldri kan divergere.
-    const finalContractText = (contract.contract_text ?? contractSnapshot) + contractAddendum
 
     // Oppdater kontrakt til signert
     const { error: updateContractError } = await supabase
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
           signatureImage,
         },
         updated_at: signedAt,
-        ...(contractAddendum ? { contract_text: finalContractText } : {}),
+        ...(finalContractText !== baseContractText ? { contract_text: finalContractText } : {}),
       })
       .eq('id', contract.id)
 
@@ -207,25 +207,34 @@ export async function POST(request: NextRequest) {
       // Ikke fatal — logg og fortsett
     }
 
-    // Hent eksisterende pipeline_data for å bevare andre felt
+    // Hent eksisterende pipeline_data/stage for å bevare andre felt
     const { data: existingProject } = await supabase
       .from('projects')
-      .select('title, pipeline_data')
+      .select('title, pipeline_stage, pipeline_data')
       .eq('id', projectId)
       .single()
 
     const existingPipelineData = (existingProject?.pipeline_data as Record<string, unknown>) ?? {}
 
-    // Avanser pipeline_stage fra 'kontrakt' → 'pre_prod', merk contract_signed
+    // contract_signed skal alltid settes når kontrakten faktisk signeres, uansett hvilket
+    // pipeline-steg prosjektet står i akkurat da — ellers kan flagget forbli usatt selv om
+    // kontrakten er reelt signert (f.eks. hvis noen rakk å flytte prosjektet videre manuelt
+    // før signeringen kom inn), og admin-pipelinen viser da "ikke signert" på en signert kontrakt.
+    //
+    // Advanser fra både 'tilbud_sendt' og 'kontrakt' — kunden kan signere før noen i teamet har
+    // rukket å flytte prosjektet til 'kontrakt' manuelt, og da skal signeringen selv drive det
+    // videre til 'pre_prod' i stedet for å bli hengende i 'tilbud_sendt'.
+    const shouldAdvanceStage =
+      existingProject?.pipeline_stage === 'kontrakt' || existingProject?.pipeline_stage === 'tilbud_sendt'
+
     const { data: updatedProject, error: updateProjectError } = await supabase
       .from('projects')
       .update({
-        pipeline_stage: 'pre_prod',
+        ...(shouldAdvanceStage ? { pipeline_stage: 'pre_prod' } : {}),
         pipeline_data: { ...existingPipelineData, contract_signed: true, contract_signed_at: signedAt },
         updated_at: signedAt,
       })
       .eq('id', projectId)
-      .eq('pipeline_stage', 'kontrakt')
       .select('title')
       .maybeSingle()
 
@@ -234,8 +243,8 @@ export async function POST(request: NextRequest) {
       // Ikke fatal — logg og fortsett
     }
 
-    // Seed pre_prod-oppgaver hvis prosjektet ble avansert
-    if (updatedProject) {
+    // Seed pre_prod-oppgaver kun hvis prosjektet faktisk ble avansert til pre_prod nå
+    if (updatedProject && shouldAdvanceStage) {
       const { data: templates } = await supabase
         .from('task_templates')
         .select('*')
@@ -336,7 +345,32 @@ export async function POST(request: NextRequest) {
       console.warn('sign contract: RESEND_API_KEY mangler — e-post ikke sendt')
     }
 
-    return Response.json({ ok: true })
+    // Internt varsel til hele admin-teamet (klokke-ikonet i admin) — i tillegg til
+    // e-posten over. Bevisst broadcast til alle admin-profiler i stedet for kun
+    // task-assignees, siden pre_prod-oppgaver først blir sådd i samme forespørsel og
+    // ingen kan være tildelt ennå. Feil her skal aldri blokkere selve signeringen.
+    try {
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+
+      if (adminProfiles && adminProfiles.length > 0) {
+        await supabase.from('notifications').insert(
+          adminProfiles.map((p) => ({
+            user_id: p.id,
+            type: 'contract_signed',
+            project_id: projectId,
+            message_preview: `Kontrakt signert av ${signerName} — ${projectTitle}`,
+            sender_name: signerName,
+          }))
+        )
+      }
+    } catch (notifyErr) {
+      console.error('sign contract notification error:', notifyErr)
+    }
+
+    return Response.json({ ok: true, pdfUrl })
   } catch (err) {
     console.error('POST /api/contracts/sign error:', err)
     return Response.json({ error: 'Serverfeil' }, { status: 500 })

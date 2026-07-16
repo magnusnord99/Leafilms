@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import type { VideoReview } from './video-reviews'
 
 const SIGNED_URL_EXPIRY = 60 * 60 * 2
 
@@ -32,6 +33,7 @@ export type AlbumWithImages = SelectionAlbum & {
     album_id: string | null
     signedUrl: string
   }[]
+  videos: (VideoReview & { signedUrl: string })[]
   selectedCount: number
 }
 
@@ -168,6 +170,34 @@ export async function getAdminSelectionPage(projectId: string): Promise<AdminSel
     .eq('gallery_id', gallery.id)
     .order('sort_order', { ascending: true })
 
+  // video_reviews har RLS kun for service_role — bruk service-klienten, ikke supabase
+  const { data: allVideos } = await service
+    .from('video_reviews')
+    .select('*')
+    .eq('gallery_id', gallery.id)
+    .not('album_id', 'is', null)
+    .order('created_at', { ascending: true })
+
+  const videoList = (allVideos ?? []) as VideoReview[]
+
+  // Signerte URL-er for videoenes forsidebilde (nettleseren rendrer selv første frame av
+  // <video preload="metadata">, samme mønster som signedUrl for bilder over) — uten dette
+  // vises kun et generisk avspillingsikon i stedet for en faktisk miniatyr av opptaket.
+  const videoPaths = videoList.filter(v => v.storage_path).map(v => v.storage_path)
+  const videoSignedUrlMap: Record<string, string> = {}
+  if (videoPaths.length > 0) {
+    const { data: videoUrlData } = await service.storage
+      .from('videos')
+      .createSignedUrls(videoPaths, SIGNED_URL_EXPIRY)
+    for (const item of videoUrlData ?? []) {
+      if (item.signedUrl && item.path) videoSignedUrlMap[item.path] = item.signedUrl
+    }
+  }
+  const videoListWithUrl = videoList.map(v => ({
+    ...v,
+    signedUrl: videoSignedUrlMap[v.storage_path] ?? '',
+  }))
+
   const imgs = (allImages ?? []) as {
     id: string; filename: string; storage_path: string | null
     sort_order: number; selected: boolean; comment: string | null
@@ -194,9 +224,11 @@ export async function getAdminSelectionPage(projectId: string): Promise<AdminSel
   const albumList = (albums ?? []) as SelectionAlbum[]
   const albumsWithImages: AlbumWithImages[] = albumList.map(album => {
     const albumImages = withUrl.filter(i => i.album_id === album.id)
+    const albumVideos = videoListWithUrl.filter(v => v.album_id === album.id)
     return {
       ...album,
       images: albumImages,
+      videos: albumVideos,
       selectedCount: albumImages.filter(i => i.selected).length,
     }
   })

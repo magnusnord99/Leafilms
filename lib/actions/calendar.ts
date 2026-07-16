@@ -3,11 +3,6 @@
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 
-const CONFIRMED_STAGES = new Set([
-  'kontrakt', 'pre_prod', 'produksjon', 'post_prod',
-  'levering', 'fakturert', 'videresalg',
-])
-
 export type ShootingEvent = {
   projectId: string
   projectTitle: string
@@ -36,10 +31,10 @@ export async function getCalendarEvents(): Promise<{
   try {
     const supabase = await createClient()
 
-    const [{ data: projects }, { data: tasks }] = await Promise.all([
+    const [{ data: projects }, { data: tasks }, { data: signedContracts }] = await Promise.all([
       supabase
         .from('projects')
-        .select('id, title, pipeline_stage, shoot_start, shoot_end, customers(name)')
+        .select('id, title, pipeline_stage, shoot_start, shoot_end, shoot_confirmed, customers(name)')
         .not('shoot_start', 'is', null),
       supabase
         .from('tasks')
@@ -49,10 +44,19 @@ export async function getCalendarEvents(): Promise<{
         `)
         .not('due_date', 'is', null)
         .order('due_date', { ascending: true }),
+      supabase
+        .from('contracts')
+        .select('project_id')
+        .eq('status', 'signed'),
     ])
 
-    type ProjectCalRow = { id: string; title: string; pipeline_stage: string; shoot_start: string; shoot_end: string | null; customers?: { name: string | null } | null }
+    type ProjectCalRow = { id: string; title: string; pipeline_stage: string; shoot_start: string; shoot_end: string | null; shoot_confirmed: boolean; customers?: { name: string | null } | null }
     type TaskCalRow = { id: string; title: string; pipeline_stage: string; status: 'todo' | 'in_progress' | 'done'; due_date: string; project: { id: string; title: string; pipeline_stage: string; customers?: { name: string | null } | null } | null }
+
+    // Opptak regnes som bekreftet kun når kontrakten er signert, eller admin har bekreftet manuelt.
+    // pipeline_stage alene er ikke pålitelig — prosjekter kan flyttes forbi 'kontrakt' uten signatur
+    // (se advanceFromKontraktUnsigned i lib/actions/pipeline.ts).
+    const signedProjectIds = new Set((signedContracts ?? []).map(c => c.project_id as string))
 
     const shootings: ShootingEvent[] = ((projects ?? []) as unknown as ProjectCalRow[]).map((p) => ({
       projectId: p.id,
@@ -60,7 +64,7 @@ export async function getCalendarEvents(): Promise<{
       customerName: p.customers?.name ?? null,
       shootStart: p.shoot_start,
       shootEnd: p.shoot_end ?? null,
-      confirmed: CONFIRMED_STAGES.has(p.pipeline_stage),
+      confirmed: p.shoot_confirmed || signedProjectIds.has(p.id),
       pipelineStage: p.pipeline_stage,
     }))
 
@@ -103,6 +107,23 @@ export async function updateProjectShootDates(
     revalidatePath('/admin/projects')
   } catch (err) {
     console.error('updateProjectShootDates error:', err)
+  }
+}
+
+export async function setShootConfirmed(
+  projectId: string,
+  confirmed: boolean
+): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('projects')
+      .update({ shoot_confirmed: confirmed, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    revalidatePath('/admin/calendar')
+    revalidatePath(`/admin/projects/${projectId}`)
+  } catch (err) {
+    console.error('setShootConfirmed error:', err)
   }
 }
 

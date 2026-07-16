@@ -51,7 +51,7 @@ function LoginContent() {
 
   useEffect(() => {
     if (errorParam === 'unauthorized') {
-      setError('Du har ikke tilgang til denne siden. Kun admin-brukere kan logge inn.')
+      setError('Du har ikke tilgang til denne siden.')
     }
   }, [errorParam])
 
@@ -86,9 +86,9 @@ function LoginContent() {
           throw new Error('Kunne ikke hente brukerprofil')
         }
 
-        if (!profile || profile.role !== 'admin') {
+        if (!profile || !['admin', 'sales', 'production'].includes(profile.role)) {
           await supabase.auth.signOut()
-          setError('Du har ikke tilgang. Kun admin-brukere kan logge inn.')
+          setError('Du har ikke tilgang.')
           setLoading(false)
           return
         }

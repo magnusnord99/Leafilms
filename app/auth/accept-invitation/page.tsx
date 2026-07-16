@@ -233,9 +233,9 @@ function AcceptInvitationContent() {
           throw new Error('Kunne ikke hente brukerprofil')
         }
 
-        if (!profile || profile.role !== 'admin') {
+        if (!profile || !['admin', 'sales', 'production'].includes(profile.role)) {
           await supabase.auth.signOut()
-          setError('Du har ikke tilgang. Kun inviterte admin-brukere kan registrere seg.')
+          setError('Du har ikke tilgang. Kun inviterte brukere kan registrere seg.')
           setLoading(false)
           return
         }

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 /**
  * POST /api/projects/[id]/duplicate
@@ -16,6 +16,17 @@ export async function POST(
     const { id: projectId } = await params
     if (!projectId) {
       return Response.json({ error: 'Mangler prosjekt-ID' }, { status: 400 })
+    }
+
+    // Admin-only internt verktøy — uten denne sjekken kan hvem som helst
+    // duplisere et vilkårlig prosjekt via URL-id-en.
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    const { data: profile } = user
+      ? await authClient.from('profiles').select('role').eq('id', user.id).single()
+      : { data: null }
+    if (!user || profile?.role !== 'admin') {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = createServiceClient()

@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       language = 'NO',
       mva = 'y',
       saveToStorage = false,
+      selectedAddonIds,
     } = body
 
     if (!builderData) {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const includeVat = mva === 'y'
 
-    const pdfBuffer = await generateQuotePDF(builderData, { language, includeVat })
+    const pdfBuffer = await generateQuotePDF(builderData, { language, includeVat }, selectedAddonIds)
 
     // Build filename
     const projectName = (builderData.projectName || 'Prosjekt')
@@ -33,11 +34,22 @@ export async function POST(req: NextRequest) {
     const date = new Date().toISOString().split('T')[0]
     const filename = `Pristilbud_${projectName}${client ? '_' + client : ''}_${version}_${date}.pdf`
 
-    // Optionally save to Supabase Storage
+    // Optionally save to Supabase Storage — kun for innloggede admin-brukere.
+    // Uten denne sjekken kan hvem som helst sende en ekte projectId og overskrive
+    // det prosjektets lagrede tilbuds-PDF (storagePath er deterministisk fra kunde+prosjekt+versjon).
     let storagePath: string | null = null
     if (saveToStorage && projectId) {
       try {
         const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: profile } = user
+          ? await supabase.from('profiles').select('role').eq('id', user.id).single()
+          : { data: null }
+
+        if (!user || profile?.role !== 'admin') {
+          return NextResponse.json({ error: 'Kun innloggede admin-brukere kan lagre tilbud til Storage' }, { status: 403 })
+        }
+
         const { data: project } = await supabase
           .from('projects')
           .select('id, title, customer_id')

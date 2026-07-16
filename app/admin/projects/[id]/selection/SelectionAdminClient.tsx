@@ -12,6 +12,7 @@ import {
   createGallery, purgeGalleryImages, reopenGallery,
   getSelectedFilenames, registerUploadedImages,
 } from '@/lib/actions/selections'
+import { createVideoReview } from '@/lib/actions/video-reviews'
 import type { AdminSelectionPageData, AlbumWithImages } from '@/lib/actions/selection-albums'
 import { C } from '@/lib/admin-theme'
 
@@ -258,6 +259,7 @@ export default function SelectionAdminClient({
           <AlbumDetailPanel
             key={activeAlbum.id}
             album={activeAlbum}
+            projectId={projectId}
             galleryId={gallery.id}
             galleryPinCode={gallery.pin_code}
             onRefresh={refresh}
@@ -329,28 +331,30 @@ export default function SelectionAdminClient({
 // ---------------------------------------------------------------------------
 // Album cover-kort (lik kundensiden sin AlbumCard)
 // ---------------------------------------------------------------------------
-function countAdminAlbumTree(albumId: string, allAlbums: AlbumWithImages[]): { total: number; selected: number; cover: string | null } {
+function countAdminAlbumTree(albumId: string, allAlbums: AlbumWithImages[]): { total: number; totalVideos: number; selected: number; cover: string | null } {
   const album = allAlbums.find(a => a.id === albumId)
-  if (!album) return { total: 0, selected: 0, cover: null }
+  if (!album) return { total: 0, totalVideos: 0, selected: 0, cover: null }
 
   let total = album.images.length
+  let totalVideos = album.videos.length
   let selected = album.selectedCount
   let cover = album.images[0]?.signedUrl || null
 
   for (const child of allAlbums.filter(a => a.parent_album_id === albumId)) {
     const sub = countAdminAlbumTree(child.id, allAlbums)
     total += sub.total
+    totalVideos += sub.totalVideos
     selected += sub.selected
     if (!cover) cover = sub.cover
   }
 
-  return { total, selected, cover }
+  return { total, totalVideos, selected, cover }
 }
 
 function AdminAlbumCover({ album, allAlbums, onClick }: { album: AlbumWithImages; allAlbums?: AlbumWithImages[]; onClick: () => void }) {
-  const { total, selected, cover } = allAlbums
+  const { total, totalVideos, selected, cover } = allAlbums
     ? countAdminAlbumTree(album.id, allAlbums)
-    : { total: album.images.length, selected: album.selectedCount, cover: album.images[0]?.signedUrl || null }
+    : { total: album.images.length, totalVideos: album.videos.length, selected: album.selectedCount, cover: album.images[0]?.signedUrl || null }
 
   return (
     <div
@@ -374,7 +378,9 @@ function AdminAlbumCover({ album, allAlbums, onClick }: { album: AlbumWithImages
       </div>
       <div style={{ padding: '9px 11px' }}>
         <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text }}>{album.name}</div>
-        <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 2 }}>{total} bilder</div>
+        <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 2 }}>
+          {total} bilder{totalVideos > 0 ? ` · ${totalVideos} ${totalVideos === 1 ? 'video' : 'videoer'}` : ''}
+        </div>
       </div>
     </div>
   )
@@ -417,6 +423,7 @@ function GalleryLinkBox({ token, pinCode }: { token: string; pinCode: string }) 
 // ---------------------------------------------------------------------------
 function AlbumDetailPanel({
   album,
+  projectId,
   galleryId,
   galleryPinCode,
   onRefresh,
@@ -425,6 +432,7 @@ function AlbumDetailPanel({
   allAlbums,
 }: {
   album: AlbumWithImages
+  projectId: string
   galleryId: string
   galleryPinCode: string
   onRefresh: () => Promise<void>
@@ -445,6 +453,7 @@ function AlbumDetailPanel({
   const [dragging, setDragging] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
 
   // Undermappe-opprettelse
   const [showAddSubAlbum, setShowAddSubAlbum] = useState(false)
@@ -548,6 +557,33 @@ function AlbumDetailPanel({
     setTimeout(() => setUploads([]), 2000)
   }
 
+  async function handleVideoFile(file: File | null) {
+    if (!file || !file.type.startsWith('video/')) return
+    setUploadingVideo(true)
+    try {
+      const path = `${projectId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { error } = await supabase.storage.from('videos').upload(path, file, { contentType: file.type, upsert: false })
+      if (error) {
+        alert('Kunne ikke laste opp video: ' + error.message)
+        return
+      }
+      const title = file.name.replace(/\.[^.]+$/, '')
+      await createVideoReview(projectId, title, path, galleryId, album.id)
+      await onRefresh()
+    } finally {
+      setUploadingVideo(false)
+    }
+  }
+
+  // Én knapp/dropzone for både bilder og video — ruter hver fil til riktig opplastingsflyt
+  // basert på MIME-type i stedet for å tvinge brukeren til å velge riktig knapp på forhånd.
+  async function handleMixedFiles(files: File[]) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+    const videoFiles = files.filter(f => f.type.startsWith('video/'))
+    if (imageFiles.length > 0) await handleFiles(imageFiles)
+    for (const video of videoFiles) await handleVideoFile(video)
+  }
+
   async function handleDeleteImage(imageId: string, storagePath: string | null) {
     if (!confirm('Slett dette bildet fra albumet?')) return
     setDeletingId(imageId)
@@ -634,7 +670,7 @@ function AlbumDetailPanel({
           </button>
         )}
         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-          · {album.images.length} bilder · {album.selectedCount} valgt
+          · {album.images.length} bilder{album.videos.length > 0 ? ` · ${album.videos.length} ${album.videos.length === 1 ? 'video' : 'videoer'}` : ''} · {album.selectedCount} valgt
         </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -709,11 +745,19 @@ function AlbumDetailPanel({
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+            disabled={uploadingVideo}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: uploadingVideo ? 'default' : 'pointer', opacity: uploadingVideo ? 0.6 : 1 }}
           >
-            + Last opp bilder
+            {uploadingVideo ? 'Laster opp video...' : '+ Last opp'}
           </button>
-          <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/jpg,image/png,image/webp" style={{ display: 'none' }} onChange={e => { if (e.target.files) handleFiles(Array.from(e.target.files)) }} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/jpg,image/png,image/webp,video/*"
+            style={{ display: 'none' }}
+            onChange={e => { if (e.target.files) handleMixedFiles(Array.from(e.target.files)); e.target.value = '' }}
+          />
         </div>
       </div>
 
@@ -787,7 +831,7 @@ function AlbumDetailPanel({
         style={{ flex: 1, overflowY: 'auto', padding: 16 }}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
-        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(Array.from(e.dataTransfer.files)) }}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleMixedFiles(Array.from(e.dataTransfer.files)) }}
       >
         {dragging && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(124,92,252,0.12)', border: `3px dashed ${C.accent}`, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
@@ -871,9 +915,45 @@ function AlbumDetailPanel({
               </div>
             )
           })}
+          {album.videos.map(video => (
+            <a
+              key={video.id}
+              href={`/admin/projects/${projectId}/video`}
+              style={{
+                borderRadius: 7, overflow: 'hidden', textDecoration: 'none',
+                border: '2px solid transparent', background: C.surface2, position: 'relative', display: 'block',
+              }}
+            >
+              <div style={{ position: 'relative', aspectRatio: '4/3' }}>
+                {video.signedUrl
+                  ? (
+                    <video
+                      src={`${video.signedUrl}#t=0.5`}
+                      preload="metadata"
+                      muted
+                      playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: C.surface2 }}
+                    />
+                  )
+                  : <div style={{ width: '100%', height: '100%' }} />
+                }
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,9,8,0.28)' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(124,92,252,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#fff"><path d="M4 2l10 6-10 6V2z" /></svg>
+                  </div>
+                </div>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 8px 6px', background: 'linear-gradient(to top, rgba(10,9,8,0.85), transparent)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: '#fff', textAlign: 'center', wordBreak: 'break-word' }}>{video.title}</span>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', color: video.status === 'submitted' ? '#4CAF7D' : '#D8D3C9', textAlign: 'center' }}>
+                    {video.status === 'submitted' ? 'Sendt inn' : 'Venter'}
+                  </span>
+                </div>
+              </div>
+            </a>
+          ))}
         </div>
 
-        {album.images.length === 0 && children.length === 0 && (
+        {album.images.length === 0 && album.videos.length === 0 && children.length === 0 && (
           <div onClick={() => fileInputRef.current?.click()} style={{ border: `2px dashed ${C.border}`, borderRadius: 10, padding: '60px 20px', textAlign: 'center', cursor: 'pointer' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>
               Dra og slipp bilder her, eller klikk for å velge

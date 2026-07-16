@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
@@ -15,6 +16,8 @@ type Props = {
 
 export default function ProjectQuotePage({ params }: Props) {
   const { id: projectId } = use(params)
+  const searchParams = useSearchParams()
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -40,6 +43,11 @@ export default function ProjectQuotePage({ params }: Props) {
 
   async function loadAll() {
     setLoading(true)
+    // Nullstill tilbuds-tilstand fra forrige prosjekt — ellers kan existingQuoteId
+    // henge igjen fra et annet prosjekt hvis det nye prosjektet ikke har noe tilbud ennå,
+    // og handleSave/QuoteChat ville da operert på feil prosjekts tilbud.
+    setExistingQuoteId(null)
+    setBuilderData(null)
     try {
       const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, discountFactorsRes, profilesRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
@@ -470,6 +478,7 @@ export default function ProjectQuotePage({ params }: Props) {
             onGeneratePDF={handleGeneratePDF}
             saving={saving}
             generatingPDF={generatingPDF}
+            autosaveEnabled={(quotes.find(q => q.id === existingQuoteId)?.status ?? 'draft') === 'draft'}
           />
         )}
 
@@ -479,6 +488,7 @@ export default function ProjectQuotePage({ params }: Props) {
             quoteId={existingQuoteId}
             projectId={projectId}
             profiles={profiles}
+            forceOpen={forceOpenChat}
           />
         )}
       </div>

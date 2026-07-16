@@ -1,17 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase-server'
 import { getContractPath } from '@/lib/storage/paths'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { projectId, quoteData, acceptedBy } = body
+    const { projectId, shareToken, quoteData, acceptedBy } = body
 
-    if (!projectId || !quoteData) {
+    if (!projectId || !shareToken || !quoteData) {
       return NextResponse.json(
         { error: 'Mangler påkrevd informasjon' },
         { status: 400 }
       )
+    }
+
+    // Service-klient — vi omgår RLS bevisst og autoriserer eksplisitt under,
+    // siden kunden ikke er innlogget (kaller fra offentlig delelenke).
+    const supabase = createServiceClient()
+
+    // Verifiser at delelenken faktisk peker på dette prosjektet før vi oppretter
+    // tilbud/kontrakt — uten dette kan hvem som helst poste en vilkårlig projectId.
+    const { data: share, error: shareError } = await supabase
+      .from('project_shares')
+      .select('project_id')
+      .eq('token', shareToken)
+      .eq('project_id', projectId)
+      .single()
+
+    if (shareError || !share) {
+      return NextResponse.json({ error: 'Ugyldig delelenke for dette prosjektet' }, { status: 403 })
     }
 
     // Hent prosjekt og kundeinfo for å bygge filsti

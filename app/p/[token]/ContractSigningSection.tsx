@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react'
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared/SignatureCanvas'
 import type { OurSignature, OptionalAddon } from '@/lib/types'
+import { buildContractTextWithAddons } from '@/lib/contract-addendum'
+import { addonDiscountedPrice } from '@/lib/quote-builder-utils'
 
 type ContractSigningSectionProps = {
   projectId: string
@@ -13,6 +15,10 @@ type ContractSigningSectionProps = {
   ourSignature?: OurSignature | null
   optionalAddons?: OptionalAddon[]
   selectedAddonIds?: Set<string>
+  baseFinalPriceExclVat?: number
+  discountFactor?: number
+  pdfUrl?: string | null
+  onSigned?: () => void
 }
 
 export default function ContractSigningSection({
@@ -24,6 +30,10 @@ export default function ContractSigningSection({
   ourSignature,
   optionalAddons = [],
   selectedAddonIds = new Set<string>(),
+  baseFinalPriceExclVat = 0,
+  discountFactor = 0,
+  pdfUrl: initialPdfUrl,
+  onSigned = () => {},
 }: ContractSigningSectionProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -31,6 +41,7 @@ export default function ContractSigningSection({
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(initialPdfUrl ?? null)
 
   const sigRef = useRef<SignatureCanvasHandle>(null)
   const [hasSigned, setHasSigned] = useState(false)
@@ -55,7 +66,10 @@ export default function ContractSigningSection({
         }),
       })
       if (res.ok) {
+        const data = await res.json()
+        setPdfUrl(data.pdfUrl ?? null)
         setSigned(true)
+        onSigned()
       } else {
         const err = await res.json()
         setError(err.error ?? 'Noe gikk galt')
@@ -68,6 +82,12 @@ export default function ContractSigningSection({
   }
 
   const canSubmit = name.trim() !== '' && email.trim() !== '' && accepted && hasSigned && !signing
+
+  // Kontraktteksten skal reflektere prisen med valgte tillegg — samme funksjon som
+  // brukes server-side ved signering (app/api/contracts/sign/route.ts), slik at
+  // forhåndsvisningen aldri avviker fra det som faktisk lagres.
+  const selectedAddons = optionalAddons.filter((a) => selectedAddonIds.has(a.id))
+  const displayContractText = buildContractTextWithAddons(contractText, baseFinalPriceExclVat, selectedAddons, discountFactor)
 
   return (
     <div
@@ -129,7 +149,7 @@ export default function ContractSigningSection({
 
         {/* Contract text box */}
         <div className="px-8 md:px-12 py-8">
-          {contractText.split('\n').map((line, i) => {
+          {displayContractText.split('\n').map((line, i) => {
             const isSectionHeader = /^\d+\.\s+\S/.test(line) && line.length < 60
             const isSubHeader = /^\d+\.\d+/.test(line)
             const isEmpty = line.trim() === ''
@@ -158,28 +178,60 @@ export default function ContractSigningSection({
         {/* Signed state / signing form */}
         <div className="px-8 md:px-12 py-8" style={{ borderTop: '1px solid #2A261F' }}>
           {isSigned ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                color: '#C49434',
-                fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.9rem',
-                letterSpacing: '0.02em',
-              }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>✓</span>
-              <span>
-                {signed
-                  ? 'Avtalen er signert. Du vil motta en bekreftelse på e-post.'
-                  : `Signert av ${signedBy}`}
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  color: '#C49434',
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.9rem',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                <span style={{ fontSize: '1.1rem' }}>✓</span>
+                <span>
+                  {signed ? 'Avtalen er signert.' : `Signert av ${signedBy}`}
+                </span>
+              </div>
+              {pdfUrl ? (
+                <a
+                  href={pdfUrl}
+                  download
+                  style={{
+                    alignSelf: 'flex-start',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    background: '#C49434',
+                    color: '#0C0B09',
+                    border: 'none',
+                    padding: '14px 32px',
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#D4A848' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#C49434' }}
+                >
+                  Last ned avtalen
+                </a>
+              ) : (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: 0 }}>
+                  Avtalen som PDF er ikke klar ennå — ta kontakt med Leafilms hvis du trenger en kopi.
+                </p>
+              )}
             </div>
           ) : (
             /* Signing form */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {selectedAddonIds.size > 0 && (
+              {selectedAddons.length > 0 && (
                 <div
                   style={{
                     padding: '1rem 1.25rem',
@@ -190,13 +242,11 @@ export default function ContractSigningSection({
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C49434', marginBottom: 8 }}>
                     Valgte tillegg
                   </p>
-                  {optionalAddons
-                    .filter((a) => selectedAddonIds.has(a.id))
-                    .map((a) => (
-                      <p key={a.id} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: '2px 0' }}>
-                        {a.description} — +{new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0 }).format(a.price)}
-                      </p>
-                    ))}
+                  {selectedAddons.map((a) => (
+                    <p key={a.id} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: '2px 0' }}>
+                      {a.description} — +{new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0 }).format(addonDiscountedPrice(a, discountFactor))}
+                    </p>
+                  ))}
                 </div>
               )}
               {/* Name input */}

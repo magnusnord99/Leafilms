@@ -557,7 +557,7 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 
     const { data, error } = await supabase
       .from('projects')
-      .select(`*, customers(id, name, company)`)
+      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
       .eq('pipeline_stage', 'post_prod')
       .neq('status', 'lost')
       .order('updated_at', { ascending: false })
@@ -670,7 +670,9 @@ export async function getProjectHub(projectId: string): Promise<{
   try {
     const supabase = await createClient()
 
-    // Hent prosjekt med customer
+    // Hent prosjekt med customer og prosjektleder. project_lead_id må disambigueres med
+    // !project_lead_id siden projects har flere FK-er mot profiles (quote_assignee_id,
+    // invoice_assignee_id) — uten det aliaset vet ikke Supabase hvilken relasjon som menes.
     const { data: projectRow, error: projectError } = await supabase
       .from('projects')
       .select(`
@@ -679,6 +681,11 @@ export async function getProjectHub(projectId: string): Promise<{
           id,
           name,
           company
+        ),
+        project_lead:profiles!project_lead_id (
+          id,
+          name,
+          email
         )
       `)
       .eq('id', projectId)
@@ -693,6 +700,7 @@ export async function getProjectHub(projectId: string): Promise<{
       ...projectRow,
       customer: projectRow.customers ?? null,
       customers: undefined,
+      project_lead: projectRow.project_lead ?? null,
     } as ProjectWithPipeline
 
     // Hent tasks for current pipeline_stage (eller alle hvis stage mangler)
@@ -758,11 +766,14 @@ export async function saveProjectMeetingNotes(projectId: string, notes: string):
   }
 }
 
+// Genererer ett kort, sammenhengende sammendrag (ikke strukturerte felter) — skal kunne
+// leses av et team-medlem som ikke har sett prosjektet før, og gi dem nok kontekst til å
+// forstå hva det handler om uten å måtte lese hele e-posttråden selv.
 export async function analyzeProjectNotes(
   projectId: string,
   notes: string,
   projectTitle: string
-): Promise<Record<string, unknown> | null> {
+): Promise<{ sammendrag: string } | null> {
   try {
     if (!process.env.ANTHROPIC_API_KEY) return null
     const supabase = await createClient()
@@ -770,18 +781,17 @@ export async function analyzeProjectNotes(
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system: 'Du er en assistent for et norsk film- og fotoproduksjonsselskap. Analyser e-posttråder og møtenotater og trekk ut nøkkelinformasjon om prosjektet. Svar alltid med gyldig JSON.',
+      max_tokens: 400,
+      system: 'Du er en assistent for et norsk film- og fotoproduksjonsselskap. Du oppsummerer e-posttråder og møtenotater til et kort, lettlest sammendrag som et team-medlem som ikke har sett prosjektet før kan lese på noen sekunder og forstå hva prosjektet handler om. Svar kun med selve sammendragsteksten — ingen overskrift, ingen liste, ingen innledning som "Her er sammendraget".',
       messages: [{
         role: 'user',
-        content: `Prosjekt: "${projectTitle}"\n\nE-posttråd / møtenotater:\n${notes}\n\nTrekk ut følgende og svar med JSON:\n{\n  "beskrivelse": "Kort sammendrag av hva prosjektet går ut på (2-3 setninger)",\n  "krav": ["Nøkkelkrav eller ønsker fra kunden (liste)"],\n  "budsjett": "Eventuell budsjettantydning, eller null",\n  "tidslinje": "Eventuell tidslinje eller deadline, eller null",\n  "kontaktperson": "Navn på kontaktperson hos kunden, eller null",\n  "notater": ["Andre viktige punkter som bør huskes"]\n}`
+        content: `Prosjekt: "${projectTitle}"\n\nE-posttråd / møtenotater:\n${notes}\n\nSkriv et sammenhengende sammendrag på 3-5 setninger (vanlig løpende tekst, ikke punktliste) som dekker: hvem kunden er, hva prosjektet går ut på, viktige krav/ønsker, og eventuelt budsjett/tidslinje/kontaktperson hvis det er nevnt.`
       }]
     })
 
-    const text = response.content.find(b => b.type === 'text')?.text ?? ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
-    const summary = JSON.parse(jsonMatch[0])
+    const sammendrag = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
+    if (!sammendrag) return null
+    const summary = { sammendrag }
 
     await supabase
       .from('projects')
@@ -1803,6 +1813,88 @@ export async function assignQuoteAndMove(
   }
 }
 
+export async function setResaleAssignee(
+  projectId: string,
+  assigneeId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ resale_assignee_id: assigneeId, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { ok: false, error: 'Kunne ikke oppdatere videresalg-ansvarlig' }
+    if (assigneeId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', projectId)
+        .single()
+      await notifyAssignment({
+        recipientId: assigneeId,
+        type: 'resale_assigned',
+        projectId,
+        preview: project?.title ?? '',
+      })
+    }
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('setResaleAssignee unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function assignResaleAndMove(
+  projectId: string,
+  assigneeId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: project, error: fetchError } = await supabase
+      .from('projects')
+      .select('title')
+      .eq('id', projectId)
+      .single()
+
+    if (fetchError || !project) {
+      return { ok: false, error: 'Prosjekt ikke funnet' }
+    }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        resale_assignee_id: assigneeId,
+        pipeline_stage: 'videresalg',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId)
+
+    if (error) {
+      return { ok: false, error: 'Kunne ikke oppdatere prosjekt' }
+    }
+
+    await seedTasksFromTemplates(projectId, 'videresalg')
+
+    await notifyAssignment({
+      recipientId: assigneeId,
+      type: 'resale_assigned',
+      projectId,
+      preview: project.title,
+    })
+
+    revalidatePath('/admin/pipeline')
+    revalidatePath(`/admin/projects/${projectId}`)
+
+    return { ok: true }
+  } catch (err) {
+    console.error('assignResaleAndMove unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
 /**
  * Setter eller fjerner prosjektleder for et prosjekt.
  */
@@ -1820,5 +1912,68 @@ export async function setProjectLead(
     return { ok: true }
   } catch (err) {
     return { ok: false, error: String(err) }
+  }
+}
+
+/**
+ * Endrer prosjektnavnet.
+ */
+export async function updateProjectTitle(
+  projectId: string,
+  title: string
+): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = title.trim()
+  if (!trimmed) return { ok: false, error: 'Navn kan ikke være tomt' }
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ title: trimmed, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
+
+/**
+ * Bytter hvilken kunde et prosjekt er koblet til.
+ */
+export async function updateProjectCustomer(
+  projectId: string,
+  customerId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
+
+/**
+ * Henter en lett kundeliste til bytt-kunde-velgeren.
+ */
+export async function getCustomersList(): Promise<{ id: string; name: string; company: string | null }[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('customers')
+      .select('id, name, company')
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('getCustomersList error:', error)
+      return []
+    }
+    return data ?? []
+  } catch {
+    return []
   }
 }

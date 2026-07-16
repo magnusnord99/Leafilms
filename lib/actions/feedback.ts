@@ -40,6 +40,23 @@ export async function updateFeedbackStatus(
   await supabase.from('feedback').update({ status }).eq('id', id)
 }
 
+export async function replyToFeedback(id: string, reply: string): Promise<{ error?: string }> {
+  const userClient = await createClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  if (!user) return { error: 'Ikke innlogget' }
+
+  const supabase = createServiceClient()
+  const { error } = await supabase
+    .from('feedback')
+    .update({ admin_reply: reply, replied_at: new Date().toISOString(), replied_by: user.id })
+    .eq('id', id)
+  if (error) {
+    console.error('replyToFeedback error:', error)
+    return { error: error.message }
+  }
+  return {}
+}
+
 export type FeedbackItem = {
   id: string
   type: 'bug' | 'wish'
@@ -50,6 +67,9 @@ export type FeedbackItem = {
   priority: 1 | 2 | 3
   status: 'open' | 'in_progress' | 'resolved'
   image_path: string | null
+  admin_reply: string | null
+  replied_at: string | null
+  replied_by: string | null
 }
 
 export async function getFeedback(): Promise<{ items: FeedbackItem[]; error?: string }> {

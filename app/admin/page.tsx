@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
 import { Badge } from '@/components/ui'
-import { Project, Customer, MarketAnalysis } from '@/lib/types'
+import { Project, Customer, MarketAnalysis, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
@@ -175,11 +175,7 @@ export default function AdminDashboard() {
     { label: 'E-post oppfølging',  value: emailFollowUpCount,             href: '/admin/email', highlight: emailFollowUpCount > 0 },
   ]
 
-  const PIPELINE_STAGE_LABELS: Record<string, string> = {
-    lead: 'Lead', møte: 'Møte', tilbud_sendt: 'Tilbud sendt',
-    kontrakt: 'Kontrakt', pre_prod: 'Pre-prod', produksjon: 'Produksjon',
-    post_prod: 'Post-prod', levering: 'Levering', fakturert: 'Fakturert', videresalg: 'Videresalg',
-  }
+  const PIPELINE_STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
   const PIPELINE_STAGE_COLORS: Record<string, string> = {
     lead: C.text3, møte: '#4A9AC4', tilbud_sendt: C.accent,
     kontrakt: C.success, pre_prod: '#F0A500', produksjon: '#F0A500',

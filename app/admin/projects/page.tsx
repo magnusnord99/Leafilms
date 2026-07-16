@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, QuoteBuilderData } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { timeAgo } from '@/lib/format'
+import { useAuth } from '@/hooks/useAuth'
+import { isStageAllowed, isStaffRole } from '@/lib/permissions'
 
 // ─── Pipeline-hjelpere ────────────────────────────────────────────────────────
 
@@ -44,17 +47,6 @@ const PROJECT_TYPE_LABEL: Record<string, string> = {
   video: 'Film',
   photo: 'Bilder',
   mixed: 'Film & Bilder',
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'I dag'
-  if (days === 1) return 'I går'
-  if (days < 7) return `${days} dager siden`
-  if (days < 30) return `${Math.floor(days / 7)} uker siden`
-  if (days < 365) return `${Math.floor(days / 30)} mnd siden`
-  return `${Math.floor(days / 365)} år siden`
 }
 
 function fmtShootDate(d: string): string {
@@ -111,6 +103,11 @@ type ProjectCard = {
 
 export default function ProjectsPage() {
   const router = useRouter()
+  const { profile } = useAuth()
+  const role = isStaffRole(profile?.role) ? profile.role : 'admin'
+  // Økonomi er kun for admin. Fail-closed: vis ingenting før profilen faktisk er lastet,
+  // i motsetning til `role` over som faller tilbake til 'admin' mens profilen hentes.
+  const canSeeEconomy = profile?.role === 'admin'
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState<ProjectRow[]>([])
   const [tasks, setTasks] = useState<TaskRow[]>([])
@@ -136,7 +133,7 @@ export default function ProjectsPage() {
         supabase.from('tasks').select('project_id, pipeline_stage, status'),
         supabase
           .from('quotes')
-          .select('project_id, status, quote_data, updated_at')
+          .select('project_id, status, quote_data, selected_addon_ids, updated_at')
           .not('quote_data', 'is', null),
       ])
 
@@ -156,10 +153,11 @@ export default function ProjectsPage() {
 
       setTasks((tasksRes.data ?? []) as TaskRow[])
 
-      type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; updated_at: string }
+      type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; selected_addon_ids: string[] | null; updated_at: string }
       setQuotes(((quotesRes.data ?? []) as unknown as RawQuote[]).flatMap(q => {
         try {
-          const totals = calculateQuoteTotals(q.quote_data)
+          // Kundens avkryssede tillegg telles med — samme beregning som Økonomi-siden
+          const totals = calculateQuoteTotals(q.quote_data, q.selected_addon_ids ?? [])
           if (!Number.isFinite(totals.afterDiscount) || totals.afterDiscount <= 0) return []
           return [{
             project_id: q.project_id,
@@ -249,8 +247,10 @@ export default function ProjectsPage() {
         shareLink: sharedVersion ? shareLinks[sharedVersion.id] : null,
         allIds,
       }
-    }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-  }, [projects, tasks, quotes, shareLinks])
+    })
+      .filter(card => isStageAllowed(role, card.stage))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }, [projects, tasks, quotes, shareLinks, role])
 
   const filtered = cards.filter(card => {
     if (filterGroup !== 'all' && card.group !== filterGroup) return false
@@ -327,7 +327,7 @@ export default function ProjectsPage() {
             {[
               { label: 'Totalt', value: String(cards.length), color: C.text },
               ...GROUP_FILTERS.map(g => ({ label: g.label, value: String(groupCounts[g.value]), color: GROUP_COLOR[g.value] })),
-              ...(activeValue > 0 ? [{ label: 'I arbeid', value: fmtMoney(activeValue), color: C.text }] : []),
+              ...(activeValue > 0 && canSeeEconomy ? [{ label: 'I arbeid', value: fmtMoney(activeValue), color: C.text }] : []),
             ].map(stat => (
               <div key={stat.label}>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.2rem', fontWeight: 600, color: stat.color }}>
@@ -496,7 +496,9 @@ export default function ProjectsPage() {
                           : '—',
                         color: C.text2,
                       },
-                      {
+                      // Kun admin skal se økonomitall — tilbudsraden droppes helt for andre roller
+                      // i stedet for å blanke verdien, slik at kortet faktisk blir mindre.
+                      canSeeEconomy && {
                         label: 'Tilbud',
                         value: card.quoteTotal !== null
                           ? `${fmtMoney(card.quoteTotal)}${card.quoteAccepted ? ' · akseptert' : ''}`
@@ -508,7 +510,7 @@ export default function ProjectsPage() {
                         value: card.tasksTotal > 0 ? `${card.tasksDone} av ${card.tasksTotal} fullført` : '—',
                         color: card.tasksTotal > 0 && card.tasksDone === card.tasksTotal ? '#4CAF7D' : C.text2,
                       },
-                    ].map(row => (
+                    ].filter((row): row is { label: string; value: string; color: string } => Boolean(row)).map(row => (
                       <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
                           {row.label}

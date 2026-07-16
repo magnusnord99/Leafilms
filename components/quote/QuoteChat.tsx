@@ -6,6 +6,8 @@ import type { QuoteMessage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
 import { MentionTextInput } from '@/components/shared/MentionTextInput'
+import { MessageReactions } from '@/components/shared/MessageReactions'
+import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import { supabase } from '@/lib/supabase-client'
 
 function formatTime(iso: string): string {
@@ -19,18 +21,27 @@ export default function QuoteChat({
   quoteId,
   projectId,
   profiles,
+  forceOpen,
 }: {
   quoteId: string
   projectId: string
   profiles: MentionableProfile[]
+  forceOpen?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<QuoteMessage[]>([])
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
+  const messagesRef = useRef<QuoteMessage[]>([])
+
+  // Deep-link fra varsel — åpne chatten automatisk (samme mønster som TaskChatToggle)
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
 
   useEffect(() => {
     openRef.current = open
@@ -39,6 +50,10 @@ export default function QuoteChat({
   async function loadMessages() {
     const msgs = await getQuoteMessages(quoteId)
     setMessages(msgs)
+    messagesRef.current = msgs
+    if (msgs.length > 0) {
+      getReactions('quote', msgs.map((m) => m.id)).then(setReactions)
+    }
   }
 
   // Hent meldinger når chatten åpnes (samme mønster som prosjektchatten)
@@ -84,6 +99,31 @@ export default function QuoteChat({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId])
+
+  // Realtime for reaksjoner — bredt filtrert på message_type (postgres_changes støtter ikke
+  // "IN"-filter), henter reaksjonene på nytt for meldingene som faktisk er lastet inn.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`quote-message-reactions-${quoteId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.quote' },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { message_id: string } | null
+          if (!row || !messagesRef.current.some((m) => m.id === row.message_id)) return
+          getReactions('quote', messagesRef.current.map((m) => m.id)).then(setReactions)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [quoteId])
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    await toggleReaction('quote', messageId, emoji)
+  }
 
   async function handleSend() {
     if (!text.trim() || sending) return
@@ -219,7 +259,7 @@ export default function QuoteChat({
             </p>
           )}
           {messages.map(msg => (
-            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.text3 }}>
                   {msg.user?.name ?? msg.user?.email ?? 'Ukjent'}
@@ -250,6 +290,10 @@ export default function QuoteChat({
                   )}
                 </p>
               </div>
+              <MessageReactions
+                reactions={reactions[msg.id] ?? []}
+                onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+              />
             </div>
           ))}
           <div ref={bottomRef} />
@@ -264,7 +308,7 @@ export default function QuoteChat({
             borderTop: `1px solid ${C.border}`,
             display: 'flex',
             gap: 8,
-            alignItems: 'center',
+            alignItems: 'flex-end',
           }}
         >
           <MentionTextInput
@@ -272,7 +316,8 @@ export default function QuoteChat({
             onChange={setText}
             onEnter={handleSend}
             profiles={profiles}
-            as="input"
+            as="textarea"
+            rows={1}
             placeholder="Skriv en melding... Bruk @navn for å tagge"
             disabled={sending}
             style={{
@@ -285,6 +330,8 @@ export default function QuoteChat({
               borderRadius: 8,
               padding: '9px 12px',
               outline: 'none',
+              resize: 'none',
+              lineHeight: 1.5,
               width: '100%',
             }}
           />

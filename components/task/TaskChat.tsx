@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { getTaskMessages, sendTaskMessage } from '@/lib/actions/pipeline'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
 import { MentionTextInput } from '@/components/shared/MentionTextInput'
+import { MessageReactions } from '@/components/shared/MessageReactions'
+import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import { supabase } from '@/lib/supabase-client'
 import type { TaskMessage } from '@/lib/types'
 
@@ -41,16 +43,22 @@ type Props = {
 
 export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) {
   const [messages, setMessages] = useState<TaskMessage[]>([])
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const [newMessage, setNewMessage] = useState('')
   const [sendingMsg, setSendingMsg] = useState(false)
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<TaskMessage[]>([])
 
   async function loadMessages() {
     setLoadingMsgs(true)
     const msgs = await getTaskMessages(taskId)
     setMessages(msgs)
+    messagesRef.current = msgs
     setLoadingMsgs(false)
+    if (msgs.length > 0) {
+      getReactions('task', msgs.map((m) => m.id)).then(setReactions)
+    }
   }
 
   useEffect(() => {
@@ -79,6 +87,31 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
+
+  // Realtime for reaksjoner — bredt filtrert på message_type (postgres_changes støtter ikke
+  // "IN"-filter), henter reaksjonene på nytt for meldingene som faktisk er lastet inn.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`task-message-reactions-${taskId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.task' },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { message_id: string } | null
+          if (!row || !messagesRef.current.some((m) => m.id === row.message_id)) return
+          getReactions('task', messagesRef.current.map((m) => m.id)).then(setReactions)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [taskId])
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    await toggleReaction('task', messageId, emoji)
+  }
 
   async function handleSendMessage() {
     if (!newMessage.trim() || sendingMsg) return
@@ -120,7 +153,7 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
             const isMe = currentUserId === msg.user_id
             const senderName = msg.user?.name ?? msg.user?.email?.split('@')[0] ?? 'Ukjent'
             return (
-              <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
+              <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {!isMe && (
                     <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.surface2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -149,6 +182,10 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
                     )}
                   </p>
                 </div>
+                <MessageReactions
+                  reactions={reactions[msg.id] ?? []}
+                  onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+                />
               </div>
             )
           })

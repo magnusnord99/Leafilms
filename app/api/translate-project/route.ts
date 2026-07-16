@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
@@ -52,6 +52,17 @@ export async function POST(req: NextRequest) {
 
     if (!projectId || !targetLanguage) {
       return Response.json({ error: 'Mangler projectId eller targetLanguage' }, { status: 400 })
+    }
+
+    // Admin-only internt verktøy — uten denne sjekken kan hvem som helst
+    // overskrive innholdet på et vilkårlig prosjekt.
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    const { data: profile } = user
+      ? await authClient.from('profiles').select('role').eq('id', user.id).single()
+      : { data: null }
+    if (!user || profile?.role !== 'admin') {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = createServiceClient()

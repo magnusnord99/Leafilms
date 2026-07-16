@@ -7,11 +7,17 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
+    // Default ignores of eslint-config-next. `**/`-prefiks er nødvendig for at disse
+    // også skal treffe build-output i nestede git worktrees (f.eks. .worktrees/*/.next/**) —
+    // uten prefiks er mønsteret rot-forankret og lar worktree-output slippe gjennom.
+    "**/.next/**",
+    "**/out/**",
+    "**/build/**",
     "next-env.d.ts",
+    // Nestede git worktrees (egne full-checkouts brukt for isolert feature-arbeid) —
+    // deres kildekode skal lintes i sin egen sesjon/branch, ikke telle med her.
+    ".worktrees/**",
+    ".claude/worktrees/**",
   ]),
   {
     rules: {

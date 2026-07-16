@@ -6,15 +6,11 @@ import {
 } from '@/lib/actions/pipeline'
 import { assignLead } from '@/lib/actions/leads'
 import { C } from '@/lib/admin-theme'
-import type { Task, PipelineStage } from '@/lib/types'
+import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task, type PipelineStage } from '@/lib/types'
 
 type Profile = { id: string; name: string | null; email: string }
 
-const STAGE_LABELS: Record<string, string> = {
-  lead: 'Lead', møte: 'Møte', tilbud_sendt: 'Tilbud sendt',
-  kontrakt: 'Kontrakt', pre_prod: 'Pre-prod', produksjon: 'Produksjon',
-  post_prod: 'Post-prod', levering: 'Levering', fakturert: 'Fakturert', videresalg: 'Videresalg',
-}
+const STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
 const QUICK_TASKS = ['Send tilbud', 'Følg opp lead', 'Book møte', 'Ring tilbake']
 
@@ -22,14 +18,12 @@ const QUICK_TASKS = ['Send tilbud', 'Følg opp lead', 'Book møte', 'Ring tilbak
 const SUCCESS = '#4CAF7D'
 const WARNING = '#F0A500'
 
-const STATUS_CYCLE: Record<Task['status'], Task['status']> = {
-  todo: 'in_progress', in_progress: 'done', done: 'todo',
-}
+const STATUS_CYCLE = TASK_STATUS_CYCLE
 
 const STATUS_STYLE: Record<Task['status'], { label: string; color: string }> = {
-  todo:        { label: 'Ikke startet', color: C.text3 },
-  in_progress: { label: 'Pågår',        color: WARNING },
-  done:        { label: 'Ferdig',       color: SUCCESS },
+  todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3 },
+  in_progress: { label: TASK_STATUS_LABELS.in_progress, color: WARNING },
+  done:        { label: TASK_STATUS_LABELS.done,        color: SUCCESS },
 }
 
 function Initials({ p, active }: { p: Profile; active: boolean }) {

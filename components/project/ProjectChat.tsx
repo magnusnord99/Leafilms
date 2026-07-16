@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase-client'
 import { getAllProfiles } from '@/lib/actions/pipeline'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
 import { MentionTextInput } from '@/components/shared/MentionTextInput'
+import { MessageReactions } from '@/components/shared/MessageReactions'
+import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import type { ProjectMessage } from '@/lib/types'
 
 const C = {
@@ -20,21 +22,28 @@ const C = {
 
 type Props = {
   projectId: string
+  forceOpen?: boolean
 }
 
-export function ProjectChat({ projectId }: Props) {
+export function ProjectChat({ projectId, forceOpen }: Props) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ProjectMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
   const [profiles, setProfiles] = useState<MentionableProfile[]>([])
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
 
   useEffect(() => {
     getAllProfiles().then(setProfiles)
   }, [])
+
+  // Deep-link fra varsel — åpne chatten automatisk (samme mønster som TaskChatToggle)
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
 
   useEffect(() => {
     openRef.current = open
@@ -72,6 +81,47 @@ export function ProjectChat({ projectId }: Props) {
     }
   }, [projectId])
 
+  // Realtime for reaksjoner — bredt filtrert på message_type (postgres_changes støtter ikke
+  // "IN"-filter), sjekker selv om meldingen tilhører denne samtalen før state oppdateres.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`project-message-reactions-${projectId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.project' },
+        (payload) => {
+          const row = payload.new as { message_id: string; user_id: string; emoji: string; user_name?: string }
+          setReactions((prev) => {
+            const list = prev[row.message_id]
+            if (list === undefined) return prev
+            if (list.some((r) => r.userId === row.user_id && r.emoji === row.emoji)) return prev
+            const profile = profiles.find((p) => p.id === row.user_id)
+            return {
+              ...prev,
+              [row.message_id]: [...list, { emoji: row.emoji, userId: row.user_id, userName: profile?.name || 'Ukjent' }],
+            }
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.project' },
+        (payload) => {
+          const row = payload.old as { message_id: string; user_id: string; emoji: string }
+          setReactions((prev) => {
+            const list = prev[row.message_id]
+            if (list === undefined) return prev
+            return { ...prev, [row.message_id]: list.filter((r) => !(r.userId === row.user_id && r.emoji === row.emoji)) }
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [projectId, profiles])
+
   // Nullstill unread når chatten åpnes (state-justering under render, jf. react.dev)
   const [prevOpen, setPrevOpen] = useState(open)
   if (prevOpen !== open) {
@@ -87,8 +137,18 @@ export function ProjectChat({ projectId }: Props) {
     const res = await fetch(`/api/projects/${projectId}/messages`)
     if (res.ok) {
       const { messages: data } = await res.json()
-      setMessages(data || [])
+      const list: ProjectMessage[] = data || []
+      setMessages(list)
+      if (list.length > 0) {
+        getReactions('project', list.map((m) => m.id)).then(setReactions)
+      }
     }
+  }
+
+  // Ingen optimistisk oppdatering nødvendig — realtime-subscriptionen over leverer
+  // INSERT/DELETE-eventet tilbake til samme klient i løpet av noen hundre ms.
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    await toggleReaction('project', messageId, emoji)
   }
 
   // Hent meldinger når chatten åpnes
@@ -251,7 +311,7 @@ export function ProjectChat({ projectId }: Props) {
             </p>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
                   fontFamily: 'var(--font-dm-sans)',
@@ -291,6 +351,10 @@ export function ProjectChat({ projectId }: Props) {
                   )}
                 </p>
               </div>
+              <MessageReactions
+                reactions={reactions[msg.id] ?? []}
+                onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+              />
             </div>
           ))}
           <div ref={bottomRef} />
@@ -305,7 +369,7 @@ export function ProjectChat({ projectId }: Props) {
             borderTop: `1px solid ${C.border}`,
             display: 'flex',
             gap: 8,
-            alignItems: 'center',
+            alignItems: 'flex-end',
           }}
         >
           <MentionTextInput
@@ -313,7 +377,8 @@ export function ProjectChat({ projectId }: Props) {
             onChange={setInput}
             onEnter={sendMessage}
             profiles={profiles}
-            as="input"
+            as="textarea"
+            rows={1}
             placeholder="Skriv en melding..."
             disabled={sending}
             style={{
@@ -326,6 +391,8 @@ export function ProjectChat({ projectId }: Props) {
               borderRadius: 8,
               padding: '9px 12px',
               outline: 'none',
+              resize: 'none',
+              lineHeight: 1.5,
               width: '100%',
             }}
           />

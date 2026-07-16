@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
+import { isStaffRole } from '@/lib/permissions'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,11 +26,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Get request body
-    const { email, name } = await request.json()
+    const { email, name, role } = await request.json()
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
+
+    // Trigger'en public.handle_new_user() setter alltid role='admin' på nye profiler —
+    // vi overskriver den under med den valgte rollen. Ugyldig/manglende rolle faller
+    // tilbake til 'sales' i stedet for å stille en ny bruker med full admin-tilgang.
+    const resolvedRole = isStaffRole(role) ? role : 'sales'
 
     // Invite user via Supabase Auth
     // Note: This requires the service role key, but we can use the admin API
@@ -90,11 +96,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update profile with name if provided
-    if (inviteData.user && name) {
+    // Oppdater profilen med navn (hvis oppgitt) og den valgte rollen — trigger'en setter
+    // alltid 'admin' som standard, så rollen må alltid overskrives eksplisitt her.
+    if (inviteData.user) {
       await adminClient
         .from('profiles')
-        .update({ name })
+        .update({ ...(name ? { name } : {}), role: resolvedRole })
         .eq('id', inviteData.user.id)
     }
 

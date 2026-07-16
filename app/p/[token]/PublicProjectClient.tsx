@@ -6,7 +6,7 @@ import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibr
 const ContractSigningSection = dynamic(() => import('./ContractSigningSection'), { ssr: false })
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
-import { useMemo, useCallback, useEffect, useState } from 'react'
+import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
 import {
   HeroSection,
   ConceptSection,
@@ -49,6 +49,7 @@ type PublicProjectClientProps = {
     isSigned: boolean
     signedBy: string | null
     ourSignature?: OurSignature | null
+    pdfUrl?: string | null
   } | null
   projectId?: string
 }
@@ -73,19 +74,61 @@ export function PublicProjectClient({
 
   const [optionalAddons, setOptionalAddons] = useState<OptionalAddon[]>([])
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(new Set())
+  const [baseFinalPriceExclVat, setBaseFinalPriceExclVat] = useState(0)
+  const [quoteDiscountFactor, setQuoteDiscountFactor] = useState(0)
+  const [contractSigned, setContractSigned] = useState(publishedContract?.isSigned ?? false)
+  const skipNextAddonSave = useRef(true)
 
   const handleToggleAddon = useCallback((id: string) => {
+    // Tilleggene låses så snart avtalen er signert — ingen flere endringer skal kunne lagres
+    if (contractSigned) return
     setSelectedAddonIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+  }, [contractSigned])
+
+  const handleContractSigned = useCallback(() => {
+    setContractSigned(true)
   }, [])
 
-  const handleAddonsLoaded = useCallback((addons: OptionalAddon[]) => {
-    setOptionalAddons(addons)
+  const scrollToContract = useCallback(() => {
+    const el = document.getElementById('kontrakt')
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 40, behavior: 'smooth' })
   }, [])
+
+  const handleAddonsLoaded = useCallback((addons: OptionalAddon[], initialSelectedIds: string[] = []) => {
+    setOptionalAddons(addons)
+    // Hentet fra server — ikke lagre dette tilbake med det samme (unngår unødvendig round-trip)
+    skipNextAddonSave.current = true
+    setSelectedAddonIds(new Set(initialSelectedIds))
+  }, [])
+
+  const handleBaseTotalsLoaded = useCallback((finalPriceExclVat: number, discountFactor: number) => {
+    setBaseFinalPriceExclVat(finalPriceExclVat)
+    setQuoteDiscountFactor(discountFactor)
+  }, [])
+
+  // Lagre kundens avhukede tillegg fortløpende, slik at de overlever en sideoppdatering
+  // — men ikke rett etter at valget nettopp ble lastet inn fra serveren.
+  useEffect(() => {
+    if (skipNextAddonSave.current) {
+      skipNextAddonSave.current = false
+      return
+    }
+    if (!shareToken || !projectId) return
+    const ids = Array.from(selectedAddonIds)
+    const timeout = setTimeout(() => {
+      fetch('/api/quotes/select-addons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, shareToken, selectedAddonIds: ids }),
+      }).catch(() => {})
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [selectedAddonIds, shareToken, projectId])
 
   // Check if user is admin - must be called before other hooks that depend on it
   const { isAdmin, loading: authLoading } = useAuth()
@@ -218,7 +261,34 @@ export function PublicProjectClient({
     <div className="min-h-screen bg-background text-foreground">
       {/* Section Navigation (desktop only, shows on scroll) */}
       <SectionNavigation sections={sections} getSectionTitle={getSectionTitle} />
-      
+
+      {/* Signert-varsel — alltid synlig helt øverst, så kunden lett finner avtalen sin igjen */}
+      {contractSigned && (
+        <button
+          onClick={scrollToContract}
+          className="fixed top-0 left-1/2 -translate-x-1/2 z-50"
+          style={{
+            marginTop: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: '#161410',
+            border: '1px solid rgba(196,148,52,0.4)',
+            borderRadius: 999,
+            padding: '8px 18px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            fontFamily: 'var(--font-dm-sans)',
+            fontSize: '0.7rem',
+            letterSpacing: '0.08em',
+            color: '#C49434',
+          }}
+        >
+          <span>✓</span>
+          <span>Avtalen er signert — se avtalen</span>
+        </button>
+      )}
+
       {/* Hero Section */}
       {heroSection && (
         <div data-section-id={heroSection.id}>
@@ -382,9 +452,11 @@ export function PublicProjectClient({
                       updateSectionContent={noop}
                       shareToken={shareToken}
                       hasPublishedContract={!!publishedContract}
+                      isContractSigned={contractSigned}
                       selectedAddonIds={selectedAddonIds}
                       onToggleAddon={handleToggleAddon}
                       onAddonsLoaded={handleAddonsLoaded}
+                      onBaseTotalsLoaded={handleBaseTotalsLoaded}
                     />
                   )}
 
@@ -478,8 +550,12 @@ export function PublicProjectClient({
           isSigned={publishedContract.isSigned}
           signedBy={publishedContract.signedBy}
           ourSignature={publishedContract.ourSignature}
+          pdfUrl={publishedContract.pdfUrl}
           optionalAddons={optionalAddons}
           selectedAddonIds={selectedAddonIds}
+          baseFinalPriceExclVat={baseFinalPriceExclVat}
+          discountFactor={quoteDiscountFactor}
+          onSigned={handleContractSigned}
         />
       )}
 

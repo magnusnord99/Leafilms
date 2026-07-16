@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updateFeedbackStatus, deleteFeedback, type FeedbackItem } from '@/lib/actions/feedback'
+import { updateFeedbackStatus, deleteFeedback, replyToFeedback, type FeedbackItem } from '@/lib/actions/feedback'
 
 const C = {
   bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
@@ -28,6 +28,10 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
   const [status, setStatus] = useState(item.status)
   const [saving, setSaving] = useState(false)
   const [deleted, setDeleted] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
+  const [replyText, setReplyText] = useState(item.admin_reply ?? '')
+  const [savedReply, setSavedReply] = useState(item.admin_reply)
+  const [sendingReply, setSendingReply] = useState(false)
 
   async function handleStatus(next: FeedbackItem['status']) {
     if (next === status) return
@@ -41,6 +45,17 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
     if (!confirm('Slett denne tilbakemeldingen?')) return
     await deleteFeedback(item.id)
     setDeleted(true)
+  }
+
+  async function handleReply() {
+    if (!replyText.trim() || sendingReply) return
+    setSendingReply(true)
+    const result = await replyToFeedback(item.id, replyText.trim())
+    setSendingReply(false)
+    if (!result.error) {
+      setSavedReply(replyText.trim())
+      setReplyOpen(false)
+    }
   }
 
   if (deleted) return null
@@ -118,6 +133,63 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
           />
         </a>
       )}
+
+      {/* Svar til den som meldte inn saken */}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+        {savedReply && !replyOpen && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2, fontStyle: 'italic', margin: 0 }}>
+              &ldquo;{savedReply}&rdquo;
+            </p>
+            <button
+              onClick={() => { setReplyText(savedReply); setReplyOpen(true) }}
+              style={{ flexShrink: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Endre svar
+            </button>
+          </div>
+        )}
+
+        {!savedReply && !replyOpen && (
+          <button
+            onClick={() => setReplyOpen(true)}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Svar på denne
+          </button>
+        )}
+
+        {replyOpen && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <textarea
+              autoFocus
+              value={replyText}
+              onChange={e => setReplyText(e.target.value)}
+              placeholder="Skriv et svar..."
+              rows={2}
+              style={{
+                flex: 1, resize: 'none', boxSizing: 'border-box',
+                background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8,
+                padding: '8px 10px', outline: 'none',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, lineHeight: 1.5,
+              }}
+            />
+            <button
+              onClick={handleReply}
+              disabled={sendingReply || !replyText.trim()}
+              style={{
+                padding: '8px 12px', borderRadius: 8, border: 'none',
+                background: C.accent, color: '#fff',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
+                cursor: replyText.trim() ? 'pointer' : 'not-allowed',
+                opacity: (!replyText.trim() || sendingReply) ? 0.5 : 1,
+              }}
+            >
+              {sendingReply ? 'Sender...' : 'Send'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

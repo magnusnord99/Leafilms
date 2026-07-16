@@ -3,16 +3,19 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts } from '@/lib/actions/pipeline'
-import { getProjectContractData, publishContract, unpublishContract } from '@/lib/actions/contracts'
-import { updateProjectShootDates } from '@/lib/actions/calendar'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
+import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText } from '@/lib/actions/contracts'
+import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
 import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
-import type { Quote } from '@/lib/types'
+import type { Quote, ContractFormFields, OurSignature } from '@/lib/types'
+import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared/SignatureCanvas'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { useAuth } from '@/hooks/useAuth'
+import { isStageAllowed, isStaffRole } from '@/lib/permissions'
 
 const C = {
   bg:       '#181920',
@@ -578,6 +581,7 @@ export default function ProjectHubPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const projectId = params.id as string
+  const { profile: authProfile } = useAuth()
 
   const [hubData, setHubData] = useState<HubData>(null)
   const [loading, setLoading] = useState(true)
@@ -602,6 +606,19 @@ export default function ProjectHubPage() {
   const [shootStart, setShootStart] = useState('')
   const [shootEnd, setShootEnd] = useState('')
   const [savingShoot, setSavingShoot] = useState(false)
+  const [shootConfirmedManually, setShootConfirmedManually] = useState(false)
+  const [contractSigned, setContractSigned] = useState(false)
+  const [confirmingShoot, setConfirmingShoot] = useState(false)
+
+  const [titleEdit, setTitleEdit] = useState(false)
+  const [titleValue, setTitleValue] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
+
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false)
+  const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string; company: string | null }[]>([])
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [savingCustomer, setSavingCustomer] = useState(false)
+  const customerDropdownRef = useRef<HTMLDivElement>(null)
 
   const [stepperContractPublished, setStepperContractPublished] = useState(false)
   const [contractText, setContractText] = useState('')
@@ -610,7 +627,29 @@ export default function ProjectHubPage() {
   const [contractPdfUrl, setContractPdfUrl] = useState<string | null>(null)
   const [loadingContract, setLoadingContract] = useState(false)
   const [publishingContract, setPublishingContract] = useState(false)
+  const [downloadingContractPdf, setDownloadingContractPdf] = useState(false)
+  const [unsigningContract, setUnsigningContract] = useState(false)
   const [contractSaved, setContractSaved] = useState(false)
+  const [contractHasText, setContractHasText] = useState(false)
+  const [contractAutoVars, setContractAutoVars] = useState<{
+    bedrift: string; kunde_kontakt: string; oppstart_dato: string; opptak_datoer: string; leveranse: string; totalpris: string
+  } | null>(null)
+  const [contractFormOpen, setContractFormOpen] = useState(false)
+  const [contractForm, setContractForm] = useState({
+    orgNummer: '', produksjonsPeriode: '', signeringsSted: '', signeringsDato: '',
+    bedrift: '', kundeKontakt: '', oppstartDato: '', opptakDatoer: '', leveranse: '', totalpris: '',
+  })
+  const [generatingContract, setGeneratingContract] = useState(false)
+
+  const [contractOurSignature, setContractOurSignature] = useState<OurSignature | null>(null)
+  const [mySignatureImage, setMySignatureImage] = useState<string | null>(null)
+  const [myName, setMyName] = useState('')
+  const [signModalOpen, setSignModalOpen] = useState(false)
+  const [signModalRedraw, setSignModalRedraw] = useState(false)
+  const [saveSignatureToProfile, setSaveSignatureToProfile] = useState(true)
+  const [signingAndPublishing, setSigningAndPublishing] = useState(false)
+  const sigCanvasRef = useRef<SignatureCanvasHandle>(null)
+  const [sigCanvasHasSigned, setSigCanvasHasSigned] = useState(false)
 
   const [showLostModal, setShowLostModal] = useState(false)
   const [lostReason, setLostReason] = useState<LostReason | null>(null)
@@ -622,12 +661,7 @@ export default function ProjectHubPage() {
   const [notesSaved, setNotesSaved] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   type MeetingSummary = {
-    beskrivelse?: string
-    krav?: string[]
-    budsjett?: string | null
-    tidslinje?: string | null
-    kontaktperson?: string | null
-    notater?: string[]
+    sammendrag?: string
   }
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -639,6 +673,7 @@ export default function ProjectHubPage() {
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [deepLinkNoticeDismissed, setDeepLinkNoticeDismissed] = useState(false)
   const deepLinkTaskId = searchParams?.get('task') ?? null
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   async function fetchHub() {
     setLoading(true)
@@ -653,14 +688,18 @@ export default function ProjectHubPage() {
       setDeliveryValue(data.project.delivery_description ?? '')
       setShootStart(data.project.shoot_start ?? '')
       setShootEnd(data.project.shoot_end ?? '')
+      setShootConfirmedManually(data.project.shoot_confirmed ?? false)
       setNotesValue(data.project.meeting_notes ?? '')
       setSummary(data.project.meeting_summary ?? null)
       setProjectLead_(data.project.project_lead
         ? { ...data.project.project_lead, color: allProfiles.find(p => p.id === data.project.project_lead!.id)?.color ?? null }
         : null)
-      // Hent kontrakt-status for stepper (tilbud_sendt) og kontrakt-steg
+      // Kontrakt-status brukes både av stepperen (tilbud_sendt/kontrakt-steg) og av
+      // opptak-bekreftelsen — sistnevnte gjelder uansett pipeline_stage, siden prosjekter
+      // kan flyttes forbi kontrakt-steget uten signatur (advanceFromKontraktUnsigned)
+      const cs = await getContractStatus(projectId)
+      setContractSigned(cs.isSigned)
       if (data.project.pipeline_stage === 'tilbud_sendt' || data.project.pipeline_stage === 'kontrakt') {
-        const cs = await getContractStatus(projectId)
         setStepperContractPublished(cs.isPublished)
       }
 
@@ -676,6 +715,18 @@ export default function ProjectHubPage() {
   useEffect(() => {
     getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
   }, [])
+
+  // Sales/produksjon skal ikke kunne åpne prosjekter som ligger utenfor rollens
+  // pipeline-steg (f.eks. produksjon som prøver seg på et lead-stadium-prosjekt via direkte
+  // lenke) — samme regler som filtrerer prosjektlisten i /admin/projects. Hard redirect (ikke
+  // router.push) — samme grunn som i app/admin/layout.tsx: en client-side push i en effect
+  // rett etter mount kan bli stille droppet før routeren er klar.
+  useEffect(() => {
+    if (!hubData || !isStaffRole(authProfile?.role)) return
+    if (!isStageAllowed(authProfile.role, hubData.project.pipeline_stage)) {
+      window.location.href = '/admin/projects'
+    }
+  }, [hubData, authProfile])
 
   function handleNotesChange(value: string) {
     setNotesValue(value)
@@ -727,6 +778,44 @@ export default function ProjectHubPage() {
     setShootEdit(false)
   }
 
+  async function handleConfirmShoot() {
+    setConfirmingShoot(true)
+    await setShootConfirmedAction(projectId, true)
+    setShootConfirmedManually(true)
+    setConfirmingShoot(false)
+  }
+
+  async function handleSaveTitle() {
+    if (!titleValue.trim()) return
+    setSavingTitle(true)
+    const result = await updateProjectTitle(projectId, titleValue)
+    setSavingTitle(false)
+    if (result.ok) {
+      setHubData(prev => prev ? { ...prev, project: { ...prev.project, title: titleValue.trim() } } : prev)
+      setTitleEdit(false)
+    }
+  }
+
+  async function handleOpenCustomerPicker() {
+    setCustomerPickerOpen(true)
+    if (customerOptions.length === 0) {
+      const list = await getCustomersList()
+      setCustomerOptions(list)
+    }
+  }
+
+  async function handleSelectCustomer(customerId: string) {
+    setSavingCustomer(true)
+    const result = await updateProjectCustomer(projectId, customerId)
+    setSavingCustomer(false)
+    if (result.ok) {
+      const picked = customerOptions.find(c => c.id === customerId)
+      setHubData(prev => prev ? { ...prev, project: { ...prev.project, customer_id: customerId, customer: picked ? { id: picked.id, name: picked.name, company: picked.company } : prev.project.customer } } : prev)
+      setCustomerPickerOpen(false)
+      setCustomerSearch('')
+    }
+  }
+
   async function handleAssigneeToggle(taskId: string, profileId: string) {
     const profile = profiles.find(p => p.id === profileId)
     if (!profile) return
@@ -771,12 +860,149 @@ export default function ProjectHubPage() {
     setContractIsPublished(data.isPublished)
     setContractSignature(data.signature)
     setContractPdfUrl(data.pdfUrl)
+    setContractHasText(data.hasContractText)
+    setContractAutoVars(data.autoVars)
+    setContractForm({
+      orgNummer: data.formDefaults.orgNummer,
+      produksjonsPeriode: data.formDefaults.produksjonsPeriode,
+      signeringsSted: data.formDefaults.signeringsSted,
+      signeringsDato: data.formDefaults.signeringsDato,
+      bedrift: data.formDefaults.bedrift,
+      kundeKontakt: data.formDefaults.kundeKontakt,
+      oppstartDato: data.formDefaults.oppstartDato,
+      opptakDatoer: data.formDefaults.opptakDatoer,
+      leveranse: data.formDefaults.leveranse,
+      totalpris: data.formDefaults.totalpris,
+    })
+    setContractFormOpen(!data.hasContractText)
+    setContractOurSignature(data.ourSignature)
+    setMySignatureImage(data.mySignatureImage)
+    setMyName(data.myName)
     setLoadingContract(false)
+  }
+
+  async function handleUnsignContract() {
+    if (!confirm('Angre signeringen? Kontrakten åpnes for redigering og kunden må signere på nytt — signaturen og den signerte PDF-en beholdes som historikk til det skjer.')) {
+      return
+    }
+    setUnsigningContract(true)
+    try {
+      await unsignContract(projectId)
+      await loadContract()
+    } catch (error) {
+      alert('Kunne ikke angre signeringen: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
+    } finally {
+      setUnsigningContract(false)
+    }
+  }
+
+  async function handleGenerateContract() {
+    const hasExistingText = contractText.trim().length > 0
+    if (hasExistingText && !confirm('Dette bygger kontraktteksten på nytt fra mal og felt, og overskriver eventuelle manuelle endringer i teksten under. Fortsette?')) {
+      return
+    }
+    setGeneratingContract(true)
+    try {
+      const formFields: ContractFormFields = {
+        orgNummerOverride: contractForm.orgNummer || undefined,
+        produksjonsPeriode: contractForm.produksjonsPeriode || undefined,
+        signeringsSted: contractForm.signeringsSted || undefined,
+        signeringsDato: contractForm.signeringsDato || undefined,
+        bedriftOverride: contractForm.bedrift || undefined,
+        kundeKontaktOverride: contractForm.kundeKontakt || undefined,
+        oppstartDatoOverride: contractForm.oppstartDato || undefined,
+        opptakDatoerOverride: contractForm.opptakDatoer || undefined,
+        leveranseOverride: contractForm.leveranse || undefined,
+        totalprisOverride: contractForm.totalpris || undefined,
+      }
+      const text = await generateContractText(projectId, formFields)
+      setContractText(text)
+      setContractSaved(false)
+      setContractFormOpen(false)
+    } finally {
+      setGeneratingContract(false)
+    }
+  }
+
+  async function doPublishContract(newSignature?: { signatureImage: string; saveToProfile: boolean }) {
+    setPublishingContract(true)
+    await publishContract(projectId, contractText, {
+      orgNummerOverride: contractForm.orgNummer || undefined,
+      produksjonsPeriode: contractForm.produksjonsPeriode || undefined,
+      signeringsSted: contractForm.signeringsSted || undefined,
+      signeringsDato: contractForm.signeringsDato || undefined,
+      bedriftOverride: contractForm.bedrift || undefined,
+      kundeKontaktOverride: contractForm.kundeKontakt || undefined,
+      oppstartDatoOverride: contractForm.oppstartDato || undefined,
+      opptakDatoerOverride: contractForm.opptakDatoer || undefined,
+      leveranseOverride: contractForm.leveranse || undefined,
+      totalprisOverride: contractForm.totalpris || undefined,
+    }, newSignature)
+    setContractHasText(true)
+    setContractIsPublished(true)
+    setStepperContractPublished(true)
+    setContractSaved(true)
+    setPublishingContract(false)
+  }
+
+  async function handleDownloadContractPdf() {
+    setDownloadingContractPdf(true)
+    try {
+      const response = await fetch('/api/contracts/download-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || 'Kunne ikke laste ned kontrakt')
+      }
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const match = contentDisposition?.match(/filename="(.+)"/)
+      const filename = match?.[1] || `Produksjonsavtale_${project?.title || 'Prosjekt'}.pdf`
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      alert('Kunne ikke laste ned kontrakt: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
+    } finally {
+      setDownloadingContractPdf(false)
+    }
+  }
+
+  function handlePublishClick() {
+    if (!contractOurSignature) {
+      setSignModalRedraw(!mySignatureImage)
+      setSaveSignatureToProfile(true)
+      setSignModalOpen(true)
+      return
+    }
+    doPublishContract()
+  }
+
+  async function handleConfirmSignAndPublish() {
+    const signatureImage = signModalRedraw ? sigCanvasRef.current?.getDataUrl() ?? null : mySignatureImage
+    if (!signatureImage) return
+    setSigningAndPublishing(true)
+    try {
+      await doPublishContract({ signatureImage, saveToProfile: signModalRedraw ? saveSignatureToProfile : false })
+      setContractOurSignature({ profileId: '', signerName: myName, signatureImage, signedAt: new Date().toISOString() })
+      setSignModalOpen(false)
+    } finally {
+      setSigningAndPublishing(false)
+    }
   }
 
   useEffect(() => {
     if (activeTab === 'kontrakt') loadContract()
-  }, [activeTab])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, projectId])
 
   useEffect(() => {
     if (!leadDropdownOpen) return
@@ -788,6 +1014,17 @@ export default function ProjectHubPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [leadDropdownOpen])
+
+  useEffect(() => {
+    if (!customerPickerOpen) return
+    function handleClick(e: MouseEvent) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setCustomerPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [customerPickerOpen])
 
   async function handleSetLead(profileId: string | null) {
     const prev = projectLead
@@ -834,14 +1071,98 @@ export default function ProjectHubPage() {
         <div style={{ marginBottom: 28, paddingBottom: 24, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
             <div>
-              <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2, marginBottom: 4 }}>
-                {project.title}
-              </h1>
-              {project.customer && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                  {project.customer.name}{project.customer.company ? ` — ${project.customer.company}` : ''}
-                </p>
+              {titleEdit ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+                  <input
+                    autoFocus
+                    value={titleValue}
+                    onChange={e => setTitleValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(); if (e.key === 'Escape') setTitleEdit(false) }}
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.3rem', fontWeight: 600, color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '4px 8px', outline: 'none', minWidth: 240 }}
+                  />
+                  <button onClick={handleSaveTitle} disabled={savingTitle} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '5px 12px', borderRadius: 6, background: C.accent, color: '#fff', border: 'none', cursor: 'pointer', opacity: savingTitle ? 0.6 : 1 }}>
+                    {savingTitle ? '...' : 'Lagre'}
+                  </button>
+                  <button onClick={() => setTitleEdit(false)} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' }}>
+                    Avbryt
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2 }}>
+                    {project.title}
+                  </h1>
+                  <button
+                    onClick={() => { setTitleValue(project.title); setTitleEdit(true) }}
+                    title="Endre prosjektnavn"
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    Rediger
+                  </button>
+                </div>
               )}
+
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }} ref={customerDropdownRef}>
+                {project.customer && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                    {project.customer.name}{project.customer.company ? ` — ${project.customer.company}` : ''}
+                  </p>
+                )}
+                <button
+                  onClick={handleOpenCustomerPicker}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}
+                >
+                  Bytt kunde
+                </button>
+                {project.customer && (
+                  <Link href={`/admin/customers/${project.customer.id}/edit`} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, textDecoration: 'underline' }}>
+                    Rediger kontaktinfo →
+                  </Link>
+                )}
+
+                {customerPickerOpen && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 150,
+                    background: C.surface2, border: `1px solid ${C.border}`,
+                    borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    minWidth: 240, maxHeight: 280, overflowY: 'auto', padding: '4px 0',
+                  }}>
+                    <div style={{ padding: '6px 10px' }}>
+                      <input
+                        autoFocus
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        placeholder="Søk kunde..."
+                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', outline: 'none' }}
+                      />
+                    </div>
+                    {customerOptions
+                      .filter(c => `${c.name} ${c.company ?? ''}`.toLowerCase().includes(customerSearch.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => handleSelectCustomer(c.id)}
+                          disabled={savingCustomer}
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                            color: c.id === project.customer_id ? C.accent : C.text,
+                            background: 'none', border: 'none',
+                            padding: '7px 14px', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
+                          onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+                        >
+                          {c.name}{c.company ? ` — ${c.company}` : ''}
+                          {c.id === project.customer_id && <span style={{ marginLeft: 8, color: C.accent }}>✓</span>}
+                        </button>
+                      ))}
+                    {customerOptions.length === 0 && (
+                      <p style={{ padding: '10px 14px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Laster...</p>
+                    )}
+                  </div>
+                )}
+              </div>
                 {/* Prosjektleder */}
                 <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
                   <button
@@ -978,8 +1299,6 @@ export default function ProjectHubPage() {
         {/* Tab content */}
         {activeTab === 'oversikt' && (
           <div>
-            {/* Leveranse, datoer, kontakt og notater — skjult for tilbud_sendt */}
-            {project.pipeline_stage !== 'tilbud_sendt' && <>
             {/* Leveranse */}
             <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: deliveryEdit ? 10 : 0 }}>
@@ -1031,11 +1350,29 @@ export default function ProjectHubPage() {
                         : 'Ikke satt'}
                     </span>
                   )}
+                  {!shootEdit && shootStart && (
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                      color: (contractSigned || shootConfirmedManually) ? '#4CAF7D' : '#F0A500',
+                      background: (contractSigned || shootConfirmedManually) ? 'rgba(76,175,125,0.12)' : 'rgba(240,165,0,0.12)',
+                      border: `1px solid ${(contractSigned || shootConfirmedManually) ? 'rgba(76,175,125,0.35)' : 'rgba(240,165,0,0.35)'}`,
+                      borderRadius: 4, padding: '2px 7px', flexShrink: 0,
+                    }}>
+                      {contractSigned ? 'Bekreftet — kontrakt signert' : shootConfirmedManually ? 'Bekreftet manuelt' : 'Ikke bekreftet'}
+                    </span>
+                  )}
                 </div>
                 {!shootEdit && (
-                  <button onClick={() => setShootEdit(true)} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', flexShrink: 0, marginLeft: 8 }}>
-                    Sett dato
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                    {shootStart && !contractSigned && !shootConfirmedManually && (
+                      <button onClick={handleConfirmShoot} disabled={confirmingShoot} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: '#4CAF7D', background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.35)', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', opacity: confirmingShoot ? 0.6 : 1 }}>
+                        {confirmingShoot ? '...' : 'Bekreft manuelt'}
+                      </button>
+                    )}
+                    <button onClick={() => setShootEdit(true)} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>
+                      Sett dato
+                    </button>
+                  </div>
                 )}
               </div>
               {shootEdit && (
@@ -1114,71 +1451,26 @@ export default function ProjectHubPage() {
                       opacity: analyzing ? 0.7 : 1, transition: 'background 0.15s',
                     }}
                   >
-                    {analyzing ? 'Analyserer...' : 'Analyser med AI'}
+                    {analyzing ? 'Analyserer...' : summary?.sammendrag ? 'Analyser på nytt' : 'Analyser med AI'}
                   </button>
                   {analyzing && (
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>Claude leser notater...</span>
                   )}
                 </div>
 
-                {/* AI-oppsummering */}
-                {summary && (
+                {/* AI-oppsummering — kort, lettlest tekst så andre i teamet raskt forstår prosjektet */}
+                {summary?.sammendrag && (
                   <div style={{ marginTop: 16, padding: '14px 16px', background: C.surface2, borderRadius: 7, border: `1px solid ${C.border}` }}>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.accent }}>
                       AI-oppsummering
                     </span>
-                    {summary.beskrivelse && (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, marginTop: 10, lineHeight: 1.6 }}>
-                        {summary.beskrivelse}
-                      </p>
-                    )}
-                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {(summary.krav?.length ?? 0) > 0 && (
-                        <div>
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Krav / ønsker</span>
-                          <ul style={{ margin: '6px 0 0 0', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {summary.krav!.map((k: string, i: number) => (
-                              <li key={i} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{k}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 4 }}>
-                        {summary.budsjett && (
-                          <div>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block' }}>Budsjett</span>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{summary.budsjett}</span>
-                          </div>
-                        )}
-                        {summary.tidslinje && (
-                          <div>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block' }}>Tidslinje</span>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{summary.tidslinje}</span>
-                          </div>
-                        )}
-                        {summary.kontaktperson && (
-                          <div>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block' }}>Kontaktperson</span>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{summary.kontaktperson}</span>
-                          </div>
-                        )}
-                      </div>
-                      {(summary.notater?.length ?? 0) > 0 && (
-                        <div>
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Andre notater</span>
-                          <ul style={{ margin: '6px 0 0 0', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {summary.notater!.map((n: string, i: number) => (
-                              <li key={i} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{n}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, marginTop: 10, lineHeight: 1.6 }}>
+                      {summary.sammendrag}
+                    </p>
                   </div>
                 )}
               </div>
             </div>
-            </> /* slutt på seksjoner skjult for tilbud_sendt */}
 
             {project.pipeline_stage === 'tilbud_sendt' ? (
               <div>
@@ -1326,12 +1618,14 @@ export default function ProjectHubPage() {
                     {typeof window !== 'undefined' ? `${window.location.origin}/p/${pitchToken}` : `/p/${pitchToken}`}
                   </p>
                 </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/p/${pitchToken}`)}
-                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: `1px solid rgba(124,92,252,0.25)`, flexShrink: 0 }}
+                <a
+                  href={`/p/${pitchToken}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: `1px solid rgba(124,92,252,0.25)`, flexShrink: 0, textDecoration: 'none', whiteSpace: 'nowrap' }}
                 >
-                  Kopier link
-                </button>
+                  Åpne →
+                </a>
               </div>
             )}
           </div>
@@ -1342,7 +1636,7 @@ export default function ProjectHubPage() {
 
             {/* Signert-banner — vises når signert */}
             {contractSignature && (
-              <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
                 <div>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.success, marginBottom: 2 }}>
                     ✓ Signert av {contractSignature.signerName}
@@ -1369,59 +1663,191 @@ export default function ProjectHubPage() {
                       Åpne signert kontrakt →
                     </a>
                   )}
+                  <button
+                    onClick={handleUnsignContract}
+                    disabled={unsigningContract}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '0.72rem',
+                      color: C.danger,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      marginTop: 8,
+                      cursor: unsigningContract ? 'default' : 'pointer',
+                      opacity: unsigningContract ? 0.6 : 0.85,
+                      display: 'block',
+                      textDecoration: 'underline',
+                    }}
+                    onMouseEnter={e => { if (!unsigningContract) (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = unsigningContract ? '0.6' : '0.85' }}
+                  >
+                    {unsigningContract ? 'Angrer signering...' : 'Angre signering'}
+                  </button>
                 </div>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.success, background: 'rgba(76,175,125,0.1)', padding: '3px 10px', borderRadius: 4 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.success, background: 'rgba(76,175,125,0.1)', padding: '3px 10px', borderRadius: 4, whiteSpace: 'nowrap' }}>
                   Bindende
                 </span>
               </div>
             )}
 
-            {/* Kontrakttekst-editor */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
-                  Kontrakttekst
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {contractSaved && <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.success }}>Publisert ✓</span>}
-                  {contractIsPublished && !contractSignature && (
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.accent, background: 'rgba(124,92,252,0.1)', padding: '2px 8px', borderRadius: 4 }}>
-                      Publisert — venter på signering
-                    </span>
+            {/* Kontraktskjema — fyll inn felt, generer hele kontraktteksten */}
+            {contractFormOpen && !loadingContract && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
+                    Kontraktskjema
+                  </span>
+                  {contractText.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setContractFormOpen(false)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      ← Tilbake til kontraktteksten
+                    </button>
                   )}
                 </div>
-              </div>
-              {loadingContract ? (
-                <div style={{ padding: '32px', textAlign: 'center' }}>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster kontrakt...</p>
+
+                <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Auto-utfylt fra prosjekt/tilbud — redigerbart */}
+                  {contractAutoVars && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, padding: '12px 14px', background: C.surface2, borderRadius: 6 }}>
+                      {(
+                        [
+                          ['Bedrift', 'bedrift', contractAutoVars.bedrift],
+                          ['Kundekontakt', 'kundeKontakt', contractAutoVars.kunde_kontakt],
+                          ['Oppstartsdato', 'oppstartDato', contractAutoVars.oppstart_dato],
+                          ['Opptaksdatoer', 'opptakDatoer', contractAutoVars.opptak_datoer],
+                          ['Leveranse', 'leveranse', contractAutoVars.leveranse],
+                          ['Totalpris', 'totalpris', contractAutoVars.totalpris],
+                        ] as const
+                      ).map(([label, field, placeholder]) => (
+                        <div key={field}>
+                          <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 4 }}>{label}</label>
+                          <input
+                            value={contractForm[field]}
+                            onChange={e => setContractForm(f => ({ ...f, [field]: e.target.value }))}
+                            placeholder={placeholder || '—'}
+                            style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Felt som må fylles inn / bekreftes */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Org.nummer</label>
+                      <input
+                        value={contractForm.orgNummer}
+                        onChange={e => setContractForm(f => ({ ...f, orgNummer: e.target.value }))}
+                        placeholder="923 456 789"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Produksjonsperiode</label>
+                      <input
+                        value={contractForm.produksjonsPeriode}
+                        onChange={e => setContractForm(f => ({ ...f, produksjonsPeriode: e.target.value }))}
+                        placeholder="juli 2026"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Signeringssted</label>
+                      <input
+                        value={contractForm.signeringsSted}
+                        onChange={e => setContractForm(f => ({ ...f, signeringsSted: e.target.value }))}
+                        placeholder="Asker"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Signeringsdato</label>
+                      <input
+                        type="date"
+                        value={contractForm.signeringsDato}
+                        onChange={e => setContractForm(f => ({ ...f, signeringsDato: e.target.value }))}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateContract}
+                    disabled={generatingContract}
+                    style={{
+                      alignSelf: 'flex-start', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600,
+                      padding: '10px 20px', borderRadius: 8, cursor: generatingContract ? 'not-allowed' : 'pointer',
+                      background: generatingContract ? C.surface2 : C.accent, color: generatingContract ? C.text3 : '#fff',
+                      border: 'none', transition: 'background 0.15s',
+                    }}
+                  >
+                    {generatingContract ? 'Genererer...' : contractText.trim() ? 'Regenerer kontrakt' : 'Generer kontrakt'}
+                  </button>
                 </div>
-              ) : (
-                <textarea
-                  value={contractText}
-                  onChange={e => { setContractText(e.target.value); setContractSaved(false) }}
-                  rows={24}
-                  style={{
-                    width: '100%', boxSizing: 'border-box', resize: 'vertical',
-                    fontFamily: 'monospace', fontSize: '0.78rem', color: C.text,
-                    background: C.surface2, border: 'none', borderRadius: 0,
-                    padding: '16px', outline: 'none', lineHeight: 1.7,
-                  }}
-                />
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Kontrakttekst-editor */}
+            {!contractFormOpen && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
+                    Kontrakttekst
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {contractSaved && <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.success }}>Publisert ✓</span>}
+                    {contractOurSignature && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
+                        Signert av {contractOurSignature.signerName} for Leafilms
+                      </span>
+                    )}
+                    {contractIsPublished && !contractSignature && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.accent, background: 'rgba(124,92,252,0.1)', padding: '2px 8px', borderRadius: 4 }}>
+                        Publisert — venter på signering
+                      </span>
+                    )}
+                    {!loadingContract && (
+                      <button
+                        type="button"
+                        onClick={() => setContractFormOpen(true)}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        Rediger felt →
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {loadingContract ? (
+                  <div style={{ padding: '32px', textAlign: 'center' }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster kontrakt...</p>
+                  </div>
+                ) : (
+                  <textarea
+                    value={contractText}
+                    onChange={e => { setContractText(e.target.value); setContractSaved(false) }}
+                    rows={24}
+                    style={{
+                      width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                      fontFamily: 'monospace', fontSize: '0.78rem', color: C.text,
+                      background: C.surface2, border: 'none', borderRadius: 0,
+                      padding: '16px', outline: 'none', lineHeight: 1.7,
+                    }}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Publish / fjern-knapper */}
-            {!contractSignature && (
+            {!contractSignature && !contractFormOpen && (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={async () => {
-                    setPublishingContract(true)
-                    await publishContract(projectId, contractText)
-                    setContractIsPublished(true)
-                    setStepperContractPublished(true)
-                    setContractSaved(true)
-                    setPublishingContract(false)
-                  }}
+                  onClick={handlePublishClick}
                   disabled={publishingContract || loadingContract || !contractText.trim()}
                   style={{
                     flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
@@ -1457,6 +1883,23 @@ export default function ProjectHubPage() {
               </div>
             )}
 
+            {/* Last ned PDF — tilgjengelig så snart det finnes kontrakttekst, uansett
+                publiserings-/signeringsstatus, slik at vi kan se nøyaktig hva kunden ser. */}
+            {contractText.trim() && !contractFormOpen && (
+              <button
+                onClick={handleDownloadContractPdf}
+                disabled={downloadingContractPdf}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                  padding: '10px 16px', borderRadius: 8, cursor: downloadingContractPdf ? 'default' : 'pointer',
+                  background: 'none', color: C.text2, border: `1px solid ${C.border}`,
+                  opacity: downloadingContractPdf ? 0.6 : 1, alignSelf: 'flex-start',
+                }}
+              >
+                {downloadingContractPdf ? 'Genererer PDF...' : 'Last ned kontrakt (PDF) ↓'}
+              </button>
+            )}
+
             {/* Lenke til mal-redigering */}
             <Link href="/admin/contracts/template" style={{ textDecoration: 'none' }}>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
@@ -1478,6 +1921,103 @@ export default function ProjectHubPage() {
               </div>
             </Link>
 
+          </div>
+        )}
+
+        {/* Bekreft signering-modal — vises før første publisering av en kontrakt */}
+        {signModalOpen && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }}
+            onClick={e => { if (e.target === e.currentTarget && !signingAndPublishing) setSignModalOpen(false) }}
+          >
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '28px 28px 24px', width: '100%', maxWidth: 460, margin: '0 16px' }}>
+              <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 600, color: C.text, marginBottom: 6 }}>
+                Bekreft signering
+              </h2>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginBottom: 20 }}>
+                Du signerer denne kontrakten for Leafilms før den sendes til kunden.
+              </p>
+
+              {!signModalRedraw && mySignatureImage ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                  <div style={{ padding: '14px 16px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <img src={mySignatureImage} alt={`Signatur — ${myName}`} style={{ height: 40, width: 'auto', maxWidth: 140, objectFit: 'contain' }} />
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{myName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSignModalRedraw(true)}
+                    style={{ alignSelf: 'flex-start', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}
+                  >
+                    Ikke deg? Tegn på nytt →
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 20 }}>
+                  {!mySignatureImage && (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginBottom: 10 }}>
+                      Du har ingen lagret signatur ennå.
+                    </p>
+                  )}
+                  <SignatureCanvas
+                    ref={sigCanvasRef}
+                    onChange={setSigCanvasHasSigned}
+                    background={C.surface2}
+                    borderColor={C.border}
+                    activeBorderColor={C.accent}
+                    strokeColor={C.text}
+                    placeholderColor={C.text3}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={saveSignatureToProfile}
+                      onChange={e => setSaveSignatureToProfile(e.target.checked)}
+                      style={{ accentColor: C.accent }}
+                    />
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>Lagre til neste gang</span>
+                  </label>
+                  {mySignatureImage && (
+                    <button
+                      type="button"
+                      onClick={() => setSignModalRedraw(false)}
+                      style={{ display: 'block', marginTop: 8, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      ← Bruk lagret signatur
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleConfirmSignAndPublish}
+                  disabled={signingAndPublishing || (signModalRedraw ? !sigCanvasHasSigned : !mySignatureImage)}
+                  style={{
+                    flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+                    padding: '10px', borderRadius: 8, cursor: 'pointer',
+                    background: signingAndPublishing ? C.surface2 : C.accent,
+                    color: signingAndPublishing ? C.text3 : '#fff',
+                    border: 'none', transition: 'background 0.15s',
+                  }}
+                >
+                  {signingAndPublishing ? 'Signerer...' : 'Signer og publiser'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignModalOpen(false)}
+                  disabled={signingAndPublishing}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                    padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
+                    background: 'none', color: C.text3, border: `1px solid ${C.border}`,
+                  }}
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1551,7 +2091,7 @@ export default function ProjectHubPage() {
           </div>
         )}
 
-        <ProjectChat projectId={projectId} />
+        <ProjectChat projectId={projectId} forceOpen={forceOpenChat} />
       </div>
     </div>
   )

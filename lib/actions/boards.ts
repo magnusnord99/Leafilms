@@ -304,6 +304,13 @@ export async function fetchLinkMetadata(url: string): Promise<LinkContent> {
   const safeHost = (() => { try { return new URL(url).hostname } catch { return url } })()
   const fallback: LinkContent = { url, title: safeHost }
   try {
+    // Denne actionen er importerbar fra det offentlige /b-bundlet og gjør
+    // server-side fetch mot vilkårlige URL-er — uten auth-sjekk er den en
+    // åpen SSRF-orakel for uinnloggede. Krev innlogget bruker før vi fetcher.
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return fallback
+
     const parsed = new URL(url)
     if (!['http:', 'https:'].includes(parsed.protocol)) return fallback
     const res = await fetch(url, {

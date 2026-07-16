@@ -66,6 +66,18 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   const maxZ = useCallback(() => Math.max(0, ...nodes.map(n => n.data.card.z_index)), [nodes])
 
+  // Idempotent append: en realtime-echo for kortet/pilen vi nettopp opprettet kan
+  // rekke å komme inn (INSERT via onRemoteCard/onRemoteEdge) FØR denne actionens
+  // HTTP-svar returnerer og markLocalOp kjøres — vinduet der kortet finnes i DB
+  // men markLocalOp ennå ikke er kalt gjør en ren [...ns, node]-append utrygg mot
+  // duplikat-id. Speiler exists-sjekken onRemoteCard/onRemoteEdge allerede bruker.
+  const appendOrReplaceNode = useCallback((node: CardNode) => {
+    setNodes(ns => ns.some(n => n.id === node.id) ? ns.map(n => n.id === node.id ? node : n) : [...ns, node])
+  }, [setNodes])
+  const appendOrReplaceEdge = useCallback((edge: Edge) => {
+    setEdges(es => es.some(e => e.id === edge.id) ? es.map(e => e.id === edge.id ? edge : e) : [...es, edge])
+  }, [setEdges])
+
   const persist = useCallback(async (patches: CardPositionPatch[]) => {
     patches.forEach(p => markLocalOp(p.id))
     const ok = await saveCardPositions(patches)
@@ -91,8 +103,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     })
     if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
-    setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
-  }, [boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
+    appendOrReplaceNode(cardToNode(card, initial.childMeta))
+  }, [boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ])
 
   // Opprette kort ved klikk på canvas i plasseringsmodus
   const onPaneClick = useCallback(async (event: React.MouseEvent) => {
@@ -118,7 +130,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         })
         if (!card) { setSaveError(SAVE_ERROR_MSG); return }
         markLocalOp(card.id)
-        setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
+        appendOrReplaceNode(cardToNode(card, initial.childMeta))
       } else {
         pendingPosRef.current = pos
         videoInputRef.current?.click()
@@ -136,7 +148,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         })
         if (!card) { setSaveError(SAVE_ERROR_MSG); return }
         markLocalOp(card.id)
-        setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
+        appendOrReplaceNode(cardToNode(card, initial.childMeta))
         // Fire-and-forget metadata fetch
         fetchLinkMetadata(url).then(meta => {
           markLocalOp(card.id)
@@ -156,7 +168,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       if (!res) { setSaveError(SAVE_ERROR_MSG); return }
       markLocalOp(res.card.id)
       const node = cardToNode(res.card, initial.childMeta)
-      setNodes(ns => [...ns, { ...node, data: { ...node.data, meta: { title, cardCount: 0 } } }])
+      appendOrReplaceNode({ ...node, data: { ...node.data, meta: { title, cardCount: 0 } } })
       return
     }
 
@@ -166,8 +178,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     })
     if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
-    setNodes(ns => [...ns, cardToNode(card, initial.childMeta)])
-  }, [pendingType, readOnly, rf, boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
+    appendOrReplaceNode(cardToNode(card, initial.childMeta))
+  }, [pendingType, readOnly, rf, boardId, appendOrReplaceNode, setNodes, markLocalOp, initial.childMeta, maxZ])
 
   // Flytt til front ved dragstart, lagre posisjoner ved slipp
   const onNodeDragStart: OnNodeDrag<CardNode> = useCallback((_e, node) => {
@@ -366,8 +378,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     const edge = await createBoardEdge({ board_id: boardId, from_card_id: conn.source, to_card_id: conn.target })
     if (!edge) { setSaveError('Kunne ikke lagre pilen'); return }
     markLocalOp(edge.id)
-    setEdges(es => [...es, edgeToFlow(edge)])
-  }, [boardId, setEdges, markLocalOp])
+    appendOrReplaceEdge(edgeToFlow(edge))
+  }, [boardId, appendOrReplaceEdge, markLocalOp])
 
   const onEdgeDoubleClick = useCallback((_e: React.MouseEvent, edge: Edge) => {
     if (readOnly) return
@@ -392,10 +404,10 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         board_id: boardId, type: isVideo ? 'video' : 'image', x: pos.x, y: pos.y,
         content: { url: res.url }, z_index: maxZ() + 1,
       })
-      if (card) { markLocalOp(card.id); setNodes(ns => [...ns, cardToNode(card, initial.childMeta)]) }
+      if (card) { markLocalOp(card.id); appendOrReplaceNode(cardToNode(card, initial.childMeta)) }
       pos = { x: pos.x + 40, y: pos.y + 40 }
     }
-  }, [readOnly, rf, boardId, setNodes, markLocalOp, initial.childMeta, maxZ])
+  }, [readOnly, rf, boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ])
 
   return (
     <BoardUiProvider value={{ palette, readOnly, markLocalOp }}>

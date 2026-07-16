@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { ImageContent } from '@/lib/types'
@@ -16,6 +16,15 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
   const [lightbox, setLightbox] = useState(false)
   const [editingCaption, setEditingCaption] = useState(false)
   const [caption, setCaption] = useState(content.caption ?? '')
+
+  // Escape lukker lightboxen, i tillegg til klikk — viktig for eksterne
+  // seere på den offentlige delingssiden som ikke nødvendigvis klikker.
+  useEffect(() => {
+    if (!lightbox) return
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(false) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [lightbox])
 
   const saveCaption = () => {
     setEditingCaption(false)

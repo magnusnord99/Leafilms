@@ -310,8 +310,46 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       const names = boardCards.map(n => (n.data.card.content as BoardRefContent).title).join(', ')
       if (!window.confirm(`Slette underboard(ene) «${names}» med alt innhold? Dette kan ikke angres.`)) return false
     }
-    return { nodes: delNodes, edges: delEdges }
-  }, [readOnly])
+
+    // React Flow v12s getElementsToRemove tar automatisk med alle barn (parentId)
+    // av en slettet kolonne i delNodes. Server-siden (deleteBoardCards) løsriver
+    // derimot barna i stedet for å slette dem når kolonnen slettes — de skal IKKE
+    // være med i det som faktisk slettes her. Vi filtrerer dem ut og speiler
+    // løsrivingen lokalt (samme felter som detach-grenen i onNodeDragStop) +
+    // markLocalOp, slik at et forsinket realtime-echo for serverens UPDATE på
+    // barna ikke krasjer med denne lokale tilstanden. Piler mellom to barn som
+    // begge overlever (eller mellom et overlevende barn og et annet kort) skal
+    // også overleve, så de filtreres ut av det som slettes på samme måte.
+    const deletedColumnIds = new Set(delNodes.filter(n => n.data.card.type === 'column').map(n => n.id))
+    let nodesToDelete = delNodes
+    let edgesToDelete = delEdges
+
+    if (deletedColumnIds.size > 0) {
+      const survivorIds = new Set(
+        delNodes.filter(n => n.parentId && deletedColumnIds.has(n.parentId)).map(n => n.id)
+      )
+      if (survivorIds.size > 0) {
+        survivorIds.forEach(id => markLocalOp(id))
+        setNodes(ns => {
+          const colPos = new Map(ns.filter(n => deletedColumnIds.has(n.id)).map(n => [n.id, n.position]))
+          return ns.map(n => {
+            if (!survivorIds.has(n.id) || !n.parentId) return n
+            const col = colPos.get(n.parentId) ?? { x: 0, y: 0 }
+            return {
+              ...n,
+              parentId: undefined,
+              position: { x: col.x + n.position.x + 24, y: col.y + n.position.y },
+              style: { ...n.style, width: n.data.card.width ?? CARD_WIDTH },
+            }
+          })
+        })
+        nodesToDelete = delNodes.filter(n => !survivorIds.has(n.id))
+        edgesToDelete = delEdges.filter(e => !survivorIds.has(e.source) && !survivorIds.has(e.target))
+      }
+    }
+
+    return { nodes: nodesToDelete, edges: edgesToDelete }
+  }, [readOnly, setNodes, markLocalOp])
 
   const onNodesDelete = useCallback((deleted: CardNode[]) => {
     deleted.forEach(n => markLocalOp(n.id))

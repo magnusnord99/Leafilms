@@ -12,7 +12,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - **Styling:** Tailwind CSS v4
 - **Language:** TypeScript (strict mode)
 - **AI:** `@anthropic-ai/sdk` + OpenAI SDK
-- **Hosting:** Vercel
+- **Hosting:** Google Cloud Run (`deploy.sh`, service `leafilms-pitch` i prosjekt smoringauto, europe-north1). NB: det finnes et Vercel-prosjekt med git-integrasjon, men det har ingen miljøvariabler og er ikke ekte produksjon — cron-jobbene i `vercel.json` kjører derfor ikke.
 - **Fonts:** Cormorant Garamond (headings) + DM Sans (body)
 - **Design:** Cinematic warm dark palette — ingen generisk AI-estetikk
 

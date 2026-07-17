@@ -71,6 +71,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Hent prosjektet tidlig — språket styrer kontrakttillegg, PDF og kunde-e-post,
+    // og pipeline-feltene brukes ved stage-avansering lenger ned.
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('title, pipeline_stage, pipeline_data, language')
+      .eq('id', projectId)
+      .single()
+
+    const lang: 'no' | 'en' = existingProject?.language === 'en' ? 'en' : 'no'
+
     // Hent gjeldende tilbud for å beregne valgte tillegg — server-side, aldri klientens tall.
     let quoteData: QuoteBuilderData | null = null
     let quoteRowId: string | null = null
@@ -109,7 +119,7 @@ export async function POST(request: NextRequest) {
 
       // Oppdaterer totalsummen i punkt 5.1 direkte (samme funksjon som forhåndsvisningen
       // bruker før signering, app/p/[token]/ContractSigningSection.tsx) — aldri divergerende.
-      finalContractText = buildContractTextWithAddons(baseContractText, baseTotals.afterDiscount, selectedAddons, discountFactor)
+      finalContractText = buildContractTextWithAddons(baseContractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
     }
 
     const signedAt = new Date().toISOString()
@@ -146,7 +156,8 @@ export async function POST(request: NextRequest) {
       pdfBuffer = await generateContractPDF(
         finalContractText,
         ourSignature,
-        { signerName, signerEmail, signedAt, ip, signatureImage }
+        { signerName, signerEmail, signedAt, ip, signatureImage },
+        lang
       )
     } catch (pdfErr) {
       console.error('sign contract PDF generation error:', pdfErr)
@@ -207,13 +218,7 @@ export async function POST(request: NextRequest) {
       // Ikke fatal — logg og fortsett
     }
 
-    // Hent eksisterende pipeline_data/stage for å bevare andre felt
-    const { data: existingProject } = await supabase
-      .from('projects')
-      .select('title, pipeline_stage, pipeline_data')
-      .eq('id', projectId)
-      .single()
-
+    // Bevar eksisterende pipeline_data-felt (hentet sammen med språket over)
     const existingPipelineData = (existingProject?.pipeline_data as Record<string, unknown>) ?? {}
 
     // contract_signed skal alltid settes når kontrakten faktisk signeres, uansett hvilket
@@ -289,25 +294,34 @@ export async function POST(request: NextRequest) {
 
     // Send bekreftelsese-poster via Resend
     if (process.env.RESEND_API_KEY) {
-      const formattedDate = new Date(signedAt).toLocaleString('nb-NO', {
+      const formattedDate = new Date(signedAt).toLocaleString(lang === 'en' ? 'en-GB' : 'nb-NO', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
       })
 
       const pdfAttachment = pdfBuffer != null
         ? [{
-            filename: `Produksjonsavtale-${(projectTitle ?? 'kontrakt').replace(/\s+/g, '-')}.pdf`,
+            filename: `${lang === 'en' ? 'Production-Agreement' : 'Produksjonsavtale'}-${(projectTitle ?? 'kontrakt').replace(/\s+/g, '-')}.pdf`,
             content: pdfBuffer.toString('base64'),
           }]
         : []
 
+      // Bekreftelsen til kunden følger prosjektspråket — den interne varslingen er alltid norsk
+      const customerEmail = lang === 'en'
+        ? {
+            to: signerEmail,
+            subject: `Confirmation of signed production agreement — ${projectTitle}`,
+            text: `Hi ${signerName},\n\nWe confirm that you have signed the production agreement for ${projectTitle}.\n\nSigned by: ${signerName} (${signerEmail})\nDate: ${formattedDate}\n\nPlease keep this email as confirmation of the agreement.\n\nBest regards,\nLeafilms`,
+            attachments: pdfAttachment,
+          }
+        : {
+            to: signerEmail,
+            subject: `Bekreftelse på signert produksjonsavtale — ${projectTitle}`,
+            text: `Hei ${signerName},\n\nVi bekrefter at du har signert produksjonsavtalen for ${projectTitle}.\n\nSignert av: ${signerName} (${signerEmail})\nDato: ${formattedDate}\n\nTa vare på denne e-posten som bekreftelse på inngått avtale.\n\nMed vennlig hilsen,\nLeafilms`,
+            attachments: pdfAttachment,
+          }
+
       const emails = [
-        // Bekreftelse til signataren
-        {
-          to: signerEmail,
-          subject: `Bekreftelse på signert produksjonsavtale — ${projectTitle}`,
-          text: `Hei ${signerName},\n\nVi bekrefter at du har signert produksjonsavtalen for ${projectTitle}.\n\nSignert av: ${signerName} (${signerEmail})\nDato: ${formattedDate}\n\nTa vare på denne e-posten som bekreftelse på inngått avtale.\n\nMed vennlig hilsen,\nLeafilms`,
-          attachments: pdfAttachment,
-        },
+        customerEmail,
         // Intern varsling til Leafilms
         {
           to: 'post@leafilms.no',

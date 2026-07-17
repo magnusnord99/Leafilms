@@ -34,6 +34,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Fant ingen kontrakttekst for dette prosjektet' }, { status: 404 })
     }
 
+    const { data: project } = await supabase
+      .from('projects')
+      .select('title, language')
+      .eq('id', projectId)
+      .single()
+
+    const lang: 'no' | 'en' = project?.language === 'en' ? 'en' : 'no'
+
     // Speiler samme tillegg-patching som kunden ser på det publiserte tilbudet (og som
     // brukes ved faktisk signering, app/api/contracts/sign/route.ts) — uten dette viser
     // admin-nedlastingen den originale, upatchede summen fra publiseringstidspunktet.
@@ -57,7 +65,7 @@ export async function POST(req: NextRequest) {
         if (selectedAddons.length > 0) {
           const discountFactor = quoteData.discountFactor ?? 0
           const baseTotals = calculateQuoteTotals(quoteData)
-          contractText = buildContractTextWithAddons(contractText, baseTotals.afterDiscount, selectedAddons, discountFactor)
+          contractText = buildContractTextWithAddons(contractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
         }
       }
     }
@@ -77,18 +85,13 @@ export async function POST(req: NextRequest) {
     const pdfBuffer = await generateContractPDF(
       contractText,
       contract.our_signature as OurSignature | null,
-      customerSignature
+      customerSignature,
+      lang
     )
-
-    const { data: project } = await supabase
-      .from('projects')
-      .select('title')
-      .eq('id', projectId)
-      .single()
 
     const safeTitle = (project?.title || 'Prosjekt').replace(/[^a-zA-Z0-9æøåÆØÅ\s_-]/g, '').replace(/\s+/g, '_')
     const date = new Date().toISOString().split('T')[0]
-    const filename = `Produksjonsavtale_${safeTitle}_${date}.pdf`
+    const filename = `${lang === 'en' ? 'Production_Agreement' : 'Produksjonsavtale'}_${safeTitle}_${date}.pdf`
 
     return new NextResponse(pdfBuffer as unknown as BodyInit, {
       headers: {

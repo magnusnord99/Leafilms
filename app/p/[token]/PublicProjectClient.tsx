@@ -184,6 +184,15 @@ export function PublicProjectClient({
   } as const
   const lang = project.language === 'en' ? 'en' : 'no'
 
+  // Rot-layouten setter <html lang="no"> globalt og kan ikke overstyres per rute i
+  // App Router — juster attributtet fra klienten så skjermlesere/oversettere ser riktig språk
+  useEffect(() => {
+    if (lang === 'en') {
+      document.documentElement.lang = 'en'
+      return () => { document.documentElement.lang = 'no' }
+    }
+  }, [lang])
+
   const getSectionTitle = useCallback((type: string) =>
     sectionTitles[lang][type as keyof typeof sectionTitles.no] || type.toUpperCase()
   , [lang]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -285,7 +294,7 @@ export function PublicProjectClient({
           }}
         >
           <span>✓</span>
-          <span>Avtalen er signert — se avtalen</span>
+          <span>{lang === 'en' ? 'The agreement is signed — view agreement' : 'Avtalen er signert — se avtalen'}</span>
         </button>
       )}
 
@@ -318,10 +327,12 @@ export function PublicProjectClient({
         {sections.length === 0 ? (
           <div className="py-20 px-4 text-center max-w-2xl mx-auto">
             <Text variant="body" className="!text-foreground mb-4">
-              Ingen seksjoner å vise
+              {lang === 'en' ? 'No sections to show' : 'Ingen seksjoner å vise'}
             </Text>
             <Text variant="small" className="!text-foreground/60">
-              Prosjektet har ingen synlige seksjoner. Kontakt prosjekteier for mer informasjon.
+              {lang === 'en'
+                ? 'This project has no visible sections. Please contact the project owner for more information.'
+                : 'Prosjektet har ingen synlige seksjoner. Kontakt prosjekteier for mer informasjon.'}
             </Text>
           </div>
         ) : (
@@ -426,6 +437,7 @@ export function PublicProjectClient({
                     <TimelineSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       timelineSectionProgress={timelineSectionProgress}
                       timelineSectionRef={timelineSectionRef}
                       getSectionTitle={getSectionTitle}
@@ -438,6 +450,7 @@ export function PublicProjectClient({
                     <ContactSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       getSectionTitle={getSectionTitle}
                       updateSectionContent={noop}
                     />
@@ -465,6 +478,7 @@ export function PublicProjectClient({
                     <CasesSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       selectedCaseIds={selectedCaseIds}
                       allCases={caseStudies}
                       getSectionTitle={getSectionTitle}
@@ -551,6 +565,7 @@ export function PublicProjectClient({
           signedBy={publishedContract.signedBy}
           ourSignature={publishedContract.ourSignature}
           pdfUrl={publishedContract.pdfUrl}
+          language={lang}
           optionalAddons={optionalAddons}
           selectedAddonIds={selectedAddonIds}
           baseFinalPriceExclVat={baseFinalPriceExclVat}
@@ -569,6 +584,7 @@ export function PublicProjectClient({
             <ContactSection
               section={contactSection}
               editMode={false}
+              language={lang}
               getSectionTitle={getSectionTitle}
               updateSectionContent={noop}
             />

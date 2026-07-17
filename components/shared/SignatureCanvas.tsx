@@ -15,6 +15,8 @@ type SignatureCanvasProps = {
   borderColor?: string
   activeBorderColor?: string
   placeholderColor?: string
+  clearLabel?: string
+  placeholderText?: string
   onChange?: (hasSigned: boolean) => void
 }
 
@@ -26,6 +28,8 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, SignatureCanvas
   borderColor = 'rgba(255,255,255,0.08)',
   activeBorderColor = 'rgba(196,148,52,0.4)',
   placeholderColor = 'rgba(232,225,213,0.3)',
+  clearLabel = 'Tøm',
+  placeholderText = 'Tegn signaturen her',
   onChange,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -108,7 +112,7 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, SignatureCanvas
             letterSpacing: '0.05em',
           }}
         >
-          Tøm
+          {clearLabel}
         </button>
       </div>
       <canvas
@@ -157,7 +161,7 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, SignatureCanvas
       />
       {!hasSigned && (
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: placeholderColor, margin: 0, textAlign: 'center' }}>
-          Tegn signaturen her
+          {placeholderText}
         </p>
       )}
     </div>

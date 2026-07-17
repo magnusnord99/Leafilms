@@ -12,6 +12,7 @@ function emptySubscribe() {
 type CasesSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   allCases: CaseStudy[]
   selectedCaseIds: string[]
   getSectionTitle?: (type: string) => string
@@ -24,6 +25,7 @@ type CasesSectionProps = {
 export function CasesSection({
   section,
   editMode,
+  language = 'no',
   allCases,
   selectedCaseIds,
   getSectionTitle,
@@ -122,7 +124,7 @@ export function CasesSection({
             if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
           }}
         >
-          {section.content.description || 'Se utvalg av våre tidligere prosjekter'}
+          {section.content.description || (language === 'en' ? 'A selection of our previous work' : 'Se utvalg av våre tidligere prosjekter')}
         </p>
       </div>
 

@@ -55,6 +55,77 @@ function isBuilderData(data: unknown): data is QuoteBuilderData {
   return !!data && Array.isArray((data as { crew?: unknown }).crew)
 }
 
+// UI-tekster for offentlig visning — følger project.language. Selve tilbudslinjene
+// (beskrivelser/antall) genereres fra quoteBuilderData.language og styres i tilbudsbyggeren.
+const QUOTE_STRINGS = {
+  no: {
+    sectionLabel: 'Pristilbud',
+    version: 'Versjon',
+    project: 'Prosjekt',
+    reference: 'Referanse',
+    yourContact: 'Deres kontakt',
+    ourContact: 'Vår kontakt',
+    delivery: 'Levering',
+    paymentInfo: 'Betalingsinfo',
+    hideTerms: 'Skjul vilkår ↑',
+    showTerms: 'Se vilkår ↓',
+    thDescription: 'Beskrivelse',
+    thQuantity: 'Antall',
+    thSum: 'Sum',
+    optionalAddons: 'Valgfrie tillegg',
+    lockedSigned: '🔒 Låst — avtalen er signert',
+    discount: 'Rabatt',
+    discountOnWithAddons: 'på opptak, post-produksjon og valgte tillegg',
+    discountOn: 'på opptak og post-produksjon',
+    priceExclVat: 'Pris eksl. MVA',
+    priceInclVat: 'Pris inkl. MVA',
+    goToSigning: 'Gå til signering ↓',
+    downloading: 'Laster ned…',
+    downloadPdf: 'Last ned PDF ↓',
+    readAndSign: 'Les og signer produksjonsavtalen nedenfor',
+    quoteSent: 'Tilbud sendt — avtale følger',
+    noQuoteData: 'Ingen tilbudsdata tilgjengelig',
+    acceptError: 'Kunne ikke akseptere tilbud',
+    downloadError: 'Kunne ikke laste ned tilbud',
+    unknownError: 'Ukjent feil',
+    pdfFilenamePrefix: 'Pristilbud',
+    numberLocale: 'no-NO',
+  },
+  en: {
+    sectionLabel: 'Quote',
+    version: 'Version',
+    project: 'Project',
+    reference: 'Reference',
+    yourContact: 'Your contact',
+    ourContact: 'Our contact',
+    delivery: 'Delivery',
+    paymentInfo: 'Payment details',
+    hideTerms: 'Hide terms ↑',
+    showTerms: 'View terms ↓',
+    thDescription: 'Description',
+    thQuantity: 'Quantity',
+    thSum: 'Amount',
+    optionalAddons: 'Optional add-ons',
+    lockedSigned: '🔒 Locked — the agreement is signed',
+    discount: 'Discount',
+    discountOnWithAddons: 'on production, post-production and selected add-ons',
+    discountOn: 'on production and post-production',
+    priceExclVat: 'Price excl. VAT',
+    priceInclVat: 'Price incl. VAT',
+    goToSigning: 'Go to signing ↓',
+    downloading: 'Downloading…',
+    downloadPdf: 'Download PDF ↓',
+    readAndSign: 'Read and sign the production agreement below',
+    quoteSent: 'Quote sent — agreement to follow',
+    noQuoteData: 'No quote data available',
+    acceptError: "Couldn't accept the quote",
+    downloadError: "Couldn't download the quote",
+    unknownError: 'Unknown error',
+    pdfFilenamePrefix: 'Quote',
+    numberLocale: 'en-US',
+  },
+} as const
+
 function formatNOK(amount: number) {
   return new Intl.NumberFormat('no-NO', {
     style: 'currency',
@@ -84,6 +155,9 @@ export function QuoteSection({
   const [quoteAccepted, setQuoteAccepted] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
+
+  const uiLang: 'no' | 'en' = project.language === 'en' ? 'en' : 'no'
+  const qt = QUOTE_STRINGS[uiLang]
 
   // Fetch quote from DB for display (both edit preview and public view).
   // Offentlig visning (shareToken satt) har ikke lenger anon RLS-tilgang til quotes —
@@ -178,18 +252,20 @@ export function QuoteSection({
       })
       if (!response.ok) {
         const err = await response.json()
-        throw new Error(err.error || 'Kunne ikke akseptere tilbud')
+        throw new Error(err.error || qt.acceptError)
       }
       setQuoteAccepted(true)
     } catch (error) {
-      alert('Kunne ikke akseptere tilbud: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
+      // Server-feilmeldinger er norske — vis generisk melding på engelske prosjekter
+      const detail = uiLang === 'no' && error instanceof Error ? error.message : qt.unknownError
+      alert(`${qt.acceptError}: ${detail}`)
     } finally {
       setAcceptingQuote(false)
     }
   }
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 2 }).format(amount)
+    new Intl.NumberFormat(qt.numberLocale, { style: 'currency', currency: 'NOK', minimumFractionDigits: 2 }).format(amount)
 
   const handleDownloadPdf = async () => {
     if (!dbBuilderData) return
@@ -207,11 +283,11 @@ export function QuoteSection({
       })
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
-        throw new Error(err.error || 'Kunne ikke laste ned tilbud')
+        throw new Error(err.error || qt.downloadError)
       }
       const blob = await response.blob()
       const xFilename = response.headers.get('X-Filename')
-      const filename = xFilename || `Pristilbud_${project.title || 'Prosjekt'}.pdf`
+      const filename = xFilename || `${qt.pdfFilenamePrefix}_${project.title || 'Prosjekt'}.pdf`
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -221,7 +297,8 @@ export function QuoteSection({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      alert('Kunne ikke laste ned tilbud: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
+      const detail = uiLang === 'no' && error instanceof Error ? error.message : qt.unknownError
+      alert(`${qt.downloadError}: ${detail}`)
     } finally {
       setDownloadingPdf(false)
     }
@@ -322,7 +399,7 @@ export function QuoteSection({
                     textTransform: 'uppercase',
                     fontWeight: 500,
                   }}>
-                    Pristilbud
+                    {qt.sectionLabel}
                   </span>
                 </div>
                 <p style={{
@@ -350,7 +427,7 @@ export function QuoteSection({
               <div className="text-right">
                 {quoteData.version && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', letterSpacing: '0.12em', color: '#62594E', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Versjon {quoteData.version}
+                    {qt.version} {quoteData.version}
                   </p>
                 )}
                 {quoteData.quoteDate && (
@@ -364,37 +441,37 @@ export function QuoteSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
               {quoteData.projectName && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Prosjekt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.project}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.projectName}</p>
                 </div>
               )}
               {quoteData.reference && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Referanse</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.reference}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.reference}</p>
                 </div>
               )}
               {quoteData.clientContact && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Deres kontakt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.yourContact}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.clientContact}</p>
                 </div>
               )}
               {quoteData.ourContact && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Vår kontakt</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.ourContact}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.ourContact}</p>
                 </div>
               )}
               {quoteData.deliveryDate && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Levering</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.delivery}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.deliveryDate}</p>
                 </div>
               )}
               {quoteData.paymentInfo && (
                 <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>Betalingsinfo</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', marginBottom: 2 }}>{qt.paymentInfo}</p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#E8E1D5' }}>{quoteData.paymentInfo}</p>
                 </div>
               )}
@@ -432,7 +509,7 @@ export function QuoteSection({
                   ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(196,148,52,0.3)'
                 }}
               >
-                {showTerms ? 'Skjul vilkår ↑' : 'Se vilkår ↓'}
+                {showTerms ? qt.hideTerms : qt.showTerms}
               </button>
 
               {showTerms && (
@@ -453,9 +530,9 @@ export function QuoteSection({
               <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #2A261F' }}>
-                    <th className="text-left py-3 px-8 md:px-12" style={{ width: '50%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Beskrivelse</th>
-                    <th className="text-right py-3 px-4" style={{ width: '20%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Antall</th>
-                    <th className="text-right py-3 px-8 md:px-12" style={{ width: '30%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>Sum</th>
+                    <th className="text-left py-3 px-8 md:px-12" style={{ width: '50%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>{qt.thDescription}</th>
+                    <th className="text-right py-3 px-4" style={{ width: '20%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>{qt.thQuantity}</th>
+                    <th className="text-right py-3 px-8 md:px-12" style={{ width: '30%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E', fontWeight: 500 }}>{qt.thSum}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -512,11 +589,11 @@ export function QuoteSection({
             >
               <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
-                  Valgfrie tillegg
+                  {qt.optionalAddons}
                 </p>
                 {isContractSigned && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.1em', color: '#C49434' }}>
-                    🔒 Låst — avtalen er signert
+                    {qt.lockedSigned}
                   </p>
                 )}
               </div>
@@ -576,26 +653,26 @@ export function QuoteSection({
               <div>
                 <div className="flex justify-between items-baseline">
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', fontWeight: 500 }}>
-                    Rabatt {quoteData.discountPercent ? `(${quoteData.discountPercent}%)` : ''}
+                    {qt.discount} {quoteData.discountPercent ? `(${quoteData.discountPercent}%)` : ''}
                   </p>
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: '#C49434', fontWeight: 500 }}>
                     -{formatCurrency(quoteData.totalDiscount)}
                   </p>
                 </div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#62594E', fontStyle: 'italic', marginTop: 2 }}>
-                  {hasDiscountedSelectedAddon ? 'på opptak, post-produksjon og valgte tillegg' : 'på opptak og post-produksjon'}
+                  {hasDiscountedSelectedAddon ? qt.discountOnWithAddons : qt.discountOn}
                 </p>
               </div>
             )}
             {quoteData.finalPriceExclVat !== undefined && (
               <div className="flex justify-between items-baseline pt-3" style={{ borderTop: '1px solid #2A261F' }}>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris eksl. MVA</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>{qt.priceExclVat}</p>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: '#E8E1D5', fontWeight: 500 }}>{formatCurrency(quoteData.finalPriceExclVat)}</p>
               </div>
             )}
             {quoteData.finalPriceInclVat !== undefined && (
               <div className="flex justify-between items-baseline">
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>Pris inkl. MVA</p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287' }}>{qt.priceInclVat}</p>
                 <p style={{
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '1.2rem',
@@ -634,7 +711,7 @@ export function QuoteSection({
                   onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#D4A848' }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#C49434' }}
                 >
-                  Gå til signering ↓
+                  {qt.goToSigning}
                 </a>
                 {dbBuilderData && (
                   <button
@@ -653,17 +730,17 @@ export function QuoteSection({
                       opacity: downloadingPdf ? 0.6 : 1,
                     }}
                   >
-                    {downloadingPdf ? 'Laster ned…' : 'Last ned PDF ↓'}
+                    {downloadingPdf ? qt.downloading : qt.downloadPdf}
                   </button>
                 )}
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#62594E' }}>
-                  Les og signer produksjonsavtalen nedenfor
+                  {qt.readAndSign}
                 </p>
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-4">
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#62594E', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  Tilbud sendt — avtale følger
+                  {qt.quoteSent}
                 </p>
                 {dbBuilderData && (
                   <button
@@ -682,7 +759,7 @@ export function QuoteSection({
                       opacity: downloadingPdf ? 0.6 : 1,
                     }}
                   >
-                    {downloadingPdf ? 'Laster ned…' : 'Last ned PDF ↓'}
+                    {downloadingPdf ? qt.downloading : qt.downloadPdf}
                   </button>
                 )}
               </div>
@@ -692,7 +769,7 @@ export function QuoteSection({
       ) : (
         <div className="max-w-4xl mx-auto py-16 text-center" style={{ background: '#161410', border: '1px solid #2A261F' }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#62594E', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-            Ingen tilbudsdata tilgjengelig
+            {qt.noQuoteData}
           </p>
         </div>
       )}

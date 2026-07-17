@@ -17,6 +17,29 @@ export interface CustomerSignature {
   signatureImage: string
 }
 
+const PDF_STRINGS = {
+  no: {
+    title: 'Produksjonsavtale',
+    generated: 'Generert',
+    signatureLeafilms: 'Signatur — Leafilms',
+    signatureCustomer: 'Signatur — Kunde',
+    signedBy: 'Signert av',
+    date: 'Dato',
+    awaitingSignature: 'Venter på kundens signatur',
+    dateLocale: 'nb-NO',
+  },
+  en: {
+    title: 'Production Agreement',
+    generated: 'Generated',
+    signatureLeafilms: 'Signature — Leafilms',
+    signatureCustomer: 'Signature — Customer',
+    signedBy: 'Signed by',
+    date: 'Date',
+    awaitingSignature: 'Awaiting customer signature',
+    dateLocale: 'en-GB',
+  },
+} as const
+
 // Delt PDF-bygger for produksjonsavtalen — brukt både når kunden faktisk signerer
 // (app/api/contracts/sign/route.ts) og når admin laster ned en forhåndsvisning
 // før kunden har signert (app/api/contracts/download-pdf/route.ts). Sistnevnte
@@ -24,8 +47,12 @@ export interface CustomerSignature {
 export async function generateContractPDF(
   contractText: string,
   ourSignature: OurSignature | null,
-  customerSignature: CustomerSignature | null
+  customerSignature: CustomerSignature | null,
+  language: 'no' | 'en' = 'no'
 ): Promise<Buffer> {
+  const t = PDF_STRINGS[language]
+  const fmtDate = (iso: string | Date) =>
+    new Date(iso).toLocaleString(t.dateLocale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
@@ -48,10 +75,10 @@ export async function generateContractPDF(
     const now = new Date()
 
     // Tittel
-    doc.fontSize(16).font('Helvetica-Bold').text('Produksjonsavtale', { align: 'center' })
+    doc.fontSize(16).font('Helvetica-Bold').text(t.title, { align: 'center' })
     doc.moveDown(0.5)
     doc.fontSize(9).font('Helvetica').fillColor('#666666')
-      .text(`Generert: ${now.toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'center' })
+      .text(`${t.generated}: ${fmtDate(now)}`, { align: 'center' })
     doc.fillColor('#000000')
     doc.moveDown(1.5)
 
@@ -70,28 +97,28 @@ export async function generateContractPDF(
 
     // Leafilms-signatur (satt ved publisering)
     if (ourSignature) {
-      doc.fontSize(9).font('Helvetica-Bold').text('Signatur — Leafilms')
+      doc.fontSize(9).font('Helvetica-Bold').text(t.signatureLeafilms)
       doc.font('Helvetica').moveDown(0.3)
-      doc.text(`Signert av: ${ourSignature.signerName}`)
-      doc.text(`Dato: ${new Date(ourSignature.signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+      doc.text(`${t.signedBy}: ${ourSignature.signerName}`)
+      doc.text(`${t.date}: ${fmtDate(ourSignature.signedAt)}`)
       doc.moveDown(0.5)
       const ourImgBuffer = Buffer.from(ourSignature.signatureImage.replace('data:image/png;base64,', ''), 'base64')
       doc.image(ourImgBuffer, { width: 220, height: 55 })
       doc.moveDown(1)
     }
 
-    doc.fontSize(9).font('Helvetica-Bold').text('Signatur — Kunde')
+    doc.fontSize(9).font('Helvetica-Bold').text(t.signatureCustomer)
     doc.font('Helvetica').moveDown(0.3)
 
     if (customerSignature) {
-      doc.text(`Signert av: ${customerSignature.signerName} (${customerSignature.signerEmail})`)
-      doc.text(`Dato: ${new Date(customerSignature.signedAt).toLocaleString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+      doc.text(`${t.signedBy}: ${customerSignature.signerName} (${customerSignature.signerEmail})`)
+      doc.text(`${t.date}: ${fmtDate(customerSignature.signedAt)}`)
       doc.text(`IP: ${customerSignature.ip}`)
       doc.moveDown(0.8)
       const imgBuffer = Buffer.from(customerSignature.signatureImage.replace('data:image/png;base64,', ''), 'base64')
       doc.image(imgBuffer, { width: 220, height: 55 })
     } else {
-      doc.font('Helvetica-Oblique').fillColor('#666666').text('Venter på kundens signatur')
+      doc.font('Helvetica-Oblique').fillColor('#666666').text(t.awaitingSignature)
       doc.fillColor('#000000').font('Helvetica')
     }
 

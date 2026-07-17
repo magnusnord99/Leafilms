@@ -6,18 +6,27 @@ import { Section } from '@/lib/types'
 type TimelineSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   timelineSectionProgress: number
   timelineSectionRef: React.RefObject<HTMLDivElement | null>
   getSectionTitle: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
-const defaultTimelineItems = [
-  { title: 'Pre-produksjon', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.', monthYear: 'Januar 2026' },
-  { title: 'Produksjon', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.', monthYear: 'Februar 2026' },
-  { title: 'Post-produksjon', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.', monthYear: 'Mars 2026' },
-  { title: 'Levering', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.', monthYear: 'April 2026' },
-]
+const DEFAULT_TIMELINE_ITEMS = {
+  no: [
+    { title: 'Pre-produksjon', text: 'Idéutvikling, moodboards, storyboards og planlegging av konsept og visuell retning.', monthYear: 'Januar 2026' },
+    { title: 'Produksjon', text: 'Gjennomføring av opptak, koordinering av team og sikring av alt nødvendig materiale.', monthYear: 'Februar 2026' },
+    { title: 'Post-produksjon', text: 'Redigering, fargekorrigering, lyddesign og ferdigstilling av sluttprodukt.', monthYear: 'Mars 2026' },
+    { title: 'Levering', text: 'Eksport i relevante formater, kvalitetssikring og overlevering til kunden.', monthYear: 'April 2026' },
+  ],
+  en: [
+    { title: 'Pre-production', text: 'Concept development, moodboards, storyboards and planning of the visual direction.', monthYear: 'January 2026' },
+    { title: 'Production', text: 'Filming, team coordination and capturing all the required material.', monthYear: 'February 2026' },
+    { title: 'Post-production', text: 'Editing, color grading, sound design and finalization of the end product.', monthYear: 'March 2026' },
+    { title: 'Delivery', text: 'Export in relevant formats, quality assurance and handover to the client.', monthYear: 'April 2026' },
+  ],
+}
 
 // Card width + gap (must match the rendered card exactly)
 const CARD_W = 280
@@ -29,6 +38,7 @@ function TimelineCard({
   item,
   isActive,
   editMode,
+  language = 'no',
   section,
   updateSectionContent,
 }: {
@@ -36,9 +46,11 @@ function TimelineCard({
   item: { title: string; text: string; monthYear?: string }
   isActive: boolean
   editMode: boolean
+  language?: 'no' | 'en'
   section: Section
   updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }) {
+  const defaultTimelineItems = DEFAULT_TIMELINE_ITEMS[language]
   return (
     <div
       className="flex-shrink-0 p-7 transition-all"
@@ -88,7 +100,7 @@ function TimelineCard({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {item.title || (editMode ? 'Tittel...' : 'Fase')}
+        {item.title || (editMode ? 'Tittel...' : language === 'en' ? 'Phase' : 'Fase')}
       </p>
 
       {/* Body */}
@@ -148,6 +160,7 @@ function TimelineCard({
 export function TimelineSection({
   section,
   editMode,
+  language = 'no',
   timelineSectionProgress,
   timelineSectionRef,
   getSectionTitle,
@@ -155,7 +168,7 @@ export function TimelineSection({
 }: TimelineSectionProps) {
   const [mobileIndex, setMobileIndex] = useState(0)
   const timelineItems: { title: string; text: string; monthYear?: string }[] =
-    section.content.timelineItems || defaultTimelineItems
+    section.content.timelineItems || DEFAULT_TIMELINE_ITEMS[language]
 
   // Active card = whichever card is closest to center based on scroll progress
   // progress 0→1 maps across 3 transitions (4 cards)
@@ -215,9 +228,10 @@ export function TimelineSection({
         <div className="flex gap-4 px-8 md:px-16 overflow-x-auto pb-4">
           {[0, 1, 2, 3].map((i) => (
             <TimelineCard
+              language={language}
               key={i}
               index={i}
-              item={timelineItems[i] || { title: 'Fase', text: '', monthYear: '' }}
+              item={timelineItems[i] || { title: language === 'en' ? 'Phase' : 'Fase', text: '', monthYear: '' }}
               isActive={i === 0}
               editMode={editMode}
               section={section}
@@ -316,8 +330,9 @@ export function TimelineSection({
           </button>
           <div className="flex-1 min-w-0 flex justify-center">
             <TimelineCard
+              language={language}
               index={mobileIndex}
-              item={timelineItems[mobileIndex] || { title: 'Fase', text: '', monthYear: '' }}
+              item={timelineItems[mobileIndex] || { title: language === 'en' ? 'Phase' : 'Fase', text: '', monthYear: '' }}
               isActive
               editMode={false}
               section={section}
@@ -373,9 +388,10 @@ export function TimelineSection({
           >
             {[0, 1, 2, 3].map((i) => (
               <TimelineCard
+                language={language}
                 key={i}
                 index={i}
-                item={timelineItems[i] || { title: 'Fase', text: '', monthYear: '' }}
+                item={timelineItems[i] || { title: language === 'en' ? 'Phase' : 'Fase', text: '', monthYear: '' }}
                 isActive={activeIndex === i}
                 editMode={false}
                 section={section}

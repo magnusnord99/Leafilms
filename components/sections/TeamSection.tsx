@@ -78,7 +78,9 @@ export function TeamSection({
             if (editMode) updateSectionContent(section.id, 'text', e.currentTarget.textContent || '')
           }}
         >
-          {section.content.text || 'Leafilms har kompetansen til å gjennomføre prosjekter i alle størrelser.'}
+          {section.content.text || (language === 'en'
+            ? 'Leafilms has the expertise to deliver projects of any size.'
+            : 'Leafilms har kompetansen til å gjennomføre prosjekter i alle størrelser.')}
         </p>
 
         {/* Edit button */}

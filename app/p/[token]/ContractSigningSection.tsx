@@ -18,8 +18,62 @@ type ContractSigningSectionProps = {
   baseFinalPriceExclVat?: number
   discountFactor?: number
   pdfUrl?: string | null
+  language?: 'no' | 'en'
   onSigned?: () => void
 }
+
+const STRINGS = {
+  no: {
+    eyebrow: 'Avtale',
+    title: 'Produksjonsavtale',
+    ourSignatureAlt: 'Signatur',
+    signedByUsFor: (name: string, date: string) => `Signert av ${name} for Leafilms · ${date}`,
+    justSigned: 'Avtalen er signert.',
+    signedBy: (name: string) => `Signert av ${name}`,
+    downloadAgreement: 'Last ned avtalen',
+    pdfNotReady: 'Avtalen som PDF er ikke klar ennå — ta kontakt med Leafilms hvis du trenger en kopi.',
+    selectedAddons: 'Valgte tillegg',
+    fullName: 'Fullt navn',
+    fullNamePlaceholder: 'Ditt fulle navn',
+    email: 'E-post',
+    emailPlaceholder: 'din@epost.no',
+    acceptTerms: 'Jeg har lest og godtar produksjonsavtalen',
+    signature: 'Signatur',
+    signatureClear: 'Tøm',
+    signaturePlaceholder: 'Tegn signaturen her',
+    signing: 'Signerer…',
+    signAgreement: 'Signer avtalen',
+    genericError: 'Noe gikk galt',
+    networkError: 'Nettverksfeil — prøv igjen',
+    dateLocale: 'nb-NO',
+    numberLocale: 'no-NO',
+  },
+  en: {
+    eyebrow: 'Agreement',
+    title: 'Production Agreement',
+    ourSignatureAlt: 'Signature',
+    signedByUsFor: (name: string, date: string) => `Signed by ${name} for Leafilms · ${date}`,
+    justSigned: 'The agreement has been signed.',
+    signedBy: (name: string) => `Signed by ${name}`,
+    downloadAgreement: 'Download the agreement',
+    pdfNotReady: "The agreement PDF isn't ready yet — please contact Leafilms if you need a copy.",
+    selectedAddons: 'Selected add-ons',
+    fullName: 'Full name',
+    fullNamePlaceholder: 'Your full name',
+    email: 'Email',
+    emailPlaceholder: 'you@email.com',
+    acceptTerms: 'I have read and accept the production agreement',
+    signature: 'Signature',
+    signatureClear: 'Clear',
+    signaturePlaceholder: 'Draw your signature here',
+    signing: 'Signing…',
+    signAgreement: 'Sign the agreement',
+    genericError: 'Something went wrong',
+    networkError: 'Network error — please try again',
+    dateLocale: 'en-GB',
+    numberLocale: 'en-US',
+  },
+} as const
 
 export default function ContractSigningSection({
   projectId,
@@ -33,8 +87,10 @@ export default function ContractSigningSection({
   baseFinalPriceExclVat = 0,
   discountFactor = 0,
   pdfUrl: initialPdfUrl,
+  language = 'no',
   onSigned = () => {},
 }: ContractSigningSectionProps) {
+  const t = STRINGS[language]
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [accepted, setAccepted] = useState(false)
@@ -72,10 +128,11 @@ export default function ContractSigningSection({
         onSigned()
       } else {
         const err = await res.json()
-        setError(err.error ?? 'Noe gikk galt')
+        // API-feilmeldingene er norske — vis generisk engelsk melding på engelske prosjekter
+        setError(language === 'en' ? t.genericError : err.error ?? t.genericError)
       }
     } catch {
-      setError('Nettverksfeil — prøv igjen')
+      setError(t.networkError)
     } finally {
       setSigning(false)
     }
@@ -87,7 +144,7 @@ export default function ContractSigningSection({
   // brukes server-side ved signering (app/api/contracts/sign/route.ts), slik at
   // forhåndsvisningen aldri avviker fra det som faktisk lagres.
   const selectedAddons = optionalAddons.filter((a) => selectedAddonIds.has(a.id))
-  const displayContractText = buildContractTextWithAddons(contractText, baseFinalPriceExclVat, selectedAddons, discountFactor)
+  const displayContractText = buildContractTextWithAddons(contractText, baseFinalPriceExclVat, selectedAddons, discountFactor, language)
 
   return (
     <div
@@ -108,7 +165,7 @@ export default function ContractSigningSection({
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
-              Avtale
+              {t.eyebrow}
             </span>
           </div>
           <p style={{
@@ -119,7 +176,7 @@ export default function ContractSigningSection({
             color: '#E8E1D5',
             lineHeight: 1.2,
           }}>
-            Produksjonsavtale
+            {t.title}
           </p>
         </div>
 
@@ -138,11 +195,11 @@ export default function ContractSigningSection({
           >
             <img
               src={ourSignature.signatureImage}
-              alt={`Signatur — ${ourSignature.signerName}`}
+              alt={`${t.ourSignatureAlt} — ${ourSignature.signerName}`}
               style={{ height: 44, width: 'auto', maxWidth: 160, objectFit: 'contain' }}
             />
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', margin: 0 }}>
-              ✓ Signert av {ourSignature.signerName} for Leafilms · {new Date(ourSignature.signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}
+              ✓ {t.signedByUsFor(ourSignature.signerName, new Date(ourSignature.signedAt).toLocaleDateString(t.dateLocale, { day: 'numeric', month: 'long', year: 'numeric' }))}
             </p>
           </div>
         )}
@@ -192,7 +249,7 @@ export default function ContractSigningSection({
               >
                 <span style={{ fontSize: '1.1rem' }}>✓</span>
                 <span>
-                  {signed ? 'Avtalen er signert.' : `Signert av ${signedBy}`}
+                  {signed ? t.justSigned : t.signedBy(signedBy ?? '')}
                 </span>
               </div>
               {pdfUrl ? (
@@ -220,11 +277,11 @@ export default function ContractSigningSection({
                   onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#D4A848' }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#C49434' }}
                 >
-                  Last ned avtalen
+                  {t.downloadAgreement}
                 </a>
               ) : (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: 0 }}>
-                  Avtalen som PDF er ikke klar ennå — ta kontakt med Leafilms hvis du trenger en kopi.
+                  {t.pdfNotReady}
                 </p>
               )}
             </div>
@@ -240,11 +297,11 @@ export default function ContractSigningSection({
                   }}
                 >
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C49434', marginBottom: 8 }}>
-                    Valgte tillegg
+                    {t.selectedAddons}
                   </p>
                   {selectedAddons.map((a) => (
                     <p key={a.id} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: '#9E9287', margin: '2px 0' }}>
-                      {a.description} — +{new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0 }).format(addonDiscountedPrice(a, discountFactor))}
+                      {a.description} — +{new Intl.NumberFormat(t.numberLocale, { style: 'currency', currency: 'NOK', minimumFractionDigits: 0 }).format(addonDiscountedPrice(a, discountFactor))}
                     </p>
                   ))}
                 </div>
@@ -261,14 +318,14 @@ export default function ContractSigningSection({
                     color: '#62594E',
                   }}
                 >
-                  Fullt navn
+                  {t.fullName}
                 </label>
                 <input
                   id="signer-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ditt fulle navn"
+                  placeholder={t.fullNamePlaceholder}
                   style={{
                     background: '#201D18',
                     border: '1px solid #2A261F',
@@ -295,14 +352,14 @@ export default function ContractSigningSection({
                     color: '#62594E',
                   }}
                 >
-                  E-post
+                  {t.email}
                 </label>
                 <input
                   id="signer-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="din@epost.no"
+                  placeholder={t.emailPlaceholder}
                   style={{
                     background: '#201D18',
                     border: '1px solid #2A261F',
@@ -343,7 +400,7 @@ export default function ContractSigningSection({
                     cursor: 'pointer',
                   }}
                 />
-                Jeg har lest og godtar produksjonsavtalen
+                {t.acceptTerms}
               </label>
 
               {/* Signaturcanvas */}
@@ -357,9 +414,9 @@ export default function ContractSigningSection({
                     color: '#62594E',
                   }}
                 >
-                  Signatur
+                  {t.signature}
                 </label>
-                <SignatureCanvas ref={sigRef} onChange={setHasSigned} />
+                <SignatureCanvas ref={sigRef} onChange={setHasSigned} clearLabel={t.signatureClear} placeholderText={t.signaturePlaceholder} />
               </div>
 
               {/* Error */}
@@ -397,7 +454,7 @@ export default function ContractSigningSection({
                 onMouseEnter={(e) => { if (canSubmit) (e.currentTarget as HTMLButtonElement).style.background = '#D4A848' }}
                 onMouseLeave={(e) => { if (canSubmit) (e.currentTarget as HTMLButtonElement).style.background = '#C49434' }}
               >
-                {signing ? 'Signerer…' : 'Signer avtalen'}
+                {signing ? t.signing : t.signAgreement}
               </button>
             </div>
           )}

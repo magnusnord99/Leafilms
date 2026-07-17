@@ -241,6 +241,7 @@ export function SectionRenderer({
           <TimelineSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             timelineSectionProgress={timelineSectionProgress}
             timelineSectionRef={timelineSectionRef}
             getSectionTitle={getSectionTitle}
@@ -253,6 +254,7 @@ export function SectionRenderer({
           <ContactSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             updateSectionContent={updateSectionContent}
           />
         )}
@@ -272,6 +274,7 @@ export function SectionRenderer({
           <CasesSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             selectedCaseIds={selectedCaseIds}
             allCases={allCases}
             updateSectionContent={updateSectionContent}

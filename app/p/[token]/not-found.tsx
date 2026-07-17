@@ -55,6 +55,10 @@ export default function NotFound() {
           marginBottom: '2.5rem',
         }}>
           Prosjektet finnes ikke<br />eller lenken er utløpt.
+          <br />
+          <span lang="en" style={{ color: '#4A4238' }}>
+            The project does not exist or the link has expired.
+          </span>
         </p>
 
         {/* Divider */}
@@ -76,7 +80,7 @@ export default function NotFound() {
             transition: 'color 0.2s, border-color 0.2s',
           }}
         >
-          Tilbake til forsiden
+          Tilbake til forsiden · Back to home
         </Link>
       </div>
     </div>

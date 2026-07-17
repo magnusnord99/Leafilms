@@ -5,6 +5,7 @@ import { Section } from '@/lib/types'
 type ContactSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   getSectionTitle?: (type: string) => string
   updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
@@ -14,6 +15,7 @@ const DEFAULT_CONTACT_TEXT = `LEAFILMS\neivind@leafilms.no`
 export function ContactSection({
   section,
   editMode,
+  language = 'no',
   getSectionTitle,
   updateSectionContent
 }: ContactSectionProps) {
@@ -55,7 +57,7 @@ export function ContactSection({
         letterSpacing: '-0.02em',
         marginBottom: '2.5rem',
       }}>
-        Har du noen spørsmål?
+        {language === 'en' ? 'Any questions?' : 'Har du noen spørsmål?'}
       </p>
 
       {/* Contact info */}

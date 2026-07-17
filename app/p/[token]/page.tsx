@@ -34,18 +34,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: project } = await supabase
     .from('projects')
-    .select('name, description, status')
+    .select('name, description, status, language')
     .eq('id', share.project_id)
     .single()
 
   if (!project || project.status !== 'published') return { title: 'Leafilms' }
 
+  const isEnglish = project.language === 'en'
+
   const title = project.name
     ? `${project.name} — Leafilms`
-    : 'Prosjektbeskrivelse — Leafilms'
+    : isEnglish
+      ? 'Project Proposal — Leafilms'
+      : 'Prosjektbeskrivelse — Leafilms'
 
   const description = project.description
-    || 'Cinematisk innholdsproduksjon av høy kvalitet. Se vår prosjektbeskrivelse og pristilbud.'
+    || (isEnglish
+      ? 'High-end cinematic content production. View our project proposal and quote.'
+      : 'Cinematisk innholdsproduksjon av høy kvalitet. Se vår prosjektbeskrivelse og pristilbud.')
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
   const pageUrl = `${siteUrl}/p/${token}`

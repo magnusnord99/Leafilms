@@ -104,15 +104,127 @@ function MoodboardCard({
 
 // ─── Packing list ─────────────────────────────────────────────────────────────
 
+type PackingCandidate = { id: string; name: string; color: string | null }
+
+// Hvem som kan tildeles utstyr: produksjonscrewet først, deretter øvrige profiler
+function buildPackingCandidates(
+  prodCrew: PreprodCrewMember[],
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
+): PackingCandidate[] {
+  const profileById = new Map(profiles.map(p => [p.id, p]))
+  const crewCandidates = prodCrew.map(c => ({
+    id: c.profile_id,
+    name: c.name,
+    color: profileById.get(c.profile_id)?.color ?? null,
+  }))
+  const crewIds = new Set(crewCandidates.map(c => c.id))
+  const rest = profiles
+    .filter(p => !crewIds.has(p.id))
+    .map(p => ({ id: p.id, name: p.name ?? p.email, color: p.color }))
+  return [...crewCandidates, ...rest]
+}
+
+function PackingAssignee({
+  item, candidates, onAssign,
+}: {
+  item: PackingItem
+  candidates: PackingCandidate[]
+  onAssign: (assignee: PackingCandidate | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const assigned = item.assignee_id
+    ? { id: item.assignee_id, name: item.assignee_name ?? '?', color: candidates.find(c => c.id === item.assignee_id)?.color ?? null }
+    : null
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0, lineHeight: 0 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title={assigned ? `Tas med av ${assigned.name}` : 'Tildel hvem som tar med'}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}
+      >
+        {assigned ? (
+          <Avatar id={assigned.id} name={assigned.name} color={assigned.color} size={20} />
+        ) : (
+          <span style={{
+            width: 20, height: 20, borderRadius: '50%', boxSizing: 'border-box',
+            border: `1.5px dashed ${C.text3}`, color: C.text3,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
+            transition: 'border-color 0.12s, color 0.12s',
+          }}>
+            +
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50,
+          background: C.surface2, border: `1px solid ${C.border}`,
+          borderRadius: 8, minWidth: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          padding: '4px 0',
+        }}>
+          {candidates.length === 0 && (
+            <p style={{ padding: '8px 12px', margin: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
+              Ingen personer tilgjengelig
+            </p>
+          )}
+          {assigned && (
+            <>
+              <button
+                onClick={() => { setOpen(false); onAssign(null) }}
+                style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}
+              >
+                Fjern tildeling
+              </button>
+              <div style={{ height: 1, background: C.border }} />
+            </>
+          )}
+          {candidates.map(cand => (
+            <button
+              key={cand.id}
+              onClick={() => { setOpen(false); onAssign(cand) }}
+              style={{
+                width: '100%', textAlign: 'left', padding: '7px 12px',
+                background: cand.id === item.assignee_id ? `${C.accent}14` : 'none',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-dm-sans)',
+              }}
+            >
+              <Avatar id={cand.id} name={cand.name} color={cand.color} size={18} />
+              <span style={{ fontSize: '0.78rem', color: C.text, fontWeight: cand.id === item.assignee_id ? 600 : 400 }}>{cand.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PackingList({
-  items, projectId, quoteEquipment, onChange,
+  items, projectId, quoteEquipment, prodCrew, profiles, onChange,
 }: {
   items: PackingItem[]
   projectId: string
   quoteEquipment: { name: string }[]
+  prodCrew: PreprodCrewMember[]
+  profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onChange: (items: PackingItem[]) => void
 }) {
   const [newItem, setNewItem] = useState('')
+  const candidates = buildPackingCandidates(prodCrew, profiles)
 
   function save(next: PackingItem[]) {
     onChange(next)
@@ -132,6 +244,13 @@ function PackingList({
 
   function removeItem(id: string) {
     save(items.filter(i => i.id !== id))
+  }
+
+  function assignItem(id: string, assignee: PackingCandidate | null) {
+    save(items.map(i => i.id === id
+      ? { ...i, assignee_id: assignee?.id ?? null, assignee_name: assignee?.name ?? null }
+      : i
+    ))
   }
 
   function importFromQuote() {
@@ -227,6 +346,11 @@ function PackingList({
               }}>
                 {item.name}
               </span>
+              <PackingAssignee
+                item={item}
+                candidates={candidates}
+                onAssign={assignee => assignItem(item.id, assignee)}
+              />
               <button
                 onClick={() => removeItem(item.id)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
@@ -1228,6 +1352,8 @@ export default function PreprodDetailPage() {
               items={preprod.packing_list}
               projectId={id}
               quoteEquipment={project.quote_equipment}
+              prodCrew={preprod.prod_crew}
+              profiles={profiles}
               onChange={next => patchPreprod({ packing_list: next })}
             />
             <InvoiceAssigneeCard

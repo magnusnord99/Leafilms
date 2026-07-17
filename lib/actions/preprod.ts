@@ -15,6 +15,10 @@ export type PackingItem = {
   name: string
   qty: number
   checked: boolean
+  // Hvem i teamet som tar med utstyret. Navnet lagres denormalisert siden
+  // crew-medlemmer fra pitch kan mangle profil (profile_id på formen "tm_<id>").
+  assignee_id?: string | null
+  assignee_name?: string | null
 }
 
 export type PreprodData = {

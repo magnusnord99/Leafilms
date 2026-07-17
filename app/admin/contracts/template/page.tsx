@@ -18,6 +18,7 @@ const C = {
 }
 
 export default function ContractTemplatePage() {
+  const [language, setLanguage] = useState<'no' | 'en'>('no')
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -27,8 +28,10 @@ export default function ContractTemplatePage() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      setSaved(false)
+      setError(null)
       try {
-        const template = await getContractTemplate()
+        const template = await getContractTemplate(language)
         setContent(template)
       } catch {
         setError('Kunne ikke laste kontraktmalen.')
@@ -37,14 +40,14 @@ export default function ContractTemplatePage() {
       }
     }
     load()
-  }, [])
+  }, [language])
 
   async function handleSave() {
     setSaving(true)
     setSaved(false)
     setError(null)
     try {
-      await saveContractTemplate(content)
+      await saveContractTemplate(content, language)
       setSaved(true)
     } catch {
       setError('Lagring mislyktes. Prøv igjen.')
@@ -80,7 +83,27 @@ export default function ContractTemplatePage() {
           </h1>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, lineHeight: 1.6 }}>
             Denne malen brukes som utgangspunkt for alle prosjektkontrakter. Variabler erstattes automatisk med prosjektdata ved publisering.
+            Prosjekter med engelsk språk bruker den engelske malen (norsk brukes som fallback hvis den engelske er tom).
           </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            {([['no', 'Norsk'], ['en', 'Engelsk']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setLanguage(value)}
+                disabled={loading || saving}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                  padding: '6px 16px', borderRadius: 7, cursor: 'pointer',
+                  background: language === value ? 'rgba(124,92,252,0.12)' : 'transparent',
+                  color: language === value ? C.accent : C.text3,
+                  border: `1px solid ${language === value ? 'rgba(124,92,252,0.35)' : C.border}`,
+                  transition: 'all 0.12s',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Hjelpetekst — variabler */}
@@ -113,7 +136,7 @@ export default function ContractTemplatePage() {
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
-              Kontraktmal
+              Kontraktmal — {language === 'no' ? 'norsk' : 'engelsk'}
             </span>
             {loading && (
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>

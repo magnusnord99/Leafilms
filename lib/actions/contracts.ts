@@ -12,13 +12,19 @@ function fillTemplate(template: string, vars: Record<string, string>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Intern hjelpefunksjon: formater dato til norsk format (dag. måned år)
+// Intern hjelpefunksjon: formater dato etter kontraktspråket (dag. måned år)
 // ---------------------------------------------------------------------------
-function formatNorwegianDate(isoDate: string | null | undefined): string {
+type ContractLang = 'no' | 'en'
+
+function contractLocale(language: ContractLang): string {
+  return language === 'en' ? 'en-GB' : 'nb-NO'
+}
+
+function formatContractDate(isoDate: string | null | undefined, language: ContractLang): string {
   if (!isoDate) return ''
   try {
     const date = new Date(isoDate)
-    return date.toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })
+    return date.toLocaleDateString(contractLocale(language), { day: 'numeric', month: 'long', year: 'numeric' })
   } catch {
     return isoDate
   }
@@ -28,15 +34,16 @@ function formatNorwegianDate(isoDate: string | null | undefined): string {
 // Intern hjelpefunksjon: foreslå produksjonsperiode ut fra opptaksdatoer
 // ("juli 2026", eller "juli–august 2026" hvis start og slutt er ulike måneder)
 // ---------------------------------------------------------------------------
-function deriveProduksjonsPeriode(shootStart?: string | null, shootEnd?: string | null): string {
+function deriveProduksjonsPeriode(shootStart?: string | null, shootEnd?: string | null, language: ContractLang = 'no'): string {
   if (!shootStart) return ''
   try {
+    const locale = contractLocale(language)
     const start = new Date(shootStart)
     const end = shootEnd ? new Date(shootEnd) : start
-    const startLabel = start.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
-    const endLabel = end.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
+    const startLabel = start.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
+    const endLabel = end.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
     if (startLabel === endLabel) return startLabel
-    return `${start.toLocaleDateString('nb-NO', { month: 'long' })}–${endLabel}`
+    return `${start.toLocaleDateString(locale, { month: 'long' })}–${endLabel}`
   } catch {
     return ''
   }
@@ -75,12 +82,27 @@ async function buildContractContext(projectId: string) {
     .eq('project_id', projectId)
     .single()
 
+  // Mal velges etter prosjektspråket — finnes ingen engelsk mal ennå, faller vi
+  // tilbake til den norske i stedet for å generere en tom kontrakt.
+  const lang: ContractLang = (project as { language?: string }).language === 'en' ? 'en' : 'no'
+
   const { data: templateRows } = await supabase
     .from('contract_templates')
     .select('content')
+    .eq('language', lang)
     .order('updated_at', { ascending: false })
     .limit(1)
-  const template = templateRows?.[0]?.content ?? ''
+  let template = templateRows?.[0]?.content ?? ''
+
+  if (!template && lang === 'en') {
+    const { data: fallbackRows } = await supabase
+      .from('contract_templates')
+      .select('content')
+      .eq('language', 'no')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+    template = fallbackRows?.[0]?.content ?? ''
+  }
 
   const customer = (project as unknown as { customers?: { name: string | null; company: string | null; org_nummer: string | null } | null }).customers ?? null
   const proj = project as unknown as { shoot_start?: string | null; shoot_end?: string | null; delivery_description?: string | null }
@@ -98,10 +120,10 @@ async function buildContractContext(projectId: string) {
 
   const shootStart = proj.shoot_start ?? null
   const shootEnd = proj.shoot_end ?? null
-  const oppstartDato = formatNorwegianDate(shootStart)
+  const oppstartDato = formatContractDate(shootStart, lang)
   const opptakDatoer =
     shootStart && shootEnd
-      ? `${formatNorwegianDate(shootStart)} – ${formatNorwegianDate(shootEnd)}`
+      ? `${formatContractDate(shootStart, lang)} – ${formatContractDate(shootEnd, lang)}`
       : oppstartDato
 
   const autoVars = {
@@ -117,7 +139,7 @@ async function buildContractContext(projectId: string) {
 
   const formDefaults = {
     orgNummer: savedFields?.orgNummerOverride ?? customer?.org_nummer ?? '',
-    produksjonsPeriode: savedFields?.produksjonsPeriode ?? deriveProduksjonsPeriode(shootStart, shootEnd),
+    produksjonsPeriode: savedFields?.produksjonsPeriode ?? deriveProduksjonsPeriode(shootStart, shootEnd, lang),
     signeringsSted: savedFields?.signeringsSted ?? 'Asker',
     signeringsDato: savedFields?.signeringsDato ?? new Date().toISOString().split('T')[0],
     bedrift: savedFields?.bedriftOverride ?? autoVars.bedrift,
@@ -128,18 +150,19 @@ async function buildContractContext(projectId: string) {
     totalpris: savedFields?.totalprisOverride ?? autoVars.totalpris,
   }
 
-  return { template, autoVars, formDefaults, contract }
+  return { template, autoVars, formDefaults, contract, lang }
 }
 
 // ---------------------------------------------------------------------------
-// Hent global mal
+// Hent global mal (én per språk — norsk er default)
 // ---------------------------------------------------------------------------
-export async function getContractTemplate(): Promise<string> {
+export async function getContractTemplate(language: 'no' | 'en' = 'no'): Promise<string> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('contract_templates')
     .select('content')
+    .eq('language', language)
     .order('updated_at', { ascending: false })
     .limit(1)
 
@@ -152,15 +175,16 @@ export async function getContractTemplate(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Lagre global mal
+// Lagre global mal (én per språk)
 // ---------------------------------------------------------------------------
-export async function saveContractTemplate(content: string): Promise<void> {
+export async function saveContractTemplate(content: string, language: 'no' | 'en' = 'no'): Promise<void> {
   const supabase = await createClient()
 
-  // Sjekk om det finnes en rad
+  // Sjekk om det finnes en rad for språket
   const { data: existingRows } = await supabase
     .from('contract_templates')
     .select('id')
+    .eq('language', language)
     .order('updated_at', { ascending: false })
     .limit(1)
   const existing = existingRows?.[0] ?? null
@@ -178,7 +202,7 @@ export async function saveContractTemplate(content: string): Promise<void> {
   } else {
     const { error } = await supabase
       .from('contract_templates')
-      .insert({ content })
+      .insert({ content, language })
 
     if (error) {
       console.error('saveContractTemplate insert error:', error)
@@ -271,7 +295,7 @@ export async function getProjectContractData(projectId: string): Promise<{
 // Ren beregning — lagrer ingenting (det gjør publishContract).
 // ---------------------------------------------------------------------------
 export async function generateContractText(projectId: string, formFields: ContractFormFields): Promise<string> {
-  const { template, autoVars } = await buildContractContext(projectId)
+  const { template, autoVars, lang } = await buildContractContext(projectId)
 
   const vars: Record<string, string> = {
     ...autoVars,
@@ -284,7 +308,7 @@ export async function generateContractText(projectId: string, formFields: Contra
     org_nummer: formFields.orgNummerOverride ?? '',
     produksjons_periode: formFields.produksjonsPeriode ?? '',
     signerings_sted: formFields.signeringsSted ?? '',
-    signerings_dato: formFields.signeringsDato ? formatNorwegianDate(formFields.signeringsDato) : '',
+    signerings_dato: formFields.signeringsDato ? formatContractDate(formFields.signeringsDato, lang) : '',
   }
 
   return fillTemplate(template, vars)

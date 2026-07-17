@@ -13,7 +13,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   return {
     title: `${result.transfer.title || result.transfer.filename} — Leafilms`,
-    description: 'Last ned filen sendt fra Leafilms.',
+    description: result.transfer.language === 'en'
+      ? 'Download the file sent from Leafilms.'
+      : 'Last ned filen sendt fra Leafilms.',
     robots: { index: false, follow: false },
   }
 }
@@ -46,6 +48,11 @@ export default async function DownloadPage({ params }: Props) {
             Filen kan ha utløpt, nådd maks antall nedlastinger, eller blitt slettet.
             Ta kontakt med avsenderen for en ny lenke.
           </p>
+          {/* Lenken finnes ikke → språket er ukjent, vis også engelsk */}
+          <p lang="en" style={{ fontFamily: S.fontBody, fontSize: '0.78rem', color: S.text3, lineHeight: '1.6', marginTop: 10 }}>
+            This link is no longer available — the file may have expired, reached its
+            download limit, or been deleted. Contact the sender for a new link.
+          </p>
           <div style={{
             marginTop: 24, paddingTop: 20,
             borderTop: `1px solid ${S.border}`,
@@ -72,6 +79,7 @@ export default async function DownloadPage({ params }: Props) {
       expiresAt={transfer.expires_at}
       hasPassword={!!transfer.password_hash}
       token={token}
+      language={transfer.language === 'en' ? 'en' : 'no'}
     />
   )
 }

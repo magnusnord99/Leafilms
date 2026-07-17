@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { SELECTION_STRINGS, type SelectionLanguage } from './strings'
 
 const S = {
   bg:      '#0C0B09',
@@ -18,10 +19,13 @@ type VerifyResult = { ok: boolean; error?: string; locked?: boolean }
 export default function PinClient({
   token,
   verifyAction,
+  language = 'no',
 }: {
   token: string
   verifyAction: (token: string, pin: string) => Promise<VerifyResult>
+  language?: SelectionLanguage
 }) {
+  const t = SELECTION_STRINGS[language]
   const [pin, setPin] = useState(['', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +64,8 @@ export default function PinClient({
       if (res.ok) {
         router.refresh()
       } else {
-        setError(res.error ?? 'Feil PIN')
+        // Server-feilmeldingene er norske — vis lokalisert variant på engelsk
+        setError(language === 'en' ? (res.locked ? t.tooManyAttempts(15) : t.wrongPin) : res.error ?? t.wrongPin)
         if (res.locked) setLocked(true)
         setPin(['', '', '', ''])
         refs[0].current?.focus()
@@ -86,7 +91,7 @@ export default function PinClient({
           fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: '0.82rem',
           color: S.text2, marginBottom: 40,
         }}>
-          Bildeseleksjon
+          {t.photoSelection}
         </p>
         <div style={{
           background: S.surface, border: `1px solid ${S.border}`,
@@ -96,7 +101,7 @@ export default function PinClient({
             fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: '0.95rem',
             color: S.text, marginBottom: 24, fontWeight: 500,
           }}>
-            Skriv inn PIN-koden du mottok
+            {t.enterPin}
           </p>
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24 }}>
@@ -143,7 +148,7 @@ export default function PinClient({
                 transition: 'background 0.15s',
               }}
             >
-              {loading ? 'Verifiserer...' : locked ? 'Låst' : 'Åpne galleri'}
+              {loading ? t.verifying : locked ? t.locked : t.openGallery}
             </button>
           </form>
         </div>

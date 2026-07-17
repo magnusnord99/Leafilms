@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import type { SelectionGallery, AlbumForCustomer, GalleryVideo } from '@/lib/actions/selections'
+import { SELECTION_STRINGS, type SelectionLanguage, type SelectionStrings } from './strings'
 
 const S = {
   bg:      '#0C0B09',
@@ -22,12 +23,15 @@ export default function AlbumOverviewClient({
   gallery,
   albums,
   videos = [],
+  language = 'no',
 }: {
   token: string
   gallery: SelectionGallery
   albums: AlbumForCustomer[]
   videos?: GalleryVideo[]
+  language?: SelectionLanguage
 }) {
+  const t = SELECTION_STRINGS[language]
   const router = useRouter()
   const rootAlbums = albums.filter(a => a.parent_album_id === null)
   const totalSelected = albums.reduce((sum, a) => sum + a.selectedCount, 0)
@@ -35,7 +39,7 @@ export default function AlbumOverviewClient({
   const isOver = target != null && totalSelected > target
 
   const counterColor = isOver ? S.warning : (target != null && totalSelected === target) ? S.green : S.text
-  const counterLabel = target != null ? `${totalSelected} av ${target} valgt` : `${totalSelected} valgt`
+  const counterLabel = t.selectedOf(totalSelected, target)
 
   return (
     <div style={{ minHeight: '100dvh', background: S.bg, display: 'flex', flexDirection: 'column' }}>
@@ -56,7 +60,7 @@ export default function AlbumOverviewClient({
       {isOver && (
         <div style={{ background: 'rgba(212,134,58,0.12)', borderBottom: '1px solid rgba(212,134,58,0.3)', padding: '8px 16px', textAlign: 'center' }}>
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.78rem', color: S.warning }}>
-            Du har valgt {totalSelected} av {target} avtalte bilder — bilder utover avtalen kan medføre tillegg.
+            {t.overWarning(totalSelected, target!)}
           </p>
         </div>
       )}
@@ -69,6 +73,7 @@ export default function AlbumOverviewClient({
               key={album.id}
               album={album}
               allAlbums={albums}
+              t={t}
               onClick={() => router.push(`/s/${token}/${album.slug}`)}
             />
           ))}
@@ -77,6 +82,7 @@ export default function AlbumOverviewClient({
             <VideoCard
               key={video.id}
               video={video}
+              t={t}
               onClick={() => router.push(`/s/${token}/video/${video.id}`)}
             />
           ))}
@@ -98,10 +104,10 @@ export default function AlbumOverviewClient({
               </div>
               <div style={{ padding: '10px 12px', background: S.goldBg }}>
                 <div style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', fontWeight: 600, color: S.gold }}>
-                  Se alle valgte ({totalSelected})
+                  {t.viewAllSelected(totalSelected)}
                 </div>
                 <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 2 }}>
-                  Gjennomgå før innsending
+                  {t.reviewBeforeSubmit}
                 </div>
               </div>
             </div>
@@ -123,7 +129,7 @@ export default function AlbumOverviewClient({
             transition: 'background 0.15s',
           }}
         >
-          {`Send inn utvalg (${totalSelected})`}
+          {t.submitSelection(totalSelected)}
         </button>
       </div>
     </div>
@@ -148,7 +154,7 @@ function countAlbumTree(albumId: string, allAlbums: AlbumForCustomer[]): { total
   return { total, selected, cover }
 }
 
-function VideoCard({ video, onClick }: { video: GalleryVideo; onClick: () => void }) {
+function VideoCard({ video, t, onClick }: { video: GalleryVideo; t: SelectionStrings; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -170,7 +176,7 @@ function VideoCard({ video, onClick }: { video: GalleryVideo; onClick: () => voi
             fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
             padding: '2px 7px', borderRadius: 8,
           }}>
-            Sendt inn
+            {t.submittedBadge}
           </div>
         )}
         {video.comment_count > 0 && video.status !== 'submitted' && (
@@ -180,7 +186,7 @@ function VideoCard({ video, onClick }: { video: GalleryVideo; onClick: () => voi
             fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
             padding: '2px 7px', borderRadius: 8,
           }}>
-            {video.comment_count} kommentar{video.comment_count !== 1 ? 'er' : ''}
+            {t.commentCount(video.comment_count)}
           </div>
         )}
       </div>
@@ -189,14 +195,14 @@ function VideoCard({ video, onClick }: { video: GalleryVideo; onClick: () => voi
           {video.title}
         </div>
         <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 2 }}>
-          Video
+          {t.videoLabel}
         </div>
       </div>
     </div>
   )
 }
 
-function AlbumCard({ album, allAlbums, onClick }: { album: AlbumForCustomer; allAlbums: AlbumForCustomer[]; onClick: () => void }) {
+function AlbumCard({ album, allAlbums, t, onClick }: { album: AlbumForCustomer; allAlbums: AlbumForCustomer[]; t: SelectionStrings; onClick: () => void }) {
   const { total, selected, cover } = countAlbumTree(album.id, allAlbums)
 
   return (
@@ -221,7 +227,7 @@ function AlbumCard({ album, allAlbums, onClick }: { album: AlbumForCustomer; all
             fontSize: '0.62rem', fontWeight: 700, fontFamily: 'sans-serif',
             padding: '2px 7px', borderRadius: 8,
           }}>
-            {selected} valgt
+            {t.selectedBadge(selected)}
           </div>
         )}
       </div>
@@ -230,7 +236,7 @@ function AlbumCard({ album, allAlbums, onClick }: { album: AlbumForCustomer; all
           {album.name}
         </div>
         <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: '#8A8070', marginTop: 2 }}>
-          {total} bilder
+          {t.imageCount(total)}
         </div>
       </div>
     </div>

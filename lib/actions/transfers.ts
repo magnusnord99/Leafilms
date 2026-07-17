@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto'
 export type ProjectForTransfer = {
   id: string
   title: string
+  language: 'no' | 'en'
   customer: {
     name: string
     company: string | null
@@ -28,7 +29,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
   const { data: project } = await supabase
     .from('projects')
     .select(`
-      id, title,
+      id, title, language,
       customers (id, name, company, email)
     `)
     .eq('id', projectId)
@@ -54,6 +55,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
   return {
     id: project.id,
     title: project.title,
+    language: (project as { language?: string }).language === 'en' ? 'en' : 'no',
     customer: customer ? {
       name: customer.name,
       company: customer.company ?? null,
@@ -77,6 +79,7 @@ export type Transfer = {
   max_downloads: number | null
   download_count: number
   status: 'active' | 'expired' | 'deleted'
+  language: 'no' | 'en'
   created_at: string
   updated_at: string
   // joined
@@ -106,6 +109,7 @@ export type CreateTransferInput = {
   max_downloads?: number
   recipient_email?: string
   recipient_name?: string
+  language?: 'no' | 'en'
   // r2_key fylles inn etter opplasting — kan settes som placeholder
   r2_key?: string
 }
@@ -195,6 +199,7 @@ export async function createTransfer(input: CreateTransferInput): Promise<{
       message: input.message ?? null,
       expires_at: expiresAt,
       max_downloads: input.max_downloads ?? null,
+      language: input.language ?? 'no',
     })
     .select()
     .single()

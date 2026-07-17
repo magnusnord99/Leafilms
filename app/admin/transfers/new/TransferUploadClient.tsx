@@ -27,17 +27,23 @@ type UploadState =
   | { phase: 'done'; downloadUrl: string; filename: string; emailSent: boolean }
   | { phase: 'error'; message: string }
 
-function buildDefaultMessage(project: ProjectForTransfer | null | undefined, type: 'video' | 'photo' | null | undefined): string {
+function buildDefaultMessage(project: ProjectForTransfer | null | undefined, type: 'video' | 'photo' | null | undefined, language: 'no' | 'en' = 'no'): string {
   if (!project) return ''
-  const customerName = project.customer?.name?.split(' ')[0] ?? 'Hei'
-  const typeLabel = type === 'video' ? 'ferdig film' : type === 'photo' ? 'bildene' : 'filene'
+  const firstName = project.customer?.name?.split(' ')[0]
 
   const delivLines = project.deliverables
     .filter(d => d.title)
     .map(d => `• ${d.quantity ? `${d.quantity}× ` : ''}${d.title}${d.format ? ` (${d.format})` : ''}`)
     .join('\n')
 
-  const body = `Hei ${customerName}!\n\nHer er ${typeLabel} fra ${project.title}.`
+  if (language === 'en') {
+    const typeLabel = type === 'video' ? 'the finished film' : type === 'photo' ? 'the photos' : 'the files'
+    const body = `Hi ${firstName ?? 'there'}!\n\nHere is ${typeLabel} from ${project.title}.`
+    return delivLines ? `${body}\n\nThe delivery includes:\n${delivLines}` : body
+  }
+
+  const typeLabel = type === 'video' ? 'ferdig film' : type === 'photo' ? 'bildene' : 'filene'
+  const body = `Hei ${firstName ?? ''}!\n\nHer er ${typeLabel} fra ${project.title}.`
   return delivLines ? `${body}\n\nLeveransen inkluderer:\n${delivLines}` : body
 }
 
@@ -49,10 +55,24 @@ function buildEmailHtml(params: {
   projectTitle: string
   expiryDays: number | null
   recipientName: string
+  language?: 'no' | 'en'
 }): string {
-  const { filename, filesize, downloadUrl, message, projectTitle, expiryDays, recipientName } = params
+  const { filename, filesize, downloadUrl, message, projectTitle, expiryDays, recipientName, language = 'no' } = params
+  const et = language === 'en'
+    ? {
+        expiry: (d: number) => `The download link is valid for ${d} day${d === 1 ? '' : 's'}.`,
+        download: '↓ Download',
+        cantClick: "Can't click the button? Copy this link:",
+        sentBy: 'Sent by Leafilms',
+      }
+    : {
+        expiry: (d: number) => `Nedlastingslenken er gyldig i ${d} ${d === 1 ? 'dag' : 'dager'}.`,
+        download: '↓ Last ned',
+        cantClick: 'Kan du ikke klikke knappen? Kopier denne lenken:',
+        sentBy: 'Sendt av Leafilms',
+      }
   const expiryLine = expiryDays
-    ? `<p style="margin:0 0 8px;font-size:13px;color:#888;">Nedlastingslenken er gyldig i ${expiryDays} ${expiryDays === 1 ? 'dag' : 'dager'}.</p>`
+    ? `<p style="margin:0 0 8px;font-size:13px;color:#888;">${et.expiry(expiryDays)}</p>`
     : ''
   const messageHtml = message
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -98,7 +118,7 @@ function buildEmailHtml(params: {
               <tr>
                 <td style="background:#C49434;border-radius:8px;">
                   <a href="${downloadUrl}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#0C0B09;text-decoration:none;letter-spacing:0.02em;">
-                    ↓ Last ned
+                    ${et.download}
                   </a>
                 </td>
               </tr>
@@ -107,7 +127,7 @@ function buildEmailHtml(params: {
             ${expiryLine}
 
             <p style="margin:16px 0 0;font-size:12px;color:#aaa;">
-              Kan du ikke klikke knappen? Kopier denne lenken:<br>
+              ${et.cantClick}<br>
               <a href="${downloadUrl}" style="color:#C49434;word-break:break-all;">${downloadUrl}</a>
             </p>
 
@@ -118,7 +138,7 @@ function buildEmailHtml(params: {
         <tr>
           <td style="background:#f8f8f5;border-top:1px solid #e4e2dc;padding:16px 32px;">
             <p style="margin:0;font-size:11px;color:#aaa;">
-              Sendt av Leafilms · ${projectTitle}
+              ${et.sentBy} · ${projectTitle}
             </p>
           </td>
         </tr>
@@ -142,13 +162,29 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
   const [usePassword, setUsePassword] = useState(false)
   const [password, setPassword] = useState('')
   const [sendEmail, setSendEmail] = useState(!!initialProject?.customer?.email)
+  const [language, setLanguage] = useState<'no' | 'en'>(initialProject?.language ?? 'no')
   const [copied, setCopied] = useState(false)
+
+  // Bytt språk — regenerer standardmeldingen kun hvis den ikke er redigert manuelt
+  const switchLanguage = (next: 'no' | 'en') => {
+    setLanguage(prev => {
+      if (next !== prev) {
+        setMessage(m => m === buildDefaultMessage(initialProject, deliveryType, prev)
+          ? buildDefaultMessage(initialProject, deliveryType, next)
+          : m)
+      }
+      return next
+    })
+  }
 
   // Oppdater forhåndsutfylte verdier hvis project-prop endres (bør ikke skje, men for robusthet)
   useEffect(() => {
     if (initialProject?.customer?.email) setRecipientEmail(initialProject.customer.email)
     if (initialProject?.customer?.name) setRecipientName(initialProject.customer.name)
-    if (initialProject) setMessage(buildDefaultMessage(initialProject, deliveryType))
+    if (initialProject) {
+      setLanguage(initialProject.language)
+      setMessage(buildDefaultMessage(initialProject, deliveryType, initialProject.language))
+    }
   }, [initialProject?.id])
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -200,8 +236,11 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
         recipient_email: recipientEmail || undefined,
         recipient_name: recipientName || undefined,
         title: initialProject
-          ? `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Leveranse'} — ${initialProject.title}`
+          ? language === 'en'
+            ? `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Photos' : 'Delivery'} — ${initialProject.title}`
+            : `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Leveranse'} — ${initialProject.title}`
           : undefined,
+        language,
       })
 
       clearInterval(interval)
@@ -219,15 +258,20 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
       if (sendEmail && recipientEmail.trim()) {
         setState({ phase: 'sending-email' })
         const projectTitle = initialProject?.title ?? 'Leafilms'
-        const subject = `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Filer'} fra Leafilms — ${projectTitle}`
+        const subject = language === 'en'
+          ? `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Photos' : 'Files'} from Leafilms — ${projectTitle}`
+          : `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Filer'} fra Leafilms — ${projectTitle}`
         const htmlBody = buildEmailHtml({
           filename: file.name,
           filesize: file.size,
           downloadUrl: result.downloadUrl,
-          message: message || `Hei!\n\nHer er leveransen fra ${projectTitle}.`,
+          message: message || (language === 'en'
+            ? `Hi!\n\nHere is the delivery from ${projectTitle}.`
+            : `Hei!\n\nHer er leveransen fra ${projectTitle}.`),
           projectTitle,
           expiryDays: expiry === 'never' ? null : parseInt(expiry),
           recipientName: recipientName || recipientEmail,
+          language,
         })
 
         try {
@@ -586,6 +630,33 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
             onChange={e => setRecipientName(e.target.value)}
             style={inputStyle}
           />
+        </div>
+
+        {/* Språk for kunde */}
+        <div>
+          <label style={labelStyle}>Språk for kunde</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['no', 'en'] as const).map(l => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => switchLanguage(l)}
+                style={{
+                  flex: 1, padding: '9px', borderRadius: 8,
+                  border: `1px solid ${language === l ? C.accent : C.border}`,
+                  background: language === l ? C.accentBg : C.surface2,
+                  color: language === l ? C.text : C.text3,
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {l === 'no' ? 'Norsk' : 'Engelsk'}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '6px 0 0' }}>
+            Styrer nedlastingssiden og e-posten kunden mottar
+          </p>
         </div>
 
         {/* Melding */}

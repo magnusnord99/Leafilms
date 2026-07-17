@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { SelectionGallery, SelectionImage } from '@/lib/actions/selections'
 import { toggleImageSelection, addImageComment, submitGallery } from '@/lib/actions/selections'
+import { SELECTION_STRINGS, type SelectionLanguage, type SelectionStrings } from './strings'
 
 // CSS-klasser håndterer responsivitet — ingen isMobile-state som bryter hydration
 const STYLES = `
@@ -41,11 +42,14 @@ export default function GalleryClient({
   token,
   gallery,
   images: initialImages,
+  language = 'no',
 }: {
   token: string
   gallery: SelectionGallery
   images: ImageWithUrl[]
+  language?: SelectionLanguage
 }) {
+  const t = SELECTION_STRINGS[language]
   const [images, setImages] = useState(initialImages)
   const [activeImageId, setActiveImageId] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -127,12 +131,12 @@ export default function GalleryClient({
       <>
         <style>{STYLES}</style>
         <div style={{ minHeight: '100dvh', background: S.bg }}>
-          <SubmittedHeader />
+          <SubmittedHeader t={t} />
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>
             <div style={{ background: S.surface, border: '1px solid rgba(76,175,125,0.3)', borderRadius: 12, padding: '20px 24px', marginBottom: 28, textAlign: 'center' }}>
-              <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>✓ Utvalget er sendt inn</p>
+              <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>{t.submittedTitle}</p>
               <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text2, marginTop: 4 }}>
-                Vi har mottatt dine {selected.length} valgte bilder og tar kontakt.
+                {t.submittedBody(selected.length)}
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
@@ -155,12 +159,12 @@ export default function GalleryClient({
     <>
       <style>{STYLES}</style>
       <div className="g-root">
-        <GalleryHeader selectedCount={selectedCount} target={target} isOver={isOver} />
+        <GalleryHeader selectedCount={selectedCount} target={target} isOver={isOver} t={t} />
 
         {isOver && (
           <div style={{ background: 'rgba(212,134,58,0.12)', borderBottom: '1px solid rgba(212,134,58,0.3)', padding: '8px 16px', textAlign: 'center', flexShrink: 0 }}>
             <p style={{ fontFamily: 'sans-serif', fontSize: '0.78rem', color: S.warning }}>
-              Du har valgt {selectedCount} av {target} avtalte bilder — bilder utover avtalen kan medføre tillegg.
+              {t.overWarning(selectedCount, target!)}
             </p>
           </div>
         )}
@@ -177,11 +181,12 @@ export default function GalleryClient({
                   onActivate={() => setActiveImageId(img.id)}
                   onLightbox={() => openLightbox(idx)}
                   onToggle={handleToggle}
+                  t={t}
                 />
               ))}
             </div>
             <div className="g-send-mobile">
-              <SendButton selectedCount={selectedCount} onPress={() => setShowConfirm(true)} />
+              <SendButton selectedCount={selectedCount} onPress={() => setShowConfirm(true)} t={t} />
             </div>
           </div>
 
@@ -193,9 +198,10 @@ export default function GalleryClient({
               onCommentChange={setCommentDraft}
               onSave={() => activeImage && saveComment(activeImage.id, commentDraft)}
               saving={savingComment}
+              t={t}
             />
             <div className="g-send-desktop">
-              <SendButton selectedCount={selectedCount} onPress={() => setShowConfirm(true)} />
+              <SendButton selectedCount={selectedCount} onPress={() => setShowConfirm(true)} t={t} />
             </div>
           </div>
         </div>
@@ -208,6 +214,7 @@ export default function GalleryClient({
             onConfirm={handleSubmit}
             onCancel={() => setShowConfirm(false)}
             loading={submitting}
+            t={t}
           />
         )}
 
@@ -223,6 +230,7 @@ export default function GalleryClient({
             onPrev={() => nav(-1)}
             onNext={() => nav(1)}
             onToggle={handleToggle}
+            t={t}
           />
         )}
       </div>
@@ -232,19 +240,19 @@ export default function GalleryClient({
 
 // ---------------------------------------------------------------------------
 
-function SubmittedHeader() {
+function SubmittedHeader({ t }: { t: SelectionStrings }) {
   return (
     <div style={{ background: S.surface, borderBottom: `1px solid ${S.border}`, padding: '13px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <span style={{ fontFamily: 'Georgia, serif', fontSize: '1rem', letterSpacing: '0.1em', color: S.gold, textTransform: 'uppercase' }}>Leafilms</span>
-      <span style={{ fontFamily: 'sans-serif', fontSize: '0.7rem', color: S.green }}>✓ Innsendt</span>
+      <span style={{ fontFamily: 'sans-serif', fontSize: '0.7rem', color: S.green }}>{t.submittedCheck}</span>
     </div>
   )
 }
 
-function GalleryHeader({ selectedCount, target, isOver }: { selectedCount: number; target: number | null; isOver: boolean }) {
+function GalleryHeader({ selectedCount, target, isOver, t }: { selectedCount: number; target: number | null; isOver: boolean; t: SelectionStrings }) {
   const isUnder = target != null && selectedCount < target
   const color = isOver ? S.warning : (!isUnder && target != null) ? S.green : S.text
-  const label = target != null ? `${selectedCount} av ${target} valgt` : `${selectedCount} valgt`
+  const label = t.selectedOf(selectedCount, target)
   return (
     <div style={{ background: S.surface, borderBottom: `1px solid ${S.border}`, padding: '13px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
       <span style={{ fontFamily: 'Georgia, serif', fontSize: '1rem', letterSpacing: '0.1em', color: S.gold, textTransform: 'uppercase' }}>Leafilms</span>
@@ -255,9 +263,10 @@ function GalleryHeader({ selectedCount, target, isOver }: { selectedCount: numbe
 
 // ---------------------------------------------------------------------------
 
-function ImageCard({ img, isActive, onActivate, onLightbox, onToggle }: {
+function ImageCard({ img, isActive, onActivate, onLightbox, onToggle, t }: {
   img: ImageWithUrl; isActive: boolean
   onActivate: () => void; onLightbox: () => void; onToggle: (id: string) => void
+  t: SelectionStrings
 }) {
   return (
     <div
@@ -300,7 +309,7 @@ function ImageCard({ img, isActive, onActivate, onLightbox, onToggle }: {
             transition: 'background 0.12s',
           }}
         >
-          {img.selected ? '✓ Valgt' : 'Velg'}
+          {img.selected ? t.selectedShort : t.select}
         </button>
       </div>
     </div>
@@ -309,10 +318,11 @@ function ImageCard({ img, isActive, onActivate, onLightbox, onToggle }: {
 
 // ---------------------------------------------------------------------------
 
-function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving }: {
+function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving, t }: {
   image: ImageWithUrl | null
-  commentDraft: string; onCommentChange: (t: string) => void
+  commentDraft: string; onCommentChange: (text: string) => void
   onSave: () => void; saving: boolean
+  t: SelectionStrings
 }) {
   const isDirty = commentDraft !== (image?.comment ?? '')
 
@@ -320,7 +330,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving }: 
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text3, textAlign: 'center', lineHeight: 1.6 }}>
-          Trykk på et bilde<br />for å se og legge til kommentarer
+          {t.tapToCommentLine1}<br />{t.tapToCommentLine2}
         </p>
       </div>
     )
@@ -350,7 +360,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving }: 
           </div>
         ) : (
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: S.text3, textAlign: 'center' }}>
-            Ingen kommentar enda
+            {t.noCommentYet}
           </p>
         )}
       </div>
@@ -361,7 +371,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving }: 
           <textarea
             value={commentDraft}
             onChange={e => onCommentChange(e.target.value)}
-            placeholder="Skriv en kommentar..."
+            placeholder={t.writeComment}
             rows={2}
             style={{
               flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.82rem',
@@ -391,7 +401,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving }: 
 
 // ---------------------------------------------------------------------------
 
-function SendButton({ selectedCount, onPress }: { selectedCount: number; onPress: () => void }) {
+function SendButton({ selectedCount, onPress, t }: { selectedCount: number; onPress: () => void; t: SelectionStrings }) {
   const enabled = selectedCount > 0
   return (
     <button
@@ -406,35 +416,36 @@ function SendButton({ selectedCount, onPress }: { selectedCount: number; onPress
         transition: 'background 0.15s',
       }}
     >
-      {`Send inn utvalg (${selectedCount})`}
+      {t.submitSelection(selectedCount)}
     </button>
   )
 }
 
 // ---------------------------------------------------------------------------
 
-function ConfirmModal({ selectedCount, target, isOver, onConfirm, onCancel, loading }: {
+function ConfirmModal({ selectedCount, target, isOver, onConfirm, onCancel, loading, t }: {
   selectedCount: number; target: number | null; isOver: boolean
   onConfirm: () => void; onCancel: () => void; loading: boolean
+  t: SelectionStrings
 }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,11,9,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50 }}>
       <div style={{ background: S.surface, border: `1px solid ${S.border}`, borderRadius: 12, padding: '28px 24px', maxWidth: 360, width: '100%' }}>
-        <p style={{ fontFamily: 'sans-serif', fontSize: '1rem', color: S.text, fontWeight: 600, marginBottom: 8 }}>Send inn utvalg?</p>
+        <p style={{ fontFamily: 'sans-serif', fontSize: '1rem', color: S.text, fontWeight: 600, marginBottom: 8 }}>{t.confirmTitle}</p>
         {isOver && (
           <div style={{ background: 'rgba(212,134,58,0.1)', border: '1px solid rgba(212,134,58,0.3)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
             <p style={{ fontFamily: 'sans-serif', fontSize: '0.78rem', color: S.warning, margin: 0 }}>
-              Du har valgt {selectedCount} bilder — {selectedCount - (target ?? 0)} over avtalt antall. Dette kan medføre tilleggskostnad.
+              {t.confirmOverWarning(selectedCount, selectedCount - (target ?? 0))}
             </p>
           </div>
         )}
         <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text2, marginBottom: 22 }}>
-          Du sender inn {selectedCount} {selectedCount === 1 ? 'bilde' : 'bilder'}. Etter innsending kan ikke utvalget endres uten at vi åpner det på nytt.
+          {t.confirmBody(selectedCount)}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '11px', borderRadius: 8, border: `1px solid ${S.border}`, background: 'none', color: S.text2, fontFamily: 'sans-serif', fontSize: '0.85rem', cursor: 'pointer' }}>Avbryt</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '11px', borderRadius: 8, border: `1px solid ${S.border}`, background: 'none', color: S.text2, fontFamily: 'sans-serif', fontSize: '0.85rem', cursor: 'pointer' }}>{t.cancel}</button>
           <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '11px', borderRadius: 8, border: 'none', background: S.gold, color: '#0C0B09', fontFamily: 'sans-serif', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Sender...' : 'Bekreft'}
+            {loading ? t.sending : t.confirm}
           </button>
         </div>
       </div>
@@ -444,12 +455,13 @@ function ConfirmModal({ selectedCount, target, isOver, onConfirm, onCancel, load
 
 // ---------------------------------------------------------------------------
 
-function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment, savingComment, onClose, onPrev, onNext, onToggle }: {
+function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment, savingComment, onClose, onPrev, onNext, onToggle, t }: {
   images: ImageWithUrl[]; index: number
-  commentDraft: string; onCommentChange: (t: string) => void
+  commentDraft: string; onCommentChange: (text: string) => void
   onSaveComment: () => void; savingComment: boolean
   onClose: () => void; onPrev: () => void; onNext: () => void
   onToggle: (id: string) => void
+  t: SelectionStrings
 }) {
   const img = images[index]
   const isDirty = commentDraft !== (img?.comment ?? '')
@@ -493,7 +505,7 @@ function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment,
             color: img?.selected ? '#0C0B09' : S.text,
           }}
         >
-          {img?.selected ? '✓ Valgt' : 'Velg dette bildet'}
+          {img?.selected ? t.selectedShort : t.selectThisPhoto}
         </button>
 
         {img?.comment && (
@@ -510,7 +522,7 @@ function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment,
           <textarea
             value={commentDraft}
             onChange={e => onCommentChange(e.target.value)}
-            placeholder="Skriv en kommentar til fotografen..."
+            placeholder={t.writeCommentToPhotographer}
             rows={2}
             style={{ flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.85rem', color: S.text, background: S.bg, border: `1px solid ${S.border}`, borderRadius: 10, padding: '8px 10px', outline: 'none' }}
           />

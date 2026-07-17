@@ -60,6 +60,44 @@ function IconVolume({ muted }: { muted: boolean }) {
   )
 }
 
+
+const VR_STRINGS = {
+  no: {
+    gallery: 'Galleri',
+    submittedBadge: 'Innsendt',
+    comments: 'Kommentarer',
+    noCommentsLine1: 'Ingen kommentarer enda.',
+    noCommentsLine2: 'Pause videoen og legg til en.',
+    feedbackSent: 'Tilbakemeldingene er sendt til Leafilms',
+    submitFeedback: 'Send inn tilbakemeldinger',
+    addComment: '+ Legg til kommentar',
+    writeComment: 'Skriv kommentar...',
+    yourNameOptional: 'Ditt navn (valgfritt)',
+    cancel: 'Avbryt',
+    sending: 'Sender...',
+    add: 'Legg til',
+    confirmBody: (n: number) => `Du sender ${n} kommentar${n !== 1 ? 'er' : ''} til Leafilms. Dette kan ikke angres.`,
+    confirmAndSend: 'Bekreft og send',
+  },
+  en: {
+    gallery: 'Gallery',
+    submittedBadge: 'Submitted',
+    comments: 'Comments',
+    noCommentsLine1: 'No comments yet.',
+    noCommentsLine2: 'Pause the video and add one.',
+    feedbackSent: 'Your feedback has been sent to Leafilms',
+    submitFeedback: 'Submit feedback',
+    addComment: '+ Add comment',
+    writeComment: 'Write a comment...',
+    yourNameOptional: 'Your name (optional)',
+    cancel: 'Cancel',
+    sending: 'Sending...',
+    add: 'Add',
+    confirmBody: (n: number) => `You are sending ${n} comment${n !== 1 ? 's' : ''} to Leafilms. This cannot be undone.`,
+    confirmAndSend: 'Confirm and send',
+  },
+} as const
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function VideoReviewClient({
   token,
@@ -68,6 +106,7 @@ export default function VideoReviewClient({
   signedUrl,
   galleryMode,
   reviewId,
+  language = 'no',
 }: {
   token: string
   review: VideoReview
@@ -75,7 +114,9 @@ export default function VideoReviewClient({
   signedUrl: string
   galleryMode?: boolean
   reviewId?: string
+  language?: 'no' | 'en'
 }) {
+  const t = VR_STRINGS[language]
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressBarRef = useRef<HTMLDivElement>(null)
 
@@ -257,7 +298,7 @@ export default function VideoReviewClient({
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M9 2L4 7L9 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Galleri
+              {t.gallery}
             </a>
           )}
           <span style={{
@@ -286,7 +327,7 @@ export default function VideoReviewClient({
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
             }}>
-              Innsendt
+              {t.submittedBadge}
             </span>
           )}
         </div>
@@ -342,7 +383,7 @@ export default function VideoReviewClient({
                 color: S.text3,
                 fontWeight: 700,
               }}>
-                Kommentarer
+                {t.comments}
               </span>
               {comments.length > 0 && (
                 <span style={{
@@ -365,9 +406,9 @@ export default function VideoReviewClient({
                   textAlign: 'center',
                   lineHeight: 1.6,
                 }}>
-                  Ingen kommentarer enda.
+                  {t.noCommentsLine1}
                   <br />
-                  Pause videoen og legg til en.
+                  {t.noCommentsLine2}
                 </p>
               )}
               {sortedComments.map(c => (
@@ -440,7 +481,7 @@ export default function VideoReviewClient({
                   textAlign: 'center',
                 }}>
                   <p style={{ fontSize: '0.78rem', color: S.gold, margin: 0 }}>
-                    Tilbakemeldingene er sendt til Leafilms
+                    {t.feedbackSent}
                   </p>
                 </div>
               ) : (
@@ -460,7 +501,7 @@ export default function VideoReviewClient({
                     letterSpacing: '0.02em',
                   }}
                 >
-                  Send inn tilbakemeldinger
+                  {t.submitFeedback}
                 </button>
               )}
             </div>
@@ -592,7 +633,7 @@ export default function VideoReviewClient({
                   e.currentTarget.style.color = S.text2
                 }}
               >
-                + Legg til kommentar
+                {t.addComment}
               </button>
             )}
 
@@ -665,7 +706,7 @@ export default function VideoReviewClient({
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddComment()
                 if (e.key === 'Escape') setShowCommentForm(false)
               }}
-              placeholder="Skriv kommentar..."
+              placeholder={t.writeComment}
               rows={3}
               style={{
                 width: '100%',
@@ -689,7 +730,7 @@ export default function VideoReviewClient({
             <input
               value={commentAuthor}
               onChange={e => setCommentAuthor(e.target.value)}
-              placeholder="Ditt navn (valgfritt)"
+              placeholder={t.yourNameOptional}
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
@@ -718,7 +759,7 @@ export default function VideoReviewClient({
                   fontFamily: 'var(--font-dm-sans, sans-serif)',
                 }}
               >
-                Avbryt
+                {t.cancel}
               </button>
               <button
                 onClick={handleAddComment}
@@ -734,7 +775,7 @@ export default function VideoReviewClient({
                   transition: 'background 0.15s',
                 }}
               >
-                {addingComment ? 'Sender...' : 'Legg til'}
+                {addingComment ? t.sending : t.add}
               </button>
             </div>
           </div>
@@ -772,7 +813,7 @@ export default function VideoReviewClient({
               letterSpacing: '0.04em',
               fontWeight: 400,
             }}>
-              Send inn tilbakemeldinger
+              {t.submitFeedback}
             </h2>
             <p style={{
               fontSize: '0.82rem',
@@ -780,8 +821,7 @@ export default function VideoReviewClient({
               lineHeight: 1.65,
               marginBottom: 24,
             }}>
-              Du sender {comments.length} kommentar{comments.length !== 1 ? 'er' : ''} til
-              Leafilms. Dette kan ikke angres.
+              {t.confirmBody(comments.length)}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button
@@ -794,7 +834,7 @@ export default function VideoReviewClient({
                   fontFamily: 'var(--font-dm-sans, sans-serif)',
                 }}
               >
-                Avbryt
+                {t.cancel}
               </button>
               <button
                 onClick={handleSubmit}
@@ -811,7 +851,7 @@ export default function VideoReviewClient({
                   transition: 'opacity 0.15s',
                 }}
               >
-                {submitting ? 'Sender...' : 'Bekreft og send'}
+                {submitting ? t.sending : t.confirmAndSend}
               </button>
             </div>
           </div>

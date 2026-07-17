@@ -5,6 +5,7 @@ import {
   verifyGalleryPin,
 } from '@/lib/actions/selections'
 import { albumTokenExists, getAlbumForCustomer, verifyAlbumPin } from '@/lib/actions/selection-picks'
+import { getAlbumLanguage, getGalleryLanguage } from '@/lib/customer-language'
 import PinClient from './PinClient'
 import GalleryClient from './GalleryClient'
 import AlbumOverviewClient from './AlbumOverviewClient'
@@ -19,9 +20,10 @@ export default async function SelectionPage({
 
   // Sjekk om token er et album-token
   if (await albumTokenExists(token)) {
+    const language = await getAlbumLanguage(token)
     const albumData = await getAlbumForCustomer(token)
     if (!albumData) {
-      return <PinClient token={token} verifyAction={verifyAlbumPin} />
+      return <PinClient token={token} verifyAction={verifyAlbumPin} language={language} />
     }
     return (
       <AlbumGalleryClient
@@ -30,6 +32,7 @@ export default async function SelectionPage({
         images={albumData.images}
         videos={albumData.videos}
         isDirectAlbumLink
+        language={language}
       />
     )
   }
@@ -39,8 +42,10 @@ export default async function SelectionPage({
 
   if (!data) {
     if (!(await galleryTokenExists(token))) notFound()
-    return <PinClient token={token} verifyAction={verifyGalleryPin} />
+    return <PinClient token={token} verifyAction={verifyGalleryPin} language={await getGalleryLanguage(token)} />
   }
+
+  const language = await getGalleryLanguage(token)
 
   // Bakoverkompatibilitet: ingen album → gammel flat visning
   if (data.albums.length === 0) {
@@ -49,6 +54,7 @@ export default async function SelectionPage({
         token={token}
         gallery={data.gallery}
         images={data.legacyImages}
+        language={language}
       />
     )
   }
@@ -57,6 +63,7 @@ export default async function SelectionPage({
     <AlbumOverviewClient
       token={token}
       gallery={data.gallery}
+      language={language}
       albums={data.albums}
       videos={data.videos}
     />

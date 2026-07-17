@@ -12,7 +12,37 @@ type Props = {
   hasPassword: boolean
   token: string
   senderName?: string
+  language?: 'no' | 'en'
 }
+
+const DL_STRINGS = {
+  no: {
+    expiresTomorrow: 'Lenken utløper i morgen',
+    expiresInDays: (d: number) => `Lenken utløper om ${d} dager`,
+    from: (name: string) => `Fra ${name}`,
+    passwordRequired: 'Passord kreves',
+    enterPassword: 'Skriv inn passord',
+    wrongPassword: 'Feil passord — prøv igjen',
+    preparing: 'Forbereder nedlasting...',
+    download: '↓ Last ned',
+    downloadStarted: 'Nedlasting startet',
+    deliveredBy: 'Levert av',
+  },
+  en: {
+    expiresTomorrow: 'The link expires tomorrow',
+    expiresInDays: (d: number) => `The link expires in ${d} days`,
+    from: (name: string) => `From ${name}`,
+    passwordRequired: 'Password required',
+    enterPassword: 'Enter password',
+    wrongPassword: 'Incorrect password — try again',
+    preparing: 'Preparing download...',
+    download: '↓ Download',
+    downloadStarted: 'Download started',
+    deliveredBy: 'Delivered by',
+  },
+}
+
+type DlStrings = (typeof DL_STRINGS)['no']
 
 function FileIcon({ filename }: { filename: string }) {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
@@ -25,11 +55,11 @@ function FileIcon({ filename }: { filename: string }) {
   return <span style={{ fontSize: '2.2rem' }}>{emoji}</span>
 }
 
-function ExpiryNotice({ expiresAt }: { expiresAt: string }) {
+function ExpiryNotice({ expiresAt, t }: { expiresAt: string; t: DlStrings }) {
   const d = new Date(expiresAt)
   const diff = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
   if (diff <= 0) return null
-  const label = diff === 1 ? 'i morgen' : `om ${diff} dager`
+  const label = diff === 1 ? t.expiresTomorrow : t.expiresInDays(diff)
 
   return (
     <div style={{
@@ -39,15 +69,16 @@ function ExpiryNotice({ expiresAt }: { expiresAt: string }) {
     }}>
       <span style={{ fontSize: '0.8rem' }}>⏱</span>
       <span style={{ fontFamily: S.fontBody, fontSize: '0.75rem', color: S.gold }}>
-        Lenken utløper {label}
+        {label}
       </span>
     </div>
   )
 }
 
 export default function DownloadClient({
-  filename, filesize, message, expiresAt, hasPassword, token, senderName,
+  filename, filesize, message, expiresAt, hasPassword, token, senderName, language = 'no',
 }: Props) {
+  const t = DL_STRINGS[language]
   const [passwordInput, setPasswordInput] = useState('')
   const [phase, setPhase] = useState<'idle' | 'downloading' | 'done' | 'error' | 'wrong-password'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -104,7 +135,7 @@ export default function DownloadClient({
         </span>
         {senderName && (
           <span style={{ fontFamily: S.fontBody, fontSize: '0.72rem', color: S.text3 }}>
-            Fra {senderName}
+            {t.from(senderName)}
           </span>
         )}
       </div>
@@ -175,7 +206,7 @@ export default function DownloadClient({
           )}
 
           {/* Utløpsvarsel */}
-          {expiresAt && <ExpiryNotice expiresAt={expiresAt} />}
+          {expiresAt && <ExpiryNotice expiresAt={expiresAt} t={t} />}
 
           {/* Passord */}
           {hasPassword && (
@@ -185,11 +216,11 @@ export default function DownloadClient({
                 color: S.text3, letterSpacing: '0.05em', textTransform: 'uppercase',
                 display: 'block', marginBottom: 8,
               }}>
-                Passord kreves
+                {t.passwordRequired}
               </label>
               <input
                 type="password"
-                placeholder="Skriv inn passord"
+                placeholder={t.enterPassword}
                 value={passwordInput}
                 onChange={e => { setPasswordInput(e.target.value); setPhase('idle') }}
                 onKeyDown={e => e.key === 'Enter' && handleDownload()}
@@ -203,7 +234,7 @@ export default function DownloadClient({
               />
               {phase === 'wrong-password' && (
                 <p style={{ fontFamily: S.fontBody, fontSize: '0.72rem', color: S.danger, marginTop: 6 }}>
-                  Feil passord — prøv igjen
+                  {t.wrongPassword}
                 </p>
               )}
             </div>
@@ -243,10 +274,10 @@ export default function DownloadClient({
               {phase === 'downloading' ? (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <span style={{ animation: 'pulse 1s infinite', display: 'inline-block' }}>⏳</span>
-                  Forbereder nedlasting...
+                  {t.preparing}
                 </span>
               ) : (
-                '↓ Last ned'
+                t.download
               )}
             </button>
           ) : (
@@ -258,7 +289,7 @@ export default function DownloadClient({
             }}>
               <span style={{ fontSize: '1rem' }}>✓</span>
               <span style={{ fontFamily: S.fontBody, fontSize: '0.88rem', fontWeight: 600, color: S.green }}>
-                Nedlasting startet
+                {t.downloadStarted}
               </span>
             </div>
           )}
@@ -269,7 +300,7 @@ export default function DownloadClient({
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
             <span style={{ fontFamily: S.fontBody, fontSize: '0.68rem', color: S.text3 }}>
-              Levert av
+              {t.deliveredBy}
             </span>
             <span style={{
               fontFamily: S.fontDisplay, fontSize: '0.78rem',

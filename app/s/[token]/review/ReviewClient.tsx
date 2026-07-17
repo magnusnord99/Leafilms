@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitGallery } from '@/lib/actions/selections'
 import type { SelectionGallery, AlbumForCustomer } from '@/lib/actions/selections'
+import { SELECTION_STRINGS, type SelectionLanguage } from '../strings'
 
 const S = {
   bg:      '#0C0B09',
@@ -25,12 +26,15 @@ export default function ReviewClient({
   gallery,
   selectedAlbums,
   totalSelected,
+  language = 'no',
 }: {
   token: string
   gallery: SelectionGallery
   selectedAlbums: SelectedAlbum[]
   totalSelected: number
+  language?: SelectionLanguage
 }) {
+  const t = SELECTION_STRINGS[language]
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -59,7 +63,7 @@ export default function ReviewClient({
       await submitGallery(token)
       setSubmitted(true)
     } catch {
-      setSubmitError('Noe gikk galt. Prøv igjen.')
+      setSubmitError(t.somethingWentWrong)
     } finally {
       setSubmitting(false)
     }
@@ -70,9 +74,9 @@ export default function ReviewClient({
       <div style={{ minHeight: '100dvh', background: S.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <div style={{ textAlign: 'center', maxWidth: 360 }}>
           <p style={{ fontFamily: 'Georgia, serif', fontSize: '1rem', letterSpacing: '0.1em', color: S.gold, textTransform: 'uppercase', marginBottom: 24 }}>Leafilms</p>
-          <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>✓ Utvalget er sendt inn</p>
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>{t.submittedTitle}</p>
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text2, marginTop: 8 }}>
-            Vi har mottatt dine {totalSelected} valgte bilder og tar kontakt.
+            {t.submittedBody(totalSelected)}
           </p>
         </div>
       </div>
@@ -87,7 +91,7 @@ export default function ReviewClient({
           <button onClick={() => router.push(`/s/${token}`)} style={{ background: 'none', border: 'none', color: S.text2, cursor: 'pointer', fontSize: '1rem', padding: '0 4px' }}>‹</button>
           <span style={{ fontFamily: 'Georgia, serif', fontSize: '1rem', letterSpacing: '0.1em', color: S.gold, textTransform: 'uppercase' }}>Leafilms</span>
         </div>
-        <span style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text2 }}>Gjennomgang</span>
+        <span style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text2 }}>{t.review}</span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', maxWidth: 720, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
@@ -100,15 +104,15 @@ export default function ReviewClient({
         }}>
           <div>
             <div style={{ fontFamily: 'sans-serif', fontSize: '1.4rem', fontWeight: 700, color: isOver ? S.warning : S.green }}>
-              {totalSelected} bilder
+              {t.imageCount(totalSelected)}
             </div>
             <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 2 }}>
-              {target != null ? `av ${target} avtalte` : 'valgt'}
+              {target != null ? t.ofTargetAgreed(target) : t.selectedWord}
             </div>
           </div>
           {isOver && (
             <div style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: S.warning, textAlign: 'right', maxWidth: 180 }}>
-              {totalSelected - target!} over avtalt antall — kan medføre tillegg
+              {t.overAgreed(totalSelected - target!)}
             </div>
           )}
         </div>
@@ -124,7 +128,7 @@ export default function ReviewClient({
                 {album.name}
               </span>
               <span style={{ fontFamily: 'sans-serif', fontSize: '0.75rem', color: S.gold }}>
-                {album.images.length} bilder
+                {t.imageCount(album.images.length)}
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 4 }}>
@@ -154,13 +158,13 @@ export default function ReviewClient({
         {totalSelected === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text3 }}>
-              Ingen bilder er valgt enda.
+              {t.noPhotosSelected}
             </p>
             <button
               onClick={() => router.push(`/s/${token}`)}
               style={{ marginTop: 12, padding: '8px 16px', borderRadius: 7, border: `1px solid ${S.border}`, background: 'none', color: S.text2, fontFamily: 'sans-serif', fontSize: '0.78rem', cursor: 'pointer' }}
             >
-              Gå tilbake til oversikten
+              {t.backToOverview}
             </button>
           </div>
         )}
@@ -214,7 +218,7 @@ export default function ReviewClient({
             background: S.gold, color: '#0C0B09', opacity: submitting ? 0.7 : 1,
           }}
         >
-          {submitting ? 'Sender...' : 'Bekreft og send inn'}
+          {submitting ? t.sending : t.confirmAndSubmit}
         </button>
         {submitError && (
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: '#C0503A', textAlign: 'center', marginTop: 6 }}>
@@ -223,7 +227,7 @@ export default function ReviewClient({
         )}
         {!submitError && (
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: S.text3, textAlign: 'center', marginTop: 6 }}>
-            Kan ikke endres etter innsending
+            {t.cannotChangeAfter}
           </p>
         )}
       </div>

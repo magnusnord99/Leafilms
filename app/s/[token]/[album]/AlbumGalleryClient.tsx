@@ -8,6 +8,7 @@ import { toggleAlbumImagePick, submitAlbumPicks, addAlbumImagePickComment } from
 import type { SelectionAlbum } from '@/lib/actions/selection-albums'
 import type { AlbumForCustomer, GalleryVideo } from '@/lib/actions/selections'
 import type { AlbumImageWithPick } from '@/lib/actions/selection-picks'
+import { SELECTION_STRINGS, type SelectionLanguage, type SelectionStrings } from '../strings'
 
 const STYLES = `
   .ag-root { display:flex; flex-direction:column; height:100dvh; background:#0C0B09; overflow:hidden; }
@@ -67,6 +68,7 @@ export default function AlbumGalleryClient({
   targetCount,
   isDirectAlbumLink,
   allAlbums,
+  language = 'no',
 }: {
   token: string
   galleryToken?: string
@@ -77,7 +79,9 @@ export default function AlbumGalleryClient({
   targetCount?: number | null
   isDirectAlbumLink: boolean
   allAlbums?: { id: string; name: string; slug: string; selectedCount: number; parent_album_id: string | null; coverUrl: string | null }[]
+  language?: SelectionLanguage
 }) {
+  const t = SELECTION_STRINGS[language]
   const router = useRouter()
   const [images, setImages] = useState(initialImages)
   const [activeImageId, setActiveImageId] = useState<string | null>(null)
@@ -176,7 +180,7 @@ export default function AlbumGalleryClient({
 
   const albumName = 'name' in album ? album.name : ''
   const counterCount = isDirectAlbumLink ? localSelected : displayTotal
-  const counterLabel = target != null ? `${counterCount} av ${target} valgt` : `${counterCount} valgt`
+  const counterLabel = t.selectedOf(counterCount, target)
   const counterColor = isOver ? S.warning : S.text
 
   if (submitted && isDirectAlbumLink) {
@@ -184,12 +188,12 @@ export default function AlbumGalleryClient({
       <div style={{ minHeight: '100dvh', background: S.bg }}>
         <div style={{ background: S.surface, borderBottom: `1px solid ${S.border}`, padding: '13px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontFamily: 'Georgia, serif', fontSize: '1rem', letterSpacing: '0.1em', color: S.gold, textTransform: 'uppercase' }}>Leafilms</span>
-          <span style={{ fontFamily: 'sans-serif', fontSize: '0.7rem', color: S.green }}>✓ Innsendt</span>
+          <span style={{ fontFamily: 'sans-serif', fontSize: '0.7rem', color: S.green }}>{t.submittedCheck}</span>
         </div>
         <div style={{ maxWidth: 480, margin: '48px auto', padding: '0 16px', textAlign: 'center' }}>
-          <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>Takk! Ditt utvalg er mottatt.</p>
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.95rem', color: S.green, fontWeight: 600 }}>{t.thanksReceived}</p>
           <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text2, marginTop: 8 }}>
-            Du valgte {localSelected} {localSelected === 1 ? 'bilde' : 'bilder'}.
+            {t.youSelected(localSelected)}
           </p>
         </div>
       </div>
@@ -235,7 +239,7 @@ export default function AlbumGalleryClient({
                   onClick={() => router.push(`/s/${token}`)}
                   style={{ borderRight: `1px solid ${S.border}`, paddingRight: 16 }}
                 >
-                  ← Oversikt
+                  {t.backToOverviewTab}
                 </div>
               )}
               {siblings.map(a => {
@@ -270,7 +274,7 @@ export default function AlbumGalleryClient({
                 const children = allAlbums.filter(a => a.parent_album_id === currentAlbumMeta?.id)
                 return children.length > 0 ? (
                   <div style={{ gridColumn: '1/-1', marginBottom: 8 }}>
-                    <p style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: S.text3, marginBottom: 6 }}>Mapper</p>
+                    <p style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: S.text3, marginBottom: 6 }}>{t.folders}</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 6 }}>
                       {children.map(child => (
                         <div
@@ -289,7 +293,7 @@ export default function AlbumGalleryClient({
                           <div style={{ padding: '5px 7px' }}>
                             <div style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', fontWeight: 600, color: S.text }}>{child.name}</div>
                             {child.selectedCount > 0 && (
-                              <div style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: S.gold, marginTop: 1 }}>{child.selectedCount} valgt</div>
+                              <div style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: S.gold, marginTop: 1 }}>{t.selectedBadge(child.selectedCount)}</div>
                             )}
                           </div>
                         </div>
@@ -345,7 +349,7 @@ export default function AlbumGalleryClient({
                           transition: 'background 0.12s',
                         }}
                       >
-                        {sel ? '✓ Valgt' : 'Velg'}
+                        {sel ? t.selectedShort : t.select}
                       </button>
                     </div>
                   </div>
@@ -366,7 +370,7 @@ export default function AlbumGalleryClient({
                     </div>
                     <span style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text, padding: '0 8px', textAlign: 'center', wordBreak: 'break-word' }}>{video.title}</span>
                     <span style={{ fontFamily: 'sans-serif', fontSize: '0.62rem', color: video.status === 'submitted' ? S.green : S.text2 }}>
-                      {video.status === 'submitted' ? 'Sendt inn' : video.comment_count > 0 ? `${video.comment_count} kommentar${video.comment_count === 1 ? '' : 'er'}` : 'Video'}
+                      {video.status === 'submitted' ? t.submittedBadge : video.comment_count > 0 ? t.commentCount(video.comment_count) : t.videoLabel}
                     </span>
                   </div>
                 </Link>
@@ -384,7 +388,7 @@ export default function AlbumGalleryClient({
                   color: localSelected > 0 ? '#0C0B09' : S.text3,
                 }}
               >
-                {isDirectAlbumLink ? `Send inn utvalg (${localSelected})` : 'Gå til gjennomgang'}
+                {isDirectAlbumLink ? t.submitSelection(localSelected) : t.goToReview}
               </button>
             </div>
           </div>
@@ -398,6 +402,7 @@ export default function AlbumGalleryClient({
               onCommentChange={setCommentDraft}
               onSave={() => activeImage && saveComment(activeImage.id, commentDraft)}
               saving={savingComment}
+              t={t}
             />
             <div className="ag-send-desktop">
               <button
@@ -412,7 +417,7 @@ export default function AlbumGalleryClient({
                   transition: 'background 0.15s',
                 }}
               >
-                {isDirectAlbumLink ? `Send inn utvalg (${localSelected})` : 'Gå til gjennomgang'}
+                {isDirectAlbumLink ? t.submitSelection(localSelected) : t.goToReview}
               </button>
             </div>
           </div>
@@ -422,14 +427,14 @@ export default function AlbumGalleryClient({
         {showConfirm && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,11,9,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50 }}>
             <div style={{ background: S.surface, border: `1px solid ${S.border}`, borderRadius: 12, padding: '28px 24px', maxWidth: 360, width: '100%' }}>
-              <p style={{ fontFamily: 'sans-serif', fontSize: '1rem', color: S.text, fontWeight: 600, marginBottom: 12 }}>Send inn utvalg?</p>
+              <p style={{ fontFamily: 'sans-serif', fontSize: '1rem', color: S.text, fontWeight: 600, marginBottom: 12 }}>{t.confirmTitle}</p>
               <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text2, marginBottom: 22 }}>
-                Du sender inn {localSelected} {localSelected === 1 ? 'bilde' : 'bilder'}. Dette kan ikke endres etterpå.
+                {t.confirmBodyAlbum(localSelected)}
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setShowConfirm(false)} style={{ flex: 1, padding: '11px', borderRadius: 8, border: `1px solid ${S.border}`, background: 'none', color: S.text2, fontFamily: 'sans-serif', fontSize: '0.85rem', cursor: 'pointer' }}>Avbryt</button>
+                <button onClick={() => setShowConfirm(false)} style={{ flex: 1, padding: '11px', borderRadius: 8, border: `1px solid ${S.border}`, background: 'none', color: S.text2, fontFamily: 'sans-serif', fontSize: '0.85rem', cursor: 'pointer' }}>{t.cancel}</button>
                 <button onClick={handleSubmit} disabled={submitting} style={{ flex: 1, padding: '11px', borderRadius: 8, border: 'none', background: S.gold, color: '#0C0B09', fontFamily: 'sans-serif', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', opacity: submitting ? 0.7 : 1 }}>
-                  {submitting ? 'Sender...' : 'Bekreft'}
+                  {submitting ? t.sending : t.confirm}
                 </button>
               </div>
             </div>
@@ -474,7 +479,7 @@ export default function AlbumGalleryClient({
                   onClick={() => handleToggle(img.id)}
                   style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', marginBottom: 12, fontFamily: 'sans-serif', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', background: sel ? S.gold : S.surface2, color: sel ? '#0C0B09' : S.text }}
                 >
-                  {sel ? '✓ Valgt' : 'Velg dette bildet'}
+                  {sel ? t.selectedShort : t.selectThisPhoto}
                 </button>
                 {existingComment && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
@@ -487,7 +492,7 @@ export default function AlbumGalleryClient({
                   <textarea
                     value={commentDraft}
                     onChange={e => setCommentDraft(e.target.value)}
-                    placeholder="Skriv en kommentar til fotografen..."
+                    placeholder={t.writeCommentToPhotographer}
                     rows={2}
                     style={{ flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.85rem', color: S.text, background: S.bg, border: `1px solid ${S.border}`, borderRadius: 10, padding: '8px 10px', outline: 'none' }}
                   />
@@ -510,13 +515,14 @@ export default function AlbumGalleryClient({
 
 // ---------------------------------------------------------------------------
 
-function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange, onSave, saving }: {
+function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange, onSave, saving, t }: {
   image: AnyImage | null
   isDirectAlbumLink: boolean
   commentDraft: string
-  onCommentChange: (t: string) => void
+  onCommentChange: (text: string) => void
   onSave: () => void
   saving: boolean
+  t: SelectionStrings
 }) {
   if (!image) {
     return <div style={{ flex: 1 }} />
@@ -556,7 +562,7 @@ function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange,
           <textarea
             value={commentDraft}
             onChange={e => onCommentChange(e.target.value)}
-            placeholder="Skriv en kommentar..."
+            placeholder={t.writeComment}
             rows={2}
             style={{
               flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.82rem',

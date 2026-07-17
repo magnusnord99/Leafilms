@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getGalleryForCustomer, galleryTokenExists, verifyGalleryPin } from '@/lib/actions/selections'
+import { getGalleryLanguage } from '@/lib/customer-language'
 import PinClient from '../PinClient'
 import AlbumGalleryClient from './AlbumGalleryClient'
 
@@ -14,7 +15,7 @@ export default async function AlbumPage({
 
   if (!data) {
     if (!(await galleryTokenExists(token))) notFound()
-    return <PinClient token={token} verifyAction={verifyGalleryPin} />
+    return <PinClient token={token} verifyAction={verifyGalleryPin} language={await getGalleryLanguage(token)} />
   }
 
   const album = data.albums.find(a => a.slug === albumSlug)
@@ -23,6 +24,7 @@ export default async function AlbumPage({
   return (
     <AlbumGalleryClient
       token={token}
+      language={await getGalleryLanguage(token)}
       galleryToken={token}
       album={album}
       images={album.images}

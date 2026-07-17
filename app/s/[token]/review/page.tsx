@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getGalleryForCustomer, galleryTokenExists, verifyGalleryPin } from '@/lib/actions/selections'
+import { getGalleryLanguage } from '@/lib/customer-language'
 import PinClient from '../PinClient'
 import ReviewClient from './ReviewClient'
 
@@ -13,7 +14,7 @@ export default async function ReviewPage({
 
   if (!data) {
     if (!(await galleryTokenExists(token))) notFound()
-    return <PinClient token={token} verifyAction={verifyGalleryPin} />
+    return <PinClient token={token} verifyAction={verifyGalleryPin} language={await getGalleryLanguage(token)} />
   }
 
   const selectedAlbums = data.albums
@@ -31,6 +32,7 @@ export default async function ReviewPage({
       gallery={data.gallery}
       selectedAlbums={selectedAlbums}
       totalSelected={totalSelected}
+      language={await getGalleryLanguage(token)}
     />
   )
 }

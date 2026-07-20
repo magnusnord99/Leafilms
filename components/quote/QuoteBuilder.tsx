@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
-import { calculateQuoteTotals, getAddonAmounts, addonTotalPrice } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
@@ -600,24 +600,23 @@ function PostProductionSection({
 }
 
 // ─── Totals panel ──────────────────────────────────────────────────────────────
+// Kategoriradene under speiler nøyaktig det admin sin "Generer PDF"-knapp produserer (som tar
+// med alle konfigurerte tillegg — se generateQuotePDF sin `selectedAddonIds === undefined`-gren).
+// Bruker samme delte funksjon som PDF-en for å garantere at tallene aldri kan divergere igjen.
 function TotalsPanel({ data }: { data: QuoteBuilderData }) {
-  const t = calculateQuoteTotals(data)
+  const allAddonIds = (data.optionalAddons ?? []).map(a => a.id)
+  const t = calculateQuoteTotals(data, allAddonIds)
+  const quote = convertBuilderDataToQuoteData(data, allAddonIds)
   const discountPct = Math.round((data.discountFactor ?? 0) * 100)
   const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
   const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.danger, fontWeight: 600, fontFamily: 'var(--font-dm-sans)' }
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <p style={{ ...sectionLabelStyle, marginBottom: 12 }}>Totaler</p>
+      <p style={{ ...sectionLabelStyle, marginBottom: 12 }}>Totaler (eks. MVA)</p>
 
-      {t.crewTotal > 0 && (
-        <div style={rowStyle}><span>Mannskap (opptak)</span><span>{formatNOK(t.crewTotal)}</span></div>
-      )}
-      {t.equipmentTotal > 0 && (
-        <div style={rowStyle}><span>Utstyrsliste</span><span>{formatNOK(t.equipmentTotal)}</span></div>
-      )}
-      {t.postProductionTotal > 0 && <div style={rowStyle}><span>Post-produksjon</span><span>{formatNOK(t.postProductionTotal)}</span></div>}
-      {t.otherCostsTotal > 0 && <div style={rowStyle}><span>Andre kostnader</span><span>{formatNOK(t.otherCostsTotal)}</span></div>}
-      {t.licensingTotal > 0 && <div style={rowStyle}><span>Lisensiering</span><span>{formatNOK(t.licensingTotal)}</span></div>}
+      {quote.lineItems?.map(item => (
+        <div key={item.description} style={rowStyle}><span>{item.description}</span><span>{formatNOK(item.amount)}</span></div>
+      ))}
 
       {t.discountAmount > 0 && (
         <div style={discountRowStyle}>

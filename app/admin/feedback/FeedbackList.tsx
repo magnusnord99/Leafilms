@@ -211,8 +211,11 @@ function Section({ title, color, items }: { title: string; color: string; items:
 }
 
 export function FeedbackList({ initialItems }: { initialItems: FeedbackItem[] }) {
-  const bugs = initialItems.filter(i => i.type === 'bug')
-  const wishes = initialItems.filter(i => i.type === 'wish')
+  // Løste saker synker til bunnen (stabil sortering — beholder ellers prioritet/dato-rekkefølgen
+  // fra getFeedback), slik at det er lett å se hva som faktisk gjenstår å gjøre.
+  const sorted = [...initialItems].sort((a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved'))
+  const bugs = sorted.filter(i => i.type === 'bug')
+  const wishes = sorted.filter(i => i.type === 'wish')
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px' }}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
@@ -66,19 +66,20 @@ export default function RoomDetailPage() {
   const [addError, setAddError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  function load() {
+  const load = useCallback(() => {
     getRoomDetail(roomId).then(data => {
       setDetail(data)
       setLoading(false)
     })
-  }
+  }, [roomId])
 
-  useEffect(() => { load() }, [roomId])
+  useEffect(() => { load() }, [load])
 
   function toggleInRoom(id: string) {
     setSelectedInRoom(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -86,7 +87,8 @@ export default function RoomDetailPage() {
   function toggleCheckedOut(id: string) {
     setSelectedCheckedOut(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }

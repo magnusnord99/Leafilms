@@ -42,6 +42,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin/calendar', label: 'Kalender' },
       { href: '/admin/preprod',    label: 'Pre-prod' },
+      { href: '/admin/utstyr',     label: 'Utstyr' },
       { href: '/admin/boards',     label: 'Boards' },
       { href: '/admin/postprod',   label: 'Post-prod' },
       { href: '/admin/selections',  label: 'Gallerier' },

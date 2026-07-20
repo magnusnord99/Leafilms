@@ -1086,11 +1086,12 @@ export function QuoteBuilder({
             </div>
             <div>
               <label style={labelStyle}>Hva leveres til kunden</label>
-              <input
-                style={fieldStyle}
+              <textarea
+                style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'var(--font-dm-sans)', lineHeight: 1.6 }}
+                rows={3}
                 value={data.deliveryDescription ?? ''}
                 onChange={e => set('deliveryDescription', e.target.value)}
-                placeholder="F.eks. 2 kampanjefilmer á 90 sek + 30 retuserte produktbilder"
+                placeholder={'F.eks.\n2 kampanjefilmer á 90 sek\n30 retuserte produktbilder'}
               />
             </div>
             {customers.length > 0 && (

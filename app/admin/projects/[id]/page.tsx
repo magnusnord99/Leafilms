@@ -640,6 +640,10 @@ export default function ProjectHubPage() {
     bedrift: '', kundeKontakt: '', oppstartDato: '', opptakDatoer: '', leveranse: '', totalpris: '',
   })
   const [generatingContract, setGeneratingContract] = useState(false)
+  // Snapshot av kontraktForm på det tidspunktet kontraktteksten sist ble generert/lastet —
+  // brukes til å oppdage om noen har endret felt (org.nummer m.fl.) uten å regenerere teksten
+  // før publisering (feedback 2702e25d: feltet ble lagret, men PDF-en fikk aldri den nye teksten).
+  const [lastGeneratedFormFields, setLastGeneratedFormFields] = useState<ContractFormFields | null>(null)
 
   const [contractOurSignature, setContractOurSignature] = useState<OurSignature | null>(null)
   const [mySignatureImage, setMySignatureImage] = useState<string | null>(null)
@@ -862,7 +866,7 @@ export default function ProjectHubPage() {
     setContractPdfUrl(data.pdfUrl)
     setContractHasText(data.hasContractText)
     setContractAutoVars(data.autoVars)
-    setContractForm({
+    const loadedForm = {
       orgNummer: data.formDefaults.orgNummer,
       produksjonsPeriode: data.formDefaults.produksjonsPeriode,
       signeringsSted: data.formDefaults.signeringsSted,
@@ -873,7 +877,11 @@ export default function ProjectHubPage() {
       opptakDatoer: data.formDefaults.opptakDatoer,
       leveranse: data.formDefaults.leveranse,
       totalpris: data.formDefaults.totalpris,
-    })
+    }
+    setContractForm(loadedForm)
+    // data.formDefaults kommer fra samme lagrede rad som data.contractText (begge satt sammen
+    // i publishContract), så de er garantert i sync akkurat nå ved innlasting.
+    setLastGeneratedFormFields(toContractFormFields(loadedForm))
     setContractFormOpen(!data.hasContractText)
     setContractOurSignature(data.ourSignature)
     setMySignatureImage(data.mySignatureImage)
@@ -896,6 +904,21 @@ export default function ProjectHubPage() {
     }
   }
 
+  function toContractFormFields(form: typeof contractForm): ContractFormFields {
+    return {
+      orgNummerOverride: form.orgNummer || undefined,
+      produksjonsPeriode: form.produksjonsPeriode || undefined,
+      signeringsSted: form.signeringsSted || undefined,
+      signeringsDato: form.signeringsDato || undefined,
+      bedriftOverride: form.bedrift || undefined,
+      kundeKontaktOverride: form.kundeKontakt || undefined,
+      oppstartDatoOverride: form.oppstartDato || undefined,
+      opptakDatoerOverride: form.opptakDatoer || undefined,
+      leveranseOverride: form.leveranse || undefined,
+      totalprisOverride: form.totalpris || undefined,
+    }
+  }
+
   async function handleGenerateContract() {
     const hasExistingText = contractText.trim().length > 0
     if (hasExistingText && !confirm('Dette bygger kontraktteksten på nytt fra mal og felt, og overskriver eventuelle manuelle endringer i teksten under. Fortsette?')) {
@@ -903,20 +926,10 @@ export default function ProjectHubPage() {
     }
     setGeneratingContract(true)
     try {
-      const formFields: ContractFormFields = {
-        orgNummerOverride: contractForm.orgNummer || undefined,
-        produksjonsPeriode: contractForm.produksjonsPeriode || undefined,
-        signeringsSted: contractForm.signeringsSted || undefined,
-        signeringsDato: contractForm.signeringsDato || undefined,
-        bedriftOverride: contractForm.bedrift || undefined,
-        kundeKontaktOverride: contractForm.kundeKontakt || undefined,
-        oppstartDatoOverride: contractForm.oppstartDato || undefined,
-        opptakDatoerOverride: contractForm.opptakDatoer || undefined,
-        leveranseOverride: contractForm.leveranse || undefined,
-        totalprisOverride: contractForm.totalpris || undefined,
-      }
+      const formFields = toContractFormFields(contractForm)
       const text = await generateContractText(projectId, formFields)
       setContractText(text)
+      setLastGeneratedFormFields(formFields)
       setContractSaved(false)
       setContractFormOpen(false)
     } finally {
@@ -925,19 +938,23 @@ export default function ProjectHubPage() {
   }
 
   async function doPublishContract(newSignature?: { signatureImage: string; saveToProfile: boolean }) {
+    const formFields = toContractFormFields(contractForm)
+    // Feltene kan være endret siden kontraktteksten sist ble generert (f.eks. org.nummer eller
+    // signeringssted redigert uten å trykke "Regenerer kontrakt" etterpå) — uten dette varselet
+    // publiseres da en tekst som ikke stemmer med de nye feltverdiene, selv om feltene i seg selv
+    // lagres riktig (feedback 2702e25d).
+    const fieldsChangedSinceGenerate =
+      lastGeneratedFormFields !== null &&
+      JSON.stringify(formFields) !== JSON.stringify(lastGeneratedFormFields)
+    if (fieldsChangedSinceGenerate) {
+      const proceed = confirm(
+        'Feltene (org.nummer, produksjonsperiode, e.l.) er endret siden kontraktteksten sist ble generert — den publiserte teksten vil derfor ikke ta med de nye verdiene.\n\nTrykk Avbryt, gå til "Rediger felt" og trykk "Regenerer kontrakt" først. Eller trykk OK for å publisere gjeldende tekst som den er.'
+      )
+      if (!proceed) return
+    }
     setPublishingContract(true)
-    await publishContract(projectId, contractText, {
-      orgNummerOverride: contractForm.orgNummer || undefined,
-      produksjonsPeriode: contractForm.produksjonsPeriode || undefined,
-      signeringsSted: contractForm.signeringsSted || undefined,
-      signeringsDato: contractForm.signeringsDato || undefined,
-      bedriftOverride: contractForm.bedrift || undefined,
-      kundeKontaktOverride: contractForm.kundeKontakt || undefined,
-      oppstartDatoOverride: contractForm.oppstartDato || undefined,
-      opptakDatoerOverride: contractForm.opptakDatoer || undefined,
-      leveranseOverride: contractForm.leveranse || undefined,
-      totalprisOverride: contractForm.totalpris || undefined,
-    }, newSignature)
+    await publishContract(projectId, contractText, formFields, newSignature)
+    setLastGeneratedFormFields(formFields)
     setContractHasText(true)
     setContractIsPublished(true)
     setStepperContractPublished(true)

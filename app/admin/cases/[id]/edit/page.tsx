@@ -112,13 +112,20 @@ export default function EditCase({ params }: Props) {
     }
   }
 
+  const MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024 // 5MB — matcher grensen på feedback-bucketen
+
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setThumbnailFile(file)
-      setThumbnailPreview(URL.createObjectURL(file))
-      setExistingThumbnail(null)
+    if (!file) return
+    if (file.size > MAX_THUMBNAIL_SIZE) {
+      setError(`Bildet er for stort (${(file.size / 1024 / 1024).toFixed(1)} MB) — maks er 5 MB.`)
+      e.target.value = ''
+      return
     }
+    setError(null)
+    setThumbnailFile(file)
+    setThumbnailPreview(URL.createObjectURL(file))
+    setExistingThumbnail(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

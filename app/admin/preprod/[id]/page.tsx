@@ -8,6 +8,7 @@ import {
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
 import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
+import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import BoardsButton from './BoardsButton'
 import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task } from '@/lib/types'
@@ -124,10 +125,11 @@ function buildPackingCandidates(
   return [...crewCandidates, ...rest]
 }
 
-function PackingAssignee({
-  item, candidates, onAssign,
+function AssigneePicker({
+  assignedId, assignedName, candidates, onAssign,
 }: {
-  item: PackingItem
+  assignedId: string | null
+  assignedName: string | null
   candidates: PackingCandidate[]
   onAssign: (assignee: PackingCandidate | null) => void
 }) {
@@ -143,8 +145,8 @@ function PackingAssignee({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const assigned = item.assignee_id
-    ? { id: item.assignee_id, name: item.assignee_name ?? '?', color: candidates.find(c => c.id === item.assignee_id)?.color ?? null }
+  const assigned = assignedId
+    ? { id: assignedId, name: assignedName ?? '?', color: candidates.find(c => c.id === assignedId)?.color ?? null }
     : null
 
   return (
@@ -198,13 +200,13 @@ function PackingAssignee({
               onClick={() => { setOpen(false); onAssign(cand) }}
               style={{
                 width: '100%', textAlign: 'left', padding: '7px 12px',
-                background: cand.id === item.assignee_id ? `${C.accent}14` : 'none',
+                background: cand.id === assignedId ? `${C.accent}14` : 'none',
                 border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-dm-sans)',
               }}
             >
               <Avatar id={cand.id} name={cand.name} color={cand.color} size={18} />
-              <span style={{ fontSize: '0.78rem', color: C.text, fontWeight: cand.id === item.assignee_id ? 600 : 400 }}>{cand.name}</span>
+              <span style={{ fontSize: '0.78rem', color: C.text, fontWeight: cand.id === assignedId ? 600 : 400 }}>{cand.name}</span>
             </button>
           ))}
         </div>
@@ -213,61 +215,66 @@ function PackingAssignee({
   )
 }
 
-function PackingList({
-  items, projectId, quoteEquipment, prodCrew, profiles, onChange,
+function PackingSection({
+  projectId, freetextItems, quoteEquipment, storageUnits, prodCrew, profiles,
+  onFreetextChange, onAssignUnit,
 }: {
-  items: PackingItem[]
   projectId: string
+  freetextItems: PackingItem[]
   quoteEquipment: { name: string }[]
+  storageUnits: ProjectEquipmentUnit[]
   prodCrew: PreprodCrewMember[]
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
-  onChange: (items: PackingItem[]) => void
+  onFreetextChange: (items: PackingItem[]) => void
+  onAssignUnit: (unitId: string, assignee: PackingCandidate | null) => void
 }) {
   const [newItem, setNewItem] = useState('')
   const candidates = buildPackingCandidates(prodCrew, profiles)
 
   function save(next: PackingItem[]) {
-    onChange(next)
+    onFreetextChange(next)
     updatePreprodData(projectId, { packing_list: next })
   }
 
   function addItem() {
     if (!newItem.trim()) return
-    const next = [...items, { id: crypto.randomUUID(), name: newItem.trim(), qty: 1, checked: false }]
+    const next = [...freetextItems, { id: crypto.randomUUID(), name: newItem.trim(), qty: 1, checked: false }]
     setNewItem('')
     save(next)
   }
 
   function toggleItem(id: string) {
-    save(items.map(i => i.id === id ? { ...i, checked: !i.checked } : i))
+    save(freetextItems.map(i => i.id === id ? { ...i, checked: !i.checked } : i))
   }
 
   function removeItem(id: string) {
-    save(items.filter(i => i.id !== id))
+    save(freetextItems.filter(i => i.id !== id))
   }
 
   function assignItem(id: string, assignee: PackingCandidate | null) {
-    save(items.map(i => i.id === id
+    save(freetextItems.map(i => i.id === id
       ? { ...i, assignee_id: assignee?.id ?? null, assignee_name: assignee?.name ?? null }
       : i
     ))
   }
 
   function importFromQuote() {
-    const existing = new Set(items.map(i => i.name.toLowerCase()))
+    const existing = new Set(freetextItems.map(i => i.name.toLowerCase()))
     const toAdd = quoteEquipment
       .filter(e => !existing.has(e.name.toLowerCase()))
       .map(e => ({ id: crypto.randomUUID(), name: e.name, qty: 1, checked: false }))
-    if (toAdd.length > 0) save([...items, ...toAdd])
+    if (toAdd.length > 0) save([...freetextItems, ...toAdd])
   }
 
-  const done = items.filter(i => i.checked).length
+  const freetextDone = freetextItems.filter(i => i.checked).length
+  const totalDone = freetextDone + storageUnits.length
+  const totalCount = freetextItems.length + storageUnits.length
 
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <SectionTitle>
-          Pakkeliste {items.length > 0 && `(${done}/${items.length})`}
+          Pakkeliste {totalCount > 0 && `(${totalDone}/${totalCount})`}
         </SectionTitle>
         {quoteEquipment.length > 0 && (
           <button
@@ -283,88 +290,129 @@ function PackingList({
         )}
       </div>
 
-      {/* Add new */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: items.length > 0 ? 12 : 0 }}>
-        <input
-          value={newItem}
-          onChange={e => setNewItem(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addItem()}
-          placeholder="Legg til utstyr..."
-          style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
-            color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
-            borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
-          }}
-          onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-          onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-        />
-        <button
-          onClick={addItem}
-          disabled={!newItem.trim()}
-          style={{
-            fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
-            padding: '7px 12px', borderRadius: 6, cursor: newItem.trim() ? 'pointer' : 'not-allowed',
-            background: newItem.trim() ? C.accentBg : 'transparent',
-            color: newItem.trim() ? C.accent : C.text3,
-            border: `1px solid ${newItem.trim() ? 'rgba(124,92,252,0.25)' : C.border}`,
-            transition: 'all 0.12s',
-          }}
-        >
-          + Legg til
-        </button>
+      {/* Utstyr fra lager */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text3 }}>
+            Utstyr fra lager
+          </p>
+          <Link
+            href="/admin/utstyr"
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'none' }}
+          >
+            Hent mer utstyr →
+          </Link>
+        </div>
+        {storageUnits.length === 0 ? (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
+            Ingen utstyr hentet fra lager ennå
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {storageUnits.map(unit => (
+              <div key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, flex: 1 }}>
+                  {unit.catalog_name} <span style={{ color: C.text3 }}>{unit.unit_label}</span>
+                </span>
+                <AssigneePicker
+                  assignedId={unit.assignee_id}
+                  assignedName={unit.assignee_name}
+                  candidates={candidates}
+                  onAssign={assignee => onAssignUnit(unit.id, assignee)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* List */}
-      {items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {items.map(item => (
-            <div
-              key={item.id}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}
-            >
-              <button
-                onClick={() => toggleItem(item.id)}
-                style={{
-                  width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
-                  background: item.checked ? 'rgba(76,175,125,0.2)' : 'transparent',
-                  border: `1.5px solid ${item.checked ? C.success : C.text3}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-                  transition: 'all 0.12s',
-                }}
-              >
-                {item.checked && (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.success} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-              <span style={{
-                fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
-                color: item.checked ? C.text3 : C.text,
-                textDecoration: item.checked ? 'line-through' : 'none',
-                flex: 1,
-              }}>
-                {item.name}
-              </span>
-              <PackingAssignee
-                item={item}
-                candidates={candidates}
-                onAssign={assignee => assignItem(item.id, assignee)}
-              />
-              <button
-                onClick={() => removeItem(item.id)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 2l8 8M10 2L2 10" />
-                </svg>
-              </button>
-            </div>
-          ))}
+      {/* Annet utstyr */}
+      <div>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text3, marginBottom: 8 }}>
+          Annet utstyr
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: freetextItems.length > 0 ? 12 : 0 }}>
+          <input
+            value={newItem}
+            onChange={e => setNewItem(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addItem()}
+            placeholder="Legg til utstyr..."
+            style={{
+              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+              color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
+              borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+            onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+          />
+          <button
+            onClick={addItem}
+            disabled={!newItem.trim()}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+              padding: '7px 12px', borderRadius: 6, cursor: newItem.trim() ? 'pointer' : 'not-allowed',
+              background: newItem.trim() ? C.accentBg : 'transparent',
+              color: newItem.trim() ? C.accent : C.text3,
+              border: `1px solid ${newItem.trim() ? 'rgba(124,92,252,0.25)' : C.border}`,
+              transition: 'all 0.12s',
+            }}
+          >
+            + Legg til
+          </button>
         </div>
-      )}
+
+        {freetextItems.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {freetextItems.map(item => (
+              <div
+                key={item.id}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}
+              >
+                <button
+                  onClick={() => toggleItem(item.id)}
+                  style={{
+                    width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+                    background: item.checked ? 'rgba(76,175,125,0.2)' : 'transparent',
+                    border: `1.5px solid ${item.checked ? C.success : C.text3}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {item.checked && (
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.success} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+                <span style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
+                  color: item.checked ? C.text3 : C.text,
+                  textDecoration: item.checked ? 'line-through' : 'none',
+                  flex: 1,
+                }}>
+                  {item.name}
+                </span>
+                <AssigneePicker
+                  assignedId={item.assignee_id ?? null}
+                  assignedName={item.assignee_name ?? null}
+                  candidates={candidates}
+                  onAssign={assignee => assignItem(item.id, assignee)}
+                />
+                <button
+                  onClick={() => removeItem(item.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M2 2l8 8M10 2L2 10" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1076,6 +1124,7 @@ export default function PreprodDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [advancing, setAdvancing] = useState(false)
+  const [storageUnits, setStorageUnits] = useState<ProjectEquipmentUnit[]>([])
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -1093,6 +1142,7 @@ export default function PreprodDetailPage() {
       }
       setLoading(false)
     })
+    getProjectEquipment(id).then(setStorageUnits)
     getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
   }, [id])
 
@@ -1117,6 +1167,14 @@ export default function PreprodDetailPage() {
 
   function patchPreprod(patch: Partial<PreprodData>) {
     setPreprod(prev => prev ? { ...prev, ...patch } : prev)
+  }
+
+  function handleAssignUnit(unitId: string, assignee: PackingCandidate | null) {
+    setStorageUnits(prev => prev.map(u => u.id === unitId
+      ? { ...u, assignee_id: assignee?.id ?? null, assignee_name: assignee?.name ?? null }
+      : u
+    ))
+    setUnitAssignee(unitId, assignee?.id ?? null)
   }
 
   function handleTaskStatusChange(taskId: string, status: Task['status']) {
@@ -1348,13 +1406,15 @@ export default function PreprodDetailPage() {
               projectId={id}
               onChange={patchPreprod}
             />
-            <PackingList
-              items={preprod.packing_list}
+            <PackingSection
               projectId={id}
+              freetextItems={preprod.packing_list}
               quoteEquipment={project.quote_equipment}
+              storageUnits={storageUnits}
               prodCrew={preprod.prod_crew}
               profiles={profiles}
-              onChange={next => patchPreprod({ packing_list: next })}
+              onFreetextChange={next => patchPreprod({ packing_list: next })}
+              onAssignUnit={handleAssignUnit}
             />
             <InvoiceAssigneeCard
               projectId={id}

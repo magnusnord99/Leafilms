@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { randomBytes } from 'crypto'
 
 export type ProjectForTransfer = {
@@ -145,7 +145,9 @@ export async function getTransferByToken(token: string): Promise<{
   transfer: Transfer
   link: TransferLink
 } | null> {
-  const supabase = await createClient()
+  // Public transfer data must only be read after filtering by the secret token.
+  // Keep the tables closed to anon/authenticated Data API enumeration.
+  const supabase = createServiceClient()
 
   const { data: link, error: linkError } = await supabase
     .from('transfer_links')
@@ -241,12 +243,17 @@ export async function recordDownload(token: string): Promise<{
   const result = await getTransferByToken(token)
   if (!result) return { error: 'Leveransen finnes ikke eller er utløpt' }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
-  await supabase
+  const { error } = await supabase
     .from('transfers')
     .update({ download_count: result.transfer.download_count + 1 })
     .eq('id', result.transfer.id)
+
+  if (error) {
+    console.error('[recordDownload]', error)
+    return { error: 'Kunne ikke registrere nedlastingen' }
+  }
 
   // TODO: Generer presigned R2 download-URL her
   // const url = await getSignedUrl(r2Client, new GetObjectCommand({

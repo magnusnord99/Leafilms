@@ -1,30 +1,8 @@
--- 095_transfers_public_download_rls.sql
--- Bug: kundens nedlastingsside (/d/[token]) viser "Lenken er ikke tilgjengelig" for
--- ALLE lenker, uansett status. Årsak: transfers-tabellens SELECT-policy krever
--- auth.uid() is not null, så en ikke-innlogget kunde får aldri lest transfer-raden
--- via joinen fra transfer_links — selv om transfer_links selv har en åpen
--- anon-policy (USING (true), satt i 074_transfers.sql).
---
--- Fix følger samme sikkerhetsmodell som transfer_links allerede bruker: tilgang
--- er gatet av at man kjenner den ugjettelige 32-byte token'en (auth-laget i
--- appkoden i getTransferByToken sjekker expires_at/status/max_downloads), ikke av
--- innlogging. Denne policyen gir kun lesetilgang til transfers som har minst én
--- tilhørende lenke — like permissivt som transfer_links sin eksisterende policy,
--- introduserer ikke en ny eksponeringsklasse.
+-- Public transfer links are resolved server-side with the service client after
+-- filtering on the unguessable token. Direct Data API access must remain closed:
+-- a SELECT policy cannot tell whether the caller supplied the matching token,
+-- and an UPDATE policy cannot limit the caller to download_count.
 
-CREATE POLICY "Anon kan lese leveranse via gyldig lenke"
-  ON transfers FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM transfer_links tl WHERE tl.transfer_id = transfers.id)
-  );
-
--- Samme hull gjelder nedlastingstelleren (download_count), som recordDownload()
--- oppdaterer på vegne av kunden når filnedlastingen faktisk trigges.
-CREATE POLICY "Anon kan oppdatere nedlastingsteller via gyldig lenke"
-  ON transfers FOR UPDATE
-  USING (
-    EXISTS (SELECT 1 FROM transfer_links tl WHERE tl.transfer_id = transfers.id)
-  )
-  WITH CHECK (
-    EXISTS (SELECT 1 FROM transfer_links tl WHERE tl.transfer_id = transfers.id)
-  );
+DROP POLICY IF EXISTS "Anon kan lese lenke via token" ON public.transfer_links;
+DROP POLICY IF EXISTS "Anon kan lese leveranse via gyldig lenke" ON public.transfers;
+DROP POLICY IF EXISTS "Anon kan oppdatere nedlastingsteller via gyldig lenke" ON public.transfers;

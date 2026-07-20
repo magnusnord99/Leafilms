@@ -11,7 +11,8 @@
     "migrate": "bash scripts/migrate.sh",
     "migrate:single": "bash scripts/migrate-single.sh",
     "migrate:show": "tsx scripts/migrate-show.ts",
-    "migrate:psql": "bash scripts/run-migrations-psql.sh"
+    "migrate:psql": "bash scripts/run-migrations-psql.sh",
+    "feedback:list": "tsx scripts/feedback-list.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",

@@ -638,6 +638,7 @@ export default function ProjectHubPage() {
   const [contractForm, setContractForm] = useState({
     orgNummer: '', produksjonsPeriode: '', signeringsSted: '', signeringsDato: '',
     bedrift: '', kundeKontakt: '', oppstartDato: '', opptakDatoer: '', leveranse: '', totalpris: '',
+    reiseDekkesAv: 'oppdragsgiver' as 'oppdragsgiver' | 'oppdragstaker', antallCrew: '',
   })
   const [generatingContract, setGeneratingContract] = useState(false)
   // Snapshot av kontraktForm på det tidspunktet kontraktteksten sist ble generert/lastet —
@@ -877,6 +878,8 @@ export default function ProjectHubPage() {
       opptakDatoer: data.formDefaults.opptakDatoer,
       leveranse: data.formDefaults.leveranse,
       totalpris: data.formDefaults.totalpris,
+      reiseDekkesAv: data.formDefaults.reiseDekkesAv,
+      antallCrew: data.formDefaults.antallCrew,
     }
     setContractForm(loadedForm)
     // data.formDefaults kommer fra samme lagrede rad som data.contractText (begge satt sammen
@@ -916,6 +919,8 @@ export default function ProjectHubPage() {
       opptakDatoerOverride: form.opptakDatoer || undefined,
       leveranseOverride: form.leveranse || undefined,
       totalprisOverride: form.totalpris || undefined,
+      reiseDekkesAv: form.reiseDekkesAv,
+      antallCrewOverride: form.antallCrew || undefined,
     }
   }
 
@@ -1791,6 +1796,26 @@ export default function ProjectHubPage() {
                         style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
                       />
                     </div>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Antall crew (§5.1)</label>
+                      <input
+                        value={contractForm.antallCrew}
+                        onChange={e => setContractForm(f => ({ ...f, antallCrew: e.target.value }))}
+                        placeholder="Auto-utfylt fra pristilbud"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text2, marginBottom: 4 }}>Reise/kost/losji dekkes av</label>
+                      <select
+                        value={contractForm.reiseDekkesAv}
+                        onChange={e => setContractForm(f => ({ ...f, reiseDekkesAv: e.target.value as 'oppdragsgiver' | 'oppdragstaker' }))}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', outline: 'none' }}
+                      >
+                        <option value="oppdragsgiver">Oppdragsgiver (kunden)</option>
+                        <option value="oppdragstaker">Oppdragstaker (Leafilms)</option>
+                      </select>
+                    </div>
                   </div>
 
                   <button
@@ -1806,6 +1831,9 @@ export default function ProjectHubPage() {
                   >
                     {generatingContract ? 'Genererer...' : contractText.trim() ? 'Regenerer kontrakt' : 'Generer kontrakt'}
                   </button>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, fontStyle: 'italic', margin: 0 }}>
+                    Feltene over lagres først når du trykker Publiser (se under) — «{contractText.trim() ? 'Regenerer' : 'Generer'} kontrakt» bygger kun en forhåndsvisning.
+                  </p>
                 </div>
               </div>
             )}

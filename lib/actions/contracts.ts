@@ -34,6 +34,11 @@ function formatContractDate(isoDate: string | null | undefined, language: Contra
 // Intern hjelpefunksjon: foreslå produksjonsperiode ut fra opptaksdatoer
 // ("juli 2026", eller "juli–august 2026" hvis start og slutt er ulike måneder)
 // ---------------------------------------------------------------------------
+function reiseDekkesAvLabel(who: 'oppdragsgiver' | 'oppdragstaker', language: ContractLang): string {
+  if (language === 'en') return who === 'oppdragstaker' ? 'The Contractor' : 'The Client'
+  return who === 'oppdragstaker' ? 'Oppdragstaker' : 'Oppdragsgiver'
+}
+
 function deriveProduksjonsPeriode(shootStart?: string | null, shootEnd?: string | null, language: ContractLang = 'no'): string {
   if (!shootStart) return ''
   try {
@@ -108,11 +113,15 @@ async function buildContractContext(projectId: string) {
   const proj = project as unknown as { shoot_start?: string | null; shoot_end?: string | null; delivery_description?: string | null }
 
   let totalprisStr = '___'
+  let antallCrewStr = '___'
   if (quote?.quote_data) {
     try {
       const qd = quote.quote_data as QuoteBuilderData
       const total = Math.round(calculateQuoteTotals(qd).afterDiscount)
       totalprisStr = total.toLocaleString('nb-NO') + ',-'
+      // Antall personer på opptak (crew som faktisk reiser til produksjonen) — ikke
+      // post-produksjonscrew, som normalt jobber eksternt/hjemmefra.
+      if (qd.crew?.length) antallCrewStr = String(qd.crew.length)
     } catch (e) {
       console.error('Feil ved beregning av totalpris:', e)
     }
@@ -133,6 +142,7 @@ async function buildContractContext(projectId: string) {
     opptak_datoer: opptakDatoer,
     leveranse: proj.delivery_description || '___',
     totalpris: totalprisStr,
+    antall_crew: antallCrewStr,
   }
 
   const savedFields = (contract?.form_fields ?? null) as ContractFormFields | null
@@ -148,6 +158,8 @@ async function buildContractContext(projectId: string) {
     opptakDatoer: savedFields?.opptakDatoerOverride ?? autoVars.opptak_datoer,
     leveranse: savedFields?.leveranseOverride ?? autoVars.leveranse,
     totalpris: savedFields?.totalprisOverride ?? autoVars.totalpris,
+    reiseDekkesAv: savedFields?.reiseDekkesAv ?? 'oppdragsgiver' as const,
+    antallCrew: savedFields?.antallCrewOverride ?? autoVars.antall_crew,
   }
 
   return { template, autoVars, formDefaults, contract, lang }
@@ -233,6 +245,7 @@ export async function getProjectContractData(projectId: string): Promise<{
     opptak_datoer: string
     leveranse: string
     totalpris: string
+    antall_crew: string
   }
   formDefaults: {
     orgNummer: string
@@ -245,6 +258,8 @@ export async function getProjectContractData(projectId: string): Promise<{
     opptakDatoer: string
     leveranse: string
     totalpris: string
+    reiseDekkesAv: 'oppdragsgiver' | 'oppdragstaker'
+    antallCrew: string
   }
   ourSignature: OurSignature | null
   mySignatureImage: string | null
@@ -309,6 +324,8 @@ export async function generateContractText(projectId: string, formFields: Contra
     produksjons_periode: formFields.produksjonsPeriode ?? '',
     signerings_sted: formFields.signeringsSted ?? '',
     signerings_dato: formFields.signeringsDato ? formatContractDate(formFields.signeringsDato, lang) : '',
+    antall_crew: formFields.antallCrewOverride ?? autoVars.antall_crew,
+    reise_dekkes_av: reiseDekkesAvLabel(formFields.reiseDekkesAv ?? 'oppdragsgiver', lang),
   }
 
   return fillTemplate(template, vars)

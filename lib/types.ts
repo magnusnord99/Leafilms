@@ -223,6 +223,10 @@ export type ContractFormFields = {
   opptakDatoerOverride?: string
   leveranseOverride?: string
   totalprisOverride?: string
+  /** Hvem som dekker reise/kost/losji i §5.1 — default 'oppdragsgiver' (dagens oppførsel). */
+  reiseDekkesAv?: 'oppdragsgiver' | 'oppdragstaker'
+  /** Antall personer i crew i §5.1 — auto-utfylt fra pristilbudets opptaksmannskap, overstyrbart. */
+  antallCrewOverride?: string
 }
 
 export type OurSignature = {

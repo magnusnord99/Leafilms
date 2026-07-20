@@ -624,6 +624,8 @@ export async function createTask(data: {
     const maxSortOrder = existing && existing.length > 0 ? existing[0].sort_order : 0
     const nextSortOrder = maxSortOrder + 1
 
+    const { data: { user } } = await supabase.auth.getUser()
+
     const { data: created, error } = await supabase
       .from('tasks')
       .insert({
@@ -635,7 +637,8 @@ export async function createTask(data: {
         priority: data.priority ?? null,
         status: 'todo' as const,
         sort_order: nextSortOrder,
-        created_by: null,
+        is_custom: true,
+        created_by: user?.id ?? null,
       })
       .select('*')
       .single()
@@ -652,6 +655,45 @@ export async function createTask(data: {
   } catch (err) {
     console.error('createTask unexpected error:', err)
     return null
+  }
+}
+
+/**
+ * Sletter en egendefinert oppgave. Nekter å slette maloppgaver
+ * (is_custom=false) for å beskytte den faste sjekklisten/stepperen.
+ */
+export async function deleteTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: task, error: fetchError } = await supabase
+      .from('tasks')
+      .select('is_custom')
+      .eq('id', taskId)
+      .single()
+
+    if (fetchError || !task) {
+      return { ok: false, error: 'Oppgave ikke funnet' }
+    }
+
+    if (!task.is_custom) {
+      return { ok: false, error: 'Kan ikke slette faste oppgaver' }
+    }
+
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+
+    if (error) {
+      console.error('deleteTask error:', error)
+      return { ok: false, error: 'Kunne ikke slette oppgaven' }
+    }
+
+    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
+
+    return { ok: true }
+  } catch (err) {
+    console.error('deleteTask unexpected error:', err)
+    return { ok: false, error: 'Kunne ikke slette oppgaven' }
   }
 }
 

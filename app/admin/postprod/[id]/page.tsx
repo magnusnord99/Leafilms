@@ -11,13 +11,15 @@ import {
   getAllProfiles, toggleTaskAssignee, updatePostProdDelivery,
   getProjectDeliverablesSection,
   updateProjectDeliverablesSection,
-  setProjectLead,
+  setProjectLead, getTaskMessageCounts,
 } from '@/lib/actions/pipeline'
+import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline } from '@/lib/types'
 import { TaskChat } from '@/components/task/TaskChat'
+import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
@@ -192,6 +194,7 @@ export default function PostProdDetailPage() {
   const [rejecting, setRejecting] = useState(false)
 
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
@@ -262,9 +265,13 @@ export default function PostProdDetailPage() {
   const VENTER_TITLE = 'Venter på tilbakemelding'
   const SELEKSJON_TITLE = 'Seleksjon til kunde'
 
+  // Egendefinerte oppgaver holdes helt utenfor den låste stepperen
+  const stepperTasks = tasks.filter(t => !t.is_custom)
+  const customTasks = tasks.filter(t => t.is_custom)
+
   // For mixed-prosjekter: vis kun tasks for aktiv tab
   const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
-  const displayTasks = isMixed ? tasks.filter(t => t.sub_type === activeTab) : tasks
+  const displayTasks = isMixed ? stepperTasks.filter(t => t.sub_type === activeTab) : stepperTasks
 
   const activeIdx = displayTasks.findIndex(t => t.status !== 'done')
   const allDone = displayTasks.length > 0 && activeIdx === -1
@@ -314,6 +321,8 @@ export default function PostProdDetailPage() {
     initNotes(projectTasks)
     initTaskData(projectTasks)
     setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed'))
+    const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
+    if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
       setDeliveryVideo(currentProj.delivery_video ?? '')
       setDeliveryPhoto(currentProj.delivery_photo ?? '')
@@ -505,7 +514,7 @@ export default function PostProdDetailPage() {
       return { ...t, status: 'todo' }
     }))
     setProjects(prev => {
-      const resetCount = tasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
+      const resetCount = stepperTasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
       return prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.max(0, p.done_count - resetCount) })
     })
     await resetTaskAndSubsequent(projectId, taskId)
@@ -528,6 +537,19 @@ export default function PostProdDetailPage() {
     await toggleTaskAssignee(taskId, profileId)
   }
 
+  function handleCustomTaskStatusChange(taskId: string, status: Task['status']) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
+    updatePreprodTaskStatus(taskId, status)
+  }
+
+  function handleCustomTaskCreated(task: Task) {
+    setTasks(prev => [...prev, task])
+  }
+
+  function handleCustomTaskDeleted(taskId: string) {
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+  }
+
   function handleSwitchTab(tab: 'video' | 'photo') {
     if (selectedTask && notesTimerRef.current) {
       clearTimeout(notesTimerRef.current)
@@ -540,7 +562,7 @@ export default function PostProdDetailPage() {
       updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
     }
     setActiveTab(tab)
-    const tabTasks = tasks.filter(t => t.sub_type === tab)
+    const tabTasks = stepperTasks.filter(t => t.sub_type === tab)
     const initIdx = getInitialIdx(tabTasks)
     setSelectedIdx(initIdx)
     setShowRejectionForm(false)
@@ -617,8 +639,8 @@ export default function PostProdDetailPage() {
 
   const typeConf = currentProject.project_type ? TYPE_CONFIG[currentProject.project_type] : null
   // Progress viser alltid total (begge flyter) i progress-bar i headeren
-  const doneTasks = tasks.filter(t => t.status === 'done').length
-  const totalTasks = tasks.length
+  const doneTasks = stepperTasks.filter(t => t.status === 'done').length
+  const totalTasks = stepperTasks.length
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
   // allDone i headeren sjekker begge flyter
   const allTasksDone = totalTasks > 0 && doneTasks === totalTasks
@@ -994,10 +1016,10 @@ export default function PostProdDetailPage() {
           </div>
 
           {/* Film/Bilder-faner for mixed-prosjekter */}
-          {isMixed && tasks.length > 0 && !reseeding && (
+          {isMixed && stepperTasks.length > 0 && !reseeding && (
             <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${C.border}` }}>
               {(['video', 'photo'] as const).map(tab => {
-                const tabTasks = tasks.filter(t => t.sub_type === tab)
+                const tabTasks = stepperTasks.filter(t => t.sub_type === tab)
                 const tabDone = tabTasks.filter(t => t.status === 'done').length
                 const tabTotal = tabTasks.length
                 const tabComplete = tabTotal > 0 && tabDone === tabTotal
@@ -1074,10 +1096,32 @@ export default function PostProdDetailPage() {
               ))}
             </div>
           )}
+
+          {/* Egendefinerte oppgaver — utenfor den låste stepperen */}
+          {!reseeding && (
+            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}` }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
+                Egendefinerte oppgaver
+              </span>
+              <TaskList
+                tasks={customTasks}
+                profiles={profiles}
+                onStatusChange={handleCustomTaskStatusChange}
+                currentUserId={currentUser?.id ?? null}
+                messageCounts={messageCounts}
+                deepLinkTaskId={deepLinkTaskId}
+                projectId={projectId}
+                pipelineStage="post_prod"
+                onTaskCreated={handleCustomTaskCreated}
+                onTaskDeleted={handleCustomTaskDeleted}
+                emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
+              />
+            </div>
+          )}
         </div>
 
         {/* Content */}
-        {tasks.length === 0 ? (
+        {stepperTasks.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {reseeding ? (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>Genererer oppgaver...</p>
@@ -1651,7 +1695,7 @@ export default function PostProdDetailPage() {
 
               {isSelectedLocked && (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
-                  Fullfør «{tasks[selectedIdx - 1]?.title ?? 'forrige oppgave'}» for å låse opp dette steget.
+                  Fullfør «{stepperTasks[selectedIdx - 1]?.title ?? 'forrige oppgave'}» for å låse opp dette steget.
                 </p>
               )}
 

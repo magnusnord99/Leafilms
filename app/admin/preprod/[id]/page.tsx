@@ -7,11 +7,11 @@ import {
   getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
-import { toggleTaskAssignee, setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
+import { setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
-import { TaskChatToggle } from '@/components/task/TaskChatToggle'
+import { TaskList } from '@/components/task/TaskList'
 import BoardsButton from './BoardsButton'
-import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task } from '@/lib/types'
+import type { Task } from '@/lib/types'
 import type { PreprodDetail } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
@@ -862,150 +862,6 @@ function PostCrewSection({
   )
 }
 
-// ─── Tasks ────────────────────────────────────────────────────────────────────
-
-function TaskList({
-  tasks, profiles, onStatusChange, currentUserId, messageCounts, deepLinkTaskId,
-}: {
-  tasks: Task[]
-  profiles: { id: string; name: string | null; email: string; color: string | null }[]
-  onStatusChange: (taskId: string, status: Task['status']) => void
-  currentUserId: string | null
-  messageCounts: Record<string, number>
-  deepLinkTaskId: string | null
-}) {
-  const [pickerOpenId, setPickerOpenId] = useState<string | null>(null)
-  const [toggling, setToggling] = useState<string | null>(null)
-
-  async function handleAssigneeToggle(taskId: string, profileId: string) {
-    setToggling(profileId)
-    await toggleTaskAssignee(taskId, profileId)
-    setToggling(null)
-  }
-
-  const STATUS_CYCLE = TASK_STATUS_CYCLE
-
-  const STATUS_STYLE: Record<Task['status'], { label: string; color: string }> = {
-    todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3   },
-    in_progress: { label: TASK_STATUS_LABELS.in_progress, color: C.warning  },
-    done:        { label: TASK_STATUS_LABELS.done,        color: C.success  },
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', padding: '4px 0' }}>
-        Ingen oppgaver funnet for dette steget.
-      </p>
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {tasks.map(task => {
-        const s = STATUS_STYLE[task.status]
-        const isOpen = pickerOpenId === task.id
-        const assignedIds = new Set(task.assignees.map(a => a.id))
-
-        return (
-          <div key={task.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', flexWrap: 'wrap' }}>
-              {/* Status toggle */}
-              <button
-                onClick={() => {
-                  const next = STATUS_CYCLE[task.status]
-                  onStatusChange(task.id, next)
-                  updatePreprodTaskStatus(task.id, next)
-                }}
-                style={{
-                  flexShrink: 0, width: 20, height: 20, borderRadius: 5, cursor: 'pointer', padding: 0,
-                  background: task.status === 'done' ? 'rgba(76,175,125,0.18)' : task.status === 'in_progress' ? 'rgba(240,165,0,0.12)' : 'transparent',
-                  border: `1.5px solid ${s.color}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s',
-                }}
-              >
-                {task.status === 'done' && (
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                    <path d="M2 5.5L4.5 8L9 3" stroke={C.success} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-                {task.status === 'in_progress' && (
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.warning }} />
-                )}
-              </button>
-
-              {/* Title */}
-              <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: task.status === 'done' ? C.text3 : C.text, textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>
-                {task.title}
-              </span>
-
-              {/* Assignees */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {task.assignees.map(a => (
-                  <Avatar key={a.id} id={a.id} name={a.name} size={24} />
-                ))}
-                <button
-                  onClick={() => setPickerOpenId(isOpen ? null : task.id)}
-                  style={{
-                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', padding: 0,
-                    background: isOpen ? C.accentBg : 'transparent',
-                    border: `1.5px dashed ${isOpen ? C.accent : C.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: isOpen ? C.accent : C.text3, fontSize: '0.85rem', transition: 'all 0.12s',
-                  }}
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Status label */}
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.04em', color: s.color, flexShrink: 0 }}>
-                {s.label}
-              </span>
-
-              <TaskChatToggle
-                taskId={task.id}
-                taskTitle={task.title}
-                currentUserId={currentUserId}
-                profiles={profiles}
-                messageCount={messageCounts[task.id] ?? 0}
-                forceOpen={deepLinkTaskId === task.id}
-              />
-            </div>
-
-            {/* Assignee picker */}
-            {isOpen && (
-              <div style={{ padding: '8px 14px 12px', borderTop: `1px solid ${C.border}`, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {profiles.map(p => {
-                  const assigned = assignedIds.has(p.id)
-                  const busy = toggling === p.id
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleAssigneeToggle(task.id, p.id)}
-                      disabled={busy}
-                      style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                        padding: '4px 10px', borderRadius: 20, cursor: busy ? 'wait' : 'pointer',
-                        background: assigned ? C.accentBg : C.surface,
-                        color: assigned ? C.accent : C.text2,
-                        border: `1px solid ${assigned ? 'rgba(124,92,252,0.3)' : C.border}`,
-                        display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.1s',
-                        opacity: busy ? 0.6 : 1,
-                      }}
-                    >
-                      {assigned && <span style={{ fontSize: '0.6rem' }}>✓</span>}
-                      {p.name ?? p.email}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 // ─── Invoice assignee card ────────────────────────────────────────────────────
 
 function InvoiceAssigneeCard({
@@ -1179,6 +1035,15 @@ export default function PreprodDetailPage() {
 
   function handleTaskStatusChange(taskId: string, status: Task['status']) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
+    updatePreprodTaskStatus(taskId, status)
+  }
+
+  function handleTaskCreated(task: Task) {
+    setTasks(prev => [...prev, task])
+  }
+
+  function handleTaskDeleted(taskId: string) {
+    setTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
   async function handleCrewChanged(updatedProdCrew?: PreprodCrewMember[], updatedPostCrew?: PreprodCrewMember[]) {
@@ -1373,6 +1238,10 @@ export default function PreprodDetailPage() {
                 currentUserId={currentUserId}
                 messageCounts={messageCounts}
                 deepLinkTaskId={deepLinkTaskId}
+                projectId={id}
+                pipelineStage="pre_prod"
+                onTaskCreated={handleTaskCreated}
+                onTaskDeleted={handleTaskDeleted}
               />
             </div>
 

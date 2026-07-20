@@ -508,6 +508,7 @@ export type Task = {
   status: 'todo' | 'in_progress' | 'done'
   priority: 'low' | 'medium' | 'high' | null
   sort_order: number
+  is_custom: boolean
   created_by: string | null
   created_at: string
   updated_at: string

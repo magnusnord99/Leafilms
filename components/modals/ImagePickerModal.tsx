@@ -38,8 +38,43 @@ export function ImagePickerModal({
     { value: 'event', label: 'Event' },
     { value: 'kommersiell', label: 'Kommersiell' },
     { value: 'abstrakt', label: 'Abstrakt' },
-    { value: 'bts', label: 'Behind The Scenes' }
+    { value: 'bts', label: 'Behind The Scenes' },
+    { value: 'bryllup', label: 'Bryllup' }
   ]
+
+  // Rediger navn/tags direkte her — uten dette må man forlate pitchen og inn i det separate
+  // bildebiblioteket for å f.eks. legge til en manglende tag (feedback 3bba01ce).
+  const [editingImageId, setEditingImageId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editTags, setEditTags] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  function startEditing(e: React.MouseEvent, image: Image) {
+    e.stopPropagation()
+    setEditingImageId(image.id)
+    setEditTitle(image.title || '')
+    setEditTags(image.tags?.join(', ') || '')
+  }
+
+  async function saveEdit(e: React.MouseEvent, imageId: string) {
+    e.stopPropagation()
+    setSavingEdit(true)
+    try {
+      const tagsArray = editTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      const { error } = await supabase
+        .from('images')
+        .update({ title: editTitle || null, tags: tagsArray })
+        .eq('id', imageId)
+      if (error) throw error
+      setImages(prev => prev.map(img => img.id === imageId ? { ...img, title: editTitle || null, tags: tagsArray } : img))
+      setEditingImageId(null)
+    } catch (error) {
+      console.error('Error saving image edit:', error)
+      alert('Kunne ikke lagre endringer')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -205,19 +240,66 @@ export function ImagePickerModal({
                           ✓ Valgt
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => startEditing(e, image)}
+                        title="Rediger navn/tags"
+                        className="absolute top-2 left-2 bg-black/60 text-white text-xs w-6 h-6 rounded flex items-center justify-center hover:bg-black/80"
+                      >
+                        ✎
+                      </button>
                     </div>
 
-                    {/* Info */}
-                    <div className="bg-admin-surface p-2">
-                      <Text variant="small" className="line-clamp-1 text-xs">
-                        {image.title || image.filename}
-                      </Text>
-                      {image.category && (
-                        <Text variant="muted" className="text-xs">
-                          {image.category}
+                    {/* Info / inline redigering */}
+                    {editingImageId === image.id ? (
+                      <div
+                        className="bg-admin-surface p-2 space-y-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          placeholder="Navn"
+                          className="w-full bg-admin-surface-light border border-admin-border rounded px-2 py-1 text-xs text-white"
+                        />
+                        <input
+                          type="text"
+                          value={editTags}
+                          onChange={(e) => setEditTags(e.target.value)}
+                          placeholder="Tags, komma-separert"
+                          className="w-full bg-admin-surface-light border border-admin-border rounded px-2 py-1 text-xs text-white"
+                        />
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            disabled={savingEdit}
+                            onClick={(e) => saveEdit(e, image.id)}
+                            className="flex-1 bg-success text-xs rounded py-1 disabled:opacity-50"
+                          >
+                            {savingEdit ? '...' : 'Lagre'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingImageId(null) }}
+                            className="flex-1 bg-admin-surface-light text-xs rounded py-1"
+                          >
+                            Avbryt
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-admin-surface p-2">
+                        <Text variant="small" className="line-clamp-1 text-xs">
+                          {image.title || image.filename}
                         </Text>
-                      )}
-                    </div>
+                        {image.category && (
+                          <Text variant="muted" className="text-xs">
+                            {image.category}
+                          </Text>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

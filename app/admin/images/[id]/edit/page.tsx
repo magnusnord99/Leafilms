@@ -18,7 +18,8 @@ const categories = {
   event: ['konsert', 'konferanse', 'festival', 'sport'],
   kommersiell: ['produkt', 'merkevare', 'reklame'],
   abstrakt: ['kunst', 'mønster', 'farge'],
-  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon']
+  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
+  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer']
 }
 
 export default function EditImagePage({ params }: Props) {

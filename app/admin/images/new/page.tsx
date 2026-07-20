@@ -29,7 +29,8 @@ export default function NewImage() {
     event: ['konsert', 'konferanse', 'festival', 'sport'],
     kommersiell: ['produkt', 'merkevare', 'reklame'],
     abstrakt: ['kunst', 'mønster', 'farge'],
-    bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon']
+    bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
+    bryllup: ['seremoni', 'fest', 'portrett', 'detaljer']
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

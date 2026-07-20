@@ -14,6 +14,7 @@ const projectTypeOptions = [
   { value: 'product', label: 'Produktfoto/-film' },
   { value: 'event', label: 'Event/Arrangement' },
   { value: 'music_video', label: 'Musikkkvideo' },
+  { value: 'wedding', label: 'Bryllup' },
   { value: 'other', label: 'Annet' }
 ]
 
@@ -33,7 +34,7 @@ const targetAudienceOptions = [
   { value: 'b2b', label: 'B2B (Bedrifter)' },
   { value: 'b2c', label: 'B2C (Forbrukere)' },
   { value: 'young_adults', label: 'Unge voksne (18-35)' },
-  { value: 'families', label: 'Familier' },
+  { value: 'families', label: 'Familie og venner' },
   { value: 'professionals', label: 'Profesjonelle/Fagfolk' },
   { value: 'general', label: 'Generelt publikum' }
 ]
@@ -49,6 +50,7 @@ const industryOptions = [
   { value: 'health', label: 'Helse/Wellness' },
   { value: 'finance', label: 'Finans' },
   { value: 'culture', label: 'Kultur/Underholdning' },
+  { value: 'wedding', label: 'Bryllup' },
   { value: 'other', label: 'Annet' }
 ]
 

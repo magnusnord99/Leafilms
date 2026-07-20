@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS board_edges (
 CREATE INDEX IF NOT EXISTS idx_board_edges_board ON board_edges(board_id);
 
 -- ---------------------------------------------------------------------------
--- RLS: staff (authenticated) har full tilgang. Offentlig deling leses
+-- RLS: interne staff-roller har full tilgang. Offentlig deling leses
 -- server-side med service-klient, så ingen anon-policies.
 -- ---------------------------------------------------------------------------
 ALTER TABLE boards      ENABLE ROW LEVEL SECURITY;
@@ -60,14 +60,14 @@ ALTER TABLE board_edges ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'boards' AND policyname = 'authenticated full access boards') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access boards" ON boards FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'boards' AND policyname = 'staff full access boards') THEN
+    EXECUTE 'CREATE POLICY "staff full access boards" ON boards FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()))';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_cards' AND policyname = 'authenticated full access board_cards') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access board_cards" ON board_cards FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_cards' AND policyname = 'staff full access board_cards') THEN
+    EXECUTE 'CREATE POLICY "staff full access board_cards" ON board_cards FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()))';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_edges' AND policyname = 'authenticated full access board_edges') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access board_edges" ON board_edges FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_edges' AND policyname = 'staff full access board_edges') THEN
+    EXECUTE 'CREATE POLICY "staff full access board_edges" ON board_edges FOR ALL TO authenticated USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()))';
   END IF;
 END$$;
 
@@ -100,10 +100,10 @@ ON CONFLICT (id) DO NOTHING;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'board images auth insert') THEN
-    EXECUTE 'CREATE POLICY "board images auth insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = ''board-images'')';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'board images staff insert') THEN
+    EXECUTE 'CREATE POLICY "board images staff insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = ''board-images'' AND public.is_staff(auth.uid()))';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'board images auth delete') THEN
-    EXECUTE 'CREATE POLICY "board images auth delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = ''board-images'')';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'board images staff delete') THEN
+    EXECUTE 'CREATE POLICY "board images staff delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = ''board-images'' AND public.is_staff(auth.uid()))';
   END IF;
 END$$;

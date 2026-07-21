@@ -200,7 +200,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       const current = next.find(n => n.id === m.id)
       if (!current) continue
       const type = current.data.card.type
-      const canJoinColumn = type !== 'column' && type !== 'board'
+      // Boards kunne tidligere ikke festes til kolonner i det hele tatt — se feedback fra Magnus.
+      const canJoinColumn = type !== 'column'
 
       const intersectingColumn = canJoinColumn
         ? (rf.getIntersectingNodes(current) as CardNode[]).find(n => n.data.card.type === 'column')

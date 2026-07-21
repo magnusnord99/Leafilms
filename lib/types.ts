@@ -599,7 +599,7 @@ export type TodoItem = { id: string; text: string; checked: boolean }
 export type TodoContent = { title?: string; items: TodoItem[] }
 export type ColumnContent = { title: string }
 /** title er denormalisert fra boards.title for enkel rendering (holdes i sync av renameBoard) */
-export type BoardRefContent = { child_board_id: string; title: string }
+export type BoardRefContent = { child_board_id: string; title: string; color?: string }
 
 export type BoardCardContent =
   | NoteContent | ImageContent | VideoContent | LinkContent

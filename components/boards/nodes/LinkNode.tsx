@@ -13,8 +13,11 @@ export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
   // Forsvar i dybden: render aldri en klikkbar lenke med annet skjema enn http(s)
   // (f.eks. javascript: — kortene vises også på offentlige delingssider)
   const safeHref = /^https?:\/\//i.test(content.url) ? content.url : undefined
-  const inner = (
-    <>
+  // Kun selve lenke-linjen er nodrag/klikkbar — resten av kortet skal kunne dras som
+  // alle andre kort. Tidligere pakket hele kortet inn i <a className="nodrag">, som
+  // gjorde det umulig å flytte lenkekort etter at de var lagt til.
+  return (
+    <CardShell selected={!!selected} padding={0}>
       {content.image_url && (
         <img src={content.image_url} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: '7px 7px 0 0', display: 'block' }} draggable={false} />
       )}
@@ -27,21 +30,14 @@ export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
             {content.description}
           </div>
         )}
-        <div style={{ fontSize: '0.66rem', color: P.accent }}>🔗 {host}</div>
+        {safeHref ? (
+          <a href={safeHref} target="_blank" rel="noopener noreferrer" className="nodrag" style={{ fontSize: '0.66rem', color: P.accent, textDecoration: 'none' }}>
+            🔗 {host}
+          </a>
+        ) : (
+          <div style={{ fontSize: '0.66rem', color: P.accent }}>🔗 {host}</div>
+        )}
       </div>
-    </>
-  )
-  return (
-    <CardShell selected={!!selected} padding={0}>
-      {safeHref ? (
-        <a href={safeHref} target="_blank" rel="noopener noreferrer" className="nodrag" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-          {inner}
-        </a>
-      ) : (
-        <div className="nodrag" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-          {inner}
-        </div>
-      )}
     </CardShell>
   )
 }

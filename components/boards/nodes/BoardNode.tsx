@@ -1,19 +1,49 @@
 'use client'
 
-import type { NodeProps } from '@xyflow/react'
+import { useState } from 'react'
+import { useReactFlow, type NodeProps } from '@xyflow/react'
 import type { BoardRefContent } from '@/lib/types'
+import { updateCardContent } from '@/lib/actions/boards'
 import { useBoardUi } from '../boardContext'
 import CardShell from './CardShell'
 import type { CardNode } from '../toFlow'
 
-export default function BoardNode({ data, selected }: NodeProps<CardNode>) {
-  const { palette: P } = useBoardUi()
+export default function BoardNode({ id, data, selected }: NodeProps<CardNode>) {
+  const rf = useReactFlow()
+  const { palette: P, readOnly, markLocalOp } = useBoardUi()
   const content = data.card.content as BoardRefContent
   const count = data.meta?.cardCount
+  // Transient buffer mens fargevelgeren er åpen — samme mønster som ColorNode.
+  const [previewHex, setPreviewHex] = useState<string | null>(null)
+  const color = previewHex ?? content.color ?? P.accent
+
+  const commit = (value: string) => {
+    if (value !== content.color) {
+      markLocalOp(id)
+      const next = { ...content, color: value }
+      rf.updateNodeData(id, { card: { ...data.card, content: next } })
+      updateCardContent(id, next)
+    }
+    setPreviewHex(null)
+  }
+
   return (
     <CardShell selected={!!selected}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: P.accent + '22', border: `1px solid ${P.accent}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: P.accent, fontSize: '1rem', flexShrink: 0 }}>▦</div>
+        <div style={{ position: 'relative', width: 34, height: 34, borderRadius: 8, background: color + '22', border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, fontSize: '1rem', flexShrink: 0 }}>
+          ▦
+          {!readOnly && (
+            <input
+              type="color"
+              className="nodrag"
+              value={content.color ?? P.accent}
+              onChange={e => setPreviewHex(e.target.value)}
+              onBlur={e => commit(e.target.value)}
+              title="Bytt farge på board"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+            />
+          )}
+        </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.82rem', fontWeight: 700, color: P.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {data.meta?.title ?? content.title}

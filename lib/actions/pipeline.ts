@@ -553,7 +553,10 @@ export async function reseedPostProdTasks(
             .update({ sort_order: row.sortOrder })
             .eq('id', row.id as string)
 
-          if (error) console.error('reseedPostProdTasks reorder error:', error)
+          if (error) {
+            console.error('reseedPostProdTasks reorder error:', error)
+            return { count: 0, error: 'Kunne ikke oppdatere rekkefølgen' }
+          }
         } else {
           const { error } = await supabase.from('tasks').insert({
             project_id: projectId,

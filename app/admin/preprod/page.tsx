@@ -52,6 +52,11 @@ function ProjectCard({ project }: { project: PreprodProject }) {
                 {project.customer.name}{project.customer.company ? ` · ${project.customer.company}` : ''}
               </p>
             )}
+            {project.project_lead && (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 2 }}>
+                Prosjektleder: {project.project_lead.name ?? project.project_lead.email}
+              </p>
+            )}
           </div>
           {type && (
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: type.color, background: `${type.color}18`, border: `1px solid ${type.color}30`, padding: '3px 8px', borderRadius: 4, flexShrink: 0 }}>

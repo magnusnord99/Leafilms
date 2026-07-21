@@ -49,7 +49,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
 
     const { data, error } = await supabase
       .from('projects')
-      .select('*, customers(id, name, company)')
+      .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
       .eq('pipeline_stage', 'pre_prod')
       .order('updated_at', { ascending: false })
 

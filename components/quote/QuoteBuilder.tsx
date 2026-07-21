@@ -15,6 +15,17 @@ Leafilms beholder full opphavsrett til alt produsert materiale. Kunden gis bruks
 Alt materiale, inkludert opptak og prosjektfiler, vil bli levert til kunden som avtalt. Lagring og arkivering av materialet utover leveringsdatoen er kundens ansvar.
 Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved signering av produksjonsavtalen, og den andre halvparten faktureres etter siste produksjonsdag. Vær oppmerksom på at forsinkede betalinger kan medføre ekstra gebyrer.`
 
+// Oversettelse av DEFAULT_TERMS over — hold de to i sync ved endringer (feedback fd02da09:
+// engelske tilbud viste norsk vilkårstekst siden det ikke fantes noen engelsk standardtekst).
+const EN_DEFAULT_TERMS = `Leafilms will be responsible for the planning, production and delivery of the project as described in this offer. The project's scope, timeline and deliverables are agreed before production begins. Any changes to the scope along the way may incur additional costs.
+Travel, accommodation and subsistence costs for the team are included in the budget unless otherwise specified.
+If unforeseen circumstances (e.g. extreme weather or other factors beyond Leafilms' control) prevent the production from being carried out as planned, alternative solutions will be arranged in consultation with the client. Any delays or rescheduling may incur additional costs.
+Cancellation within 14 days before the start date: 50% of the agreed price will be invoiced.
+Cancellation within 48 hours before the start date: 100% of the agreed price will be invoiced.
+Leafilms retains full copyright to all produced material. The client is granted usage rights for the agreed purpose and project. Further sale or distribution is not permitted without written consent from Leafilms. Leafilms must be credited in accordance with industry standards wherever the material is used, where practically possible.
+All material, including recordings and project files, will be delivered to the client as agreed. Storage and archiving of the material beyond the delivery date is the client's responsibility.
+The invoice is split into two equal payments. The first half is invoiced upon signing of the production agreement, and the second half is invoiced after the last day of production. Please note that late payments may incur additional fees.`
+
 export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
   return {
     version: 'V1',
@@ -1068,7 +1079,21 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Språk</label>
-                <select style={fieldStyle} value={data.language} onChange={e => set('language', e.target.value as 'NO' | 'EN')}>
+                <select
+                  style={fieldStyle}
+                  value={data.language}
+                  onChange={e => {
+                    const nextLang = e.target.value as 'NO' | 'EN'
+                    // Bytt kun vilkårsteksten hvis den fortsatt er uendret standardtekst —
+                    // rører aldri egendefinert tekst admin selv har skrevet inn.
+                    setData(prev => {
+                      let terms = prev.terms
+                      if (nextLang === 'EN' && prev.terms === DEFAULT_TERMS) terms = EN_DEFAULT_TERMS
+                      if (nextLang === 'NO' && prev.terms === EN_DEFAULT_TERMS) terms = DEFAULT_TERMS
+                      return { ...prev, language: nextLang, terms }
+                    })
+                  }}
+                >
                   <option value="NO">Norsk</option>
                   <option value="EN">English</option>
                 </select>

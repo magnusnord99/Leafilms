@@ -1,4 +1,11 @@
-import { QuoteBuilderData, OptionalAddon, OptionalAddonCategory } from './types'
+import { QuoteBuilderData, OptionalAddon, OptionalAddonCategory, CrewMember } from './types'
+
+// Timebasert opptaksmannskap (billingMode='hour') bruker hourlyRate*hours i stedet for
+// dailyRate*days — kun aktuelt for opptak, jf. feedback 2bbb2f77.
+export function crewMemberCost(m: CrewMember): number {
+  if (m.billingMode === 'hour') return (m.hourlyRate ?? 0) * (m.hours ?? 0)
+  return m.dailyRate * m.days
+}
 
 const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']
 
@@ -101,7 +108,7 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
   const startupTotal = startupCrewList.reduce((sum, m) => sum + m.dailyRate * m.days, 0)
   const startupDays = startupCrewList.reduce((sum, m) => sum + m.days, 0)
 
-  const shootCrewTotal = data.crew.reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+  const shootCrewTotal = data.crew.reduce((sum, m) => sum + crewMemberCost(m), 0)
   // Faktiske dager på mannskapet er fasit — data.shootDays er kun en UI-snarvei og kan avvike hvis en rad er endret manuelt
   const shootDays = data.crew.length > 0 ? data.crew[0].days : (data.shootDays ?? 0)
   const crewTotal = shootCrewTotal + startupTotal

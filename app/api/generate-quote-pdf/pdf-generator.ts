@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit'
 import fs from 'fs'
 import path from 'path'
 import type { QuoteBuilderData, OptionalAddonCategory } from '@/lib/types'
-import { getAddonAmounts, addonTotalPrice, addonDiscountedPrice, isAddonDiscountable } from '@/lib/quote-builder-utils'
+import { getAddonAmounts, addonTotalPrice, addonDiscountedPrice, isAddonDiscountable, crewMemberCost } from '@/lib/quote-builder-utils'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'leafilms-logo.png')
 const LOGO_ASPECT_RATIO = 446 / 840
@@ -253,7 +253,7 @@ export async function generateQuotePDF(
     const startupTotal = startupCrewList.reduce((s, m) => s + m.dailyRate * m.days, 0)
     const startupDays = startupCrewList.reduce((s, m) => s + m.days, 0)
 
-    const shootCrewTotal = data.crew.reduce((s, m) => s + m.dailyRate * m.days, 0)
+    const shootCrewTotal = data.crew.reduce((s, m) => s + crewMemberCost(m), 0)
     const equipTotal = data.equipment.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     const productionTotal = shootCrewTotal + equipTotal
     // Faktiske dager på mannskapet er fasit (brukes også i pengeberegningen over) —

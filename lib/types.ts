@@ -118,6 +118,10 @@ export type CrewMember = {
   name: string
   dailyRate: number
   days: number
+  /** Timebasert avlønning i stedet for dagsats — kun for opptaksmannskap. 'day' (default) bruker dailyRate*days som før. */
+  billingMode?: 'day' | 'hour'
+  hourlyRate?: number
+  hours?: number
 }
 
 export type QuoteBuilderItem = {

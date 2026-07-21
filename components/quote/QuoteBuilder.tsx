@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
-import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
@@ -868,26 +868,53 @@ function ShootCrewSection({
           <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Rolle', 'Navn', 'Dagsats', 'Dager', 'Total', ''].map((h, i) => (
-                  <th key={h} style={{ textAlign: i >= 2 && i < 5 ? 'right' : i === 5 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 5 ? 24 : 'auto' }}>{h}</th>
+                {['Rolle', 'Navn', 'Sats', 'Antall', '', 'Total', ''].map((h, i) => (
+                  <th key={h} style={{ textAlign: i >= 2 && i < 4 ? 'right' : i === 5 ? 'right' : i === 6 ? 'center' : 'left', paddingBottom: 8, paddingLeft: 4, fontSize: '0.62rem', color: C.text2, fontWeight: 400, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap', width: i === 4 ? 20 : i === 6 ? 24 : 'auto' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {crew.map(m => (
+              {crew.map(m => {
+                const hourly = m.billingMode === 'hour'
+                return (
                 <tr key={m.id} className="group">
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.role} onChange={e => update(m.id, 'role', e.target.value)} placeholder="Rolle" /></td>
                   <td style={{ padding: '4px 8px 4px 0' }}><input style={inputBase} value={m.name} onChange={e => update(m.id, 'name', e.target.value)} placeholder="Navn" /></td>
-                  <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
-                  <td style={{ padding: '4px 8px 4px 0' }}>
-                    <input
-                      style={{ ...inputBase, textAlign: 'right', color: m.days !== shootDays ? C.accent : C.text }}
-                      type="number" min={0.5} step={0.5} value={m.days || ''}
-                      onChange={e => update(m.id, 'days', Number(e.target.value))}
-                      title={m.days !== shootDays ? `Avviker fra opptaksdager (${shootDays})` : undefined}
-                    />
+                  {hourly ? (
+                    <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.hourlyRate || ''} onChange={e => update(m.id, 'hourlyRate', Number(e.target.value))} placeholder="0/t" /></td>
+                  ) : (
+                    <td style={{ padding: '4px 8px 4px 0' }}><input style={{ ...inputBase, textAlign: 'right' }} type="number" value={m.dailyRate || ''} onChange={e => update(m.id, 'dailyRate', Number(e.target.value))} placeholder="0" /></td>
+                  )}
+                  {hourly ? (
+                    <td style={{ padding: '4px 8px 4px 0' }}>
+                      <input
+                        style={{ ...inputBase, textAlign: 'right' }}
+                        type="number" min={0.5} step={0.5} value={m.hours || ''}
+                        onChange={e => update(m.id, 'hours', Number(e.target.value))}
+                        placeholder="timer"
+                      />
+                    </td>
+                  ) : (
+                    <td style={{ padding: '4px 8px 4px 0' }}>
+                      <input
+                        style={{ ...inputBase, textAlign: 'right', color: m.days !== shootDays ? C.accent : C.text }}
+                        type="number" min={0.5} step={0.5} value={m.days || ''}
+                        onChange={e => update(m.id, 'days', Number(e.target.value))}
+                        title={m.days !== shootDays ? `Avviker fra opptaksdager (${shootDays})` : undefined}
+                      />
+                    </td>
+                  )}
+                  <td style={{ padding: '4px 4px 4px 0' }}>
+                    <button
+                      type="button"
+                      onClick={() => update(m.id, 'billingMode', hourly ? 'day' : 'hour')}
+                      title={hourly ? 'Bytt til dagsats' : 'Bytt til timepris'}
+                      style={{ fontSize: '0.62rem', color: hourly ? C.accent : C.text3, background: 'none', border: `1px solid ${hourly ? C.accent : C.border}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer', fontFamily: 'var(--font-dm-sans)' }}
+                    >
+                      {hourly ? 't' : 'd'}
+                    </button>
                   </td>
-                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(m.dailyRate * m.days)}</td>
+                  <td style={{ padding: '4px 8px 4px 0', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{formatNOK(crewMemberCost(m))}</td>
                   <td style={{ padding: 4 }}>
                     <button type="button" onClick={() => remove(m.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
@@ -896,7 +923,7 @@ function ShootCrewSection({
                       title="Fjern">×</button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

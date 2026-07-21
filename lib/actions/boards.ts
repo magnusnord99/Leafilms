@@ -23,6 +23,63 @@ export type CardPositionPatch = {
 
 const now = () => new Date().toISOString()
 
+// Samme tall som COLUMN_WIDTH/COLUMN_PAD/COLUMN_HEADER/COLUMN_GAP i components/boards/toFlow.ts —
+// duplisert (i stedet for importert) for å unngå en sirkulær import (toFlow.ts importerer
+// allerede ChildBoardMeta herfra, og bruker @xyflow/react som ikke skal inn i server-bundlen).
+const INFO_COLUMN_WIDTH = 280
+const INFO_COLUMN_PAD = 10
+const INFO_COLUMN_HEADER = 44
+const INFO_COLUMN_GAP = 8
+
+// Seeder en "Prosjektinfo"-kolonne med et kort sammendrag + leveransebeskrivelse på
+// et helt nytt rot-board, slik at man får en rask oversikt uten å måtte hoppe til
+// prosjektsiden. Kun ved førstegangs-opprettelse — feiler stille (boardet finnes uansett).
+async function seedProjectInfoColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  boardId: string,
+  projectId: string
+) {
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('meeting_summary, delivery_description, customers(name, company)')
+      .eq('id', projectId)
+      .single()
+    if (!proj) return
+
+    const summary = (proj.meeting_summary as { sammendrag?: string } | null)?.sammendrag?.trim()
+    const customer = (proj as unknown as { customers?: { name: string | null; company: string | null } | null }).customers
+    const delivery = (proj as { delivery_description?: string | null }).delivery_description?.trim()
+
+    const { data: column, error: colError } = await supabase
+      .from('board_cards')
+      .insert({
+        board_id: boardId, type: 'column', x: 40, y: 40,
+        width: INFO_COLUMN_WIDTH, content: { title: 'Prosjektinfo' },
+      })
+      .select('id').single()
+    if (colError || !column) return
+
+    const notes: string[] = [
+      summary || `${customer?.company || customer?.name || 'Ingen kunde satt ennå'} — legg til sammendrag fra møtenotater på prosjektsiden.`,
+      delivery ? `Leveranse:\n${delivery}` : 'Leveranse: ikke beskrevet ennå.',
+    ]
+
+    let y = INFO_COLUMN_HEADER + INFO_COLUMN_GAP
+    for (const [i, text] of notes.entries()) {
+      await supabase.from('board_cards').insert({
+        board_id: boardId, type: 'note', x: INFO_COLUMN_PAD, y,
+        width: INFO_COLUMN_WIDTH - INFO_COLUMN_PAD * 2, column_id: column.id, sort_order: i,
+        content: { text },
+      })
+      // Grovt estimat — riktig høyde restackes uansett på klienten når kortene er målt.
+      y += 90 + INFO_COLUMN_GAP
+    }
+  } catch (err) {
+    console.error('seedProjectInfoColumn:', err)
+  }
+}
+
 export async function getOrCreateRootBoard(projectId: string): Promise<string | null> {
   try {
     const supabase = await createClient()
@@ -44,6 +101,7 @@ export async function getOrCreateRootBoard(projectId: string): Promise<string | 
         .eq('project_id', projectId).is('parent_board_id', null).maybeSingle()
       return retry?.id ?? null
     }
+    await seedProjectInfoColumn(supabase, data.id, projectId)
     return data.id
   } catch (err) {
     console.error('getOrCreateRootBoard:', err)

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 
 async function assertParticipant(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -23,9 +24,9 @@ export async function GET(
     const { conversationId } = await params
     const supabase = await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
+    const user = await getAuthenticatedStaffUser(supabase)
+    if (!user) {
+      return Response.json({ error: 'Ikke tilgang' }, { status: 403 })
     }
 
     if (!(await assertParticipant(supabase, conversationId, user.id))) {
@@ -59,9 +60,9 @@ export async function POST(
     const { conversationId } = await params
     const supabase = await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
+    const user = await getAuthenticatedStaffUser(supabase)
+    if (!user) {
+      return Response.json({ error: 'Ikke tilgang' }, { status: 403 })
     }
 
     if (!(await assertParticipant(supabase, conversationId, user.id))) {

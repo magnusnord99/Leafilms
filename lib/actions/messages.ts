@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser, isStaffProfile } from '@/lib/auth/staff'
 
 export type ConversationParticipant = {
   id: string
@@ -19,7 +20,7 @@ export type ConversationListItem = {
 export async function getConversations(): Promise<ConversationListItem[]> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user) return []
 
     const { data: myRows } = await supabase
@@ -90,13 +91,16 @@ export async function getConversations(): Promise<ConversationListItem[]> {
  * Finner eksisterende 1:1-samtale mellom meg og otherProfileId, eller oppretter en ny.
  * Deltaker-rader skrives via service-klienten fordi RLS på conversation_participants
  * kun tillater at man setter inn sin egen profile_id, mens en ny samtale krever at
- * begge deltakerne legges inn (autorisasjon er allerede sjekket over via auth.getUser()).
+ * begge deltakerne legges inn (begge profiler er verifisert som interne staff-brukere).
  */
 export async function startConversation(otherProfileId: string): Promise<string | null> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user || user.id === otherProfileId) return null
+
+    const serviceClient = createServiceClient()
+    if (!(await isStaffProfile(serviceClient, otherProfileId))) return null
 
     const { data: myRows } = await supabase
       .from('conversation_participants')
@@ -120,7 +124,6 @@ export async function startConversation(otherProfileId: string): Promise<string 
       }
     }
 
-    const serviceClient = createServiceClient()
     const { data: conversation, error: convError } = await serviceClient
       .from('conversations')
       .insert({})
@@ -146,7 +149,7 @@ export async function startConversation(otherProfileId: string): Promise<string 
 export async function markConversationRead(conversationId: string): Promise<void> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user) return
     await supabase
       .from('notifications')

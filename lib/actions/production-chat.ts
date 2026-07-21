@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { getPitchTeamAsProdCrew } from '@/lib/actions/preprod'
 import type { ConversationParticipant } from '@/lib/actions/messages'
+import { getAuthenticatedStaffUser, isStaffProfile } from '@/lib/auth/staff'
 
 export type ProductionChatInfo = {
   conversationId: string
@@ -71,7 +72,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function getOrCreateProjectConversation(projectId: string): Promise<ProductionChatInfo | null> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user) return null
 
     const serviceClient = createServiceClient()
@@ -169,10 +170,12 @@ async function callerIsMember(conversationId: string, userId: string): Promise<b
 export async function addConversationMember(conversationId: string, profileId: string): Promise<boolean> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user || !(await callerIsMember(conversationId, user.id))) return false
 
     const serviceClient = createServiceClient()
+    if (!(await isStaffProfile(serviceClient, profileId))) return false
+
     const { error } = await serviceClient
       .from('conversation_participants')
       .insert({ conversation_id: conversationId, profile_id: profileId })
@@ -186,7 +189,7 @@ export async function addConversationMember(conversationId: string, profileId: s
 export async function removeConversationMember(conversationId: string, profileId: string): Promise<boolean> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user || !(await callerIsMember(conversationId, user.id))) return false
 
     const serviceClient = createServiceClient()

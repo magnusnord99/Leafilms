@@ -50,34 +50,38 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
           }}
         />
       )}
-      <CardShell selected={!!selected} padding={6}>
+      {/* padding=0 — bildet skal fylle kortet helt uten en synlig ramme rundt seg,
+          samme mønster som LinkNode allerede bruker for sitt forhåndsvisningsbilde. */}
+      <CardShell selected={!!selected} padding={0}>
         <img
           src={content.url}
           alt={content.caption ?? ''}
           onDoubleClick={() => setLightbox(true)}
-          style={{ width: '100%', display: 'block', borderRadius: 4 }}
+          style={{ width: '100%', display: 'block', borderRadius: (content.caption || editingCaption || !readOnly) ? '7px 7px 0 0' : 7 }}
           draggable={false}
         />
         {(content.caption || editingCaption || !readOnly) && (
-          editingCaption ? (
-            <input
-              autoFocus
-              className="nodrag"
-              value={caption}
-              onChange={e => setCaption(e.target.value)}
-              onBlur={saveCaption}
-              onKeyDown={e => e.key === 'Enter' && saveCaption()}
-              placeholder="Bildetekst"
-              style={{ width: '100%', marginTop: 6, background: P.surface2, color: P.text, border: `1px solid ${P.border}`, borderRadius: 4, padding: '4px 6px', fontSize: '0.72rem', outline: 'none' }}
-            />
-          ) : (
-            <div
-              onDoubleClick={() => !readOnly && setEditingCaption(true)}
-              style={{ marginTop: content.caption ? 6 : 2, fontSize: '0.72rem', color: content.caption ? P.text2 : 'transparent', minHeight: 12 }}
-            >
-              {content.caption || '·'}
-            </div>
-          )
+          <div style={{ padding: '6px 10px' }}>
+            {editingCaption ? (
+              <input
+                autoFocus
+                className="nodrag"
+                value={caption}
+                onChange={e => setCaption(e.target.value)}
+                onBlur={saveCaption}
+                onKeyDown={e => e.key === 'Enter' && saveCaption()}
+                placeholder="Bildetekst"
+                style={{ width: '100%', background: P.surface2, color: P.text, border: `1px solid ${P.border}`, borderRadius: 4, padding: '4px 6px', fontSize: '0.72rem', outline: 'none' }}
+              />
+            ) : (
+              <div
+                onDoubleClick={() => !readOnly && setEditingCaption(true)}
+                style={{ fontSize: '0.72rem', color: content.caption ? P.text2 : 'transparent', minHeight: 12 }}
+              >
+                {content.caption || '·'}
+              </div>
+            )}
+          </div>
         )}
       </CardShell>
       {lightbox && createPortal(

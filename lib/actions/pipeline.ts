@@ -660,8 +660,9 @@ export async function createTask(data: {
 }
 
 /**
- * Sletter en egendefinert oppgave. Nekter å slette maloppgaver
- * (is_custom=false) for å beskytte den faste sjekklisten/stepperen.
+ * Sletter en oppgave brukeren har lagt til (fri egendefinert oppgave eller
+ * planlagt post-prod-steg). Nekter å slette maloppgaver (created_by=null,
+ * seedet fra task_templates) for å beskytte den faste sjekklisten/stepperen.
  */
 export async function deleteTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
   try {
@@ -669,7 +670,7 @@ export async function deleteTask(taskId: string): Promise<{ ok: boolean; error?:
 
     const { data: task, error: fetchError } = await supabase
       .from('tasks')
-      .select('is_custom')
+      .select('created_by')
       .eq('id', taskId)
       .single()
 
@@ -677,7 +678,7 @@ export async function deleteTask(taskId: string): Promise<{ ok: boolean; error?:
       return { ok: false, error: 'Oppgave ikke funnet' }
     }
 
-    if (!task.is_custom) {
+    if (!task.created_by) {
       return { ok: false, error: 'Kan ikke slette faste oppgaver' }
     }
 

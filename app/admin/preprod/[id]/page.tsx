@@ -9,6 +9,8 @@ import {
 } from '@/lib/actions/preprod'
 import { setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
+import { getPostProdFlowOptions, type PostProdFlowTrack, type PlannedPostProdStep } from '@/lib/actions/pipeline'
+import { PostProdFlowPlanner } from './PostProdFlowPlanner'
 import { TaskList } from '@/components/task/TaskList'
 import BoardsButton from './BoardsButton'
 import type { Task } from '@/lib/types'
@@ -1002,6 +1004,20 @@ export default function PreprodDetailPage() {
     getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
   }, [id])
 
+  const [flowTracks, setFlowTracks] = useState<PostProdFlowTrack[]>([])
+  const [plannedSteps, setPlannedSteps] = useState<PlannedPostProdStep[]>([])
+
+  function refetchFlowOptions() {
+    getPostProdFlowOptions(id).then(res => {
+      setFlowTracks(res.tracks)
+      setPlannedSteps(res.plannedSteps)
+    })
+  }
+
+  useEffect(() => {
+    refetchFlowOptions()
+  }, [id])
+
   useEffect(() => {
     if (!leadDropdownOpen) return
     function handleClick(e: MouseEvent) {
@@ -1030,7 +1046,7 @@ export default function PreprodDetailPage() {
       ? { ...u, assignee_id: assignee?.id ?? null, assignee_name: assignee?.name ?? null }
       : u
     ))
-    setUnitAssignee(unitId, assignee?.id ?? null)
+    setUnitAssignee(unitId, id, assignee?.id ?? null)
   }
 
   function handleTaskStatusChange(taskId: string, status: Task['status']) {
@@ -1264,6 +1280,16 @@ export default function PreprodDetailPage() {
               projectType={project.project_type}
               onChange={next => patchPreprod({ post_crew: next })}
               onCrewAdded={next => handleCrewChanged(undefined, next)}
+            />
+
+            {/* Planlagt for post-produksjon (f.eks. VFX/animasjon) */}
+            <PostProdFlowPlanner
+              projectId={id}
+              projectType={project.project_type}
+              tracks={flowTracks}
+              plannedSteps={plannedSteps}
+              onStepAdded={refetchFlowOptions}
+              onStepDeleted={deletedId => setPlannedSteps(prev => prev.filter(s => s.id !== deletedId))}
             />
           </div>
 

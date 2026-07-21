@@ -6,7 +6,7 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
-import { computeInsertionOrder, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
+import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -467,7 +467,6 @@ export async function reseedPostProdTasks(
   try {
     const supabase = await createClient()
 
-    // Hent project_type
     const { data: proj, error: projError } = await supabase
       .from('projects')
       .select('project_type')
@@ -482,67 +481,106 @@ export async function reseedPostProdTasks(
       return { count: 0, error: 'Innholdstype ikke satt på prosjektet' }
     }
 
-    // Slett eksisterende tasks
-    const { error: deleteError } = await supabase
+    const { data: existingTasks, error: existingError } = await supabase
       .from('tasks')
-      .delete()
+      .select('id, title, description, sub_type, created_by')
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
-
-    if (deleteError) {
-      console.error('reseedPostProdTasks delete error:', deleteError)
-      return { count: 0, error: 'Kunne ikke slette gamle oppgaver' }
-    }
-
-    // Mixed: seed to uavhengige flyter
-    if (proj.project_type === 'mixed') {
-      await seedMixedPostProdTasks(supabase, projectId)
-      revalidatePath('/admin/postprod')
-      return { count: -1 } // antall beregnes av to flyter, returnerer bare ok
-    }
-
-    // Hent maler
-    const { data: templates, error: templatesError } = await supabase
-      .from('task_templates')
-      .select('*')
-      .eq('pipeline_stage', 'post_prod')
-      .eq('project_type', proj.project_type)
       .order('sort_order', { ascending: true })
 
-    if (templatesError) {
-      console.error('reseedPostProdTasks templates error:', templatesError)
-      return { count: 0, error: 'Kunne ikke hente maler' }
+    if (existingError) {
+      console.error('reseedPostProdTasks fetch error:', existingError)
+      return { count: 0, error: 'Kunne ikke hente eksisterende oppgaver' }
     }
 
-    if (!templates || templates.length === 0) {
-      return { count: 0, error: `Ingen maler funnet for type "${proj.project_type}"` }
+    // Kun maloppgaver (created_by=null) slettes og regenereres. Alt et
+    // menneske har lagt til — frie egendefinerte oppgaver OG planlagte
+    // post-prod-steg — bevares.
+    const toDeleteIds = (existingTasks ?? [])
+      .filter((t: { created_by: string | null }) => t.created_by === null)
+      .map((t: { id: string }) => t.id)
+
+    const preserved: (SequenceRow & { subType: 'video' | 'photo' | null })[] = (existingTasks ?? [])
+      .filter((t: { created_by: string | null }) => t.created_by !== null)
+      .map((t: { id: string; title: string; description: string | null; sub_type: 'video' | 'photo' | null }) => ({
+        id: t.id, title: t.title, description: t.description, origin: 'existing' as const, subType: t.sub_type,
+      }))
+
+    if (toDeleteIds.length > 0) {
+      const { error: deleteError } = await supabase.from('tasks').delete().in('id', toDeleteIds)
+      if (deleteError) {
+        console.error('reseedPostProdTasks delete error:', deleteError)
+        return { count: 0, error: 'Kunne ikke slette gamle maloppgaver' }
+      }
     }
 
-    // Opprett tasks
-    const tasksToInsert = templates.map((t: TaskTemplateRow) => ({
-      project_id: projectId,
-      pipeline_stage: 'post_prod',
-      title: t.title,
-      description: t.description ?? null,
-      status: 'todo' as const,
-      sort_order: t.sort_order,
-      sub_type: null,
-      due_date: null,
-      priority: null,
-      created_by: null,
-    }))
+    const subTypeTracks: ('video' | 'photo' | null)[] = proj.project_type === 'mixed' ? ['video', 'photo'] : [null]
+    let totalInserted = 0
 
-    const { error: insertError } = await supabase
-      .from('tasks')
-      .insert(tasksToInsert)
+    for (const subType of subTypeTracks) {
+      const templateProjectType = proj.project_type === 'mixed' ? subType! : proj.project_type
 
-    if (insertError) {
-      console.error('reseedPostProdTasks insert error:', insertError)
-      return { count: 0, error: 'Kunne ikke opprette oppgaver' }
+      const { data: templates, error: templatesError } = await supabase
+        .from('task_templates')
+        .select('title, description')
+        .eq('pipeline_stage', 'post_prod')
+        .eq('project_type', templateProjectType)
+        .order('sort_order', { ascending: true })
+
+      if (templatesError) {
+        console.error('reseedPostProdTasks templates error:', templatesError)
+        return { count: 0, error: 'Kunne ikke hente maler' }
+      }
+
+      if (!templates || templates.length === 0) {
+        return { count: 0, error: `Ingen maler funnet for type "${templateProjectType}"` }
+      }
+
+      const freshRows: SequenceRow[] = templates.map((t: { title: string; description: string | null }) => ({
+        id: null, title: t.title, description: t.description ?? null, origin: 'template' as const,
+      }))
+
+      const preservedForTrack: SequenceRow[] = preserved
+        .filter(p => p.subType === subType)
+        .map(p => ({ id: p.id, title: p.title, description: p.description, origin: p.origin }))
+
+      const merged = assignSortOrder(mergeReseededSequence(freshRows, preservedForTrack))
+
+      for (const row of merged) {
+        if (row.origin === 'existing') {
+          const { error } = await supabase
+            .from('tasks')
+            .update({ sort_order: row.sortOrder })
+            .eq('id', row.id as string)
+
+          if (error) console.error('reseedPostProdTasks reorder error:', error)
+        } else {
+          const { error } = await supabase.from('tasks').insert({
+            project_id: projectId,
+            pipeline_stage: 'post_prod',
+            title: row.title,
+            description: row.description,
+            status: 'todo' as const,
+            sort_order: row.sortOrder,
+            sub_type: subType,
+            is_custom: false,
+            created_by: null,
+            due_date: null,
+            priority: null,
+          })
+
+          if (error) {
+            console.error('reseedPostProdTasks insert error:', error)
+            return { count: 0, error: 'Kunne ikke opprette oppgaver' }
+          }
+          totalInserted++
+        }
+      }
     }
 
     revalidatePath('/admin/postprod')
-    return { count: tasksToInsert.length }
+    revalidatePath('/admin/preprod')
+    return { count: totalInserted }
   } catch (err) {
     console.error('reseedPostProdTasks error:', err)
     return { count: 0, error: 'Uventet feil' }

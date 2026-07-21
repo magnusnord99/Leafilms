@@ -95,6 +95,17 @@ export function EditProjectTopBar({
         setMenuOpen(false)
       },
     },
+    shareLink && {
+      label: 'Kopier signeringslink',
+      action: (e: React.MouseEvent<HTMLButtonElement>) => {
+        navigator.clipboard.writeText(`${shareLink}/sign`)
+        const btn = e.currentTarget
+        const orig = btn.textContent || 'Kopier signeringslink'
+        btn.textContent = 'Kopiert!'
+        setTimeout(() => { btn.textContent = orig }, 2000)
+        setMenuOpen(false)
+      },
+    },
     {
       label: 'E-post →',
       href: `/admin/projects/${project.id}/email`,

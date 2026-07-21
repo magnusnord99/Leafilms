@@ -1,12 +1,12 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature, OptionalAddon } from '@/lib/types'
+import { Project, Section, TeamMember, CaseStudy, Image, SectionImage, VideoLibrary, SectionVideo, CollagePreset, OurSignature } from '@/lib/types'
 
 const ContractSigningSection = dynamic(() => import('./ContractSigningSection'), { ssr: false })
 import { Text } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
-import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import {
   HeroSection,
   ConceptSection,
@@ -24,6 +24,7 @@ import {
 } from '@/components/sections'
 import { useProjectAnalytics } from '@/hooks/useProjectAnalytics'
 import { useScrollAnimations } from '@/hooks/useScrollAnimations'
+import { useQuoteContractState } from '@/hooks/useQuoteContractState'
 import { useAuth } from '@/hooks/useAuth'
 import { SectionNavigation } from '@/components/project'
 
@@ -72,63 +73,22 @@ export function PublicProjectClient({
   // Always call hooks in the same order - useMemo to ensure stable sectionIds
   const sectionIds = useMemo(() => sections.map(s => s.id), [sections])
 
-  const [optionalAddons, setOptionalAddons] = useState<OptionalAddon[]>([])
-  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(new Set())
-  const [baseFinalPriceExclVat, setBaseFinalPriceExclVat] = useState(0)
-  const [quoteDiscountFactor, setQuoteDiscountFactor] = useState(0)
-  const [contractSigned, setContractSigned] = useState(publishedContract?.isSigned ?? false)
-  const skipNextAddonSave = useRef(true)
-
-  const handleToggleAddon = useCallback((id: string) => {
-    // Tilleggene låses så snart avtalen er signert — ingen flere endringer skal kunne lagres
-    if (contractSigned) return
-    setSelectedAddonIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [contractSigned])
-
-  const handleContractSigned = useCallback(() => {
-    setContractSigned(true)
-  }, [])
+  const {
+    optionalAddons,
+    selectedAddonIds,
+    baseFinalPriceExclVat,
+    quoteDiscountFactor,
+    contractSigned,
+    handleToggleAddon,
+    handleContractSigned,
+    handleAddonsLoaded,
+    handleBaseTotalsLoaded,
+  } = useQuoteContractState({ shareToken, projectId, initialIsSigned: publishedContract?.isSigned ?? false })
 
   const scrollToContract = useCallback(() => {
     const el = document.getElementById('kontrakt')
     if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 40, behavior: 'smooth' })
   }, [])
-
-  const handleAddonsLoaded = useCallback((addons: OptionalAddon[], initialSelectedIds: string[] = []) => {
-    setOptionalAddons(addons)
-    // Hentet fra server — ikke lagre dette tilbake med det samme (unngår unødvendig round-trip)
-    skipNextAddonSave.current = true
-    setSelectedAddonIds(new Set(initialSelectedIds))
-  }, [])
-
-  const handleBaseTotalsLoaded = useCallback((finalPriceExclVat: number, discountFactor: number) => {
-    setBaseFinalPriceExclVat(finalPriceExclVat)
-    setQuoteDiscountFactor(discountFactor)
-  }, [])
-
-  // Lagre kundens avhukede tillegg fortløpende, slik at de overlever en sideoppdatering
-  // — men ikke rett etter at valget nettopp ble lastet inn fra serveren.
-  useEffect(() => {
-    if (skipNextAddonSave.current) {
-      skipNextAddonSave.current = false
-      return
-    }
-    if (!shareToken || !projectId) return
-    const ids = Array.from(selectedAddonIds)
-    const timeout = setTimeout(() => {
-      fetch('/api/quotes/select-addons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, shareToken, selectedAddonIds: ids }),
-      }).catch(() => {})
-    }, 400)
-    return () => clearTimeout(timeout)
-  }, [selectedAddonIds, shareToken, projectId])
 
   // Check if user is admin - must be called before other hooks that depend on it
   const { isAdmin, loading: authLoading } = useAuth()

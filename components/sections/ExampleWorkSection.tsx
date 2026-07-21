@@ -180,6 +180,50 @@ export function ExampleWorkSection({
         // #endregion
       }}
     >
+      {/* Section header — gjør det tydelig at dette er innhold Leafilms har laget,
+          samme mønster som video-seksjonen (CasesSection) allerede har (feedback 551666cf) */}
+      <div className="max-w-6xl mx-auto px-8 md:px-16 pt-16 md:pt-20 mb-5">
+        <div className="flex items-center gap-4 mb-5">
+          <div style={{ width: 32, height: 1, background: '#C49434' }} />
+          <span
+            className={editMode ? 'edit-outline px-2 py-1' : ''}
+            style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.78rem',
+              letterSpacing: '0.16em',
+              color: '#C49434',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}
+            contentEditable={editMode}
+            suppressContentEditableWarning
+            onBlur={(e) => {
+              if (editMode) updateSectionContent(section.id, 'title', e.currentTarget.textContent || '')
+            }}
+          >
+            {section.content.title || 'Eksempelarbeid'}
+          </span>
+        </div>
+        <p
+          className={editMode ? 'edit-outline px-2 py-1' : ''}
+          style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.75rem, 2.8vw, 2.5rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: '#E8E1D5',
+            lineHeight: 1.3,
+          }}
+          contentEditable={editMode}
+          suppressContentEditableWarning
+          onBlur={(e) => {
+            if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
+          }}
+        >
+          {section.content.description || 'Bilder vi har tatt for tidligere kunder'}
+        </p>
+      </div>
+
       {/* Velg bilde-sett knapp i edit mode */}
       {editMode && (
         <div className="max-w-6xl mx-auto mb-6 px-4 flex items-center gap-4">

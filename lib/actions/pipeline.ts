@@ -2138,15 +2138,24 @@ export async function addPlannedPostProdStep(input: {
       return { ok: false, error: 'Ikke innlogget' }
     }
 
-    const { data: proj } = await supabase
+    const { data: proj, error: projError } = await supabase
       .from('projects')
       .select('project_type')
       .eq('id', input.projectId)
       .single()
 
-    const projectType = (proj?.project_type ?? null) as ProjectType | null
+    if (projError || !proj) {
+      console.error('addPlannedPostProdStep project error:', projError)
+      return { ok: false, error: 'Fant ikke prosjektet' }
+    }
+
+    const projectType = proj.project_type as ProjectType | null
     if (!projectType) {
       return { ok: false, error: 'Prosjektet mangler innholdstype' }
+    }
+
+    if (projectType === 'mixed' && !input.subType) {
+      return { ok: false, error: 'Velg video eller foto for mixed-prosjekter' }
     }
 
     let existingQuery = supabase

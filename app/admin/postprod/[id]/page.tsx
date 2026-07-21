@@ -12,6 +12,7 @@ import {
   getProjectDeliverablesSection,
   updateProjectDeliverablesSection,
   setProjectLead, getTaskMessageCounts,
+  deleteTask,
 } from '@/lib/actions/pipeline'
 import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
@@ -548,6 +549,17 @@ export default function PostProdDetailPage() {
 
   function handleCustomTaskDeleted(taskId: string) {
     setTasks(prev => prev.filter(t => t.id !== taskId))
+  }
+
+  async function handleDeleteStepperTask(taskId: string) {
+    const result = await deleteTask(taskId)
+    if (!result.ok) return
+    const newTasks = tasks.filter(t => t.id !== taskId)
+    setTasks(newTasks)
+    const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
+    const newStepperTasks = newTasks.filter(t => !t.is_custom)
+    const newDisplayTasks = isMixedProject ? newStepperTasks.filter(t => t.sub_type === activeTab) : newStepperTasks
+    setSelectedIdx(getInitialIdx(newDisplayTasks))
   }
 
   function handleSwitchTab(tab: 'video' | 'photo') {
@@ -1201,9 +1213,22 @@ export default function PostProdDetailPage() {
               </div>
 
               {/* Task title */}
-              <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 700, color: C.text, marginBottom: 8, lineHeight: 1.2 }}>
-                {selectedTask.title}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
+                  {selectedTask.title}
+                </h2>
+                {selectedTask.created_by && (
+                  <button
+                    onClick={() => handleDeleteStepperTask(selectedTask.id)}
+                    title="Fjern dette planlagte steget"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 4, lineHeight: 0, flexShrink: 0 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M2 2l8 8M10 2L2 10" />
+                    </svg>
+                  </button>
+                )}
+              </div>
 
               {/* Description from template */}
               {selectedTask.description && (

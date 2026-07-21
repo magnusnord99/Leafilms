@@ -4,10 +4,15 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  getRoomDetail, deleteRoom, addEquipmentUnits, checkOutUnits, returnUnits,
-  RoomDetail, EquipmentUnitRow, CheckedOutUnitRow,
+  getRoomDetail, deleteRoom, addEquipmentUnits, checkOutUnits, returnUnits, setRoomOwner, cancelReservation,
+  RoomDetail, EquipmentUnitRow, CheckedOutUnitRow, BookingConflict,
 } from '@/lib/actions/equipment'
 import { EQUIPMENT_CATEGORY_LABELS } from '@/lib/equipment-constants'
+
+function formatDate(isoDate: string) {
+  const [y, m, d] = isoDate.split('-')
+  return `${d}.${m}.${y}`
+}
 
 const C = {
   bg:       '#181920',
@@ -60,9 +65,9 @@ export default function RoomDetailPage() {
   const [selectedInRoom, setSelectedInRoom] = useState<Set<string>>(new Set())
   const [selectedCheckedOut, setSelectedCheckedOut] = useState<Set<string>>(new Set())
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [checkoutConflicts, setCheckoutConflicts] = useState<BookingConflict[] | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [addCatalogId, setAddCatalogId] = useState('')
-  const [addCount, setAddCount] = useState(1)
+  const [addSelection, setAddSelection] = useState<Record<string, number>>({})
   const [addError, setAddError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -76,6 +81,7 @@ export default function RoomDetailPage() {
   useEffect(() => { load() }, [load])
 
   function toggleInRoom(id: string) {
+    setCheckoutConflicts(null)
     setSelectedInRoom(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -95,8 +101,22 @@ export default function RoomDetailPage() {
 
   async function handleCheckOut() {
     if (selectedInRoom.size === 0 || !targetProjectId) return
+    setCheckoutConflicts(null)
     setBusy(true)
-    await checkOutUnits(Array.from(selectedInRoom), targetProjectId)
+    const result = await checkOutUnits(Array.from(selectedInRoom), targetProjectId)
+    setBusy(false)
+    if (result.conflicts) {
+      setCheckoutConflicts(result.conflicts)
+      return
+    }
+    setSelectedInRoom(new Set())
+    load()
+  }
+
+  async function handleCancelReservation(unitIds: string[]) {
+    if (unitIds.length === 0) return
+    setBusy(true)
+    await cancelReservation(unitIds)
     setSelectedInRoom(new Set())
     load()
     setBusy(false)
@@ -111,19 +131,40 @@ export default function RoomDetailPage() {
     setBusy(false)
   }
 
+  function toggleCatalogSelection(catalogId: string) {
+    setAddSelection(prev => {
+      const next = { ...prev }
+      if (catalogId in next) delete next[catalogId]
+      else next[catalogId] = 1
+      return next
+    })
+  }
+
+  function setCatalogCount(catalogId: string, count: number) {
+    setAddSelection(prev => ({ ...prev, [catalogId]: count }))
+  }
+
   async function handleAdd() {
-    if (!addCatalogId || addCount <= 0) return
+    const entries = Object.entries(addSelection).filter(([, count]) => count > 0)
+    if (entries.length === 0) return
     setAddError(null)
     setBusy(true)
-    const result = await addEquipmentUnits(roomId, addCatalogId, addCount)
+    const results = await Promise.all(
+      entries.map(([catalogId, count]) => addEquipmentUnits(roomId, catalogId, count))
+    )
     setBusy(false)
-    if (result.error) {
-      setAddError(result.error)
+    const firstError = results.find(r => r.error)?.error
+    if (firstError) {
+      setAddError(firstError)
       return
     }
     setShowAdd(false)
-    setAddCatalogId('')
-    setAddCount(1)
+    setAddSelection({})
+    load()
+  }
+
+  async function handleSetOwner(ownerId: string) {
+    await setRoomOwner(roomId, ownerId || null)
     load()
   }
 
@@ -159,6 +200,9 @@ export default function RoomDetailPage() {
   }, {})
 
   const targetProjectTitle = detail.preprodProjects.find(p => p.id === targetProjectId)?.title ?? ''
+  const selectedReservedIds = detail.unitsInRoom
+    .filter(u => selectedInRoom.has(u.id) && u.reservedFor)
+    .map(u => u.id)
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
@@ -200,7 +244,7 @@ export default function RoomDetailPage() {
           </label>
           <select
             value={targetProjectId}
-            onChange={e => setTargetProjectId(e.target.value)}
+            onChange={e => { setTargetProjectId(e.target.value); setCheckoutConflicts(null) }}
             style={{
               width: '100%', boxSizing: 'border-box',
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
@@ -213,6 +257,31 @@ export default function RoomDetailPage() {
               <option key={p.id} value={p.id}>{p.title}</option>
             ))}
           </select>
+        </div>
+
+        {/* Rom-eier */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
+          <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, display: 'block', marginBottom: 8 }}>
+            Rom-eier
+          </label>
+          <select
+            value={detail.room.owner_id ?? ''}
+            onChange={e => handleSetOwner(e.target.value)}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
+              color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
+              borderRadius: 6, padding: '8px 10px', outline: 'none', cursor: 'pointer',
+            }}
+          >
+            <option value="">Ingen eier</option>
+            {detail.staff.map(s => (
+              <option key={s.id} value={s.id}>{s.name ?? 'Uten navn'}</option>
+            ))}
+          </select>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '8px 0 0' }}>
+            Utstyr som hentes fra dette rommet tildeles automatisk rom-eieren som pakke-ansvarlig.
+          </p>
         </div>
 
         {/* I dette rommet */}
@@ -233,55 +302,87 @@ export default function RoomDetailPage() {
             </button>
           </div>
 
-          {showAdd && (
-            <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={addCatalogId}
-                onChange={e => setAddCatalogId(e.target.value)}
-                style={{
-                  flex: 1, minWidth: 180, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
-                  color: C.text, background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: 6, padding: '7px 10px', outline: 'none', cursor: 'pointer',
-                }}
-              >
-                <option value="">Velg type...</option>
-                {Object.entries(catalogByCategory).map(([category, items]) => (
-                  <optgroup key={category} label={EQUIPMENT_CATEGORY_LABELS[category] ?? category}>
-                    {items.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-              <input
-                type="number"
-                min={1}
-                value={addCount}
-                onChange={e => setAddCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                style={{
-                  width: 64, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
-                  color: C.text, background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: 6, padding: '7px 10px', outline: 'none',
-                }}
-              />
-              <button
-                onClick={handleAdd}
-                disabled={!addCatalogId || busy}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
-                  padding: '7px 12px', borderRadius: 6, cursor: addCatalogId ? 'pointer' : 'not-allowed',
-                  background: addCatalogId ? C.accentBg : 'transparent',
-                  color: addCatalogId ? C.accent : C.text3,
-                  border: `1px solid ${addCatalogId ? 'rgba(124,92,252,0.25)' : C.border}`,
-                }}
-              >
-                Legg til
-              </button>
-              {addError && (
-                <p style={{ width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, margin: 0 }}>
-                  {addError}
-                </p>
-              )}
-            </div>
-          )}
+          {showAdd && (() => {
+            const selectedCount = Object.keys(addSelection).length
+            return (
+              <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, marginBottom: 14 }}>
+                <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4 }}>
+                  {Object.entries(catalogByCategory).map(([category, items]) => (
+                    <div key={category}>
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3, margin: '0 0 6px' }}>
+                        {EQUIPMENT_CATEGORY_LABELS[category] ?? category}
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {items.map(item => {
+                          const selected = item.id in addSelection
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => toggleCatalogSelection(item.id)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6,
+                                background: selected ? C.accentBg : C.surface,
+                                border: `1px solid ${selected ? 'rgba(124,92,252,0.4)' : C.border}`,
+                                cursor: 'pointer', transition: 'all 0.12s',
+                              }}
+                            >
+                              <span style={{
+                                width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                                background: selected ? C.accent : 'transparent',
+                                border: `1.5px solid ${selected ? C.accent : C.text3}`,
+                              }} />
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, flex: 1 }}>
+                                {item.name}
+                              </span>
+                              {selected && (
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={addSelection[item.id]}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => setCatalogCount(item.id, Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                  style={{
+                                    width: 52, flexShrink: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
+                                    color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
+                                    borderRadius: 5, padding: '4px 6px', outline: 'none',
+                                  }}
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                    {selectedCount > 0 ? `${selectedCount} valgt` : 'Huk av det du vil legge til'}
+                  </span>
+                  <button
+                    onClick={handleAdd}
+                    disabled={selectedCount === 0 || busy}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                      padding: '7px 12px', borderRadius: 6, cursor: selectedCount > 0 ? 'pointer' : 'not-allowed',
+                      background: selectedCount > 0 ? C.accentBg : 'transparent',
+                      color: selectedCount > 0 ? C.accent : C.text3,
+                      border: `1px solid ${selectedCount > 0 ? 'rgba(124,92,252,0.25)' : C.border}`,
+                    }}
+                  >
+                    Legg til
+                  </button>
+                </div>
+
+                {addError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, margin: '10px 0 0' }}>
+                    {addError}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {detail.unitsInRoom.length === 0 ? (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
@@ -293,7 +394,9 @@ export default function RoomDetailPage() {
                 <UnitRow
                   key={u.id}
                   label={u.catalog_name}
-                  sub={u.unit_label}
+                  sub={u.reservedFor
+                    ? `${u.unit_label} · reservert til ${u.reservedFor.project_title}${u.reservedFor.shoot_start ? ` · ute fra ${formatDate(u.reservedFor.shoot_start)}` : ''}`
+                    : u.unit_label}
                   selected={selectedInRoom.has(u.id)}
                   onToggle={() => toggleInRoom(u.id)}
                 />
@@ -302,24 +405,58 @@ export default function RoomDetailPage() {
           )}
 
           {selectedInRoom.size > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                 {selectedInRoom.size} valgt
               </span>
-              <button
-                onClick={handleCheckOut}
-                disabled={!targetProjectId || busy}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
-                  padding: '7px 12px', borderRadius: 6,
-                  cursor: targetProjectId ? 'pointer' : 'not-allowed',
-                  background: targetProjectId ? C.accentBg : 'transparent',
-                  color: targetProjectId ? C.accent : C.text3,
-                  border: `1px solid ${targetProjectId ? 'rgba(124,92,252,0.25)' : C.border}`,
-                }}
-              >
-                {targetProjectId ? `Flytt ${selectedInRoom.size} til «${targetProjectTitle}»` : 'Velg mål-shoot først'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selectedReservedIds.length > 0 && (
+                  <button
+                    onClick={() => handleCancelReservation(selectedReservedIds)}
+                    disabled={busy}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                      padding: '7px 12px', borderRadius: 6, cursor: 'pointer',
+                      background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.3)',
+                    }}
+                  >
+                    Avreserver ({selectedReservedIds.length})
+                  </button>
+                )}
+                <button
+                  onClick={handleCheckOut}
+                  disabled={!targetProjectId || busy}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                    padding: '7px 12px', borderRadius: 6,
+                    cursor: targetProjectId ? 'pointer' : 'not-allowed',
+                    background: targetProjectId ? C.accentBg : 'transparent',
+                    color: targetProjectId ? C.accent : C.text3,
+                    border: `1px solid ${targetProjectId ? 'rgba(124,92,252,0.25)' : C.border}`,
+                  }}
+                >
+                  {targetProjectId ? `Reserver ${selectedInRoom.size} til «${targetProjectTitle}»` : 'Velg mål-shoot først'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {checkoutConflicts && checkoutConflicts.length > 0 && (
+            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 6, background: 'rgba(224,85,85,0.08)', border: '1px solid rgba(224,85,85,0.3)' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, color: C.danger, margin: '0 0 6px' }}>
+                Dobbeltbooking — allerede reservert til et annet prosjekt:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {checkoutConflicts.map((c, i) => (
+                  <li key={i} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                    {c.catalog_name} {c.unit_label} · reservert til {c.project_title}
+                    {c.shoot_start ? ` (${formatDate(c.shoot_start)})` : ''}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, margin: '6px 0 0' }}>
+                Fjern disse fra valget, eller avreserver dem fra det andre prosjektet først.
+              </p>
             </div>
           )}
         </div>

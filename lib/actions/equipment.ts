@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
+import { getAllProfiles } from '@/lib/actions/pipeline'
 
 export type EquipmentRoom = { id: string; name: string; unit_count: number }
 
@@ -11,6 +12,7 @@ export type EquipmentUnitRow = {
   catalog_id: string
   catalog_name: string
   catalog_category: string
+  reservedFor?: { project_title: string; shoot_start: string | null } | null
 }
 
 export type CheckedOutUnitRow = EquipmentUnitRow & {
@@ -19,11 +21,12 @@ export type CheckedOutUnitRow = EquipmentUnitRow & {
 }
 
 export type RoomDetail = {
-  room: { id: string; name: string }
+  room: { id: string; name: string; owner_id: string | null }
   unitsInRoom: EquipmentUnitRow[]
   unitsCheckedOut: CheckedOutUnitRow[]
   catalog: { id: string; name: string; category: string }[]
   preprodProjects: { id: string; title: string }[]
+  staff: { id: string; name: string | null }[]
 }
 
 export type ProjectEquipmentUnit = {
@@ -36,8 +39,16 @@ export type ProjectEquipmentUnit = {
 }
 
 type CatalogJoin = { name: string; category: string } | null
-type ProjectJoin = { title: string } | null
+type ProjectShootJoin = { title: string; shoot_start: string | null } | null
 type AssigneeJoin = { id: string; name: string | null } | null
+
+/** En reservert enhet regnes som fysisk "ute" fra og med prosjektets shoot_start.
+ *  Mangler shoot_start helt, regnes den som ute med det samme (bevarer gammel oppførsel
+ *  for prosjekter uten satt dato — vi kan ikke vite at den *ikke* er ute). */
+function isPhysicallyOut(shootStart: string | null): boolean {
+  if (!shootStart) return true
+  return shootStart <= new Date().toISOString().slice(0, 10)
+}
 
 export async function getRooms(): Promise<EquipmentRoom[]> {
   try {
@@ -74,21 +85,26 @@ export async function getRoomDetail(roomId: string): Promise<RoomDetail | null> 
 
     const { data: room } = await supabase
       .from('equipment_rooms')
-      .select('id, name')
+      .select('id, name, owner_id')
       .eq('id', roomId)
       .single()
 
     if (!room) return null
 
-    const { data: unitsInRoom } = await supabase
+    // Enheter med hjemme-rom = dette rommet. Kan være reservert til et fremtidig
+    // prosjekt (checked_out_project_id satt) uten å være fysisk ute ennå.
+    const { data: roomUnits } = await supabase
       .from('equipment_units')
-      .select('id, unit_label, catalog_id, price_catalog(name, category)')
+      .select('id, unit_label, catalog_id, checked_out_project_id, price_catalog(name, category), projects(title, shoot_start)')
       .eq('room_id', roomId)
       .order('unit_label', { ascending: true })
 
-    const { data: unitsCheckedOut } = await supabase
+    // Fysisk ute til shoot: reservert OG shoot har startet (eller ingen dato satt).
+    // Ikke rom-avgrenset — historiske enheter uten hjemme-rom (fra før 109-migrasjonen)
+    // skal fortsatt vises et sted.
+    const { data: checkedOutUnits } = await supabase
       .from('equipment_units')
-      .select('id, unit_label, catalog_id, checked_out_project_id, price_catalog(name, category), projects(title)')
+      .select('id, unit_label, catalog_id, checked_out_project_id, price_catalog(name, category), projects(title, shoot_start)')
       .not('checked_out_project_id', 'is', null)
 
     const { data: catalog } = await supabase
@@ -104,33 +120,48 @@ export async function getRoomDetail(roomId: string): Promise<RoomDetail | null> 
       .eq('pipeline_stage', 'pre_prod')
       .order('title', { ascending: true })
 
+    const staff = await getAllProfiles()
+
+    const unitsInRoom: EquipmentUnitRow[] = []
+    for (const u of roomUnits ?? []) {
+      const catalogRow = u.price_catalog as unknown as CatalogJoin
+      const projectRow = u.projects as unknown as ProjectShootJoin
+      if (u.checked_out_project_id && isPhysicallyOut(projectRow?.shoot_start ?? null)) continue
+      unitsInRoom.push({
+        id: u.id,
+        unit_label: u.unit_label,
+        catalog_id: u.catalog_id,
+        catalog_name: catalogRow?.name ?? '?',
+        catalog_category: catalogRow?.category ?? 'annet',
+        reservedFor: u.checked_out_project_id
+          ? { project_title: projectRow?.title ?? '?', shoot_start: projectRow?.shoot_start ?? null }
+          : null,
+      })
+    }
+
+    const unitsCheckedOut: CheckedOutUnitRow[] = []
+    for (const u of checkedOutUnits ?? []) {
+      const catalogRow = u.price_catalog as unknown as CatalogJoin
+      const projectRow = u.projects as unknown as ProjectShootJoin
+      if (!isPhysicallyOut(projectRow?.shoot_start ?? null)) continue
+      unitsCheckedOut.push({
+        id: u.id,
+        unit_label: u.unit_label,
+        catalog_id: u.catalog_id,
+        catalog_name: catalogRow?.name ?? '?',
+        catalog_category: catalogRow?.category ?? 'annet',
+        checked_out_project_id: u.checked_out_project_id as string,
+        project_title: projectRow?.title ?? '?',
+      })
+    }
+
     return {
       room,
-      unitsInRoom: (unitsInRoom ?? []).map((u): EquipmentUnitRow => {
-        const catalogRow = u.price_catalog as unknown as CatalogJoin
-        return {
-          id: u.id,
-          unit_label: u.unit_label,
-          catalog_id: u.catalog_id,
-          catalog_name: catalogRow?.name ?? '?',
-          catalog_category: catalogRow?.category ?? 'annet',
-        }
-      }),
-      unitsCheckedOut: (unitsCheckedOut ?? []).map((u): CheckedOutUnitRow => {
-        const catalogRow = u.price_catalog as unknown as CatalogJoin
-        const projectRow = u.projects as unknown as ProjectJoin
-        return {
-          id: u.id,
-          unit_label: u.unit_label,
-          catalog_id: u.catalog_id,
-          catalog_name: catalogRow?.name ?? '?',
-          catalog_category: catalogRow?.category ?? 'annet',
-          checked_out_project_id: u.checked_out_project_id as string,
-          project_title: projectRow?.title ?? '?',
-        }
-      }),
+      unitsInRoom,
+      unitsCheckedOut,
       catalog: catalog ?? [],
       preprodProjects: preprodProjects ?? [],
+      staff: staff.map(p => ({ id: p.id, name: p.name })),
     }
   } catch (err) {
     console.error('getRoomDetail error:', err)
@@ -216,20 +247,122 @@ export async function addEquipmentUnits(
   }
 }
 
-export async function checkOutUnits(unitIds: string[], projectId: string): Promise<void> {
+export type BookingConflict = {
+  unit_label: string
+  catalog_name: string
+  project_title: string
+  shoot_start: string | null
+}
+
+export async function checkOutUnits(
+  unitIds: string[],
+  projectId: string
+): Promise<{ error?: string; conflicts?: BookingConflict[] }> {
+  if (unitIds.length === 0) return {}
+
+  try {
+    const supabase = await createClient()
+
+    const { data: units } = await supabase
+      .from('equipment_units')
+      .select('id, room_id, unit_label, checked_out_project_id, price_catalog(name), projects(title, shoot_start)')
+      .in('id', unitIds)
+
+    // Dobbeltbooking-sperre: enheter allerede reservert til et ANNET prosjekt
+    // blokkeres — ingen stille overskriving. Samme prosjekt (re-reservering)
+    // og fysisk ledige enheter går gjennom som normalt.
+    const conflicts: BookingConflict[] = []
+    for (const u of units ?? []) {
+      if (u.checked_out_project_id && u.checked_out_project_id !== projectId) {
+        const catalogRow = u.price_catalog as unknown as { name: string } | null
+        const projectRow = u.projects as unknown as ProjectShootJoin
+        conflicts.push({
+          unit_label: u.unit_label,
+          catalog_name: catalogRow?.name ?? '?',
+          project_title: projectRow?.title ?? '?',
+          shoot_start: projectRow?.shoot_start ?? null,
+        })
+      }
+    }
+
+    if (conflicts.length > 0) {
+      return { error: 'Noe av utstyret er allerede reservert til et annet prosjekt', conflicts }
+    }
+
+    // Enhetene beholder hjemme-rommet sitt (room_id nulles ikke) — de regnes
+    // som "planlagt ut" frem til prosjektets shoot_start. Rom med eier gir
+    // automatisk pakke-ansvar til eieren.
+    const roomIds = Array.from(new Set((units ?? []).map(u => u.room_id).filter((id): id is string => !!id)))
+    const { data: rooms } = roomIds.length
+      ? await supabase.from('equipment_rooms').select('id, owner_id').in('id', roomIds)
+      : { data: [] }
+    const ownerByRoom = new Map((rooms ?? []).map(r => [r.id, r.owner_id]))
+
+    await Promise.all((units ?? []).map(u => {
+      const ownerId = u.room_id ? ownerByRoom.get(u.room_id) ?? null : null
+      return supabase
+        .from('equipment_units')
+        .update({
+          checked_out_project_id: projectId,
+          checked_out_assignee_id: ownerId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', u.id)
+    }))
+
+    revalidatePath('/admin/utstyr')
+    revalidatePath(`/admin/preprod/${projectId}`)
+    return {}
+  } catch (err) {
+    console.error('checkOutUnits error:', err)
+    return { error: 'Kunne ikke reservere utstyr' }
+  }
+}
+
+/** Avreserverer enheter som ennå ikke er fysisk ute (før shoot_start). Rommet er
+ *  uendret siden enhetene aldri forlot det — kun reservasjonen fjernes. */
+export async function cancelReservation(unitIds: string[]): Promise<void> {
   if (unitIds.length === 0) return
 
   try {
     const supabase = await createClient()
+
+    const { data: units } = await supabase
+      .from('equipment_units')
+      .select('id, checked_out_project_id')
+      .in('id', unitIds)
+
     await supabase
       .from('equipment_units')
-      .update({ room_id: null, checked_out_project_id: projectId, updated_at: new Date().toISOString() })
+      .update({ checked_out_project_id: null, checked_out_assignee_id: null, updated_at: new Date().toISOString() })
       .in('id', unitIds)
 
     revalidatePath('/admin/utstyr')
-    revalidatePath(`/admin/preprod/${projectId}`)
+
+    const projectIds = new Set((units ?? []).map(u => u.checked_out_project_id).filter(Boolean))
+    for (const projectId of projectIds) {
+      revalidatePath(`/admin/preprod/${projectId}`)
+    }
   } catch (err) {
-    console.error('checkOutUnits error:', err)
+    console.error('cancelReservation error:', err)
+  }
+}
+
+export async function setRoomOwner(roomId: string, ownerId: string | null): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('equipment_rooms')
+      .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+      .eq('id', roomId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath(`/admin/utstyr/${roomId}`)
+    return {}
+  } catch (err) {
+    console.error('setRoomOwner error:', err)
+    return { error: 'Kunne ikke sette rom-eier' }
   }
 }
 

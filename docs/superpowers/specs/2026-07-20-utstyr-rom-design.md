@@ -168,3 +168,25 @@ prosjektdata — bruk et engangs-testprosjekt):
    fungerer som før
 5. Prøv å slette et rom med utstyr i seg → verifiser feilmelding
 6. Prøv å slette et tomt rom → verifiser at det går gjennom
+
+## Tillegg 2026-07-21 — reservasjon frem i tid + rom-eier
+
+Magnus meldte tilbake: å tildele utstyr til et prosjekt i preprod gjorde det
+umiddelbart utilgjengelig, selv uker før faktisk shoot. Linje 33–35 over
+("reservasjon frem i tid" utenfor scope) reverseres derfor:
+
+- Migrasjon `109_equipment_room_owner_and_planning.sql` fjerner
+  `equipment_units_location_xor`-constrainten. En enhet kan nå ha både
+  `room_id` (hjemme-rom) og `checked_out_project_id` (reservasjon) satt
+  samtidig — `room_id` nulles ikke lenger ved tildeling.
+- Status beregnes av `isPhysicallyOut()` i `lib/actions/equipment.ts`: en
+  reservert enhet vises fortsatt under «I dette rommet» (med badge
+  «reservert til X, ute fra {shoot_start}») frem til prosjektets
+  `projects.shoot_start`. Mangler prosjektet shoot-dato, regnes enheten som
+  ute med det samme (bevarer gammel oppførsel der vi ikke har nok info).
+  Først når shoot har startet flyttes den til «Ute til shoot».
+- Samme migrasjon legger til valgfritt `owner_id` på `equipment_rooms`. Utstyr
+  som hentes ut fra et rom med eier (`checkOutUnits`) tildeles automatisk
+  eieren som `checked_out_assignee_id` — dukker opp som pakke-ansvarlig i
+  prosjektets pakkeliste. Uten rom-eier skjer ingen automatisk tildeling.
+- Manuell retur (`returnUnits`) er uendret.

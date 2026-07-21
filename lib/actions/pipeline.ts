@@ -6,6 +6,7 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
+import { computeInsertionOrder, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -2112,5 +2113,138 @@ export async function getPostProdFlowOptions(projectId: string): Promise<{
   } catch (err) {
     console.error('getPostProdFlowOptions error:', err)
     return { projectType: null, tracks: [], plannedSteps: [] }
+  }
+}
+
+/**
+ * Legger til et nytt, menneske-planlagt steg i post_prod-stepperen for et
+ * prosjekt — kan kalles fra pre-prod, før stepperen i det hele tatt er
+ * seedet. Hvis den ikke er seedet ennå, materialiseres standardmalene i
+ * samme kall, slik at det nye steget kan settes inn på riktig plass i en
+ * ekte, sammenhengende sort_order-sekvens.
+ */
+export async function addPlannedPostProdStep(input: {
+  projectId: string
+  title: string
+  description?: string
+  insertBeforeTitle: string | null
+  subType: 'video' | 'photo' | null
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return { ok: false, error: 'Ikke innlogget' }
+    }
+
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('project_type')
+      .eq('id', input.projectId)
+      .single()
+
+    const projectType = (proj?.project_type ?? null) as ProjectType | null
+    if (!projectType) {
+      return { ok: false, error: 'Prosjektet mangler innholdstype' }
+    }
+
+    let existingQuery = supabase
+      .from('tasks')
+      .select('id, title, description')
+      .eq('project_id', input.projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+      .order('sort_order', { ascending: true })
+
+    existingQuery = input.subType
+      ? existingQuery.eq('sub_type', input.subType)
+      : existingQuery.is('sub_type', null)
+
+    const { data: existingRows, error: existingError } = await existingQuery
+
+    if (existingError) {
+      console.error('addPlannedPostProdStep existing error:', existingError)
+      return { ok: false, error: 'Kunne ikke hente eksisterende steg' }
+    }
+
+    let currentSequence: SequenceRow[] = (existingRows ?? []).map(
+      (r: { id: string; title: string; description: string | null }) => ({
+        id: r.id, title: r.title, description: r.description, origin: 'existing' as const,
+      })
+    )
+
+    if (currentSequence.length === 0) {
+      const templateProjectType = projectType === 'mixed' ? input.subType : projectType
+      const { data: templates, error: templatesError } = await supabase
+        .from('task_templates')
+        .select('title, description')
+        .eq('pipeline_stage', 'post_prod')
+        .eq('project_type', templateProjectType)
+        .order('sort_order', { ascending: true })
+
+      if (templatesError) {
+        console.error('addPlannedPostProdStep templates error:', templatesError)
+        return { ok: false, error: 'Kunne ikke hente maler' }
+      }
+
+      currentSequence = (templates ?? []).map((t: { title: string; description: string | null }) => ({
+        id: null, title: t.title, description: t.description ?? null, origin: 'template' as const,
+      }))
+    }
+
+    const newStep: SequenceRow = {
+      id: null,
+      title: input.title,
+      description: input.description ?? null,
+      origin: 'new',
+    }
+
+    const merged = assignSortOrder(
+      computeInsertionOrder(currentSequence, newStep, input.insertBeforeTitle)
+    )
+
+    for (const row of merged) {
+      if (row.origin === 'existing') {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ sort_order: row.sortOrder })
+          .eq('id', row.id as string)
+
+        if (error) {
+          console.error('addPlannedPostProdStep update error:', error)
+          return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }
+        }
+      } else {
+        const { error } = await supabase.from('tasks').insert({
+          project_id: input.projectId,
+          pipeline_stage: 'post_prod',
+          title: row.title,
+          description: row.description,
+          status: 'todo' as const,
+          sort_order: row.sortOrder,
+          sub_type: input.subType,
+          is_custom: false,
+          created_by: row.origin === 'new' ? user.id : null,
+          due_date: null,
+          priority: null,
+        })
+
+        if (error) {
+          console.error('addPlannedPostProdStep insert error:', error)
+          return { ok: false, error: 'Kunne ikke opprette steget' }
+        }
+      }
+    }
+
+    revalidatePath('/admin/preprod')
+    revalidatePath('/admin/postprod')
+    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
+
+    return { ok: true }
+  } catch (err) {
+    console.error('addPlannedPostProdStep unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
   }
 }

@@ -1680,6 +1680,9 @@ export async function getContractStatus(projectId: string): Promise<{
       .from('contracts')
       .select('published_at, status, signed_at, signature_data')
       .eq('project_id', projectId)
+      .eq('is_current', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
 
     return {

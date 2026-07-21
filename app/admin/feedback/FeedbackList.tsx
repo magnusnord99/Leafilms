@@ -195,27 +195,49 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
 }
 
 function Section({ title, color, items }: { title: string; color: string; items: FeedbackItem[] }) {
+  const [showResolved, setShowResolved] = useState(false)
+  const active = items.filter(i => i.status !== 'resolved')
+  const resolved = items.filter(i => i.status === 'resolved')
+
   return (
     <div style={{ marginBottom: 36 }}>
       <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 12 }}>
-        {title} ({items.length})
+        {title} ({active.length})
       </h2>
-      {items.length === 0
+      {active.length === 0
         ? <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>Ingen ennå.</p>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map(item => <FeedbackCard key={item.id} item={item} />)}
+            {active.map(item => <FeedbackCard key={item.id} item={item} />)}
           </div>
       }
+
+      {resolved.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            onClick={() => setShowResolved(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3,
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            }}
+          >
+            <span style={{ display: 'inline-block', transform: showResolved ? 'rotate(90deg)' : 'none', transition: 'transform 0.12s' }}>▸</span>
+            Løste ({resolved.length})
+          </button>
+          {showResolved && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+              {resolved.map(item => <FeedbackCard key={item.id} item={item} />)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 export function FeedbackList({ initialItems }: { initialItems: FeedbackItem[] }) {
-  // Løste saker synker til bunnen (stabil sortering — beholder ellers prioritet/dato-rekkefølgen
-  // fra getFeedback), slik at det er lett å se hva som faktisk gjenstår å gjøre.
-  const sorted = [...initialItems].sort((a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved'))
-  const bugs = sorted.filter(i => i.type === 'bug')
-  const wishes = sorted.filter(i => i.type === 'wish')
+  const bugs = initialItems.filter(i => i.type === 'bug')
+  const wishes = initialItems.filter(i => i.type === 'wish')
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px' }}>

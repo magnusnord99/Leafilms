@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
       .from('contracts')
       .select('contract_text, our_signature, status, signed_at, signed_by, signature_data')
       .eq('project_id', projectId)
-      .single()
+      .eq('is_current', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (error || !contract || !contract.contract_text) {
       return NextResponse.json({ error: 'Fant ingen kontrakttekst for dette prosjektet' }, { status: 404 })

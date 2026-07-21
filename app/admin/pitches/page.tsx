@@ -112,6 +112,17 @@ export default function PitchesPage() {
   const totalPublished = projects.filter(p => p.status === 'published').length
   const totalDraft = projects.filter(p => p.status === 'draft').length
 
+  async function handleArchive(project: PitchProject) {
+    if (!confirm(`Arkivere pitchen "${project.title || '(uten tittel)'}"? Den forsvinner fra denne lista, men kan gjenopprettes senere.`)) return
+    try {
+      const { error } = await supabase.from('projects').update({ status: 'archived' }).eq('id', project.id)
+      if (error) throw error
+      setProjects(prev => prev.filter(p => p.id !== project.id))
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 16px 48px' }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
@@ -483,6 +494,33 @@ export default function PitchesPage() {
                           Oversikt
                         </button>
                       </Link>
+                      <button
+                        onClick={() => handleArchive(project)}
+                        title="Arkiver pitch"
+                        style={{
+                          padding: '5px 8px',
+                          background: 'transparent',
+                          color: C.text3,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          transition: 'color 0.12s, border-color 0.12s',
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLButtonElement).style.color = C.danger
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = `${C.danger}66`
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLButtonElement).style.color = C.text3
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = C.border
+                        }}
+                      >
+                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -212,6 +212,8 @@ export type Contract = {
   signature_data: Record<string, unknown> | null
   form_fields: ContractFormFields | null
   our_signature: OurSignature | null
+  is_current: boolean
+  label: string | null
   created_at: string
   updated_at: string
 }

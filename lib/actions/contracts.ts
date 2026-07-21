@@ -85,7 +85,10 @@ async function buildContractContext(projectId: string) {
     .from('contracts')
     .select('*')
     .eq('project_id', projectId)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   // Mal velges etter prosjektspråket — finnes ingen engelsk mal ennå, faller vi
   // tilbake til den norske i stedet for å generere en tom kontrakt.
@@ -374,17 +377,25 @@ export async function publishContract(
     }
   }
 
-  // Sjekk om kontrakt allerede eksisterer
+  // Hent gjeldende kontrakt (om noen)
   const { data: existing } = await supabase
     .from('contracts')
-    .select('id, our_signature')
+    .select('id, our_signature, status')
     .eq('project_id', projectId)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (existing?.id) {
+  // En signert avtale skal aldri overskrives — den fryses som historikk, og et nytt
+  // tilbud (f.eks. videresalg til samme kunde) publiseres i stedet som en ny,
+  // gjeldende kontraktrad. En upublisert/usignert kontrakt oppdateres fortsatt i samme
+  // rad som før, slik at vanlig redigering ikke lager en ny versjon per lagring.
+  if (existing?.id && existing.status !== 'signed') {
     const { error } = await supabase
       .from('contracts')
       .update({
+        quote_id: quoteId,
         contract_text: contractText,
         form_fields: formFields ?? null,
         our_signature: existing.our_signature ?? ourSignaturePayload ?? null,
@@ -398,6 +409,18 @@ export async function publishContract(
       throw new Error('Kunne ikke oppdatere kontrakt')
     }
   } else {
+    if (existing?.id) {
+      const { error: archiveError } = await supabase
+        .from('contracts')
+        .update({ is_current: false })
+        .eq('id', existing.id)
+
+      if (archiveError) {
+        console.error('publishContract archive error:', archiveError)
+        throw new Error('Kunne ikke arkivere forrige kontrakt')
+      }
+    }
+
     const { error } = await supabase
       .from('contracts')
       .insert({
@@ -405,9 +428,13 @@ export async function publishContract(
         quote_id: quoteId,
         contract_text: contractText,
         form_fields: formFields ?? null,
-        our_signature: ourSignaturePayload,
+        // Leafilms' egen signatur følger med til den nye versjonen hvis den allerede
+        // finnes (handlePublishClick ber ikke om ny signatur når vi allerede har en) —
+        // uten dette ville en videresalgs-kontrakt manglet vår signatur helt.
+        our_signature: existing?.our_signature ?? ourSignaturePayload ?? null,
         published_at: publishedAt,
         status: 'sent',
+        is_current: true,
       })
 
     if (error) {
@@ -427,6 +454,7 @@ export async function unpublishContract(projectId: string): Promise<void> {
     .from('contracts')
     .update({ published_at: null, updated_at: new Date().toISOString() })
     .eq('project_id', projectId)
+    .eq('is_current', true)
     .neq('status', 'signed') // aldri fjern en allerede signert kontrakt
 
   if (error) {
@@ -448,6 +476,7 @@ export async function unsignContract(projectId: string): Promise<void> {
     .from('contracts')
     .update({ status: 'sent', updated_at: new Date().toISOString() })
     .eq('project_id', projectId)
+    .eq('is_current', true)
     .eq('status', 'signed')
 
   if (error) {
@@ -469,6 +498,43 @@ export async function unsignContract(projectId: string): Promise<void> {
     console.error('unsignContract quote reset error:', quoteError)
     throw new Error('Kunne ikke angre signeringen')
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hent tidligere kontraktversjoner for et prosjekt (is_current = false) — f.eks.
+// en signert avtale som ble arkivert da et nytt tilbud/kontrakt (videresalg) ble
+// publisert. Rent leseformål, nyeste først.
+// ---------------------------------------------------------------------------
+export async function getContractHistory(projectId: string): Promise<Array<{
+  id: string
+  label: string | null
+  status: 'pending' | 'sent' | 'signed' | 'cancelled'
+  signedAt: string | null
+  publishedAt: string | null
+  pdfUrl: string | null
+}>> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('id, label, status, signed_at, published_at, pdf_url')
+    .eq('project_id', projectId)
+    .eq('is_current', false)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('getContractHistory error:', error)
+    return []
+  }
+
+  return (data ?? []).map(row => ({
+    id: row.id,
+    label: row.label,
+    status: row.status,
+    signedAt: row.signed_at,
+    publishedAt: row.published_at,
+    pdfUrl: row.pdf_url,
+  }))
 }
 
 // ---------------------------------------------------------------------------

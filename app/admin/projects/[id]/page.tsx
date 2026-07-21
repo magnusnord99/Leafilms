@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
-import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText } from '@/lib/actions/contracts'
+import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory } from '@/lib/actions/contracts'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
@@ -625,6 +625,7 @@ export default function ProjectHubPage() {
   const [contractIsPublished, setContractIsPublished] = useState(false)
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
   const [contractPdfUrl, setContractPdfUrl] = useState<string | null>(null)
+  const [contractHistory, setContractHistory] = useState<Awaited<ReturnType<typeof getContractHistory>>>([])
   const [loadingContract, setLoadingContract] = useState(false)
   const [publishingContract, setPublishingContract] = useState(false)
   const [downloadingContractPdf, setDownloadingContractPdf] = useState(false)
@@ -860,7 +861,10 @@ export default function ProjectHubPage() {
 
   async function loadContract() {
     setLoadingContract(true)
-    const data = await getProjectContractData(projectId)
+    const [data] = await Promise.all([
+      getProjectContractData(projectId),
+      getContractHistory(projectId).then(setContractHistory),
+    ])
     setContractText(data.contractText)
     setContractIsPublished(data.isPublished)
     setContractSignature(data.signature)
@@ -905,6 +909,21 @@ export default function ProjectHubPage() {
     } finally {
       setUnsigningContract(false)
     }
+  }
+
+  // Åpner redigering for et nytt tilbud/kontrakt på samme prosjekt (f.eks. videresalg)
+  // uten å røre den signerte avtalen — den forblir urørt i databasen helt til
+  // "Publiser kontrakt til kunde" faktisk trykkes (publishContract arkiverer den da
+  // automatisk siden status er 'signed', se lib/actions/contracts.ts).
+  function handleStartNewContract() {
+    if (!confirm('Sette opp et nytt tilbud/kontrakt på dette prosjektet? Den signerte avtalen forblir trygt lagret som historikk under "Tidligere kontrakter" når den nye publiseres.')) {
+      return
+    }
+    setContractSignature(null)
+    setContractPdfUrl(null)
+    setContractIsPublished(false)
+    setContractSaved(false)
+    setContractFormOpen(true)
   }
 
   function toContractFormFields(form: typeof contractForm): ContractFormFields {
@@ -1656,6 +1675,44 @@ export default function ProjectHubPage() {
         {activeTab === 'kontrakt' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+            {/* Tidligere kontrakter — arkiverte versjoner (f.eks. en signert avtale som ble
+                erstattet av et nytt tilbud/kontrakt ved videresalg). Rent leseformål. */}
+            {contractHistory.length > 0 && (
+              <div style={{ padding: '12px 16px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 8 }}>
+                  Tidligere kontrakter
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {contractHistory.map(c => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                        {c.status === 'signed'
+                          ? `Signert ${c.signedAt ? new Date(c.signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`
+                          : c.publishedAt
+                            ? `Publisert ${new Date(c.publishedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                            : 'Utkast'}
+                        {c.label ? ` — ${c.label}` : ''}
+                      </span>
+                      {c.pdfUrl ? (
+                        <a
+                          href={c.pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, textDecoration: 'none' }}
+                          onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+                          onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+                        >
+                          Åpne PDF →
+                        </a>
+                      ) : (
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Ingen PDF</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Signert-banner — vises når signert */}
             {contractSignature && (
               <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
@@ -1707,9 +1764,23 @@ export default function ProjectHubPage() {
                     {unsigningContract ? 'Angrer signering...' : 'Angre signering'}
                   </button>
                 </div>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.success, background: 'rgba(76,175,125,0.1)', padding: '3px 10px', borderRadius: 4, whiteSpace: 'nowrap' }}>
-                  Bindende
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.success, background: 'rgba(76,175,125,0.1)', padding: '3px 10px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                    Bindende
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleStartNewContract}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                      padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
+                      background: 'transparent', color: C.accent, border: `1px dashed ${C.accent}`,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    + Nytt tilbud og kontrakt
+                  </button>
+                </div>
               </div>
             )}
 

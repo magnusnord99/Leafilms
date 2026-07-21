@@ -41,12 +41,15 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Ugyldig delelenke for dette prosjektet' }, { status: 403 })
     }
 
-    // Hent kontrakt for prosjektet
+    // Hent gjeldende kontrakt for prosjektet
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
       .select('id, published_at, status, contract_text, our_signature')
       .eq('project_id', projectId)
-      .single()
+      .eq('is_current', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (contractError || !contract) {
       return Response.json(

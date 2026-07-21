@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: project } = await supabase
     .from('projects')
-    .select('name, description, status, language')
+    .select('title, status, language')
     .eq('id', share.project_id)
     .single()
 
@@ -42,16 +42,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const isEnglish = project.language === 'en'
 
-  const title = project.name
-    ? `${project.name} — Leafilms`
+  const title = project.title
+    ? `${project.title} — Leafilms`
     : isEnglish
       ? 'Project Proposal — Leafilms'
       : 'Prosjektbeskrivelse — Leafilms'
 
-  const description = project.description
-    || (isEnglish
-      ? 'High-end cinematic content production. View our project proposal and quote.'
-      : 'Cinematisk innholdsproduksjon av høy kvalitet. Se vår prosjektbeskrivelse og pristilbud.')
+  const description = isEnglish
+    ? 'High-end cinematic content production. View our project proposal and quote.'
+    : 'Cinematisk innholdsproduksjon av høy kvalitet. Se vår prosjektbeskrivelse og pristilbud.'
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
   const pageUrl = `${siteUrl}/p/${token}`
@@ -347,12 +346,16 @@ export default async function PublicProjectView({ params }: Props) {
       .eq('token', token)
   }
 
-  // Hent publisert kontrakt
+  // Hent publisert kontrakt (gjeldende versjon — eldre, signerte kontrakter skal
+  // aldri vises igjen på pitchen etter at prosjektet har fått et nytt tilbud)
   const { data: contractData } = await supabase
     .from('contracts')
     .select('contract_text, published_at, status, signed_at, signed_by, our_signature, pdf_url')
     .eq('project_id', share.project_id)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   const contractHiddenFromPitch = !!(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
 

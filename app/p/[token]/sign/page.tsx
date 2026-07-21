@@ -149,12 +149,15 @@ export default async function SigningProjectView({ params }: Props) {
     }
   }
 
-  // Hent publisert kontrakt
+  // Hent publisert kontrakt (gjeldende versjon)
   const { data: contractData } = await supabase
     .from('contracts')
     .select('contract_text, published_at, status, signed_at, signed_by, our_signature, pdf_url')
     .eq('project_id', share.project_id)
-    .single()
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   const contractHiddenFromPitch = !!(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
 

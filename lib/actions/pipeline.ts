@@ -2022,3 +2022,95 @@ export async function getCustomersList(): Promise<{ id: string; name: string; co
     return []
   }
 }
+
+export type PostProdFlowTrack = {
+  subType: 'video' | 'photo' | null
+  titles: string[]
+}
+
+export type PlannedPostProdStep = {
+  id: string
+  title: string
+  description: string | null
+  subType: 'video' | 'photo' | null
+}
+
+type StepperRow = {
+  id: string
+  title: string
+  description: string | null
+  sub_type: 'video' | 'photo' | null
+  is_custom: boolean
+  created_by: string | null
+}
+
+/**
+ * Henter alt pre-prod-siden trenger for å tilby "legg til post-prod-steg":
+ * - hvilke titler som finnes i den (evt. fremtidige) stepperen, per spor
+ *   (video/foto for mixed-prosjekter, ett spor ellers) — brukes til
+ *   "Sett inn før"-velgeren
+ * - hvilke planlagte steg som allerede er lagt til av et menneske
+ */
+export async function getPostProdFlowOptions(projectId: string): Promise<{
+  projectType: ProjectType | null
+  tracks: PostProdFlowTrack[]
+  plannedSteps: PlannedPostProdStep[]
+}> {
+  try {
+    const supabase = await createClient()
+
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('project_type')
+      .eq('id', projectId)
+      .single()
+
+    const projectType = (proj?.project_type ?? null) as ProjectType | null
+    if (!projectType) {
+      return { projectType: null, tracks: [], plannedSteps: [] }
+    }
+
+    const { data: existingTasks } = await supabase
+      .from('tasks')
+      .select('id, title, description, sub_type, is_custom, created_by')
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .order('sort_order', { ascending: true })
+
+    const stepperRows: StepperRow[] = (existingTasks ?? []).filter((t: StepperRow) => !t.is_custom)
+
+    const plannedSteps: PlannedPostProdStep[] = stepperRows
+      .filter(t => t.created_by !== null)
+      .map(t => ({ id: t.id, title: t.title, description: t.description, subType: t.sub_type }))
+
+    const subTypes: ('video' | 'photo' | null)[] = projectType === 'mixed' ? ['video', 'photo'] : [null]
+
+    const tracks: PostProdFlowTrack[] = await Promise.all(
+      subTypes.map(async (subType): Promise<PostProdFlowTrack> => {
+        const existingForTrack = stepperRows
+          .filter(t => t.sub_type === subType)
+          .map(t => t.title)
+
+        if (existingForTrack.length > 0) {
+          return { subType, titles: existingForTrack }
+        }
+
+        // Stepperen er ikke seedet ennå for denne tracken: bruk standardmalene
+        const templateProjectType = projectType === 'mixed' ? subType! : projectType
+        const { data: templates } = await supabase
+          .from('task_templates')
+          .select('title')
+          .eq('pipeline_stage', 'post_prod')
+          .eq('project_type', templateProjectType)
+          .order('sort_order', { ascending: true })
+
+        return { subType, titles: (templates ?? []).map((t: { title: string }) => t.title) }
+      })
+    )
+
+    return { projectType, tracks, plannedSteps }
+  } catch (err) {
+    console.error('getPostProdFlowOptions error:', err)
+    return { projectType: null, tracks: [], plannedSteps: [] }
+  }
+}

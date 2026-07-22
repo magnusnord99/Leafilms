@@ -14,7 +14,10 @@ import {
   createBoardCard, createSubBoard, createStorylineBoard, addStorylineCard, addStorylineRow, widenStorylineGrid, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel, updateBoardEdgeEndpoints, moveCardToBoard,
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
+import { postBoardComment, toggleThreadResolved, type BoardCommentsByCard } from '@/lib/actions/boardComments'
+import type { BoardComment, BoardCommentThread } from '@/lib/types'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
+import { BoardCommentsProvider } from './boardCommentsContext'
 import { cardsToNodes, cardToNode, edgesToFlow, edgeToFlow, CARD_WIDTH, COLUMN_WIDTH, COLUMN_PAD, type CardNode } from './toFlow'
 import { restackColumn } from './columnLayout'
 import { nodeTypes } from './nodes'
@@ -44,14 +47,19 @@ type Props = {
   readOnly?: boolean
   palette?: BoardPalette
   onOpenBoard: (childBoardId: string) => void
+  // Kort å panorere til + åpne kommentartråden for automatisk ved mount —
+  // satt fra ?comment=<cardId> når man klikker et boardkommentar-varsel.
+  focusCardId?: string
 }
 
-function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALETTE, onOpenBoard }: Props) {
+function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALETTE, onOpenBoard, focusCardId }: Props) {
   const rf = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<CardNode>(cardsToNodes(initial.cards, initial.childMeta))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(edgesToFlow(initial.edges))
   const [pendingType, setPendingType] = useState<BoardCardType | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [threadsByCard, setThreadsByCard] = useState<BoardCommentsByCard>(initial.comments ?? {})
+  const [openCardId, setOpenCardId] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const pendingPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -64,6 +72,57 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   const isLocalOp = useCallback((rowId: string) => {
     const ts = localOps.current.get(rowId)
     return !!ts && Date.now() - ts < 5000
+  }, [])
+
+  const openThread = useCallback((cardId: string) => setOpenCardId(cardId), [])
+  const closeThread = useCallback(() => setOpenCardId(null), [])
+
+  const postComment = useCallback(async (cardId: string, content: string, mentions: string[]) => {
+    const res = await postBoardComment(cardId, boardId, content, mentions)
+    if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+    markLocalOp(res.thread.id)
+    markLocalOp(res.comment.id)
+    setThreadsByCard(prev => {
+      const existing = prev[cardId]
+      return { ...prev, [cardId]: { thread: res.thread, comments: [...(existing?.comments ?? []), res.comment] } }
+    })
+  }, [boardId, markLocalOp])
+
+  const toggleResolved = useCallback(async (cardId: string) => {
+    const entry = threadsByCard[cardId]
+    if (!entry) return
+    const updated = await toggleThreadResolved(entry.thread.id, !entry.thread.resolved)
+    if (!updated) { setSaveError(SAVE_ERROR_MSG); return }
+    markLocalOp(updated.id)
+    setThreadsByCard(prev => ({ ...prev, [cardId]: { ...prev[cardId], thread: updated } }))
+  }, [threadsByCard, markLocalOp])
+
+  // Realtime: reflekter kommentartråd-/meldingsendringer fra andre klienter.
+  // isLocalOp filtrerer bort vårt eget echo (samme mønster som onRemoteCard/onRemoteEdge).
+  const onRemoteCommentThread = useCallback((evt: 'INSERT' | 'UPDATE' | 'DELETE', row: Partial<BoardCommentThread> & { id: string }) => {
+    setThreadsByCard(prev => {
+      const cardId = row.card_id ?? Object.keys(prev).find(k => prev[k].thread.id === row.id)
+      if (!cardId) return prev
+      if (evt === 'DELETE') { const { [cardId]: _removed, ...rest } = prev; return rest }
+      const existing = prev[cardId]
+      return { ...prev, [cardId]: { thread: row as BoardCommentThread, comments: existing?.comments ?? [] } }
+    })
+  }, [])
+
+  const onRemoteComment = useCallback((evt: 'INSERT' | 'UPDATE' | 'DELETE', row: Partial<BoardComment> & { id: string }) => {
+    setThreadsByCard(prev => {
+      const cardId = Object.keys(prev).find(k => prev[k].thread.id === row.thread_id)
+      if (!cardId) return prev
+      const entry = prev[cardId]
+      if (evt === 'DELETE') {
+        return { ...prev, [cardId]: { ...entry, comments: entry.comments.filter(c => c.id !== row.id) } }
+      }
+      const exists = entry.comments.some(c => c.id === row.id)
+      const comments = exists
+        ? entry.comments.map(c => c.id === row.id ? row as BoardComment : c)
+        : [...entry.comments, row as BoardComment]
+      return { ...prev, [cardId]: { ...entry, comments } }
+    })
   }, [])
 
   const maxZ = useCallback(() => Math.max(0, ...nodes.map(n => n.data.card.z_index)), [nodes])
@@ -110,6 +169,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   // Opprette kort ved klikk på canvas i plasseringsmodus
   const onPaneClick = useCallback(async (event: React.MouseEvent) => {
+    closeThread()
     if (!pendingType || readOnly) return
     const type = pendingType
     setPendingType(null)
@@ -192,7 +252,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
     appendOrReplaceNode(cardToNode(card, initial.childMeta))
-  }, [pendingType, readOnly, rf, boardId, appendOrReplaceNode, setNodes, markLocalOp, initial.childMeta, maxZ])
+  }, [pendingType, readOnly, rf, boardId, appendOrReplaceNode, setNodes, markLocalOp, initial.childMeta, maxZ, closeThread])
 
   // Flytt til front ved dragstart, lagre posisjoner ved slipp
   const onNodeDragStart: OnNodeDrag<CardNode> = useCallback((_e, node) => {
@@ -392,7 +452,20 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     })
   }, [setEdges])
 
-  useBoardRealtime(boardId, { enabled: !readOnly, isLocalOp, onCard: onRemoteCard, onEdge: onRemoteEdge })
+  useBoardRealtime(boardId, {
+    enabled: !readOnly, isLocalOp, onCard: onRemoteCard, onEdge: onRemoteEdge,
+    onCommentThread: onRemoteCommentThread, onComment: onRemoteComment,
+  })
+
+  // Deep-link fra et boardkommentar-varsel (?comment=<cardId>, se BoardPageClient) —
+  // panorer til kortet og åpne tråden automatisk. Kjører kun én gang per mount.
+  useEffect(() => {
+    if (!focusCardId) return
+    if (!nodes.some(n => n.id === focusCardId)) return
+    rf.fitView({ nodes: [{ id: focusCardId }], duration: 400, maxZoom: 1 })
+    setOpenCardId(focusCardId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCardId])
 
   // Dobbeltklikk på et board-/storyline-kort navigerer inn i underboardet — ikke gatet på
   // readOnly, siden offentlige delingssider også skal kunne navigere i boardhierarkiet.
@@ -559,6 +632,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   }, [boardId, markLocalOp, setNodes])
 
   return (
+    <BoardCommentsProvider value={{ threadsByCard, openCardId, openThread, closeThread, postComment, toggleResolved }}>
     <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize }}>
       <div
         style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}
@@ -683,6 +757,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         </ReactFlow>
       </div>
     </BoardUiProvider>
+    </BoardCommentsProvider>
   )
 }
 

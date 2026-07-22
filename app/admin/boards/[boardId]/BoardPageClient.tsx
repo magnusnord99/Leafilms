@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { C } from '@/lib/admin-theme'
 import { renameBoard, type BoardData } from '@/lib/actions/boards'
 import BoardCanvas from '@/components/boards/BoardCanvas'
@@ -10,6 +10,8 @@ import ShareDialog from '@/components/boards/ShareDialog'
 
 export default function BoardPageClient({ initial }: { initial: BoardData }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const focusCardId = searchParams.get('comment') ?? undefined
   const [title, setTitle] = useState(initial.board.title)
   const [shareOpen, setShareOpen] = useState(false)
 
@@ -59,6 +61,7 @@ export default function BoardPageClient({ initial }: { initial: BoardData }) {
           boardId={initial.board.id}
           initial={initial}
           onOpenBoard={id => router.push(`/admin/boards/${id}`)}
+          focusCardId={focusCardId}
         />
       </div>
       {shareOpen && (

@@ -156,6 +156,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       } else {
         router.push(`/admin/projects/${n.project_id}?task=${n.task_id}`)
       }
+    } else if (n.type === 'board_comment_mention' || n.type === 'board_comment_reply') {
+      router.push(`/admin/boards/${n.board_id}?comment=${n.board_card_id}`)
     } else {
       router.push(`/admin/postprod/${n.project_id}`)
     }
@@ -308,12 +310,12 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
-                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' ? (
+                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' || n.type === 'board_comment_mention' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="4" />
                           <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5" />
                         </svg>
-                      ) : n.type === 'project_message' || n.type === 'quote_message' || n.type === 'direct_message' ? (
+                      ) : n.type === 'project_message' || n.type === 'quote_message' || n.type === 'direct_message' || n.type === 'board_comment_reply' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                         </svg>
@@ -347,6 +349,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'project_message_reaction' ? 'reagerte på meldingen din i prosjekt-chatten'
                             : n.type === 'task_message_reaction' ? 'reagerte på meldingen din i en oppgave'
                             : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
+                            : n.type === 'board_comment_mention' ? 'nevnte deg i en boardkommentar'
+                            : n.type === 'board_comment_reply' ? 'svarte på kommentaren din på boardet'
                             : 'i en oppgave'}
                         </span>
                       </div>

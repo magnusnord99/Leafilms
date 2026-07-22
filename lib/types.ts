@@ -55,6 +55,18 @@ export type Customer = {
   updated_at: string
 }
 
+export type CustomerContact = {
+  id: string
+  customer_id: string
+  name: string
+  email: string | null
+  phone: string | null
+  role: string | null
+  is_primary: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type Project = {
   id: string
   title: string
@@ -600,6 +612,27 @@ export type TodoContent = { title?: string; items: TodoItem[] }
 export type ColumnContent = { title: string }
 /** title er denormalisert fra boards.title for enkel rendering (holdes i sync av renameBoard) */
 export type BoardRefContent = { child_board_id: string; title: string; color?: string }
+export type SchedulePersonRef =
+  | { type: 'customer_contact'; id: string }
+  | { type: 'team_member'; id: string }
+
+export type ResolvedSchedulePerson = {
+  ref: SchedulePersonRef
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+}
+
+export type BoardScheduleItem = {
+  id: string
+  time: string
+  label: string
+  location?: string
+  locationLink?: string
+  people?: SchedulePersonRef[]
+}
+
 
 export type BoardCardContent =
   | NoteContent | ImageContent | VideoContent | LinkContent

@@ -19,6 +19,11 @@ export default function PersonChip({ person, readOnly, onRemove, onUpdated }: Pr
 
   if (!person) return null
 
+  const openPopover = () => {
+    setDraft({ email: person.email ?? '', phone: person.phone ?? '' })
+    setOpen(true)
+  }
+
   const save = async () => {
     const patch = { email: draft.email || null, phone: draft.phone || null }
     const ok = person.ref.type === 'customer_contact'
@@ -31,7 +36,7 @@ export default function PersonChip({ person, readOnly, onRemove, onUpdated }: Pr
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
       <span
-        onClick={() => setOpen(o => !o)}
+        onClick={() => (open ? setOpen(false) : openPopover())}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
           background: P.surface2, border: `1px solid ${P.border}`, borderRadius: 999,

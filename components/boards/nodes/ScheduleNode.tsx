@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
-import type { BoardScheduleContent, BoardScheduleItem } from '@/lib/types'
+import type { BoardScheduleContent, BoardScheduleItem, ResolvedSchedulePerson, SchedulePersonRef } from '@/lib/types'
 import { updateCardContent } from '@/lib/actions/boards'
 import { useBoardUi } from '../boardContext'
 import CardShell from './CardShell'
 import { ClockIcon } from '../icons'
 import type { CardNode } from '../toFlow'
+import { useResolvedPeople, refKey } from './schedule/useResolvedPeople'
+import PersonChip from './schedule/PersonChip'
+import PersonPicker from './schedule/PersonPicker'
 
 const sortByTime = (items: BoardScheduleItem[]) => [...items].sort((a, b) => a.time.localeCompare(b.time))
 
@@ -30,6 +33,10 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
   const [newTime, setNewTime] = useState('')
   const [newLabel, setNewLabel] = useState('')
 
+  const [openPickerFor, setOpenPickerFor] = useState<string | null>(null)
+  const allPeopleRefs = items.flatMap(i => i.people ?? [])
+  const { directory, upsert } = useResolvedPeople(allPeopleRefs)
+
   const persist = (nextItems: BoardScheduleItem[], nextTitle?: string) => {
     const finalTitle = nextTitle !== undefined ? nextTitle : content.title
     const next: BoardScheduleContent = { title: finalTitle || undefined, items: nextItems }
@@ -40,6 +47,20 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
 
   const updateItem = (itemId: string, patch: Partial<BoardScheduleItem>) => {
     persist(content.items.map(i => i.id === itemId ? { ...i, ...patch } : i))
+  }
+
+  const addPersonToItem = (itemId: string, ref: SchedulePersonRef, resolved: ResolvedSchedulePerson) => {
+    const item = content.items.find(i => i.id === itemId)
+    if (!item) return
+    updateItem(itemId, { people: [...(item.people ?? []), ref] })
+    upsert(resolved)
+    setOpenPickerFor(null)
+  }
+
+  const removePersonFromItem = (itemId: string, ref: SchedulePersonRef) => {
+    const item = content.items.find(i => i.id === itemId)
+    if (!item) return
+    updateItem(itemId, { people: (item.people ?? []).filter(p => !(p.type === ref.type && p.id === ref.id)) })
   }
 
   const saveTitle = () => {
@@ -183,6 +204,30 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
                           onClick={e => e.stopPropagation()}
                           style={{ color: P.accent, fontSize: '0.7rem', textDecoration: 'none', flexShrink: 0 }}
                         >📍 Maps</a>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
+                      {(item.people ?? []).map(ref => (
+                        <PersonChip
+                          key={refKey(ref)}
+                          person={directory[refKey(ref)]}
+                          readOnly={!!readOnly}
+                          onRemove={() => removePersonFromItem(item.id, ref)}
+                          onUpdated={upsert}
+                        />
+                      ))}
+                      {!readOnly && (
+                        <span
+                          onClick={() => setOpenPickerFor(openPickerFor === item.id ? null : item.id)}
+                          style={{ fontSize: '0.68rem', color: P.accent, cursor: 'pointer' }}
+                        >+ person</span>
+                      )}
+                      {openPickerFor === item.id && (
+                        <PersonPicker
+                          onSelect={(ref, resolved) => addPersonToItem(item.id, ref, resolved)}
+                          onClose={() => setOpenPickerFor(null)}
+                        />
                       )}
                     </div>
                   </div>

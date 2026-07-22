@@ -137,7 +137,16 @@ export async function resolveSchedulePeople(refs: SchedulePersonRef[]): Promise<
     if (contactIds.length > 0) {
       const { data } = await db.from('customer_contacts').select('id, name, role, email, phone').in('id', contactIds)
       for (const c of data ?? []) {
-        resolved.push({ ref: { type: 'customer_contact', id: c.id }, name: c.name, role: c.role, email: c.email, phone: c.phone })
+        // Anonyme (uautentiserte) kallere skal aldri få kundekontakters e-post/telefon —
+        // customer_contacts er en authenticated-only RLS-tabell; vi bruker service-klienten
+        // her kun for å vise navn/rolle på offentlig delte boards.
+        resolved.push({
+          ref: { type: 'customer_contact', id: c.id },
+          name: c.name,
+          role: c.role,
+          email: user ? c.email : null,
+          phone: user ? c.phone : null,
+        })
       }
     }
     if (teamIds.length > 0) {

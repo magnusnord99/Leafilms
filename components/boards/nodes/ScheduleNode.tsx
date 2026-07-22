@@ -52,7 +52,10 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
   const addPersonToItem = (itemId: string, ref: SchedulePersonRef, resolved: ResolvedSchedulePerson) => {
     const item = content.items.find(i => i.id === itemId)
     if (!item) return
-    updateItem(itemId, { people: [...(item.people ?? []), ref] })
+    const alreadyAdded = (item.people ?? []).some(p => p.type === ref.type && p.id === ref.id)
+    if (!alreadyAdded) {
+      updateItem(itemId, { people: [...(item.people ?? []), ref] })
+    }
     upsert(resolved)
     setOpenPickerFor(null)
   }

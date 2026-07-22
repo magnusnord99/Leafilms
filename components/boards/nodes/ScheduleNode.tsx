@@ -12,6 +12,12 @@ import type { CardNode } from '../toFlow'
 
 const sortByTime = (items: BoardScheduleItem[]) => [...items].sort((a, b) => a.time.localeCompare(b.time))
 
+const mapsUrl = (item: BoardScheduleItem): string | null => {
+  if (item.locationLink) return item.locationLink
+  if (item.location) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`
+  return null
+}
+
 export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
   const { palette: P, readOnly, markLocalOp } = useBoardUi()
@@ -30,6 +36,10 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
     markLocalOp(id)
     rf.updateNodeData(id, { card: { ...data.card, content: next } })
     updateCardContent(id, next)
+  }
+
+  const updateItem = (itemId: string, patch: Partial<BoardScheduleItem>) => {
+    persist(content.items.map(i => i.id === itemId ? { ...i, ...patch } : i))
   }
 
   const saveTitle = () => {
@@ -74,7 +84,9 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
               {items.slice(0, 4).map(item => (
                 <div key={item.id} style={{ display: 'flex', gap: 8, fontSize: '0.74rem', color: P.text2 }}>
                   <span style={{ fontWeight: 600, color: P.text, flexShrink: 0 }}>{item.time}</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.label}{item.location ? ` · ${item.location}` : ''}
+                  </span>
                 </div>
               ))}
               {items.length > 4 && (
@@ -122,30 +134,60 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {items.map(item => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', background: P.surface2, borderRadius: 6 }}>
-                  <input
-                    type="time"
-                    value={item.time}
-                    disabled={readOnly}
-                    onChange={e => persist(content.items.map(i => i.id === item.id ? { ...i, time: e.target.value } : i))}
-                    style={{ background: 'transparent', border: 'none', outline: 'none', color: P.text, fontSize: '0.8rem', fontWeight: 600, width: 84, flexShrink: 0 }}
-                  />
-                  <input
-                    value={item.label}
-                    readOnly={readOnly}
-                    onChange={e => persist(content.items.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
-                    placeholder="Programpunkt"
-                    style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: P.text, fontSize: '0.8rem' }}
-                  />
-                  {!readOnly && (
-                    <button
-                      onClick={() => persist(content.items.filter(i => i.id !== item.id))}
-                      style={{ background: 'none', border: 'none', color: P.text2, cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0 }}
-                    >✕</button>
-                  )}
-                </div>
-              ))}
+              {items.map(item => {
+                const link = mapsUrl(item)
+                return (
+                  <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: P.surface2, borderRadius: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="time"
+                        value={item.time}
+                        disabled={readOnly}
+                        onChange={e => updateItem(item.id, { time: e.target.value })}
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: P.text, fontSize: '0.8rem', fontWeight: 600, width: 84, flexShrink: 0 }}
+                      />
+                      <input
+                        value={item.label}
+                        readOnly={readOnly}
+                        onChange={e => updateItem(item.id, { label: e.target.value })}
+                        placeholder="Programpunkt"
+                        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: P.text, fontSize: '0.8rem' }}
+                      />
+                      {!readOnly && (
+                        <button
+                          onClick={() => persist(content.items.filter(i => i.id !== item.id))}
+                          style={{ background: 'none', border: 'none', color: P.text2, cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0 }}
+                        >✕</button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        value={item.location ?? ''}
+                        readOnly={readOnly}
+                        onChange={e => updateItem(item.id, { location: e.target.value || undefined })}
+                        placeholder="Lokasjon"
+                        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: P.text2, fontSize: '0.72rem' }}
+                      />
+                      {!readOnly && (
+                        <input
+                          value={item.locationLink ?? ''}
+                          onChange={e => updateItem(item.id, { locationLink: e.target.value || undefined })}
+                          placeholder="Maps-lenke (valgfritt)"
+                          style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: P.text2, fontSize: '0.68rem' }}
+                        />
+                      )}
+                      {link && (
+                        <a
+                          href={link} target="_blank" rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          style={{ color: P.accent, fontSize: '0.7rem', textDecoration: 'none', flexShrink: 0 }}
+                        >📍 Maps</a>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
             {!readOnly && (

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Customer } from '@/lib/types'
+import { Customer, CustomerContact } from '@/lib/types'
+import { getCustomerContacts, createCustomerContact, updateCustomerContact, deleteCustomerContact } from '@/lib/actions/schedule-people'
 import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
@@ -56,11 +57,57 @@ export default function EditCustomer() {
   })
   const initialDataRef = useRef<typeof formData | null>(null)
 
+  const [contacts, setContacts] = useState<CustomerContact[]>([])
+  const [contactsLoading, setContactsLoading] = useState(true)
+  const [newContact, setNewContact] = useState({ name: '', role: '', email: '', phone: '' })
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState({ name: '', role: '', email: '', phone: '' })
+
   useEffect(() => {
     if (customerId) {
       fetchCustomer()
     }
   }, [customerId])
+
+  useEffect(() => {
+    if (!customerId) return
+    getCustomerContacts(customerId).then(data => { setContacts(data); setContactsLoading(false) })
+  }, [customerId])
+
+  async function handleAddContact() {
+    if (!newContact.name.trim()) return
+    const created = await createCustomerContact({
+      customer_id: customerId,
+      name: newContact.name,
+      role: newContact.role || null,
+      email: newContact.email || null,
+      phone: newContact.phone || null,
+    })
+    if (created) {
+      setContacts(prev => [...prev, created])
+      setNewContact({ name: '', role: '', email: '', phone: '' })
+    }
+  }
+
+  function startEditContact(c: CustomerContact) {
+    setEditingContactId(c.id)
+    setEditDraft({ name: c.name, role: c.role ?? '', email: c.email ?? '', phone: c.phone ?? '' })
+  }
+
+  async function saveEditContact(id: string) {
+    const patch = { name: editDraft.name, role: editDraft.role || null, email: editDraft.email || null, phone: editDraft.phone || null }
+    const ok = await updateCustomerContact(id, patch)
+    if (ok) {
+      setContacts(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
+      setEditingContactId(null)
+    }
+  }
+
+  async function handleDeleteContact(id: string) {
+    if (!confirm('Slette denne kontaktpersonen?')) return
+    const ok = await deleteCustomerContact(id)
+    if (ok) setContacts(prev => prev.filter(c => c.id !== id))
+  }
 
   useEffect(() => {
     if (!initialDataRef.current) return
@@ -334,6 +381,54 @@ export default function EditCustomer() {
               rows={4}
               style={{ ...inputStyle, resize: 'vertical' }}
             />
+          </div>
+
+          <div>
+            {fieldLabel('Kontaktpersoner')}
+            {contactsLoading ? (
+              <p style={{ fontSize: '0.7rem', color: C.text3 }}>Laster...</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {contacts.map(c => (
+                  <div key={c.id} style={{ padding: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3 }}>
+                    {editingContactId === c.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <input value={editDraft.name} onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))} placeholder="Navn" style={inputStyle} />
+                        <input value={editDraft.role} onChange={e => setEditDraft(d => ({ ...d, role: e.target.value }))} placeholder="Rolle" style={inputStyle} />
+                        <input value={editDraft.email} onChange={e => setEditDraft(d => ({ ...d, email: e.target.value }))} placeholder="E-post" style={inputStyle} />
+                        <input value={editDraft.phone} onChange={e => setEditDraft(d => ({ ...d, phone: e.target.value }))} placeholder="Telefon" style={inputStyle} />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" onClick={() => saveEditContact(c.id)} style={{ fontSize: '0.65rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}>Lagre</button>
+                          <button type="button" onClick={() => setEditingContactId(null)} style={{ fontSize: '0.65rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer' }}>Avbryt</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: C.text, fontWeight: 600 }}>
+                            {c.name}{c.role ? ` · ${c.role}` : ''}{c.is_primary ? ' · Primær' : ''}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: C.text3 }}>
+                            {c.email || 'Ingen e-post'} · {c.phone || 'Ingen telefon'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button type="button" onClick={() => startEditContact(c)} style={{ fontSize: '0.65rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}>Rediger</button>
+                          <button type="button" onClick={() => handleDeleteContact(c.id)} style={{ fontSize: '0.65rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer' }}>Slett</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, border: `1px dashed ${C.border}`, borderRadius: 3 }}>
+                  <input value={newContact.name} onChange={e => setNewContact(n => ({ ...n, name: e.target.value }))} placeholder="Navn *" style={inputStyle} />
+                  <input value={newContact.role} onChange={e => setNewContact(n => ({ ...n, role: e.target.value }))} placeholder="Rolle" style={inputStyle} />
+                  <input value={newContact.email} onChange={e => setNewContact(n => ({ ...n, email: e.target.value }))} placeholder="E-post" style={inputStyle} />
+                  <input value={newContact.phone} onChange={e => setNewContact(n => ({ ...n, phone: e.target.value }))} placeholder="Telefon" style={inputStyle} />
+                  <button type="button" onClick={handleAddContact} disabled={!newContact.name.trim()} style={{ alignSelf: 'flex-start', fontSize: '0.65rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}>+ Legg til kontaktperson</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">

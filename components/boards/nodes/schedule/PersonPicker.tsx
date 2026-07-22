@@ -117,7 +117,11 @@ export default function PersonPicker({ onSelect, onClose }: Props) {
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: P.text }}>{activeCustomer.name}</span>
-              <span onClick={() => setActiveCustomer(null)} style={{ fontSize: '0.65rem', color: P.text2, cursor: 'pointer' }}>Bytt</span>
+              <span onClick={() => {
+                setActiveCustomer(null)
+                setShowNewForm(false)
+                setNewContact({ name: '', role: '', email: '', phone: '' })
+              }} style={{ fontSize: '0.65rem', color: P.text2, cursor: 'pointer' }}>Bytt</span>
             </div>
             {contacts.map(c => (
               <div key={c.id} onClick={() => pickContact(c)} style={{ padding: '5px 6px', fontSize: '0.72rem', color: P.text, cursor: 'pointer', borderRadius: 4 }}>

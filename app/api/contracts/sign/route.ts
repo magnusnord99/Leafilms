@@ -8,7 +8,11 @@ import { generateContractPDF } from '../pdf-generator'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage, selectedAddonIds: rawSelectedAddonIds } = body
+    const {
+      projectId, shareToken, signerName, signerEmail, contractSnapshot, signatureImage,
+      selectedAddonIds: rawSelectedAddonIds,
+      noInvoiceInfo, invoiceCompany, invoiceOrgNummer, invoiceAddress, invoiceEmail, invoiceReference,
+    } = body
     const selectedAddonIds: string[] = Array.isArray(rawSelectedAddonIds) ? rawSelectedAddonIds : []
 
     // Valider påkrevde felt
@@ -78,11 +82,33 @@ export async function POST(request: NextRequest) {
     // og pipeline-feltene brukes ved stage-avansering lenger ned.
     const { data: existingProject } = await supabase
       .from('projects')
-      .select('title, pipeline_stage, pipeline_data, language')
+      .select('title, pipeline_stage, pipeline_data, language, customer_id')
       .eq('id', projectId)
       .single()
 
     const lang: 'no' | 'en' = existingProject?.language === 'en' ? 'en' : 'no'
+
+    // Admin kan skru av fakturainfo-spørsmålet per prosjekt (f.eks. hvis vi allerede har
+    // informasjonen) — defaulter til på for prosjekter uten eksplisitt valg.
+    const requestInvoiceInfo =
+      (existingProject?.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false
+
+    // Fakturainformasjon er påkrevd med mindre den er skrudd av for prosjektet, eller kunden
+    // eksplisitt har krysset av for at den ikke er tilgjengelig ennå — samme regel håndheves
+    // client-side (canSubmit), men signeringsendepunktet er offentlig så vi stoler ikke på
+    // klienten alene.
+    if (requestInvoiceInfo) {
+      const hasInvoiceInfo =
+        typeof invoiceCompany === 'string' && invoiceCompany.trim() !== '' &&
+        typeof invoiceAddress === 'string' && invoiceAddress.trim() !== '' &&
+        typeof invoiceEmail === 'string' && invoiceEmail.trim() !== ''
+      if (!noInvoiceInfo && !hasInvoiceInfo) {
+        return Response.json(
+          { error: 'Fakturainformasjon mangler — fyll ut eller huk av for at den ikke er tilgjengelig ennå' },
+          { status: 400 }
+        )
+      }
+    }
 
     // Hent gjeldende tilbud for å beregne valgte tillegg — server-side, aldri klientens tall.
     let quoteData: QuoteBuilderData | null = null
@@ -150,6 +176,34 @@ export async function POST(request: NextRequest) {
     if (updateContractError) {
       console.error('sign contract update error:', updateContractError)
       return Response.json({ error: 'Kunne ikke registrere signering' }, { status: 500 })
+    }
+
+    // Lagre fakturainformasjonen på kundekortet — ikke-fatal, kontrakten er allerede signert.
+    // invoice_info_confirmed_at settes uansett (utfylt eller hoppet over) slik at fakturasteget
+    // i pipelinen kan skille «ikke spurt ennå» fra «kunden har svart».
+    if (existingProject?.customer_id && requestInvoiceInfo) {
+      try {
+        const customerUpdate: Record<string, unknown> = {
+          invoice_info_skipped: !!noInvoiceInfo,
+          invoice_info_confirmed_at: signedAt,
+        }
+        if (!noInvoiceInfo) {
+          if (invoiceCompany?.trim()) customerUpdate.company = invoiceCompany.trim()
+          if (invoiceOrgNummer?.trim()) customerUpdate.org_nummer = invoiceOrgNummer.trim()
+          if (invoiceAddress?.trim()) customerUpdate.address = invoiceAddress.trim()
+          if (invoiceEmail?.trim()) customerUpdate.invoice_email = invoiceEmail.trim()
+          if (invoiceReference?.trim()) customerUpdate.invoice_reference = invoiceReference.trim()
+        }
+        const { error: customerUpdateError } = await supabase
+          .from('customers')
+          .update(customerUpdate)
+          .eq('id', existingProject.customer_id)
+        if (customerUpdateError) {
+          console.error('sign contract customer invoice update error:', customerUpdateError)
+        }
+      } catch (invoiceErr) {
+        console.error('sign contract customer invoice update exception:', invoiceErr)
+      }
     }
 
     // Generer PDF i minnet (ikke-fatal — kontrakt er allerede signert)

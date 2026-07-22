@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui'
 import { PriceCatalogItem, DiscountFactor } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
+import { EquipmentGroupsPanel } from '@/components/admin/EquipmentGroupsPanel'
 
 const CATEGORIES = [
   { value: 'kamera', label: 'Kamera' },
+  { value: 'objektiver', label: 'Objektiver' },
   { value: 'lys', label: 'Lys' },
   { value: 'lyd', label: 'Lyd' },
   { value: 'utstyr', label: 'Utstyr' },
@@ -59,6 +61,7 @@ export default function PricesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [form, setForm] = useState<FormData>(emptyForm)
+  const [activeTab, setActiveTab] = useState<'katalog' | 'pakker'>('katalog')
   const [activeCategory, setActiveCategory] = useState<string>('alle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -209,11 +212,42 @@ export default function PricesPage() {
               Standardpriser brukes som utgangspunkt i pristilbud og kan alltid justeres per tilbud
             </p>
           </div>
-          <Button variant="primary" size="sm" onClick={() => { cancelForm(); setShowAddForm(true) }}>
-            + Nytt element
-          </Button>
+          {activeTab === 'katalog' && (
+            <Button variant="primary" size="sm" onClick={() => { cancelForm(); setShowAddForm(true) }}>
+              + Nytt element
+            </Button>
+          )}
         </div>
 
+        {/* ── Tabs ── */}
+        <div className="flex gap-2 mb-8">
+          {([{ value: 'katalog', label: 'Priskatalog' }, { value: 'pakker', label: 'Pakker' }] as const).map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.68rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                padding: '8px 16px',
+                borderRadius: 2,
+                border: `1px solid ${activeTab === tab.value ? C.accent : C.border}`,
+                background: activeTab === tab.value ? C.accentBg : 'transparent',
+                color: activeTab === tab.value ? C.accent : C.text3,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'pakker' && <EquipmentGroupsPanel catalog={items} />}
+
+        {activeTab === 'katalog' && (
+        <>
         {/* ── Flerdagsrabatt ── */}
         <div className="mb-10" style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
           <button
@@ -445,6 +479,8 @@ export default function PricesPage() {
               )
             })}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

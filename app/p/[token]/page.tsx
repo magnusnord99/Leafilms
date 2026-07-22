@@ -358,6 +358,7 @@ export default async function PublicProjectView({ params }: Props) {
     .maybeSingle()
 
   const contractHiddenFromPitch = !!(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
+  const requestInvoiceInfo = (project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false
 
   const publishedContract = contractData?.published_at && !contractHiddenFromPitch ? {
     contractText: contractData.contract_text ?? '',
@@ -365,6 +366,7 @@ export default async function PublicProjectView({ params }: Props) {
     signedBy: contractData.signed_by ?? null,
     ourSignature: (contractData.our_signature as OurSignature | null) ?? null,
     pdfUrl: contractData.pdf_url ?? null,
+    requestInvoiceInfo,
   } : null
 
   return (

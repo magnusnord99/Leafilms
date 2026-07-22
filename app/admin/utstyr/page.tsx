@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { getRooms, createRoom, EquipmentRoom } from '@/lib/actions/equipment'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { getRooms, createRoom, getPreprodProjects, EquipmentRoom } from '@/lib/actions/equipment'
+import EquipmentPickerPanel from '@/components/admin/EquipmentPickerPanel'
 
 const C = {
   bg:       '#181920',
@@ -18,9 +19,10 @@ const C = {
   danger:   '#E05555',
 }
 
-function RoomCard({ room }: { room: EquipmentRoom }) {
+function RoomCard({ room, projectId }: { room: EquipmentRoom; projectId: string }) {
+  const href = projectId ? `/admin/utstyr/${room.id}?project=${projectId}` : `/admin/utstyr/${room.id}`
   return (
-    <Link href={`/admin/utstyr/${room.id}`} style={{ textDecoration: 'none' }}>
+    <Link href={href} style={{ textDecoration: 'none' }}>
       <div
         style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.12s' }}
         onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
@@ -39,19 +41,31 @@ function RoomCard({ room }: { room: EquipmentRoom }) {
 
 export default function UtstyrPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectId = searchParams.get('project') ?? ''
+
   const [rooms, setRooms] = useState<EquipmentRoom[]>([])
+  const [preprodProjects, setPreprodProjects] = useState<{ id: string; title: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadRooms = useCallback(() => {
     getRooms().then(data => {
       setRooms(data)
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => { loadRooms() }, [loadRooms])
+  useEffect(() => { getPreprodProjects().then(setPreprodProjects) }, [])
+
+  function handleSelectProject(id: string) {
+    if (id) router.push(`/admin/utstyr?project=${id}`)
+    else router.push('/admin/utstyr')
+  }
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -76,7 +90,8 @@ export default function UtstyrPage() {
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 48px' }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ maxWidth: projectId ? 1244 : 960, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0, maxWidth: 960 }}>
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
@@ -135,6 +150,27 @@ export default function UtstyrPage() {
           </p>
         )}
 
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
+          <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, display: 'block', marginBottom: 8 }}>
+            Hent utstyr til prosjekt
+          </label>
+          <select
+            value={projectId}
+            onChange={e => handleSelectProject(e.target.value)}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
+              color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
+              borderRadius: 6, padding: '8px 10px', outline: 'none', cursor: 'pointer',
+            }}
+          >
+            <option value="">Bla i rom uten valgt prosjekt...</option>
+            {preprodProjects.map(p => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
+        </div>
+
         {rooms.length === 0 ? (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '64px 24px', textAlign: 'center' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', color: C.text3 }}>
@@ -143,10 +179,12 @@ export default function UtstyrPage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-            {rooms.map(r => <RoomCard key={r.id} room={r} />)}
+            {rooms.map(r => <RoomCard key={r.id} room={r} projectId={projectId} />)}
           </div>
         )}
 
+      </div>
+      {projectId && <EquipmentPickerPanel key={projectId} projectId={projectId} onChange={loadRooms} />}
       </div>
     </div>
   )

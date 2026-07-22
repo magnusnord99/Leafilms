@@ -30,8 +30,9 @@ export default function SharedBoardClient({ token, data }: { token: string; data
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         <BoardCanvas
+          key={data.board.id}
           boardId={data.board.id}
-          initial={{ ...data, projectId: '', projectTitle: '' }}
+          initial={{ ...data, projectId: '' }}
           readOnly
           palette={CINEMATIC_PALETTE}
           onOpenBoard={id => router.push(`/b/${token}?board=${id}`)}

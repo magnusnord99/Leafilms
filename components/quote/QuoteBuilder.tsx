@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems } from '@/lib/types'
 import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
@@ -118,6 +118,7 @@ const sectionHeaderStyle: React.CSSProperties = {
 // ─── Shared: Price catalog picker ─────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
   kamera: 'Kamera',
+  objektiver: 'Objektiver',
   lys: 'Lys',
   lyd: 'Lyd',
   utstyr: 'Utstyr',
@@ -249,6 +250,81 @@ function CatalogItem({ item, onSelect }: { item: PriceCatalogItem; onSelect: () 
         {item.default_price.toLocaleString('nb-NO')} {item.unit}
       </span>
     </button>
+  )
+}
+
+// ─── Utstyrspakker: sett inn en ferdigdefinert gruppe varer i ett trykk ────────
+// Hver vare i pakken havner i riktig seksjon basert på katalogkategorien sin —
+// samme kategori→seksjon-oppsett som catalogCategories under bruker per seksjon.
+const CATEGORY_TO_SECTION: Record<string, 'equipment' | 'postProduction' | 'otherCosts' | 'licensing'> = {
+  kamera: 'equipment',
+  objektiver: 'equipment',
+  lys: 'equipment',
+  lyd: 'equipment',
+  utstyr: 'equipment',
+  post: 'postProduction',
+  transport: 'otherCosts',
+  annet: 'otherCosts',
+}
+
+function GroupPicker({
+  groups,
+  onSelect,
+}: {
+  groups: EquipmentGroupWithItems[]
+  onSelect: (group: EquipmentGroupWithItems) => void
+}) {
+  const [open, setOpen] = useState(false)
+  if (groups.length === 0) return null
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <Button size="sm" variant="ghost" type="button" onClick={() => setOpen(o => !o)}>
+        Legg til pakke {open ? '▲' : '▼'}
+      </Button>
+      {open && (
+        <div style={{
+          position: 'absolute',
+          zIndex: 50,
+          top: '100%',
+          left: 0,
+          marginTop: 4,
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 3,
+          minWidth: 280,
+          maxHeight: 320,
+          overflow: 'auto',
+        }}>
+          {groups.map(group => (
+            <button
+              key={group.id}
+              type="button"
+              style={{
+                width: '100%',
+                display: 'block',
+                padding: '9px 16px',
+                fontSize: '0.78rem',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'var(--font-dm-sans)',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+              onClick={() => { onSelect(group); setOpen(false) }}
+            >
+              <span style={{ color: C.text, display: 'block' }}>{group.name}</span>
+              <span style={{ color: C.text3, fontSize: '0.68rem' }}>
+                {group.items.map(i => `${i.quantity}× ${i.catalog_item?.name ?? ''}`).join(', ')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -939,6 +1015,7 @@ interface QuoteBuilderProps {
   teamMembers?: TeamMember[]
   customers?: Customer[]
   priceCatalog?: PriceCatalogItem[]
+  equipmentGroups?: EquipmentGroupWithItems[]
   discountFactors?: DiscountFactor[]
   onSave: (data: QuoteBuilderData) => void
   onGeneratePDF: (data: QuoteBuilderData) => void
@@ -953,6 +1030,7 @@ export function QuoteBuilder({
   teamMembers = [],
   customers = [],
   priceCatalog = [],
+  equipmentGroups = [],
   discountFactors = [],
   onSave,
   onGeneratePDF,
@@ -1027,6 +1105,25 @@ export function QuoteBuilder({
       equipment: prev.equipment.map(e => ({ ...e, quantity: days })),
     }))
   }, [discountFactors])
+
+  const handleAddGroup = useCallback((group: EquipmentGroupWithItems) => {
+    setData(prev => {
+      const additions: Record<'equipment' | 'postProduction' | 'otherCosts' | 'licensing', QuoteBuilderItem[]> = {
+        equipment: [], postProduction: [], otherCosts: [], licensing: [],
+      }
+      group.items.forEach(gi => {
+        const section = CATEGORY_TO_SECTION[gi.catalog_item.category] ?? 'otherCosts'
+        additions[section].push({ id: newId(), description: gi.catalog_item.name, quantity: gi.quantity, unitPrice: gi.catalog_item.default_price })
+      })
+      return {
+        ...prev,
+        equipment: [...prev.equipment, ...additions.equipment],
+        postProduction: [...prev.postProduction, ...additions.postProduction],
+        otherCosts: [...prev.otherCosts, ...additions.otherCosts],
+        licensing: [...prev.licensing, ...additions.licensing],
+      }
+    })
+  }, [])
 
   const collapsibleHeader = (label: string, open: boolean, onToggle: () => void) => (
     <button type="button"
@@ -1173,6 +1270,11 @@ export function QuoteBuilder({
 
       {/* ── Line item sections ── */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 32, background: C.bg }}>
+        {equipmentGroups.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <GroupPicker groups={equipmentGroups} onSelect={handleAddGroup} />
+          </div>
+        )}
         <StartupSection
           crew={data.startupCrew}
           onChange={v => set('startupCrew', v)}
@@ -1189,7 +1291,7 @@ export function QuoteBuilder({
           label="Utstyrsliste"
           items={data.equipment}
           catalog={priceCatalog}
-          catalogCategories={['kamera', 'lys', 'lyd', 'utstyr']}
+          catalogCategories={['kamera', 'objektiver', 'lys', 'lyd', 'utstyr']}
           onChange={v => set('equipment', v)}
           addLabel="+ Legg til utstyr"
           defaultQuantity={data.shootDays}

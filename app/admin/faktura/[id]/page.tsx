@@ -35,6 +35,15 @@ function Avatar({ id, name, color, size = 28 }: { id: string; name: string | nul
   )
 }
 
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p style={{ margin: 0, fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.text3 }}>{label}</p>
+      <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: C.text, whiteSpace: 'pre-line' }}>{value}</p>
+    </div>
+  )
+}
+
 type Profile = { id: string; name: string | null; email: string; color: string | null }
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
 
@@ -101,7 +110,9 @@ export default function FakturaPage() {
   }
 
   const project = hub?.project
-  const customerName = (project?.customer as { name?: string | null } | null)?.name ?? null
+  const customer = project?.customer ?? null
+  const customerName = customer?.name ?? null
+  const hasInvoiceInfo = !!(customer?.company || customer?.org_nummer || customer?.address || customer?.invoice_email)
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px', fontFamily: 'var(--font-dm-sans)' }}>
@@ -232,6 +243,37 @@ export default function FakturaPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Fakturainformasjon fra kunden */}
+        <div style={{ marginTop: 16, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 24px' }}>
+          <p style={{ margin: '0 0 14px', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
+            Fakturainformasjon
+          </p>
+
+          {hasInvoiceInfo ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {customer?.company && <InfoLine label="Firma" value={customer.company} />}
+              {customer?.org_nummer && <InfoLine label="Org.nummer" value={customer.org_nummer} />}
+              {customer?.address && <InfoLine label="Fakturaadresse" value={customer.address} />}
+              {customer?.invoice_email && <InfoLine label="Faktura-e-post" value={customer.invoice_email} />}
+              {customer?.invoice_reference && <InfoLine label="Merking / referanse" value={customer.invoice_reference} />}
+            </div>
+          ) : customer?.invoice_info_skipped ? (
+            <p style={{ margin: 0, fontSize: '0.82rem', color: C.danger, lineHeight: 1.5 }}>
+              ⚠ Kunden hoppet over fakturainformasjon ved signering — følg opp manuelt før fakturering.
+            </p>
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.82rem', color: C.text3, fontStyle: 'italic' }}>
+              Ikke oppgitt ennå — samles inn når kunden signerer kontrakten.
+            </p>
+          )}
+
+          {customer?.invoice_info_skipped && hasInvoiceInfo && (
+            <p style={{ margin: '10px 0 0', fontSize: '0.72rem', color: C.danger }}>
+              ⚠ Delvis oppgitt — kunden hadde huket av for at fakturainformasjon ikke var klar.
+            </p>
+          )}
         </div>
 
         {/* Info-boks */}

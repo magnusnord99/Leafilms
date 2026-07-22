@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
-import { QuoteBuilderData, PipelineStage, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
+import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+import { QuoteBuilderData, PipelineStage, PIPELINE_STAGES, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
 const green = '#4CAF7D'
@@ -23,6 +23,8 @@ type ProjectRow = {
   id: string
   title: string
   pipeline_stage: PipelineStage | null
+  parent_project_id: string | null
+  updated_at: string
   customers: { name: string } | null
   quotes: QuoteRow[]
 }
@@ -41,24 +43,27 @@ const EARNED_STAGES: PipelineStage[] = ['fakturert', 'videresalg']
 
 const STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
+const STAGE_INDEX: Record<string, number> = Object.fromEntries(
+  PIPELINE_STAGES.map((s, i) => [s.value, i])
+)
+
+// Sortert etter created_at desc slik at "nyeste" alltid er entydig — et prosjekt kan i
+// praksis ha flere 'accepted'-tilbud (f.eks. en gammel akseptering fra før et tilbud ble
+// korrigert), og rekkefølgen quotes(...) kommer i fra Supabase er ikke garantert stabil.
 function pickBestQuote(quotes: QuoteRow[]): QuoteRow | null {
   const withData = quotes.filter(q => q.quote_data)
   if (!withData.length) return null
-  const accepted = withData.find(q => q.status === 'accepted')
-  if (accepted) return accepted
-  return withData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+  const byRecency = (a: QuoteRow, b: QuoteRow) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  const accepted = withData.filter(q => q.status === 'accepted').sort(byRecency)
+  if (accepted.length) return accepted[0]
+  return withData.sort(byRecency)[0]
 }
 
 function getAmount(quote: QuoteRow | null): number | null {
   if (!quote?.quote_data) return null
-  try {
-    // Kundens avkryssede tillegg fra pitch-siden telles med, slik at beløpet her
-    // matcher det kunden faktisk ser og signerer på.
-    const totals = calculateQuoteTotals(quote.quote_data, quote.selected_addon_ids ?? [])
-    return totals.afterDiscount
-  } catch {
-    return null
-  }
+  // Kundens avkryssede tillegg fra pitch-siden telles med, slik at beløpet her
+  // matcher det kunden faktisk ser og signerer på.
+  return getQuoteAmountExclVat(quote.quote_data, quote.selected_addon_ids ?? [])
 }
 
 function formatNok(amount: number): string {
@@ -219,12 +224,30 @@ export default function OkonomiPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('projects')
-      .select('id, title, pipeline_stage, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at)')
+      .select('id, title, pipeline_stage, parent_project_id, updated_at, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at)')
       .neq('status', 'archived')
       .neq('status', 'lost')
       .order('created_at', { ascending: false })
 
-    const rows = (data ?? []) as unknown as ProjectRow[]
+    const allRows = (data ?? []) as unknown as ProjectRow[]
+
+    // Grupper V1/V2/... av samme prosjekt til én rad — ellers telles samme avtale flere
+    // ganger hvis en eldre versjon fortsatt henger igjen i et tidligere pipeline-steg mens
+    // en nyere versjon har gått videre (samme gruppering som admin/projects/page.tsx).
+    const byRoot = new Map<string, ProjectRow[]>()
+    for (const p of allRows) {
+      const rootId = p.parent_project_id ?? p.id
+      const list = byRoot.get(rootId) ?? []
+      list.push(p)
+      byRoot.set(rootId, list)
+    }
+    const rows = Array.from(byRoot.values()).map(versions =>
+      [...versions].sort((a, b) => {
+        const stageDiff = (STAGE_INDEX[b.pipeline_stage ?? 'lead'] ?? 0) - (STAGE_INDEX[a.pipeline_stage ?? 'lead'] ?? 0)
+        if (stageDiff !== 0) return stageDiff
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      })[0]
+    )
 
     function toAmountRows(stages: PipelineStage[]): ProjectWithAmount[] {
       return rows

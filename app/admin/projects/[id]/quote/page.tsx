@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote } from '@/lib/types'
+import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote, EquipmentGroupWithItems } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
@@ -28,6 +28,7 @@ export default function ProjectQuotePage({ params }: Props) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [priceCatalog, setPriceCatalog] = useState<PriceCatalogItem[]>([])
+  const [equipmentGroups, setEquipmentGroups] = useState<EquipmentGroupWithItems[]>([])
   const [discountFactors, setDiscountFactors] = useState<DiscountFactor[]>([])
   const [builderData, setBuilderData] = useState<QuoteBuilderData | null>(null)
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
@@ -49,7 +50,7 @@ export default function ProjectQuotePage({ params }: Props) {
     setExistingQuoteId(null)
     setBuilderData(null)
     try {
-      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, discountFactorsRes, profilesRes] = await Promise.all([
+      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, equipmentGroupsRes, discountFactorsRes, profilesRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
@@ -58,6 +59,7 @@ export default function ProjectQuotePage({ params }: Props) {
         supabase.from('sections').select('id, type').eq('project_id', projectId)
           .eq('type', 'team').maybeSingle(),
         supabase.from('price_catalog').select('*').order('category').order('name'),
+        supabase.from('equipment_groups').select('*, items:equipment_group_items(*, catalog_item:price_catalog(*))').order('name'),
         supabase.from('discount_factors').select('*').order('shoot_day'),
         supabase.from('profiles').select('id, name, email').returns<{ id: string; name: string | null; email: string }[]>(),
       ])
@@ -73,6 +75,7 @@ export default function ProjectQuotePage({ params }: Props) {
       setTeamMembers(members)
       setCustomers(custs)
       setPriceCatalog((catalogRes.data || []) as PriceCatalogItem[])
+      setEquipmentGroups((equipmentGroupsRes.data || []) as EquipmentGroupWithItems[])
       setDiscountFactors((discountFactorsRes.data || []) as DiscountFactor[])
       setProfiles((profilesRes.data ?? []) as { id: string; name: string | null; email: string }[])
 
@@ -401,15 +404,30 @@ export default function ProjectQuotePage({ params }: Props) {
                   key={q.id}
                   type="button"
                   onClick={() => handleSwitchVersion(q.id)}
+                  title={q.is_current ? 'Dette er den gjeldende versjonen' : undefined}
+                  className="flex items-center gap-1.5"
                   style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
                     padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
                     background: active ? C.accent : C.surface,
                     color: active ? C.bg : C.text2,
-                    border: `1px solid ${active ? C.accent : C.border}`,
+                    border: `1px solid ${q.is_current ? C.accent : (active ? C.accent : C.border)}`,
                   }}
                 >
-                  {q.version}{q.label ? ` — ${q.label}` : ''}{q.is_current ? ' · gjeldende' : ''}
+                  {q.version}{q.label ? ` — ${q.label}` : ''}
+                  {q.is_current && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', fontWeight: 700,
+                        letterSpacing: '0.08em', textTransform: 'uppercase',
+                        padding: '2px 6px', borderRadius: 2, flexShrink: 0,
+                        color: '#4CAF7D', background: 'rgba(76,175,125,0.16)',
+                        border: '1px solid rgba(76,175,125,0.4)',
+                      }}
+                    >
+                      Gjeldende
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -473,6 +491,7 @@ export default function ProjectQuotePage({ params }: Props) {
             teamMembers={teamMembers}
             customers={customers}
             priceCatalog={priceCatalog}
+            equipmentGroups={equipmentGroups}
             discountFactors={discountFactors}
             onSave={handleSave}
             onGeneratePDF={handleGeneratePDF}

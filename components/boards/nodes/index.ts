@@ -7,6 +7,8 @@ import ColorNode from './ColorNode'
 import TodoNode from './TodoNode'
 import ColumnNode from './ColumnNode'
 import BoardNode from './BoardNode'
+import ScheduleNode from './ScheduleNode'
+import StorylineNode from './StorylineNode'
 
 export const nodeTypes: NodeTypes = {
   note: NoteNode,
@@ -17,4 +19,6 @@ export const nodeTypes: NodeTypes = {
   todo: TodoNode,
   column: ColumnNode,
   board: BoardNode,
+  schedule: ScheduleNode,
+  storyline: StorylineNode,
 }

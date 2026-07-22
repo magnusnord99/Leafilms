@@ -51,6 +51,7 @@ type PublicProjectClientProps = {
     signedBy: string | null
     ourSignature?: OurSignature | null
     pdfUrl?: string | null
+    requestInvoiceInfo?: boolean
   } | null
   projectId?: string
 }
@@ -530,6 +531,7 @@ export function PublicProjectClient({
           selectedAddonIds={selectedAddonIds}
           baseFinalPriceExclVat={baseFinalPriceExclVat}
           discountFactor={quoteDiscountFactor}
+          requestInvoiceInfo={publishedContract.requestInvoiceInfo}
           onSigned={handleContractSigned}
         />
       )}

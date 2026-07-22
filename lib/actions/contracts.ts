@@ -120,7 +120,8 @@ async function buildContractContext(projectId: string) {
   if (quote?.quote_data) {
     try {
       const qd = quote.quote_data as QuoteBuilderData
-      const total = Math.round(calculateQuoteTotals(qd).afterDiscount)
+      const selectedAddonIds = (quote as { selected_addon_ids?: string[] }).selected_addon_ids ?? []
+      const total = Math.round(calculateQuoteTotals(qd, selectedAddonIds).afterDiscount)
       totalprisStr = total.toLocaleString('nb-NO') + ',-'
       // Antall personer på opptak (crew som faktisk reiser til produksjonen) — ikke
       // post-produksjonscrew, som normalt jobber eksternt/hjemmefra.
@@ -562,5 +563,34 @@ export async function setContractHiddenFromPitch(projectId: string, hidden: bool
   if (error) {
     console.error('setContractHiddenFromPitch error:', error)
     throw new Error('Kunne ikke oppdatere synlighet for kontrakten')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Skru av/på om kunden må oppgi fakturainformasjon ved signering (f.eks. hvis
+// vi allerede har den fra før). Default er på — fraværende felt tolkes som på.
+// ---------------------------------------------------------------------------
+export async function setRequestInvoiceInfo(projectId: string, requested: boolean): Promise<void> {
+  const supabase = await createClient()
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('pipeline_data')
+    .eq('id', projectId)
+    .single()
+
+  const existingPipelineData = (project?.pipeline_data as Record<string, unknown>) ?? {}
+
+  const { error } = await supabase
+    .from('projects')
+    .update({
+      pipeline_data: { ...existingPipelineData, request_invoice_info: requested },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', projectId)
+
+  if (error) {
+    console.error('setRequestInvoiceInfo error:', error)
+    throw new Error('Kunne ikke oppdatere fakturainfo-innstillingen')
   }
 }

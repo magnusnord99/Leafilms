@@ -9,7 +9,9 @@ export const COLUMN_PAD = 10
 export const COLUMN_HEADER = 44
 export const COLUMN_GAP = 8
 
-export type CardNodeData = { card: BoardCard; meta?: ChildBoardMeta }
+// dropTarget: satt transient under drag når et kort svever over dette board-/storyline-kortet
+// (se onNodeDrag i BoardCanvas.tsx) — brukes til hover-highlight, aldri persistert.
+export type CardNodeData = { card: BoardCard; meta?: ChildBoardMeta; dropTarget?: boolean }
 export type CardNode = Node<CardNodeData>
 
 export function cardToNode(card: BoardCard, childMeta: Record<string, ChildBoardMeta>): CardNode {
@@ -20,7 +22,7 @@ export function cardToNode(card: BoardCard, childMeta: Record<string, ChildBoard
     position: { x: card.x, y: card.y },
     data: {
       card,
-      meta: card.type === 'board'
+      meta: (card.type === 'board' || card.type === 'storyline')
         ? childMeta[(card.content as { child_board_id: string }).child_board_id]
         : undefined,
     },

@@ -1,21 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { ImageContent } from '@/lib/types'
 import { updateCardContent, saveCardPositions } from '@/lib/actions/boards'
+import { uploadBoardFile } from '../upload'
 import { useBoardUi } from '../boardContext'
 import CardShell from './CardShell'
 import type { CardNode } from '../toFlow'
 
 export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, onCardResize } = useBoardUi()
   const content = data.card.content as ImageContent
   const [lightbox, setLightbox] = useState(false)
   const [editingCaption, setEditingCaption] = useState(false)
   const [caption, setCaption] = useState(content.caption ?? '')
+  const [replacing, setReplacing] = useState(false)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+
+  const replaceImage = async (file: File) => {
+    setReplacing(true)
+    const res = await uploadBoardFile(data.card.board_id, file)
+    setReplacing(false)
+    if ('error' in res) { window.alert(res.error); return }
+    markLocalOp(id)
+    const next = { ...content, url: res.url }
+    rf.updateNodeData(id, { card: { ...data.card, content: next } })
+    updateCardContent(id, next)
+  }
 
   // Escape lukker lightboxen, i tillegg til klikk — viktig for eksterne
   // seere på den offentlige delingssiden som ikke nødvendigvis klikker.
@@ -53,13 +67,63 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
       {/* padding=0 — bildet skal fylle kortet helt uten en synlig ramme rundt seg,
           samme mønster som LinkNode allerede bruker for sitt forhåndsvisningsbilde. */}
       <CardShell selected={!!selected} padding={0}>
-        <img
-          src={content.url}
-          alt={content.caption ?? ''}
-          onDoubleClick={() => setLightbox(true)}
-          style={{ width: '100%', display: 'block', borderRadius: (content.caption || editingCaption || !readOnly) ? '7px 7px 0 0' : 7 }}
-          draggable={false}
-        />
+        <div style={{ position: 'relative' }}>
+          {content.url ? (
+            <img
+              src={content.url}
+              alt={content.caption ?? ''}
+              onDoubleClick={() => setLightbox(true)}
+              // Bildet har ingen reservert høyde, så den reelle høyden er ukjent inntil lastet —
+              // trigger en ny kolonne-restack med korrekt høyde når den blir kjent.
+              onLoad={onCardResize}
+              style={{ width: '100%', display: 'block', borderRadius: (content.caption || editingCaption || !readOnly) ? '7px 7px 0 0' : 7, opacity: replacing ? 0.5 : 1 }}
+              draggable={false}
+            />
+          ) : (
+            // Tom bildeplass — sådd inn av f.eks. storyline-blueprinten. Klikk for å laste opp.
+            <div
+              className="nodrag"
+              onClick={() => !readOnly && replaceInputRef.current?.click()}
+              style={{
+                width: '100%', aspectRatio: '16 / 9', background: P.surface2,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: (content.caption || editingCaption || !readOnly) ? '7px 7px 0 0' : 7,
+                cursor: readOnly ? 'default' : 'pointer', opacity: replacing ? 0.5 : 1,
+              }}
+            >
+              <span style={{ fontSize: '0.72rem', color: P.text2 }}>{replacing ? '…' : readOnly ? 'Ingen bilde' : '+ Last opp bilde'}</span>
+            </div>
+          )}
+          {!readOnly && content.url && (
+            <>
+              <button
+                type="button"
+                className="nodrag"
+                title="Bytt bilde"
+                disabled={replacing}
+                onClick={() => replaceInputRef.current?.click()}
+                style={{
+                  position: 'absolute', top: 6, right: 6, width: 26, height: 26,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: 6,
+                  fontSize: '0.85rem', cursor: replacing ? 'default' : 'pointer',
+                }}
+              >
+                {replacing ? '…' : '⟳'}
+              </button>
+            </>
+          )}
+          {!readOnly && (
+            <input
+              ref={replaceInputRef}
+              type="file"
+              accept="image/*"
+              className="nodrag"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) replaceImage(f) }}
+            />
+          )}
+        </div>
         {(content.caption || editingCaption || !readOnly) && (
           <div style={{ padding: '6px 10px' }}>
             {editingCaption ? (

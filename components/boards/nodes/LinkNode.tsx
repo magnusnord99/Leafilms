@@ -4,6 +4,7 @@ import type { NodeProps } from '@xyflow/react'
 import type { LinkContent } from '@/lib/types'
 import { useBoardUi } from '../boardContext'
 import CardShell from './CardShell'
+import { LinkIcon } from '../icons'
 import type { CardNode } from '../toFlow'
 
 export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
@@ -31,11 +32,13 @@ export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
           </div>
         )}
         {safeHref ? (
-          <a href={safeHref} target="_blank" rel="noopener noreferrer" className="nodrag" style={{ fontSize: '0.66rem', color: P.accent, textDecoration: 'none' }}>
-            🔗 {host}
+          <a href={safeHref} target="_blank" rel="noopener noreferrer" className="nodrag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.66rem', color: P.accent, textDecoration: 'none' }}>
+            <LinkIcon size={12} /> {host}
           </a>
         ) : (
-          <div style={{ fontSize: '0.66rem', color: P.accent }}>🔗 {host}</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.66rem', color: P.accent }}>
+            <LinkIcon size={12} /> {host}
+          </div>
         )}
       </div>
     </CardShell>

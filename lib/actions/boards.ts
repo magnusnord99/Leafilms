@@ -13,6 +13,7 @@ export type BoardData = {
   breadcrumbs: { id: string; title: string }[]
   projectId: string
   projectTitle: string
+  customerName: string
   childMeta: Record<string, ChildBoardMeta>
 }
 
@@ -31,6 +32,17 @@ const INFO_COLUMN_PAD = 10
 const INFO_COLUMN_HEADER = 44
 const INFO_COLUMN_GAP = 8
 
+function formatShootDates(shootStart: string | null | undefined, shootEnd: string | null | undefined): string {
+  if (!shootStart) return 'Ikke satt ennå.'
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split('-')
+    return `${d}.${m}.${y}`
+  }
+  return shootEnd && shootEnd !== shootStart
+    ? `${fmt(shootStart)} – ${fmt(shootEnd)}`
+    : fmt(shootStart)
+}
+
 // Seeder en "Prosjektinfo"-kolonne med et kort sammendrag + leveransebeskrivelse på
 // et helt nytt rot-board, slik at man får en rask oversikt uten å måtte hoppe til
 // prosjektsiden. Kun ved førstegangs-opprettelse — feiler stille (boardet finnes uansett).
@@ -42,7 +54,7 @@ async function seedProjectInfoColumn(
   try {
     const { data: proj } = await supabase
       .from('projects')
-      .select('meeting_summary, delivery_description, customers(name, company)')
+      .select('meeting_summary, delivery_description, shoot_start, shoot_end, customers(name, company)')
       .eq('id', projectId)
       .single()
     if (!proj) return
@@ -50,6 +62,8 @@ async function seedProjectInfoColumn(
     const summary = (proj.meeting_summary as { sammendrag?: string } | null)?.sammendrag?.trim()
     const customer = (proj as unknown as { customers?: { name: string | null; company: string | null } | null }).customers
     const delivery = (proj as { delivery_description?: string | null }).delivery_description?.trim()
+    const shootStart = (proj as { shoot_start?: string | null }).shoot_start
+    const shootEnd = (proj as { shoot_end?: string | null }).shoot_end
 
     const { data: column, error: colError } = await supabase
       .from('board_cards')
@@ -63,6 +77,7 @@ async function seedProjectInfoColumn(
     const notes: string[] = [
       summary || `${customer?.company || customer?.name || 'Ingen kunde satt ennå'} — legg til sammendrag fra møtenotater på prosjektsiden.`,
       delivery ? `Leveranse:\n${delivery}` : 'Leveranse: ikke beskrevet ennå.',
+      `Opptak:\n${formatShootDates(shootStart, shootEnd)}`,
     ]
 
     let y = INFO_COLUMN_HEADER + INFO_COLUMN_GAP
@@ -131,7 +146,7 @@ async function loadChildMeta(
   cards: BoardCard[]
 ): Promise<Record<string, ChildBoardMeta>> {
   const childIds = cards
-    .filter(c => c.type === 'board')
+    .filter(c => c.type === 'board' || c.type === 'storyline')
     .map(c => (c.content as BoardRefContent).child_board_id)
     .filter(Boolean)
   if (childIds.length === 0) return {}
@@ -154,10 +169,11 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const [{ data: cards }, { data: edges }, { data: project }] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
-      supabase.from('projects').select('id, title').eq('id', board.project_id).single(),
+      supabase.from('projects').select('id, title, customers(name, company)').eq('id', board.project_id).single(),
     ])
     const breadcrumbs = await buildBreadcrumbs(supabase, board)
     const childMeta = await loadChildMeta(supabase, (cards ?? []) as BoardCard[])
+    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
 
     return {
       board: board as Board,
@@ -166,6 +182,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       breadcrumbs,
       projectId: board.project_id,
       projectTitle: project?.title ?? '',
+      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
       childMeta,
     }
   } catch (err) {
@@ -250,9 +267,9 @@ export async function deleteBoardCards(ids: string[]): Promise<boolean> {
       }
     }
 
-    // Board-kort som slettes: slett underboardet (cascade tar kort/edges/underboards)
+    // Board-/storyline-kort som slettes: slett underboardet (cascade tar kort/edges/underboards)
     const childBoardIds = cards
-      .filter(c => c.type === 'board')
+      .filter(c => c.type === 'board' || c.type === 'storyline')
       .map(c => (c.content as BoardRefContent).child_board_id)
       .filter(Boolean)
     if (childBoardIds.length > 0) {
@@ -293,6 +310,17 @@ export async function updateBoardEdgeLabel(id: string, label: string | null): Pr
   }
 }
 
+export async function updateBoardEdgeEndpoints(id: string, from_card_id: string, to_card_id: string): Promise<boolean> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase.from('board_edges').update({ from_card_id, to_card_id }).eq('id', id)
+    return !error
+  } catch (err) {
+    console.error('updateBoardEdgeEndpoints:', err)
+    return false
+  }
+}
+
 export async function deleteBoardEdges(ids: string[]): Promise<boolean> {
   try {
     if (ids.length === 0) return true
@@ -301,6 +329,27 @@ export async function deleteBoardEdges(ids: string[]): Promise<boolean> {
     return !error
   } catch (err) {
     console.error('deleteBoardEdges:', err)
+    return false
+  }
+}
+
+// Flytter et kort til et underboard (dra-og-slipp på et board-kort, se onNodeDragStop
+// i BoardCanvas.tsx). Piler til/fra kortet slettes — de kan ikke krysse boards, siden
+// board_edges er begrenset til ett board_id.
+export async function moveCardToBoard(cardId: string, targetBoardId: string, x: number, y: number): Promise<boolean> {
+  try {
+    const supabase = await createClient()
+    const { error: edgeError } = await supabase.from('board_edges')
+      .delete().or(`from_card_id.eq.${cardId},to_card_id.eq.${cardId}`)
+    if (edgeError) { console.error('moveCardToBoard (edges):', edgeError); return false }
+
+    const { error } = await supabase.from('board_cards').update({
+      board_id: targetBoardId, x, y, column_id: null, sort_order: 0, z_index: 0, updated_at: now(),
+    }).eq('id', cardId)
+    if (error) { console.error('moveCardToBoard:', error); return false }
+    return true
+  } catch (err) {
+    console.error('moveCardToBoard:', err)
     return false
   }
 }
@@ -335,6 +384,167 @@ export async function createSubBoard(
   }
 }
 
+const STORYLINE_TITLE = 'Storyline'
+const STORYLINE_PANEL_COUNT = 10
+const STORYLINE_COLS = 4
+const STORYLINE_IMG_WIDTH = 240
+const STORYLINE_GAP = 24
+const STORYLINE_ROW_HEIGHT = 200
+const storylinePanelStartX = () => 40 + INFO_COLUMN_WIDTH + 60
+
+// Setter inn `count` nye tomme bildepaneler etter alle eksisterende paneler på boardet,
+// og kjeder dem sammen med piler i sekvens (forrige siste panel → første nye, osv.) —
+// brukes både til å så blueprinten og til «legg til kort»/«legg til rad». En og en insert
+// (ikke batch) fordi vi trenger hver rads id i rekkefølge for å tegne pilene riktig.
+async function insertStorylinePanels(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  boardId: string, count: number, columns: number
+): Promise<{ cards: BoardCard[]; edges: BoardEdge[] }> {
+  const { data: existing } = await supabase.from('board_cards')
+    .select('id').eq('board_id', boardId).eq('type', 'image').order('created_at')
+  let n = existing?.length ?? 0
+  let prevId: string | null = n > 0 ? existing![n - 1].id : null
+  const panelStartX = storylinePanelStartX()
+  const cards: BoardCard[] = []
+  const edges: BoardEdge[] = []
+
+  for (let k = 0; k < count; k++) {
+    const { data: card, error } = await supabase.from('board_cards').insert({
+      board_id: boardId, type: 'image',
+      x: panelStartX + (n % columns) * (STORYLINE_IMG_WIDTH + STORYLINE_GAP),
+      y: 40 + Math.floor(n / columns) * STORYLINE_ROW_HEIGHT,
+      width: STORYLINE_IMG_WIDTH,
+      content: {},
+    }).select('*').single()
+    if (error || !card) { console.error('insertStorylinePanels:', error); break }
+    cards.push(card as BoardCard)
+    if (prevId) {
+      const { data: edge } = await supabase.from('board_edges').insert({
+        board_id: boardId, from_card_id: prevId, to_card_id: card.id,
+      }).select('*').single()
+      if (edge) edges.push(edge as BoardEdge)
+    }
+    prevId = card.id
+    n++
+  }
+  return { cards, edges }
+}
+
+// Som createSubBoard, men det nye underboardet sås med en blueprint (synopsis-kolonne
+// + løst rutenett av tomme bildeplasser, kjedet sammen med piler) i stedet for å åpnes
+// tomt — se Magnus' referansebilde av hvordan en ekte storyline pleier å bygges opp
+// manuelt i boards i dag.
+export async function createStorylineBoard(
+  parentBoardId: string, x: number, y: number
+): Promise<{ boardId: string; card: BoardCard } | null> {
+  try {
+    const supabase = await createClient()
+    const { data: parent } = await supabase.from('boards')
+      .select('id, project_id').eq('id', parentBoardId).single()
+    if (!parent) return null
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: child, error } = await supabase.from('boards').insert({
+      project_id: parent.project_id,
+      parent_board_id: parentBoardId,
+      title: STORYLINE_TITLE,
+      kind: 'storyline',
+      storyline_columns: STORYLINE_COLS,
+      created_by: user?.id ?? null,
+    }).select('id').single()
+    if (error || !child) { console.error('createStorylineBoard:', error); return null }
+
+    const { data: column } = await supabase.from('board_cards').insert({
+      board_id: child.id, type: 'column', x: 40, y: 40,
+      width: INFO_COLUMN_WIDTH, content: { title: 'SYNOPSIS' },
+    }).select('id').single()
+    if (column) {
+      await supabase.from('board_cards').insert({
+        board_id: child.id, type: 'note', x: INFO_COLUMN_PAD, y: INFO_COLUMN_HEADER + INFO_COLUMN_GAP,
+        width: INFO_COLUMN_WIDTH - INFO_COLUMN_PAD * 2, column_id: column.id, sort_order: 0,
+        content: { text: '' },
+      })
+    }
+
+    await insertStorylinePanels(supabase, child.id, STORYLINE_PANEL_COUNT, STORYLINE_COLS)
+
+    const card = await createBoardCard({
+      board_id: parentBoardId, type: 'storyline', x, y,
+      content: { child_board_id: child.id, title: STORYLINE_TITLE },
+    })
+    if (!card) return null
+    return { boardId: child.id, card }
+  } catch (err) {
+    console.error('createStorylineBoard:', err)
+    return null
+  }
+}
+
+async function getStorylineColumns(
+  supabase: Awaited<ReturnType<typeof createClient>>, boardId: string
+): Promise<number> {
+  const { data: board } = await supabase.from('boards').select('storyline_columns').eq('id', boardId).single()
+  return board?.storyline_columns ?? STORYLINE_COLS
+}
+
+/** «Legg til kort» — ett nytt tomt panel rett etter det siste, kjedet med en pil. */
+export async function addStorylineCard(boardId: string): Promise<{ cards: BoardCard[]; edges: BoardEdge[] } | null> {
+  try {
+    const supabase = await createClient()
+    const columns = await getStorylineColumns(supabase, boardId)
+    return await insertStorylinePanels(supabase, boardId, 1, columns)
+  } catch (err) {
+    console.error('addStorylineCard:', err)
+    return null
+  }
+}
+
+/** «Legg til rad» — en hel ny rad med tomme paneler (samme bredde som gjeldende rutenett). */
+export async function addStorylineRow(boardId: string): Promise<{ cards: BoardCard[]; edges: BoardEdge[] } | null> {
+  try {
+    const supabase = await createClient()
+    const columns = await getStorylineColumns(supabase, boardId)
+    return await insertStorylinePanels(supabase, boardId, columns, columns)
+  } catch (err) {
+    console.error('addStorylineRow:', err)
+    return null
+  }
+}
+
+/**
+ * «Legg til kolonne» — utvider rutenettet én kolonne bredere og pakker eksisterende
+ * paneler om til den nye bredden (færre, bredere rader). Fremtidige legg til kort/rad
+ * bruker automatisk den nye bredden siden den leses fra boards.storyline_columns.
+ */
+export async function widenStorylineGrid(boardId: string): Promise<{ columns: number; cards: BoardCard[] } | null> {
+  try {
+    const supabase = await createClient()
+    const oldColumns = await getStorylineColumns(supabase, boardId)
+    const newColumns = oldColumns + 1
+    const { error: updErr } = await supabase.from('boards')
+      .update({ storyline_columns: newColumns, updated_at: now() }).eq('id', boardId)
+    if (updErr) { console.error('widenStorylineGrid:', updErr); return null }
+
+    const { data: existing } = await supabase.from('board_cards')
+      .select('id').eq('board_id', boardId).eq('type', 'image').order('created_at')
+    const panelStartX = storylinePanelStartX()
+    const updated: BoardCard[] = []
+    for (const [i, row] of (existing ?? []).entries()) {
+      const patch = {
+        x: panelStartX + (i % newColumns) * (STORYLINE_IMG_WIDTH + STORYLINE_GAP),
+        y: 40 + Math.floor(i / newColumns) * STORYLINE_ROW_HEIGHT,
+        updated_at: now(),
+      }
+      const { data: card } = await supabase.from('board_cards').update(patch).eq('id', row.id).select('*').single()
+      if (card) updated.push(card as BoardCard)
+    }
+    return { columns: newColumns, cards: updated }
+  } catch (err) {
+    console.error('widenStorylineGrid:', err)
+    return null
+  }
+}
+
 export async function renameBoard(boardId: string, title: string): Promise<boolean> {
   try {
     const supabase = await createClient()
@@ -343,9 +553,9 @@ export async function renameBoard(boardId: string, title: string): Promise<boole
     const { error } = await supabase.from('boards')
       .update({ title: trimmed, updated_at: now() }).eq('id', boardId)
     if (error) return false
-    // Hold denormalisert tittel på board-kortet i foreldre-boardet i sync
+    // Hold denormalisert tittel på board-/storyline-kortet i foreldre-boardet i sync
     const { data: refCards } = await supabase.from('board_cards')
-      .select('id, content').eq('type', 'board').contains('content', { child_board_id: boardId })
+      .select('id, content').in('type', ['board', 'storyline']).contains('content', { child_board_id: boardId })
     for (const rc of refCards ?? []) {
       await supabase.from('board_cards')
         .update({ content: { ...(rc.content as BoardRefContent), title: trimmed }, updated_at: now() })
@@ -423,7 +633,7 @@ export async function disableBoardShare(boardId: string): Promise<boolean> {
   }
 }
 
-export type SharedBoardData = Omit<BoardData, 'projectId' | 'projectTitle'> & { rootBoardId: string }
+export type SharedBoardData = Omit<BoardData, 'projectId'> & { rootBoardId: string }
 
 export async function getSharedBoard(token: string, childBoardId?: string): Promise<SharedBoardData | null> {
   try {
@@ -451,10 +661,12 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       target = child as Board
     }
 
-    const [{ data: cards }, { data: edges }] = await Promise.all([
+    const [{ data: cards }, { data: edges }, { data: project }] = await Promise.all([
       service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
       service.from('board_edges').select('*').eq('board_id', target.id),
+      service.from('projects').select('title, customers(name, company)').eq('id', root.project_id).single(),
     ])
+    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
 
     // Brødsmuler begrenset til det delte treet (stopp ved root)
     const crumbs = [{ id: target.id, title: target.title }]
@@ -470,7 +682,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
 
     const childMeta: Record<string, ChildBoardMeta> = {}
     const childIds = ((cards ?? []) as BoardCard[])
-      .filter(c => c.type === 'board')
+      .filter(c => c.type === 'board' || c.type === 'storyline')
       .map(c => (c.content as BoardRefContent).child_board_id)
     if (childIds.length) {
       const [{ data: children }, { data: counts }] = await Promise.all([
@@ -486,6 +698,8 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       cards: (cards ?? []) as BoardCard[],
       edges: (edges ?? []) as BoardEdge[],
       breadcrumbs: crumbs,
+      projectTitle: (project as { title?: string } | null)?.title ?? '',
+      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
       childMeta,
       rootBoardId: root.id,
     }
@@ -500,6 +714,7 @@ export type BoardOverviewItem = {
   title: string
   projectId: string
   projectTitle: string
+  customerName: string
   cardCount: number
   subBoardCount: number
   shared: boolean
@@ -511,7 +726,7 @@ export async function getAllBoards(): Promise<BoardOverviewItem[]> {
     const supabase = await createClient()
     const { data: roots } = await supabase
       .from('boards')
-      .select('id, title, project_id, share_token, updated_at, projects(title)')
+      .select('id, title, project_id, share_token, updated_at, projects(title, customers(name, company))')
       .is('parent_board_id', null)
       .order('updated_at', { ascending: false })
     if (!roots || roots.length === 0) return []
@@ -527,16 +742,21 @@ export async function getAllBoards(): Promise<BoardOverviewItem[]> {
     const subCounts: Record<string, number> = {}
     for (const s of subs ?? []) subCounts[s.project_id] = (subCounts[s.project_id] ?? 0) + 1
 
-    return roots.map(r => ({
-      id: r.id,
-      title: r.title,
-      projectId: r.project_id,
-      projectTitle: (r.projects as unknown as { title: string } | null)?.title ?? r.title,
-      cardCount: cardCounts[r.id] ?? 0,
-      subBoardCount: subCounts[r.project_id] ?? 0,
-      shared: !!r.share_token,
-      updated_at: r.updated_at,
-    }))
+    return roots.map(r => {
+      const project = r.projects as unknown as { title: string; customers?: { name: string | null; company: string | null } | null } | null
+      const customer = project?.customers
+      return {
+        id: r.id,
+        title: r.title,
+        projectId: r.project_id,
+        projectTitle: project?.title ?? r.title,
+        customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+        cardCount: cardCounts[r.id] ?? 0,
+        subBoardCount: subCounts[r.project_id] ?? 0,
+        shared: !!r.share_token,
+        updated_at: r.updated_at,
+      }
+    })
   } catch (err) {
     console.error('getAllBoards:', err)
     return []

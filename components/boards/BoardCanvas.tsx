@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap,
-  useNodesState, useEdgesState, useReactFlow,
-  type Edge, type OnNodeDrag, type OnBeforeDelete, type Connection,
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Panel,
+  useNodesState, useEdgesState, useReactFlow, reconnectEdge,
+  type Edge, type OnNodeDrag, type OnBeforeDelete, type Connection, type OnReconnect,
+  type FinalConnectionState, type HandleType,
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent } from '@/lib/types'
 import {
-  createBoardCard, createSubBoard, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel,
+  createBoardCard, createSubBoard, createStorylineBoard, addStorylineCard, addStorylineRow, widenStorylineGrid, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel, updateBoardEdgeEndpoints, moveCardToBoard,
   type BoardData, type CardPositionPatch,
 } from '@/lib/actions/boards'
 import { BoardUiProvider, ADMIN_BOARD_PALETTE, type BoardPalette } from './boardContext'
@@ -24,7 +25,7 @@ import { useBoardRealtime } from '@/hooks/useBoardRealtime'
 
 const SAVE_ERROR_MSG = 'Kunne ikke lagre siste endring — sjekk nettverket og prøv igjen.'
 
-const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo', 'column', 'board'] // utvides per task
+const ENABLED_TYPES: BoardCardType[] = ['note', 'image', 'video', 'link', 'color', 'todo', 'column', 'board', 'schedule', 'storyline'] // utvides per task
 
 function defaultContent(type: BoardCardType): BoardCardContent {
   switch (type) {
@@ -32,6 +33,7 @@ function defaultContent(type: BoardCardType): BoardCardContent {
     case 'color': return { hex: '#C49434' }
     case 'todo': return { items: [] }
     case 'column': return { title: 'Kolonne' }
+    case 'schedule': return { items: [] }
     default: return { text: '' }
   }
 }
@@ -172,6 +174,17 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       return
     }
 
+    if (type === 'storyline') {
+      // Ingen navne-prompt — underboardet sås med en ferdig blueprint (synopsis + bildeplasser),
+      // så terskelen skal være lavest mulig for å starte en ny storyline.
+      const res = await createStorylineBoard(boardId, pos.x, pos.y)
+      if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+      markLocalOp(res.card.id)
+      const node = cardToNode(res.card, initial.childMeta)
+      appendOrReplaceNode({ ...node, data: { ...node.data, meta: { title: 'Storyline', cardCount: 12 } } })
+      return
+    }
+
     const card = await createBoardCard({
       board_id: boardId, type, x: pos.x, y: pos.y,
       content: defaultContent(type), z_index: maxZ() + 1,
@@ -188,15 +201,77 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     setNodes(ns => ns.map(n => n.id === node.id ? { ...n, zIndex: n.data.card.type === 'column' ? 0 : z + 1 } : n))
   }, [setNodes, maxZ])
 
+  // Hover-highlight mens man drar: markerer board-/storyline-kortet man svever over som
+  // mottaksklart (se dropTarget i CardNodeData / dropActive i CardShell), så det er
+  // tydelig at slippet flytter kortet inn i det underboardet. Kun det siste treffet holdes
+  // markert — dragTargetRef unngår unødvendige setNodes-kall når målet ikke har endret seg.
+  const dragTargetRef = useRef<string | null>(null)
+  const onNodeDrag: OnNodeDrag<CardNode> = useCallback((_e, node, dragged) => {
+    const moving = (dragged.length > 0 ? dragged : [node]) as CardNode[]
+    let targetId: string | null = null
+    for (const m of moving) {
+      const type = m.data.card.type
+      if (type === 'column' || type === 'board' || type === 'storyline') continue
+      const hit = (rf.getIntersectingNodes(m) as CardNode[]).find(n => n.data.card.type === 'board' || n.data.card.type === 'storyline')
+      if (hit) { targetId = hit.id; break }
+    }
+    if (targetId === dragTargetRef.current) return
+    const prevId = dragTargetRef.current
+    dragTargetRef.current = targetId
+    setNodes(ns => ns.map(n => {
+      if (n.id === prevId) return { ...n, data: { ...n.data, dropTarget: false } }
+      if (n.id === targetId) return { ...n, data: { ...n.data, dropTarget: true } }
+      return n
+    }))
+  }, [rf, setNodes])
+
   // Utvidet ved Task 9: kort kan festes til / løsrives fra kolonner ved slipp,
   // og berørte kolonner restables (barn stables vertikalt, kolonnehøyden justeres).
   const onNodeDragStop: OnNodeDrag<CardNode> = useCallback((_e, node, dragged) => {
     const moved = (dragged.length > 0 ? dragged : [node]) as CardNode[]
-    let next = rf.getNodes() as CardNode[]
+    dragTargetRef.current = null
+    let next = (rf.getNodes() as CardNode[]).map(n => n.data.dropTarget ? { ...n, data: { ...n.data, dropTarget: false } } : n)
     const patches: CardPositionPatch[] = []
     const dirtyColumns = new Set<string>()
 
+    // Slippes et kort oppå et board-/storyline-kort: flytt kortet inn i underboardet i
+    // stedet for å plassere det her. Kolonner og andre board-referanser kan ikke selv
+    // flyttes inn (unngår rekursiv nesting av boards).
+    const boardMoves: { cardId: string; targetBoardId: string; x: number; y: number }[] = []
+    const boardDropCounts = new Map<string, number>() // targetBoardId -> antall droppet dit i dette draget, for kaskade-offset
+    const remaining: CardNode[] = []
+
     for (const m of moved) {
+      const current = next.find(n => n.id === m.id)
+      if (!current) continue
+      const type = current.data.card.type
+      const canDropOnBoard = type !== 'column' && type !== 'board' && type !== 'storyline'
+      const targetBoardNode = canDropOnBoard
+        ? (rf.getIntersectingNodes(current) as CardNode[]).find(n => n.data.card.type === 'board' || n.data.card.type === 'storyline')
+        : undefined
+
+      if (targetBoardNode) {
+        const targetBoardId = (targetBoardNode.data.card.content as BoardRefContent).child_board_id
+        const count = boardDropCounts.get(targetBoardId) ?? 0
+        boardDropCounts.set(targetBoardId, count + 1)
+        boardMoves.push({ cardId: current.id, targetBoardId, x: 40 + count * 30, y: 40 + count * 30 })
+        if (current.parentId) dirtyColumns.add(current.parentId)
+      } else {
+        remaining.push(current)
+      }
+    }
+
+    if (boardMoves.length) {
+      const movedIds = new Set(boardMoves.map(bm => bm.cardId))
+      next = next.filter(n => !movedIds.has(n.id))
+      setEdges(es => es.filter(e => !movedIds.has(e.source) && !movedIds.has(e.target)))
+      boardMoves.forEach(bm => {
+        markLocalOp(bm.cardId)
+        moveCardToBoard(bm.cardId, bm.targetBoardId, bm.x, bm.y).then(ok => { if (!ok) setSaveError(SAVE_ERROR_MSG) })
+      })
+    }
+
+    for (const m of remaining) {
       const current = next.find(n => n.id === m.id)
       if (!current) continue
       const type = current.data.card.type
@@ -256,11 +331,23 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
     setNodes(next)
     if (patches.length) persist(patches)
-  }, [rf, absPos, nodeHeight, persist, setNodes])
+  }, [rf, absPos, nodeHeight, persist, setNodes, setEdges, markLocalOp])
 
   // Etter innlasting: restack kolonner én gang når alle noder er målt, så lagret
   // stabling/høyde vises korrekt fra start (uten dette blir kolonnehøyden feil ved refresh).
+  // Bildekort har ingen reservert høyde (se ImageNode) og måler derfor ofte en liten/feil
+  // høyde FØR bildet er ferdig lastet — restacken kan da låse seg med feil høyder. Derfor
+  // kan onCardResize (kalt fra img onLoad) nullstille guarden og trigge en ny, korrekt restack
+  // når det faktiske innholdet endrer størrelse.
+  // resizeTick i state (ikke bare en ref) fordi å nullstille en ref alene ikke
+  // trigger noen re-render — effekten under ville da aldri kjørt på nytt når et
+  // bilde laster ferdig etter at den første restacken allerede har kjørt.
   const restackedOnce = useRef(false)
+  const [resizeTick, setResizeTick] = useState(0)
+  const onCardResize = useCallback(() => {
+    restackedOnce.current = false
+    setResizeTick(t => t + 1)
+  }, [])
   useEffect(() => {
     if (restackedOnce.current) return
     const all = rf.getNodes() as CardNode[]
@@ -271,7 +358,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       next = restackColumn(col.id, next, nodeHeight).nodes // uten persist — bare visuelt
     }
     setNodes(next)
-  }, [nodes, rf, nodeHeight, setNodes])
+  }, [nodes, rf, nodeHeight, setNodes, resizeTick])
 
   // Realtime: reflekter kort/piler opprettet/endret/slettet av andre klienter (Task 12).
   // isLocalOp filtrerer bort vårt eget echo innen 5 s-vinduet.
@@ -284,7 +371,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     setNodes(ns => {
       const exists = ns.some(n => n.id === card.id)
       const fresh = cardToNode(card, initial.childMeta)
-      if (card.type === 'board' && !initial.childMeta[(card.content as BoardRefContent).child_board_id]) {
+      if ((card.type === 'board' || card.type === 'storyline') && !initial.childMeta[(card.content as BoardRefContent).child_board_id]) {
         fresh.data.meta = { title: (card.content as BoardRefContent).title, cardCount: 0 }
       }
       if (!exists) return [...ns, fresh]
@@ -307,18 +394,18 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   useBoardRealtime(boardId, { enabled: !readOnly, isLocalOp, onCard: onRemoteCard, onEdge: onRemoteEdge })
 
-  // Dobbeltklikk på et board-kort navigerer inn i underboardet — ikke gatet på
+  // Dobbeltklikk på et board-/storyline-kort navigerer inn i underboardet — ikke gatet på
   // readOnly, siden offentlige delingssider også skal kunne navigere i boardhierarkiet.
   const onNodeDoubleClick = useCallback((_e: React.MouseEvent, n: CardNode) => {
     const c = n.data.card
-    if (c.type === 'board') onOpenBoard((c.content as BoardRefContent).child_board_id)
+    if (c.type === 'board' || c.type === 'storyline') onOpenBoard((c.content as BoardRefContent).child_board_id)
   }, [onOpenBoard])
 
   // Slett valgte med Delete-tast — bekreftelse kreves når board-kort er involvert,
   // siden det kaskaderer til sletting av hele underboardet (Task 3).
   const onBeforeDelete: OnBeforeDelete<CardNode, Edge> = useCallback(async ({ nodes: delNodes, edges: delEdges }) => {
     if (readOnly) return false
-    const boardCards = delNodes.filter(n => n.data.card.type === 'board')
+    const boardCards = delNodes.filter(n => n.data.card.type === 'board' || n.data.card.type === 'storyline')
     if (boardCards.length > 0) {
       const names = boardCards.map(n => (n.data.card.content as BoardRefContent).title).join(', ')
       if (!window.confirm(`Slette underboard(ene) «${names}» med alt innhold? Dette kan ikke angres.`)) return false
@@ -384,12 +471,42 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
 
   const onEdgeDoubleClick = useCallback((_e: React.MouseEvent, edge: Edge) => {
     if (readOnly) return
-    const label = window.prompt('Tekst på pilen (tom for å fjerne):', (edge.label as string) ?? '')
+    const label = window.prompt('Tekst på pilen (tom for å fjerne teksten):', (edge.label as string) ?? '')
     if (label === null) return
     markLocalOp(edge.id)
     updateBoardEdgeLabel(edge.id, label.trim() || null)
     setEdges(es => es.map(e => e.id === edge.id ? { ...e, label: label.trim() || undefined } : e))
   }, [readOnly, setEdges, markLocalOp])
+
+  // Høyreklikk for å slette en pil — et alternativ til å måtte velge pilen og
+  // trykke Delete-tasten, som ikke er lett å oppdage.
+  const onEdgeContextMenu = useCallback((e: React.MouseEvent, edge: Edge) => {
+    e.preventDefault()
+    if (readOnly) return
+    if (!window.confirm('Slette denne pilen?')) return
+    markLocalOp(edge.id)
+    setEdges(es => es.filter(x => x.id !== edge.id))
+    deleteBoardEdges([edge.id]).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
+  }, [readOnly, setEdges, markLocalOp])
+
+  // Dra en pilende løs og slipp den på et annet kort for å koble pilen om
+  // (React Flows innebygde reconnect — shouldReplaceId: false så vi beholder
+  // samme rad-id i board_edges i stedet for å lage en ny).
+  const onReconnect: OnReconnect = useCallback((oldEdge, newConnection) => {
+    if (!newConnection.source || !newConnection.target || newConnection.source === newConnection.target) return
+    markLocalOp(oldEdge.id)
+    setEdges(es => reconnectEdge(oldEdge, newConnection, es, { shouldReplaceId: false }))
+    updateBoardEdgeEndpoints(oldEdge.id, newConnection.source, newConnection.target)
+  }, [setEdges, markLocalOp])
+
+  // Slipper man en pilende i løs luft (ikke over et gyldig kort) skal pilen
+  // slettes i stedet for å hoppe tilbake til utgangspunktet.
+  const onReconnectEnd = useCallback((_e: MouseEvent | TouchEvent, edge: Edge, _handleType: HandleType, connectionState: FinalConnectionState) => {
+    if (connectionState.isValid) return
+    markLocalOp(edge.id)
+    setEdges(es => es.filter(x => x.id !== edge.id))
+    deleteBoardEdges([edge.id]).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
+  }, [setEdges, markLocalOp])
 
   // Drop fra Finder/Explorer direkte på lerretet — laster opp alle bilde-/videofiler på slippunktet
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -410,8 +527,39 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     }
   }, [readOnly, rf, boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ])
 
+  // Storyline-blueprintets hurtigknapper — «legg til kort/rad» setter inn nye tomme
+  // paneler kjedet med piler etter det siste; «legg til kolonne» utvider hele
+  // rutenettet og pakker eksisterende paneler om (se widenStorylineGrid).
+  const isStorylineBoard = initial.board.kind === 'storyline'
+
+  const applyNewPanels = useCallback((res: { cards: BoardCard[]; edges: BoardEdge[] } | null) => {
+    if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+    res.cards.forEach(c => markLocalOp(c.id))
+    res.edges.forEach(e => markLocalOp(e.id))
+    setNodes(ns => [...ns, ...res.cards.map(c => cardToNode(c, initial.childMeta))])
+    setEdges(es => [...es, ...res.edges.map(edgeToFlow)])
+  }, [markLocalOp, setNodes, setEdges, initial.childMeta])
+
+  const handleAddStorylineCard = useCallback(async () => {
+    applyNewPanels(await addStorylineCard(boardId))
+  }, [boardId, applyNewPanels])
+
+  const handleAddStorylineRow = useCallback(async () => {
+    applyNewPanels(await addStorylineRow(boardId))
+  }, [boardId, applyNewPanels])
+
+  const handleWidenStorylineGrid = useCallback(async () => {
+    const res = await widenStorylineGrid(boardId)
+    if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+    res.cards.forEach(c => markLocalOp(c.id))
+    setNodes(ns => ns.map(n => {
+      const updated = res.cards.find(c => c.id === n.id)
+      return updated ? { ...n, position: { x: updated.x, y: updated.y } } : n
+    }))
+  }, [boardId, markLocalOp, setNodes])
+
   return (
-    <BoardUiProvider value={{ palette, readOnly, markLocalOp }}>
+    <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize }}>
       <div
         style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}
         onDrop={onDrop}
@@ -419,6 +567,29 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       >
         {!readOnly && (
           <Toolbar pending={pendingType} onPick={setPendingType} enabledTypes={ENABLED_TYPES} />
+        )}
+        {!readOnly && isStorylineBoard && (
+          <div style={{
+            position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
+            display: 'flex', gap: 6, background: palette.surface, border: `1px solid ${palette.border}`,
+            borderRadius: 10, padding: 6, fontFamily: 'var(--font-dm-sans)',
+          }}>
+            <button
+              title="Legg til ett nytt panel"
+              onClick={handleAddStorylineCard}
+              style={{ fontSize: '0.74rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, background: 'transparent', color: palette.text2, border: `1px solid ${palette.border}`, cursor: 'pointer' }}
+            >+ Kort</button>
+            <button
+              title="Legg til en ny rad med paneler"
+              onClick={handleAddStorylineRow}
+              style={{ fontSize: '0.74rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, background: 'transparent', color: palette.text2, border: `1px solid ${palette.border}`, cursor: 'pointer' }}
+            >+ Rad</button>
+            <button
+              title="Gjør rutenettet én kolonne bredere"
+              onClick={handleWidenStorylineGrid}
+              style={{ fontSize: '0.74rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, background: 'transparent', color: palette.text2, border: `1px solid ${palette.border}`, cursor: 'pointer' }}
+            >+ Kolonne</button>
+          </div>
         )}
         {!readOnly && (
           <>
@@ -453,12 +624,20 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           onPaneClick={onPaneClick}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeDragStart={readOnly ? undefined : onNodeDragStart}
+          onNodeDrag={readOnly ? undefined : onNodeDrag}
           onNodeDragStop={readOnly ? undefined : onNodeDragStop}
           onBeforeDelete={onBeforeDelete}
           onNodesDelete={onNodesDelete}
           onEdgesDelete={onEdgesDelete}
           onConnect={onConnect}
+          onReconnect={readOnly ? undefined : onReconnect}
+          onReconnectEnd={readOnly ? undefined : onReconnectEnd}
+          // Standard er 10px — for lite til å treffe presist. Utvider
+          // gripesonen rundt hver pilende slik at man ikke må treffe tuppen
+          // pikselnøyaktig for å starte en omkobling.
+          reconnectRadius={40}
           onEdgeDoubleClick={onEdgeDoubleClick}
+          onEdgeContextMenu={onEdgeContextMenu}
           nodesDraggable={!readOnly}
           nodesConnectable={!readOnly}
           // Alltid true (også readOnly): React Flow gater pointer-events på noder til
@@ -485,6 +664,20 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
           style={{ cursor: pendingType ? 'crosshair' : undefined }}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color={palette.border} />
+          {initial.customerName && (
+            <Panel position="top-left" style={{ margin: 14, pointerEvents: 'none' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: 'var(--font-dm-sans)' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: palette.accent }}>
+                  {initial.customerName}
+                </span>
+                {initial.projectTitle && (
+                  <span style={{ fontSize: '1rem', fontWeight: 600, color: palette.text }}>
+                    {initial.projectTitle}
+                  </span>
+                )}
+              </div>
+            </Panel>
+          )}
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable nodeColor={() => palette.surface2} maskColor="rgba(0,0,0,0.5)" style={{ background: palette.surface }} />
         </ReactFlow>

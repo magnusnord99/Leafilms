@@ -70,6 +70,7 @@ export function buildPipelineColumnPlan(role: StaffRole, orderedStages: Pipeline
 const PATH_ROLE_PREFIXES: { prefix: string; roles: StaffRole[] }[] = [
   { prefix: '/admin/okonomi', roles: ['admin'] },
   { prefix: '/admin/prices', roles: ['admin'] },
+  { prefix: '/admin/internal', roles: ['admin'] },
   { prefix: '/admin/market-analysis', roles: ['admin'] },
   { prefix: '/admin/users', roles: ['admin'] },
   { prefix: '/admin/leads', roles: ['admin', 'sales'] },

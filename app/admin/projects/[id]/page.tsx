@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
-import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory } from '@/lib/actions/contracts'
+import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo } from '@/lib/actions/contracts'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
@@ -630,6 +630,7 @@ export default function ProjectHubPage() {
   const [publishingContract, setPublishingContract] = useState(false)
   const [downloadingContractPdf, setDownloadingContractPdf] = useState(false)
   const [unsigningContract, setUnsigningContract] = useState(false)
+  const [togglingRequestInvoiceInfo, setTogglingRequestInvoiceInfo] = useState(false)
   const [contractSaved, setContractSaved] = useState(false)
   const [contractHasText, setContractHasText] = useState(false)
   const [contractAutoVars, setContractAutoVars] = useState<{
@@ -908,6 +909,22 @@ export default function ProjectHubPage() {
       alert('Kunne ikke angre signeringen: ' + (error instanceof Error ? error.message : 'Ukjent feil'))
     } finally {
       setUnsigningContract(false)
+    }
+  }
+
+  async function handleToggleRequestInvoiceInfo() {
+    const currentlyRequested = (project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false
+    const next = !currentlyRequested
+    setHubData(prev => prev ? { ...prev, project: { ...prev.project, pipeline_data: { ...prev.project.pipeline_data, request_invoice_info: next } } } : prev)
+    setTogglingRequestInvoiceInfo(true)
+    try {
+      await setRequestInvoiceInfo(projectId, next)
+    } catch (error) {
+      console.error('Toggle request invoice info error:', error)
+      setHubData(prev => prev ? { ...prev, project: { ...prev.project, pipeline_data: { ...prev.project.pipeline_data, request_invoice_info: currentlyRequested } } } : prev)
+      alert('Kunne ikke oppdatere fakturainfo-innstillingen. Prøv igjen.')
+    } finally {
+      setTogglingRequestInvoiceInfo(false)
     }
   }
 
@@ -1998,6 +2015,31 @@ export default function ProjectHubPage() {
                 )}
               </div>
             )}
+
+            {/* Fakturainfo-spørsmål ved signering — skru av hvis vi allerede har infoen */}
+            <label
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer',
+                padding: '12px 16px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`,
+                opacity: togglingRequestInvoiceInfo ? 0.6 : 1,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={(project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false}
+                onChange={handleToggleRequestInvoiceInfo}
+                disabled={togglingRequestInvoiceInfo}
+                style={{ marginTop: 2, accentColor: C.accent, width: 16, height: 16, flexShrink: 0, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer' }}
+              />
+              <div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, margin: 0 }}>
+                  Spør om fakturainfo ved signering
+                </p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, margin: '2px 0 0' }}>
+                  Kunden må oppgi firma, org.nr, fakturaadresse og faktura-e-post før avtalen kan signeres (med mulighet til å hoppe over). Skru av hvis vi allerede har informasjonen.
+                </p>
+              </div>
+            </label>
 
             {/* Last ned PDF — tilgjengelig så snart det finnes kontrakttekst, uansett
                 publiserings-/signeringsstatus, slik at vi kan se nøyaktig hva kunden ser. */}

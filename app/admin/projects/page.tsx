@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, QuoteBuilderData } from '@/lib/types'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
 import { timeAgo } from '@/lib/format'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
@@ -155,19 +155,15 @@ export default function ProjectsPage() {
 
       type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; selected_addon_ids: string[] | null; updated_at: string }
       setQuotes(((quotesRes.data ?? []) as unknown as RawQuote[]).flatMap(q => {
-        try {
-          // Kundens avkryssede tillegg telles med — samme beregning som Økonomi-siden
-          const totals = calculateQuoteTotals(q.quote_data, q.selected_addon_ids ?? [])
-          if (!Number.isFinite(totals.afterDiscount) || totals.afterDiscount <= 0) return []
-          return [{
-            project_id: q.project_id,
-            accepted: q.status === 'accepted',
-            total: totals.afterDiscount,
-            updated_at: q.updated_at,
-          }]
-        } catch {
-          return []
-        }
+        // Kundens avkryssede tillegg telles med — samme beregning som Økonomi-siden
+        const amount = getQuoteAmountExclVat(q.quote_data, q.selected_addon_ids ?? [])
+        if (amount === null || !Number.isFinite(amount) || amount <= 0) return []
+        return [{
+          project_id: q.project_id,
+          accepted: q.status === 'accepted',
+          total: amount,
+          updated_at: q.updated_at,
+        }]
       }))
 
       const publishedIds = rawProjects.filter(p => p.status === 'published').map(p => p.id)

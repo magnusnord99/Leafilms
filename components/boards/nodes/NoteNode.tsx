@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
 import type { NoteContent } from '@/lib/types'
 import { updateCardContent } from '@/lib/actions/boards'
@@ -27,6 +27,16 @@ export default function NoteNode({ id, data, selected }: NodeProps<CardNode>) {
   const content = data.card.content as NoteContent
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(content.text)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Autovoks etter innhold i stedet for radtelling, som ikke fanger opp
+  // tekst som brytes over flere visuelle linjer uten linjeskift.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!editing || !el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editing, draft])
 
   const save = () => {
     setEditing(false)
@@ -45,13 +55,14 @@ export default function NoteNode({ id, data, selected }: NodeProps<CardNode>) {
     <CardShell selected={!!selected}>
       {editing ? (
         <textarea
+          ref={textareaRef}
           autoFocus
           className="nodrag"
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onBlur={save}
-          rows={Math.max(4, draft.split('\n').length)}
-          style={{ width: '100%', background: P.surface2, color: P.text, border: `1px solid ${P.border}`, borderRadius: 6, padding: 8, fontSize: '0.82rem', fontFamily: 'var(--font-dm-sans)', resize: 'vertical', outline: 'none' }}
+          rows={4}
+          style={{ width: '100%', background: P.surface2, color: P.text, border: `1px solid ${P.border}`, borderRadius: 6, padding: 8, fontSize: '0.82rem', fontFamily: 'var(--font-dm-sans)', resize: 'none', outline: 'none', overflow: 'hidden' }}
         />
       ) : (
         <div

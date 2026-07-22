@@ -98,6 +98,29 @@ export type QuoteTotals = {
   finalInclVat: number
 }
 
+// quotes.quote_data kan være to ulike former: rå QuoteBuilderData (har `crew`), eller den
+// konverterte visningsformen som /api/accept-quote skriver ved akseptering (har `finalPriceExclVat`
+// i stedet, jf. convertBuilderDataToQuoteData). Samme sjekk som QuoteSection.tsx sin isBuilderData.
+export function isBuilderData(data: unknown): data is QuoteBuilderData {
+  return !!data && Array.isArray((data as { crew?: unknown }).crew)
+}
+
+// Robust beløp uavhengig av hvilken av de to formene over quote_data har — brukt av
+// Økonomi-siden og pipeline-oversikten (admin/projects) slik at et akseptert tilbud aldri
+// stille faller ut som "—"/0 bare fordi det ble lagret i den konverterte formen.
+export function getQuoteAmountExclVat(data: unknown, selectedAddonIds?: string[]): number | null {
+  if (!data) return null
+  if (isBuilderData(data)) {
+    try {
+      return calculateQuoteTotals(data, selectedAddonIds ?? []).afterDiscount
+    } catch {
+      return null
+    }
+  }
+  const finalPriceExclVat = (data as { finalPriceExclVat?: unknown }).finalPriceExclVat
+  return typeof finalPriceExclVat === 'number' ? finalPriceExclVat : null
+}
+
 // selectedAddonIds er valgfri: uoppgitt = ingen tillegg inkludert (dagens oppførsel, brukt av
 // admin-byggeren og alle andre kallere). Når oppgitt (kundens avkryssede tillegg på den
 // offentlige pristilbudssiden) summeres tilleggenes poster inn i riktig kategori — samme

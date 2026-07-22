@@ -128,6 +128,17 @@ export default function CustomerProjectsPage() {
     setLoading(false)
   }
 
+  async function handleDeleteProject(project: ProjectWithDetails) {
+    const extra = project.quotes.length > 0 || project.contracts.length > 0
+      ? ` (inkl. ${project.quotes.length} tilbud og ${project.contracts.length} kontrakt${project.contracts.length === 1 ? '' : 'er'})`
+      : ''
+    if (!confirm(`Slett prosjektet "${project.title}"${extra}? Dette kan ikke angres.`)) return
+    const supabase = createClient()
+    const { error } = await supabase.from('projects').delete().eq('id', project.id)
+    if (error) { alert('Kunne ikke slette prosjektet.'); return }
+    setProjects(prev => prev.filter(p => p.id !== project.id))
+  }
+
   async function handleDeleteQuote(quote: Quote) {
     if (!confirm('Slett dette tilbudet? Dette kan ikke angres.')) return
     const supabase = createClient()
@@ -246,11 +257,20 @@ export default function CustomerProjectsPage() {
                       {new Date(project.created_at).toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
-                  <Link href={`/admin/projects/${project.id}?from=/admin/customers/${customerId}/projects`}>
-                    <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}>
-                      Åpne
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <Link href={`/admin/projects/${project.id}?from=/admin/customers/${customerId}/projects`}>
+                      <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
+                        Åpne
+                      </button>
+                    </Link>
+                    <button
+                      onClick={() => handleDeleteProject(project)}
+                      title="Slett prosjekt"
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)' }}
+                    >
+                      Slett
                     </button>
-                  </Link>
+                  </div>
                 </div>
 
                 {/* Quotes */}

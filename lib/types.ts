@@ -51,6 +51,10 @@ export type Customer = {
   notes: string | null
   customer_number: number
   org_nummer: string | null
+  invoice_email: string | null
+  invoice_reference: string | null
+  invoice_info_skipped: boolean
+  invoice_info_confirmed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -211,6 +215,25 @@ export type PriceCatalogItem = {
   unit: string
   created_at: string
   updated_at: string
+}
+
+export type EquipmentGroupItem = {
+  id: string
+  group_id: string
+  catalog_item_id: string
+  quantity: number
+}
+
+export type EquipmentGroup = {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+/** Gruppe med varene den inneholder, hver slått sammen med katalogvaren sin (navn/kategori/pris). */
+export type EquipmentGroupWithItems = EquipmentGroup & {
+  items: (EquipmentGroupItem & { catalog_item: PriceCatalogItem })[]
 }
 
 export type Contract = {
@@ -539,6 +562,20 @@ export type Task = {
 
 export type TaskStatus = Task['status']
 
+// Intern admin-oppgave uten prosjekttilknytning — status ER pipelinen (ingen egne stadier).
+export type AdminTask = {
+  id: string
+  title: string
+  description: string | null
+  status: TaskStatus
+  assignee: { id: string; name: string | null; email: string; color: string | null } | null
+  due_date: string | null
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 // Delt kilde for oppgavestatus-tekst — var tidligere "Todo"/"Å gjøre"/"Ikke startet"
 // for samme status i ulike admin-sider.
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
@@ -586,6 +623,12 @@ export type ProjectWithPipeline = Project & {
     company: string | null
     email?: string | null
     phone?: string | null
+    org_nummer?: string | null
+    address?: string | null
+    invoice_email?: string | null
+    invoice_reference?: string | null
+    invoice_info_skipped?: boolean
+    invoice_info_confirmed_at?: string | null
   } | null
   tasks?: Task[]
 }
@@ -599,10 +642,11 @@ export type ProjectRow = ProjectWithPipeline & { customers?: ProjectWithPipeline
 // Boards (intern Milanote-erstatning) — 098_boards.sql
 // ---------------------------------------------------------------------------
 
-export type BoardCardType = 'note' | 'image' | 'video' | 'link' | 'color' | 'todo' | 'column' | 'board'
+export type BoardCardType = 'note' | 'image' | 'video' | 'link' | 'color' | 'todo' | 'column' | 'board' | 'schedule' | 'storyline'
 
 export type NoteContent = { text: string }
-export type ImageContent = { url: string; caption?: string }
+/** url mangler for tomme bildeplasser sådd inn av storyline-blueprinten, fylles inn ved opplasting */
+export type ImageContent = { url?: string; caption?: string }
 /** Enten embed_url (YouTube/Vimeo iframe-URL) eller url (opplastet fil i board-images) */
 export type VideoContent = { embed_url?: string; url?: string }
 export type LinkContent = { url: string; title?: string; description?: string; image_url?: string }
@@ -633,10 +677,11 @@ export type BoardScheduleItem = {
   people?: SchedulePersonRef[]
 }
 
+export type BoardScheduleContent = { title?: string; items: BoardScheduleItem[] }
 
 export type BoardCardContent =
   | NoteContent | ImageContent | VideoContent | LinkContent
-  | ColorContent | TodoContent | ColumnContent | BoardRefContent
+  | ColorContent | TodoContent | ColumnContent | BoardRefContent | BoardScheduleContent
 
 export type Board = {
   id: string
@@ -647,6 +692,10 @@ export type Board = {
   created_by: string | null
   created_at: string
   updated_at: string
+  /** 'storyline' på underboards sådd av storyline-blueprinten, ellers null */
+  kind: 'storyline' | null
+  /** Bredden på panel-rutenettet på et storyline-board — brukes av legg til kort/rad/kolonne */
+  storyline_columns: number | null
 }
 
 export type BoardCard = {

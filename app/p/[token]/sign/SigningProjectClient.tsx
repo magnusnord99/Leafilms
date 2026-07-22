@@ -31,6 +31,7 @@ type SigningProjectClientProps = {
     signedBy: string | null
     ourSignature?: OurSignature | null
     pdfUrl?: string | null
+    requestInvoiceInfo?: boolean
   } | null
   projectId?: string
 }
@@ -220,6 +221,7 @@ export function SigningProjectClient({
           selectedAddonIds={selectedAddonIds}
           baseFinalPriceExclVat={baseFinalPriceExclVat}
           discountFactor={quoteDiscountFactor}
+          requestInvoiceInfo={publishedContract.requestInvoiceInfo}
           onSigned={handleContractSigned}
         />
       )}

@@ -22,8 +22,13 @@ export default function BoardPageClient({ initial }: { initial: BoardData }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', background: C.bg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--font-dm-sans)' }}>
-        <Link href={`/admin/preprod/${initial.projectId}`} style={{ color: C.text3, fontSize: '0.8rem', textDecoration: 'none' }}>
-          {initial.projectTitle}
+        <Link href={`/admin/preprod/${initial.projectId}`} style={{ display: 'flex', flexDirection: 'column', gap: 1, textDecoration: 'none' }}>
+          <span style={{ fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', color: C.accent }}>
+            {initial.customerName}
+          </span>
+          <span style={{ color: C.text3, fontSize: '0.8rem' }}>
+            {initial.projectTitle}
+          </span>
         </Link>
         {initial.breadcrumbs.map((b, i) => (
           <span key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

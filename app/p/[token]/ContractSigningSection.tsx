@@ -19,6 +19,7 @@ type ContractSigningSectionProps = {
   discountFactor?: number
   pdfUrl?: string | null
   language?: 'no' | 'en'
+  requestInvoiceInfo?: boolean
   onSigned?: () => void
 }
 
@@ -37,6 +38,18 @@ const STRINGS = {
     fullNamePlaceholder: 'Ditt fulle navn',
     email: 'E-post',
     emailPlaceholder: 'din@epost.no',
+    invoiceTitle: 'Fakturainformasjon',
+    invoiceCompany: 'Firma / fakturamottaker',
+    invoiceCompanyPlaceholder: 'Firmanavn eller fullt navn',
+    invoiceOrgNummer: 'Org.nummer (valgfritt)',
+    invoiceOrgNummerPlaceholder: '923 456 789',
+    invoiceAddress: 'Fakturaadresse',
+    invoiceAddressPlaceholder: 'Gateadresse, postnummer, sted',
+    invoiceEmail: 'Faktura-e-post',
+    invoiceEmailPlaceholder: 'faktura@firma.no',
+    invoiceReference: 'Merking / referanse (valgfritt)',
+    invoiceReferencePlaceholder: 'F.eks. PO-nummer eller avdeling',
+    noInvoiceInfo: 'Jeg har ikke fakturainformasjonen klar nå',
     acceptTerms: 'Jeg har lest og godtar produksjonsavtalen',
     signature: 'Signatur',
     signatureClear: 'Tøm',
@@ -62,6 +75,18 @@ const STRINGS = {
     fullNamePlaceholder: 'Your full name',
     email: 'Email',
     emailPlaceholder: 'you@email.com',
+    invoiceTitle: 'Invoicing details',
+    invoiceCompany: 'Company / invoice recipient',
+    invoiceCompanyPlaceholder: 'Company name or full name',
+    invoiceOrgNummer: 'Org. number (optional)',
+    invoiceOrgNummerPlaceholder: '923 456 789',
+    invoiceAddress: 'Billing address',
+    invoiceAddressPlaceholder: 'Street address, postal code, city',
+    invoiceEmail: 'Invoice email',
+    invoiceEmailPlaceholder: 'invoices@company.com',
+    invoiceReference: 'Reference (optional)',
+    invoiceReferencePlaceholder: 'e.g. PO number or department',
+    noInvoiceInfo: "I don't have my invoice details ready yet",
     acceptTerms: 'I have read and accept the production agreement',
     signature: 'Signature',
     signatureClear: 'Clear',
@@ -88,11 +113,18 @@ export default function ContractSigningSection({
   discountFactor = 0,
   pdfUrl: initialPdfUrl,
   language = 'no',
+  requestInvoiceInfo = true,
   onSigned = () => {},
 }: ContractSigningSectionProps) {
   const t = STRINGS[language]
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [invoiceCompany, setInvoiceCompany] = useState('')
+  const [invoiceOrgNummer, setInvoiceOrgNummer] = useState('')
+  const [invoiceAddress, setInvoiceAddress] = useState('')
+  const [invoiceEmail, setInvoiceEmail] = useState('')
+  const [invoiceReference, setInvoiceReference] = useState('')
+  const [noInvoiceInfo, setNoInvoiceInfo] = useState(false)
   const [accepted, setAccepted] = useState(false)
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
@@ -119,6 +151,12 @@ export default function ContractSigningSection({
           contractSnapshot: contractText,
           signatureImage: sigRef.current?.getDataUrl() ?? '',
           selectedAddonIds: Array.from(selectedAddonIds),
+          noInvoiceInfo,
+          invoiceCompany: noInvoiceInfo ? '' : invoiceCompany,
+          invoiceOrgNummer: noInvoiceInfo ? '' : invoiceOrgNummer,
+          invoiceAddress: noInvoiceInfo ? '' : invoiceAddress,
+          invoiceEmail: noInvoiceInfo ? '' : invoiceEmail,
+          invoiceReference: noInvoiceInfo ? '' : invoiceReference,
         }),
       })
       if (res.ok) {
@@ -138,7 +176,10 @@ export default function ContractSigningSection({
     }
   }
 
-  const canSubmit = name.trim() !== '' && email.trim() !== '' && accepted && hasSigned && !signing
+  const hasInvoiceInfo = invoiceCompany.trim() !== '' && invoiceAddress.trim() !== '' && invoiceEmail.trim() !== ''
+  const canSubmit =
+    name.trim() !== '' && email.trim() !== '' && accepted && hasSigned && !signing &&
+    (!requestInvoiceInfo || noInvoiceInfo || hasInvoiceInfo)
 
   // Kontraktteksten skal reflektere prisen med valgte tillegg — samme funksjon som
   // brukes server-side ved signering (app/api/contracts/sign/route.ts), slik at
@@ -373,6 +414,126 @@ export default function ContractSigningSection({
                   }}
                 />
               </div>
+
+              {/* Fakturainformasjon */}
+              {requestInvoiceInfo && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.85rem',
+                  padding: '1.1rem 1.25rem',
+                  border: '1px solid #2A261F',
+                  background: '#171410',
+                }}
+              >
+                <p style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: '#C49434',
+                  margin: 0,
+                }}>
+                  {t.invoiceTitle}
+                </p>
+
+                {!noInvoiceInfo && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label htmlFor="invoice-company" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+                        {t.invoiceCompany}
+                      </label>
+                      <input
+                        id="invoice-company"
+                        type="text"
+                        value={invoiceCompany}
+                        onChange={(e) => setInvoiceCompany(e.target.value)}
+                        placeholder={t.invoiceCompanyPlaceholder}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label htmlFor="invoice-org-nummer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+                        {t.invoiceOrgNummer}
+                      </label>
+                      <input
+                        id="invoice-org-nummer"
+                        type="text"
+                        value={invoiceOrgNummer}
+                        onChange={(e) => setInvoiceOrgNummer(e.target.value)}
+                        placeholder={t.invoiceOrgNummerPlaceholder}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label htmlFor="invoice-address" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+                        {t.invoiceAddress}
+                      </label>
+                      <textarea
+                        id="invoice-address"
+                        value={invoiceAddress}
+                        onChange={(e) => setInvoiceAddress(e.target.value)}
+                        placeholder={t.invoiceAddressPlaceholder}
+                        rows={2}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label htmlFor="invoice-email" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+                        {t.invoiceEmail}
+                      </label>
+                      <input
+                        id="invoice-email"
+                        type="email"
+                        value={invoiceEmail}
+                        onChange={(e) => setInvoiceEmail(e.target.value)}
+                        placeholder={t.invoiceEmailPlaceholder}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label htmlFor="invoice-reference" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#62594E' }}>
+                        {t.invoiceReference}
+                      </label>
+                      <input
+                        id="invoice-reference"
+                        type="text"
+                        value={invoiceReference}
+                        onChange={(e) => setInvoiceReference(e.target.value)}
+                        placeholder={t.invoiceReferencePlaceholder}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.78rem',
+                    color: '#9E9287',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={noInvoiceInfo}
+                    onChange={(e) => setNoInvoiceInfo(e.target.checked)}
+                    style={{ marginTop: '0.2rem', accentColor: '#C49434', width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }}
+                  />
+                  {t.noInvoiceInfo}
+                </label>
+              </div>
+              )}
 
               {/* Checkbox */}
               <label

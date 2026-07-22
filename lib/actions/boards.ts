@@ -3,6 +3,7 @@
 import { randomBytes } from 'crypto'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
+import { getBoardComments, type BoardCommentsByCard } from '@/lib/actions/boardComments'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
@@ -15,6 +16,9 @@ export type BoardData = {
   projectTitle: string
   customerName: string
   childMeta: Record<string, ChildBoardMeta>
+  // Fraværende (undefined) for delt/offentlig board-visning (getSharedBoard) —
+  // kommentarer er internt-only (se 2026-07-22-board-comments-design.md).
+  comments?: BoardCommentsByCard
 }
 
 export type CardPositionPatch = {
@@ -166,10 +170,11 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const { data: board } = await supabase.from('boards').select('*').eq('id', boardId).single()
     if (!board) return null
 
-    const [{ data: cards }, { data: edges }, { data: project }] = await Promise.all([
+    const [{ data: cards }, { data: edges }, { data: project }, comments] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
       supabase.from('projects').select('id, title, customers(name, company)').eq('id', board.project_id).single(),
+      getBoardComments(boardId),
     ])
     const breadcrumbs = await buildBreadcrumbs(supabase, board)
     const childMeta = await loadChildMeta(supabase, (cards ?? []) as BoardCard[])
@@ -184,6 +189,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       projectTitle: project?.title ?? '',
       customerName: customer?.name || customer?.company || 'Ingen kunde satt',
       childMeta,
+      comments,
     }
   } catch (err) {
     console.error('getBoardData:', err)

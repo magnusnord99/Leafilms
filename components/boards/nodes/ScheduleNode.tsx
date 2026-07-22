@@ -85,7 +85,7 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
 
   return (
     <>
-      <CardShell selected={!!selected}>
+      <CardShell cardId={id} selected={!!selected}>
         <div onDoubleClick={() => setOpen(true)} style={{ cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 34, height: 34, borderRadius: 8, background: P.accent + '22', border: `1px solid ${P.accent}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: P.accent, flexShrink: 0 }}>

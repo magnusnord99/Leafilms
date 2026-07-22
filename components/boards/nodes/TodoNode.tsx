@@ -34,7 +34,7 @@ export default function TodoNode({ id, data, selected }: NodeProps<CardNode>) {
   }
 
   return (
-    <CardShell selected={!!selected}>
+    <CardShell cardId={id} selected={!!selected}>
       {editingTitle ? (
         <input
           autoFocus

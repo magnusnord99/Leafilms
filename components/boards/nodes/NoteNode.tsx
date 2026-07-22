@@ -52,7 +52,7 @@ export default function NoteNode({ id, data, selected }: NodeProps<CardNode>) {
   const lines = (editing ? draft : content.text || 'Dobbeltklikk for å skrive …').split('\n')
 
   return (
-    <CardShell selected={!!selected}>
+    <CardShell cardId={id} selected={!!selected}>
       {editing ? (
         <textarea
           ref={textareaRef}

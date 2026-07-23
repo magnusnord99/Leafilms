@@ -4,13 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
+  getPreprodDetail, updatePreprodData, updatePreprodTaskStatus,
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
 import { setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
-import { getPostProdFlowOptions, type PostProdFlowTrack, type PlannedPostProdStep } from '@/lib/actions/pipeline'
-import { PostProdFlowPlanner } from './PostProdFlowPlanner'
+import { PostProdBoard } from './PostProdBoard'
 import { TaskList } from '@/components/task/TaskList'
 import BoardsButton from './BoardsButton'
 import type { Task } from '@/lib/types'
@@ -427,7 +426,7 @@ function CrewSection({
   title: string
   crew: PreprodCrewMember[]
   projectId: string
-  field: 'prod_crew' | 'post_crew'
+  field: 'prod_crew'
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onChange: (crew: PreprodCrewMember[]) => void
   onCrewAdded?: (updated: PreprodCrewMember[]) => void
@@ -668,202 +667,6 @@ function CrewSection({
   )
 }
 
-// ─── PostCrewSection — oppgavebasert tildeling for post-produksjon ───────────
-
-const POST_ROLES_VIDEO: { key: string; label: string }[] = [
-  { key: 'video_logging',   label: 'Logging'   },
-  { key: 'video_grovklipp', label: 'Grovklipp' },
-  { key: 'video_klipp',     label: 'Klipp'     },
-  { key: 'video_farger',    label: 'Farger'    },
-  { key: 'video_lyd',       label: 'Lyd'       },
-  { key: 'video_ferdig',    label: 'Ferdig'    },
-]
-const POST_ROLES_PHOTO: { key: string; label: string }[] = [
-  { key: 'photo_selektering',        label: 'Selektering'        },
-  { key: 'photo_seleksjon_til_kunde', label: 'Seleksjon til kunde' },
-  { key: 'photo_redigering',         label: 'Redigering'         },
-  { key: 'photo_ferdig',             label: 'Ferdig'             },
-]
-
-type RoleGroup = { heading: string; color: string; roles: { key: string; label: string }[] }
-
-function resolveGroups(projectType: string | null | undefined): RoleGroup[] {
-  if (projectType === 'photo') return [{ heading: 'Foto', color: '#4A9EFF', roles: POST_ROLES_PHOTO }]
-  if (projectType === 'mixed') return [
-    { heading: 'Video', color: '#C49434', roles: POST_ROLES_VIDEO },
-    { heading: 'Foto',  color: '#4A9EFF', roles: POST_ROLES_PHOTO },
-  ]
-  return [{ heading: 'Video', color: '#C49434', roles: POST_ROLES_VIDEO }]
-}
-
-function PostCrewSection({
-  crew, projectId, profiles, projectType, onChange, onCrewAdded,
-}: {
-  crew: PreprodCrewMember[]
-  projectId: string
-  profiles: { id: string; name: string | null; email: string; color: string | null }[]
-  projectType: string | null | undefined
-  onChange: (crew: PreprodCrewMember[]) => void
-  onCrewAdded?: (updated: PreprodCrewMember[]) => void
-}) {
-  const [openKey, setOpenKey] = useState<string | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!openKey) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpenKey(null)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [openKey])
-
-  const groups = resolveGroups(projectType)
-
-  function assignRole(key: string, profile: { id: string; name: string | null; email: string }) {
-    const prev = crew.find(c => c.role === key)
-    const next = [
-      ...crew.filter(c => c.role !== key),
-      { profile_id: profile.id, name: profile.name ?? profile.email, role: key },
-    ]
-    onChange(next)
-    updatePreprodData(projectId, { post_crew: next })
-    syncPostCrewToTask(projectId, key, profile.id, prev?.profile_id ?? null)
-    onCrewAdded?.(next)
-    setOpenKey(null)
-  }
-
-  function removeRole(key: string) {
-    const prev = crew.find(c => c.role === key)
-    const next = crew.filter(c => c.role !== key)
-    onChange(next)
-    updatePreprodData(projectId, { post_crew: next })
-    if (prev) syncPostCrewToTask(projectId, key, null, prev.profile_id)
-    onCrewAdded?.(next)
-  }
-
-  return (
-    <div ref={ref} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
-      <SectionTitle>Fordeling — Post-produksjon</SectionTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {groups.map(group => (
-          <div key={group.heading}>
-            {groups.length > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                <span style={{ width: 4, height: 4, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: group.color }}>
-                  {group.heading}
-                </span>
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {group.roles.map(({ key, label }) => {
-                const member = crew.find(c => c.role === key)
-                const isOpen = openKey === key
-                const assigned = member
-                  ? profiles.find(p => p.id === member.profile_id) ?? { id: member.profile_id, name: member.name, email: member.name, color: null }
-                  : null
-
-                return (
-                  <div key={key} style={{ position: 'relative' }}>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 12px', borderRadius: 7,
-                      background: isOpen ? C.accentBg : C.surface2,
-                      border: `1px solid ${isOpen ? 'rgba(124,92,252,0.3)' : C.border}`,
-                      transition: 'all 0.12s',
-                    }}>
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, flex: 1 }}>
-                        {label}
-                      </span>
-                      {assigned ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <Avatar id={assigned.id} name={assigned.name} color={assigned.color} size={22} />
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text }}>
-                            {assigned.name ?? assigned.email}
-                          </span>
-                          <button
-                            onClick={() => setOpenKey(isOpen ? null : key)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: '0 2px', lineHeight: 0, fontSize: '0.7rem' }}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            onClick={() => removeRole(key)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M2 2l8 8M10 2L2 10" />
-                            </svg>
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setOpenKey(isOpen ? null : key)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 5,
-                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
-                            color: isOpen ? C.accent : C.text3,
-                            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                          </svg>
-                          Tildel
-                        </button>
-                      )}
-                    </div>
-
-                    {isOpen && (
-                      <div style={{
-                        position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
-                        background: C.surface2, border: `1px solid ${C.border}`,
-                        borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        minWidth: 200, padding: '3px 0',
-                      }}>
-                        {profiles.map(p => {
-                          const isCurrent = assigned?.id === p.id
-                          return (
-                            <button
-                              key={p.id}
-                              onClick={() => assignRole(key, p)}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 9,
-                                width: '100%', padding: '7px 12px',
-                                background: isCurrent ? C.accentBg : 'none',
-                                border: 'none', cursor: 'pointer', textAlign: 'left',
-                              }}
-                              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
-                              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
-                            >
-                              <Avatar id={p.id} name={p.name} color={p.color} size={22} />
-                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: isCurrent ? C.accent : C.text, flex: 1 }}>
-                                {p.name ?? p.email}
-                              </span>
-                              {isCurrent && (
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                                  <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ─── Invoice assignee card ────────────────────────────────────────────────────
 
 function InvoiceAssigneeCard({
@@ -983,6 +786,7 @@ export default function PreprodDetailPage() {
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [advancing, setAdvancing] = useState(false)
   const [storageUnits, setStorageUnits] = useState<ProjectEquipmentUnit[]>([])
+  const [postProdHasAssignee, setPostProdHasAssignee] = useState(false)
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -1002,20 +806,6 @@ export default function PreprodDetailPage() {
     })
     getProjectEquipment(id).then(setStorageUnits)
     getCurrentUserProfile().then(profile => setCurrentUserId(profile?.id ?? null))
-  }, [id])
-
-  const [flowTracks, setFlowTracks] = useState<PostProdFlowTrack[]>([])
-  const [plannedSteps, setPlannedSteps] = useState<PlannedPostProdStep[]>([])
-
-  function refetchFlowOptions() {
-    getPostProdFlowOptions(id).then(res => {
-      setFlowTracks(res.tracks)
-      setPlannedSteps(res.plannedSteps)
-    })
-  }
-
-  useEffect(() => {
-    refetchFlowOptions()
   }, [id])
 
   useEffect(() => {
@@ -1062,16 +852,25 @@ export default function PreprodDetailPage() {
     setTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
-  async function handleCrewChanged(updatedProdCrew?: PreprodCrewMember[], updatedPostCrew?: PreprodCrewMember[]) {
+  // hasPostOverride sendes eksplisitt fra onAssignedChange (PostProdBoard) i
+  // stedet for å leses fra postProdHasAssignee-state via closure, siden
+  // funksjonen da kan kalles i samme tick som state-oppdateringen skjer uten
+  // å fange en foreldet verdi.
+  async function handleCrewChanged(updatedProdCrew?: PreprodCrewMember[], hasPostOverride?: boolean) {
     const prodCrew = updatedProdCrew ?? preprod?.prod_crew ?? []
-    const postCrew = updatedPostCrew ?? preprod?.post_crew ?? []
     const hasProd = prodCrew.length > 0
-    const hasPost = postCrew.length > 0
+    const hasPost = hasPostOverride ?? postProdHasAssignee
     const newStatus = (hasProd && hasPost) ? 'done' : (hasProd || hasPost) ? 'in_progress' : 'todo'
     await setTildelTaskStatus(id, newStatus)
     setTasks(prev => prev.map(t =>
       t.title === 'Tildel oppgaver til teamet' ? { ...t, status: newStatus } : t
     ))
+  }
+
+  function handlePostDeadlineChange(subType: 'video' | 'photo', date: string | null) {
+    const next = { ...(preprod?.post_deadlines ?? { video: null, photo: null }), [subType]: date }
+    patchPreprod({ post_deadlines: next })
+    updatePreprodData(id, { post_deadlines: next })
   }
 
   async function handleAdvanceToProduction() {
@@ -1269,27 +1068,22 @@ export default function PreprodDetailPage() {
               field="prod_crew"
               profiles={profiles}
               onChange={next => patchPreprod({ prod_crew: next })}
-              onCrewAdded={next => handleCrewChanged(next, undefined)}
+              onCrewAdded={next => handleCrewChanged(next)}
             />
 
-            {/* Fordeling: Post */}
-            <PostCrewSection
-              crew={preprod.post_crew}
+            {/* Post-produksjon-brettet: Video/Foto-lanes, egendefinerte lanes, parallell-rad, bibliotek */}
+            <PostProdBoard
               projectId={id}
-              profiles={profiles}
-              projectType={project.project_type}
-              onChange={next => patchPreprod({ post_crew: next })}
-              onCrewAdded={next => handleCrewChanged(undefined, next)}
-            />
-
-            {/* Planlagt for post-produksjon (f.eks. VFX/animasjon) */}
-            <PostProdFlowPlanner
-              projectId={id}
-              projectType={project.project_type}
-              tracks={flowTracks}
-              plannedSteps={plannedSteps}
-              onStepAdded={refetchFlowOptions}
-              onStepDeleted={deletedId => setPlannedSteps(prev => prev.filter(s => s.id !== deletedId))}
+              shootEnd={project.shoot_end ?? null}
+              postDeadlines={preprod.post_deadlines}
+              onDeadlineChange={handlePostDeadlineChange}
+              onAssignedChange={hasAny => {
+                setPostProdHasAssignee(prev => {
+                  if (prev === hasAny) return prev
+                  handleCrewChanged(undefined, hasAny)
+                  return hasAny
+                })
+              }}
             />
           </div>
 

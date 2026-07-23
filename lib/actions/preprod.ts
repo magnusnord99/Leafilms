@@ -26,6 +26,7 @@ export type PreprodData = {
   millanote_done: boolean
   prod_crew: PreprodCrewMember[]
   packing_list: PackingItem[]
+  post_deadlines: { video: string | null; photo: string | null }
 }
 
 const DEFAULT_PREPROD: PreprodData = {
@@ -33,6 +34,7 @@ const DEFAULT_PREPROD: PreprodData = {
   millanote_done: false,
   prod_crew: [],
   packing_list: [],
+  post_deadlines: { video: null, photo: null },
 }
 
 export type PreprodProject = ProjectWithPipeline & {

@@ -67,12 +67,13 @@ function Avatar({ id, name, size = 20 }: { id: string; name: string | null; size
 }
 
 export function PostProdBoard({
-  projectId, shootEnd, postDeadlines, onDeadlineChange,
+  projectId, shootEnd, postDeadlines, onDeadlineChange, onAssignedChange,
 }: {
   projectId: string
   shootEnd: string | null
   postDeadlines: { video: string | null; photo: string | null }
   onDeadlineChange: (subType: 'video' | 'photo', date: string | null) => void
+  onAssignedChange: (hasAny: boolean) => void
 }) {
   const [board, setBoard] = useState<PostProdBoardData>({ projectType: null, lanes: [], parallel: [] })
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
@@ -152,6 +153,8 @@ export function PostProdBoard({
     const data = await getPostProdBoard(projectId)
     setBoard(data)
     setLibraryRefreshKey(k => k + 1)
+    const hasAny = data.lanes.some(l => l.cards.some(c => c.assignees.length > 0)) || data.parallel.some(c => c.assignees.length > 0)
+    onAssignedChange(hasAny)
   }
 
   useEffect(() => {

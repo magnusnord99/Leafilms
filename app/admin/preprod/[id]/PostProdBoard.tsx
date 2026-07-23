@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -37,6 +37,15 @@ function SortableCard({ card, children }: { card: PostProdBoardCard; children: R
       {...attributes}
       {...listeners}
     >
+      {children}
+    </div>
+  )
+}
+
+function DroppableLane({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id })
+  return (
+    <div ref={setNodeRef} data-lane-id={id} style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 8 }}>
       {children}
     </div>
   )
@@ -93,6 +102,8 @@ export function PostProdBoard({
     // over.id er enten en kort-id (sluppet oppå et annet kort) eller en
     // lane-container-id (sluppet i tomt rom i en lane via data-lane-id).
     const overId = over.id as string
+    if (activeId === overId) return
+
     const overIsCard = board.parallel.some(c => c.id === overId) || board.lanes.some(l => l.cards.some(c => c.id === overId))
 
     const targetContainerId = overIsCard ? findContainerId(overId) : overId
@@ -103,8 +114,8 @@ export function PostProdBoard({
 
     const beforeTaskId = overIsCard && overId !== activeId ? overId : null
 
-    // Optimistisk lokal reordering for en umiddelbar respons, faktisk
-    // rekkefølge bekreftes av refetch() etter at moveBoardTask er ferdig.
+    // Ingen optimistisk lokal oppdatering — brettet oppdateres når
+    // moveBoardTask er ferdig og refetch() henter fasit fra serveren.
     await moveBoardTask(activeId, destination, beforeTaskId)
     refetch()
   }
@@ -250,9 +261,9 @@ export function PostProdBoard({
             Parallelt gjennom hele post-produksjonen
           </p>
           <SortableContext items={board.parallel.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            <div data-lane-id="parallel" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <DroppableLane id="parallel">
               {board.parallel.map(renderCard)}
-            </div>
+            </DroppableLane>
           </SortableContext>
         </div>
       )}
@@ -277,12 +288,9 @@ export function PostProdBoard({
             </div>
           </div>
           <SortableContext items={lane.cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            <div
-              data-lane-id={lane.laneId ?? lane.kind}
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 8 }}
-            >
+            <DroppableLane id={lane.laneId ?? lane.kind}>
               {lane.cards.map(renderCard)}
-            </div>
+            </DroppableLane>
           </SortableContext>
         </div>
       ))}

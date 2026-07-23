@@ -26,7 +26,6 @@ export type PreprodData = {
   millanote_url: string
   millanote_done: boolean
   prod_crew: PreprodCrewMember[]
-  post_crew: PreprodCrewMember[]
   packing_list: PackingItem[]
   // Leveringsfrist per spor, brukt til å foreslå frister bakover på post_prod-oppgavene
   post_deadlines: { video: string | null; photo: string | null }
@@ -36,7 +35,6 @@ const DEFAULT_PREPROD: PreprodData = {
   millanote_url: '',
   millanote_done: false,
   prod_crew: [],
-  post_crew: [],
   packing_list: [],
   post_deadlines: { video: null, photo: null },
 }
@@ -51,6 +49,7 @@ export type PostProdTaskLite = {
 export type PreprodProject = ProjectWithPipeline & {
   task_count: number
   done_count: number
+  postProdAssignedCount: number
   preprod: PreprodData
 }
 
@@ -81,6 +80,20 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
       if (t.status === 'done') taskMap[t.project_id].done++
     }
 
+    const { data: postProdRows } = await supabase
+      .from('tasks')
+      .select('project_id, task_assignees(profile_id)')
+      .in('project_id', ids)
+      .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+
+    const assignedCountMap: Record<string, number> = {}
+    for (const t of postProdRows ?? []) {
+      if ((t.task_assignees ?? []).length > 0) {
+        assignedCountMap[t.project_id] = (assignedCountMap[t.project_id] ?? 0) + 1
+      }
+    }
+
     return data.map((row: ProjectRow) => {
       const pd = (row.pipeline_data as PipelineData) ?? {}
       return {
@@ -89,6 +102,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
         customers: undefined,
         task_count: taskMap[row.id]?.total ?? 0,
         done_count: taskMap[row.id]?.done ?? 0,
+        postProdAssignedCount: assignedCountMap[row.id] ?? 0,
         preprod: { ...DEFAULT_PREPROD, ...(pd.preprod ?? {}) },
       }
     }) as PreprodProject[]

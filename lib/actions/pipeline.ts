@@ -6,7 +6,7 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
-import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
+import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks } from '@/lib/task-lock'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
@@ -484,7 +484,7 @@ export async function reseedPostProdTasks(
 
     const { data: existingTasks, error: existingError } = await supabase
       .from('tasks')
-      .select('id, title, description, sub_type, created_by')
+      .select('id, title, description, sub_type, custom_lane_id, is_parallel, created_by')
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
       .order('sort_order', { ascending: true })
@@ -502,7 +502,9 @@ export async function reseedPostProdTasks(
       .map((t: { id: string }) => t.id)
 
     const preserved: (SequenceRow & { subType: 'video' | 'photo' | null })[] = (existingTasks ?? [])
-      .filter((t: { created_by: string | null }) => t.created_by !== null)
+      .filter((t: { created_by: string | null; custom_lane_id: string | null; is_parallel: boolean }) =>
+        t.created_by !== null && !t.custom_lane_id && !t.is_parallel
+      )
       .map((t: { id: string; title: string; description: string | null; sub_type: 'video' | 'photo' | null }) => ({
         id: t.id, title: t.title, description: t.description, origin: 'existing' as const, subType: t.sub_type,
       }))
@@ -2073,39 +2075,99 @@ export async function getCustomersList(): Promise<{ id: string; name: string; co
   }
 }
 
-export type PostProdFlowTrack = {
-  subType: 'video' | 'photo' | null
-  titles: string[]
-}
-
-export type PlannedPostProdStep = {
+export type PostProdBoardCard = {
   id: string
   title: string
   description: string | null
-  subType: 'video' | 'photo' | null
+  color: string | null
+  icon: string | null
+  dueDate: string | null
+  assignees: { id: string; name: string | null; email: string }[]
 }
 
-type StepperRow = {
+export type PostProdBoardLane = {
+  kind: 'video' | 'photo' | 'custom'
+  laneId: string | null
+  name: string
+  color: string | null
+  deadline: string | null
+  cards: PostProdBoardCard[]
+}
+
+export type PostProdBoard = {
+  projectType: ProjectType | null
+  lanes: PostProdBoardLane[]
+  parallel: PostProdBoardCard[]
+}
+
+type BoardTaskRow = {
   id: string
   title: string
   description: string | null
   sub_type: 'video' | 'photo' | null
-  is_custom: boolean
-  created_by: string | null
+  custom_lane_id: string | null
+  is_parallel: boolean
+  color: string | null
+  icon: string | null
+  due_date: string | null
+  task_assignees: { profile: { id: string; name: string | null; email: string } | null }[]
+}
+
+async function shouldMaterializeDefaults(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string
+): Promise<boolean> {
+  const { count } = await supabase
+    .from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .eq('pipeline_stage', 'post_prod')
+    .eq('is_custom', false)
+
+  return (count ?? 0) === 0
+}
+
+async function materializeDefaultLane(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string,
+  dbSubType: 'video' | 'photo' | null,
+  templateProjectType: ProjectType
+): Promise<void> {
+  const { data: templates } = await supabase
+    .from('task_templates')
+    .select('title, description')
+    .eq('pipeline_stage', 'post_prod')
+    .eq('project_type', templateProjectType)
+    .order('sort_order', { ascending: true })
+
+  if (!templates?.length) return
+
+  await supabase.from('tasks').insert(
+    templates.map((t: { title: string; description: string | null }, i: number) => ({
+      project_id: projectId,
+      pipeline_stage: 'post_prod',
+      title: t.title,
+      description: t.description,
+      status: 'todo' as const,
+      sort_order: i + 1,
+      sub_type: dbSubType,
+      custom_lane_id: null,
+      is_parallel: false,
+      is_custom: false,
+      created_by: null,
+      due_date: null,
+      priority: null,
+    }))
+  )
 }
 
 /**
- * Henter alt pre-prod-siden trenger for å tilby "legg til post-prod-steg":
- * - hvilke titler som finnes i den (evt. fremtidige) stepperen, per spor
- *   (video/foto for mixed-prosjekter, ett spor ellers) — brukes til
- *   "Sett inn før"-velgeren
- * - hvilke planlagte steg som allerede er lagt til av et menneske
+ * Henter alt post-produksjon-brettet trenger: Video/Foto-lanes (materialisert
+ * fra task_templates hvis prosjektet ikke har noen post-prod-oppgaver i det
+ * hele tatt ennå), prosjektets egendefinerte lanes, og parallell-oppgaver —
+ * alt bygget fra ekte tasks-rader, ingen hardkodede rollelister.
  */
-export async function getPostProdFlowOptions(projectId: string): Promise<{
-  projectType: ProjectType | null
-  tracks: PostProdFlowTrack[]
-  plannedSteps: PlannedPostProdStep[]
-}> {
+export async function getPostProdBoard(projectId: string): Promise<PostProdBoard> {
   try {
     const supabase = await createClient()
 
@@ -2116,183 +2178,254 @@ export async function getPostProdFlowOptions(projectId: string): Promise<{
       .single()
 
     const projectType = (proj?.project_type ?? null) as ProjectType | null
-    if (!projectType) {
-      return { projectType: null, tracks: [], plannedSteps: [] }
+    if (!projectType) return { projectType: null, lanes: [], parallel: [] }
+
+    const subTypes: ('video' | 'photo')[] =
+      projectType === 'photo' ? ['photo'] : projectType === 'mixed' ? ['video', 'photo'] : ['video']
+
+    // Ikke-mixed prosjekter lagrer sub_type=null i DB — samme konvensjon som
+    // seedTasksFromTemplates/reseedPostProdTasks/getTasksForProject bruker
+    // overalt ellers i kodebasen. Kun mixed-prosjekter skiller video/foto via
+    // sub_type. 'video'/'photo' i subTypes over er kun en UI-nøkkel for
+    // hvilken lane som vises, ikke nødvendigvis den faktiske DB-verdien.
+    const dbSubTypeFor = (uiSubType: 'video' | 'photo'): 'video' | 'photo' | null =>
+      projectType === 'mixed' ? uiSubType : null
+
+    if (await shouldMaterializeDefaults(supabase, projectId)) {
+      await Promise.all(
+        subTypes.map(uiSubType =>
+          materializeDefaultLane(
+            supabase,
+            projectId,
+            dbSubTypeFor(uiSubType),
+            projectType === 'mixed' ? uiSubType : projectType
+          )
+        )
+      )
     }
 
-    const { data: existingTasks } = await supabase
-      .from('tasks')
-      .select('id, title, description, sub_type, is_custom, created_by')
-      .eq('project_id', projectId)
-      .eq('pipeline_stage', 'post_prod')
-      .order('sort_order', { ascending: true })
+    const [{ data: taskRows }, { data: laneRows }] = await Promise.all([
+      supabase
+        .from('tasks')
+        .select('id, title, description, sub_type, custom_lane_id, is_parallel, color, icon, due_date, task_assignees(profile:profiles(id, name, email))')
+        .eq('project_id', projectId)
+        .eq('pipeline_stage', 'post_prod')
+        .eq('is_custom', false)
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('post_prod_lanes')
+        .select('id, name, color, deadline, sort_order')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: true }),
+    ])
 
-    const stepperRows: StepperRow[] = (existingTasks ?? []).filter((t: StepperRow) => !t.is_custom)
+    const rows = (taskRows ?? []) as unknown as BoardTaskRow[]
 
-    const plannedSteps: PlannedPostProdStep[] = stepperRows
-      .filter(t => t.created_by !== null)
-      .map(t => ({ id: t.id, title: t.title, description: t.description, subType: t.sub_type }))
+    const toCard = (t: BoardTaskRow): PostProdBoardCard => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      color: t.color,
+      icon: t.icon,
+      dueDate: t.due_date,
+      assignees: (t.task_assignees ?? [])
+        .map(ta => ta.profile)
+        .filter((p): p is NonNullable<typeof p> => p !== null),
+    })
 
-    const subTypes: ('video' | 'photo' | null)[] = projectType === 'mixed' ? ['video', 'photo'] : [null]
+    const parallel = rows.filter(t => t.is_parallel).map(toCard)
 
-    const tracks: PostProdFlowTrack[] = await Promise.all(
-      subTypes.map(async (subType): Promise<PostProdFlowTrack> => {
-        const existingForTrack = stepperRows
-          .filter(t => t.sub_type === subType)
-          .map(t => t.title)
+    const builtinLanes: PostProdBoardLane[] = subTypes.map(uiSubType => ({
+      kind: uiSubType,
+      laneId: null,
+      name: uiSubType === 'video' ? 'Video' : 'Foto',
+      color: uiSubType === 'video' ? '#C49434' : '#4A9EFF',
+      deadline: null,
+      cards: rows
+        .filter(t => t.sub_type === dbSubTypeFor(uiSubType) && !t.is_parallel && !t.custom_lane_id)
+        .map(toCard),
+    }))
 
-        if (existingForTrack.length > 0) {
-          return { subType, titles: existingForTrack }
-        }
-
-        // Stepperen er ikke seedet ennå for denne tracken: bruk standardmalene
-        const templateProjectType = projectType === 'mixed' ? subType! : projectType
-        const { data: templates } = await supabase
-          .from('task_templates')
-          .select('title')
-          .eq('pipeline_stage', 'post_prod')
-          .eq('project_type', templateProjectType)
-          .order('sort_order', { ascending: true })
-
-        return { subType, titles: (templates ?? []).map((t: { title: string }) => t.title) }
+    const customLanes: PostProdBoardLane[] = (laneRows ?? []).map(
+      (lane: { id: string; name: string; color: string | null; deadline: string | null }) => ({
+        kind: 'custom' as const,
+        laneId: lane.id,
+        name: lane.name,
+        color: lane.color,
+        deadline: lane.deadline,
+        cards: rows.filter(t => t.custom_lane_id === lane.id && !t.is_parallel).map(toCard),
       })
     )
 
-    return { projectType, tracks, plannedSteps }
+    return { projectType, lanes: [...builtinLanes, ...customLanes], parallel }
   } catch (err) {
-    console.error('getPostProdFlowOptions error:', err)
-    return { projectType: null, tracks: [], plannedSteps: [] }
+    console.error('getPostProdBoard error:', err)
+    return { projectType: null, lanes: [], parallel: [] }
   }
 }
 
+export type PostProdDestination =
+  | { kind: 'video' }
+  | { kind: 'photo' }
+  | { kind: 'custom'; laneId: string }
+  | { kind: 'parallel' }
+
 /**
- * Legger til et nytt, menneske-planlagt steg i post_prod-stepperen for et
- * prosjekt — kan kalles fra pre-prod, før stepperen i det hele tatt er
- * seedet. Hvis den ikke er seedet ennå, materialiseres standardmalene i
- * samme kall, slik at det nye steget kan settes inn på riktig plass i en
- * ekte, sammenhengende sort_order-sekvens.
+ * Legger til en ny post-prod-oppgave: i Video/Foto-sekvensen (samme
+ * innsettingslogikk som addPlannedPostProdStep hadde), i en egendefinert
+ * lanes egen sekvens, eller i parallell-raden (ingen sekvens der).
  */
-export async function addPlannedPostProdStep(input: {
+export async function addPostProdBoardTask(input: {
   projectId: string
   title: string
   description?: string
-  insertBeforeTitle: string | null
-  subType: 'video' | 'photo' | null
-}): Promise<{ ok: boolean; error?: string }> {
+  assigneeId?: string
+  color?: string
+  icon?: string
+  destination: PostProdDestination
+  insertBeforeTaskId?: string | null
+  isReusable?: boolean
+}): Promise<{ ok: boolean; error?: string; taskId?: string }> {
   try {
     const supabase = await createClient()
-
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return { ok: false, error: 'Ikke innlogget' }
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    let dbSubType: 'video' | 'photo' | null = null
+    if (input.destination.kind === 'video' || input.destination.kind === 'photo') {
+      const { data: destProj } = await supabase
+        .from('projects')
+        .select('project_type')
+        .eq('id', input.projectId)
+        .single()
+      dbSubType = destProj?.project_type === 'mixed' ? input.destination.kind : null
     }
 
-    const { data: proj, error: projError } = await supabase
-      .from('projects')
-      .select('project_type')
-      .eq('id', input.projectId)
-      .single()
+    let newTaskId: string
 
-    if (projError || !proj) {
-      console.error('addPlannedPostProdStep project error:', projError)
-      return { ok: false, error: 'Fant ikke prosjektet' }
-    }
-
-    const projectType = proj.project_type as ProjectType | null
-    if (!projectType) {
-      return { ok: false, error: 'Prosjektet mangler innholdstype' }
-    }
-
-    if (projectType === 'mixed' && !input.subType) {
-      return { ok: false, error: 'Velg video eller foto for mixed-prosjekter' }
-    }
-
-    let existingQuery = supabase
-      .from('tasks')
-      .select('id, title, description')
-      .eq('project_id', input.projectId)
-      .eq('pipeline_stage', 'post_prod')
-      .eq('is_custom', false)
-      .order('sort_order', { ascending: true })
-
-    existingQuery = input.subType
-      ? existingQuery.eq('sub_type', input.subType)
-      : existingQuery.is('sub_type', null)
-
-    const { data: existingRows, error: existingError } = await existingQuery
-
-    if (existingError) {
-      console.error('addPlannedPostProdStep existing error:', existingError)
-      return { ok: false, error: 'Kunne ikke hente eksisterende steg' }
-    }
-
-    let currentSequence: SequenceRow[] = (existingRows ?? []).map(
-      (r: { id: string; title: string; description: string | null }) => ({
-        id: r.id, title: r.title, description: r.description, origin: 'existing' as const,
-      })
-    )
-
-    if (currentSequence.length === 0) {
-      const templateProjectType = projectType === 'mixed' ? input.subType : projectType
-      const { data: templates, error: templatesError } = await supabase
-        .from('task_templates')
-        .select('title, description')
-        .eq('pipeline_stage', 'post_prod')
-        .eq('project_type', templateProjectType)
-        .order('sort_order', { ascending: true })
-
-      if (templatesError) {
-        console.error('addPlannedPostProdStep templates error:', templatesError)
-        return { ok: false, error: 'Kunne ikke hente maler' }
-      }
-
-      currentSequence = (templates ?? []).map((t: { title: string; description: string | null }) => ({
-        id: null, title: t.title, description: t.description ?? null, origin: 'template' as const,
-      }))
-    }
-
-    const newStep: SequenceRow = {
-      id: null,
-      title: input.title,
-      description: input.description ?? null,
-      origin: 'new',
-    }
-
-    const merged = assignSortOrder(
-      computeInsertionOrder(currentSequence, newStep, input.insertBeforeTitle)
-    )
-
-    for (const row of merged) {
-      if (row.origin === 'existing') {
-        const { error } = await supabase
-          .from('tasks')
-          .update({ sort_order: row.sortOrder })
-          .eq('id', row.id as string)
-
-        if (error) {
-          console.error('addPlannedPostProdStep update error:', error)
-          return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }
-        }
-      } else {
-        const { error } = await supabase.from('tasks').insert({
+    if (input.destination.kind === 'parallel') {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
           project_id: input.projectId,
           pipeline_stage: 'post_prod',
-          title: row.title,
-          description: row.description,
+          title: input.title,
+          description: input.description ?? null,
           status: 'todo' as const,
-          sort_order: row.sortOrder,
-          sub_type: input.subType,
+          sort_order: 0,
+          sub_type: null,
+          custom_lane_id: null,
+          is_parallel: true,
+          color: input.color ?? null,
+          icon: input.icon ?? null,
           is_custom: false,
-          created_by: row.origin === 'new' ? user.id : null,
+          created_by: user.id,
           due_date: null,
           priority: null,
         })
+        .select('id')
+        .single()
 
-        if (error) {
-          console.error('addPlannedPostProdStep insert error:', error)
-          return { ok: false, error: 'Kunne ikke opprette steget' }
+      if (error || !data) return { ok: false, error: 'Kunne ikke opprette oppgaven' }
+      newTaskId = data.id
+    } else {
+      const subType = input.destination.kind === 'custom' ? null : dbSubType
+      const customLaneId = input.destination.kind === 'custom' ? input.destination.laneId : null
+
+      let existingQuery = supabase
+        .from('tasks')
+        .select('id, title, description')
+        .eq('project_id', input.projectId)
+        .eq('pipeline_stage', 'post_prod')
+        .eq('is_custom', false)
+        .eq('is_parallel', false)
+        .order('sort_order', { ascending: true })
+
+      existingQuery = input.destination.kind === 'custom'
+        ? existingQuery.eq('custom_lane_id', customLaneId as string)
+        : subType === null
+          ? existingQuery.is('sub_type', null).is('custom_lane_id', null)
+          : existingQuery.eq('sub_type', subType).is('custom_lane_id', null)
+
+      const { data: existingRows, error: existingError } = await existingQuery
+      if (existingError) return { ok: false, error: 'Kunne ikke hente eksisterende steg' }
+
+      const currentSequence: SequenceRow[] = (existingRows ?? []).map(
+        (r: { id: string; title: string; description: string | null }) => ({
+          id: r.id, title: r.title, description: r.description, origin: 'existing' as const,
+        })
+      )
+
+      const insertBeforeTitle = input.insertBeforeTaskId
+        ? currentSequence.find(r => r.id === input.insertBeforeTaskId)?.title ?? null
+        : null
+
+      const newStep: SequenceRow = { id: null, title: input.title, description: input.description ?? null, origin: 'new' }
+      const merged = assignSortOrder(computeInsertionOrder(currentSequence, newStep, insertBeforeTitle))
+
+      newTaskId = ''
+      for (const row of merged) {
+        if (row.origin === 'existing') {
+          const { error } = await supabase.from('tasks').update({ sort_order: row.sortOrder }).eq('id', row.id as string)
+          if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }
+        } else {
+          const { data, error } = await supabase
+            .from('tasks')
+            .insert({
+              project_id: input.projectId,
+              pipeline_stage: 'post_prod',
+              title: row.title,
+              description: row.description,
+              status: 'todo' as const,
+              sort_order: row.sortOrder,
+              sub_type: subType,
+              custom_lane_id: customLaneId,
+              is_parallel: false,
+              color: input.color ?? null,
+              icon: input.icon ?? null,
+              is_custom: false,
+              created_by: user.id,
+              due_date: null,
+              priority: null,
+            })
+            .select('id')
+            .single()
+
+          if (error || !data) return { ok: false, error: 'Kunne ikke opprette steget' }
+          newTaskId = data.id
         }
       }
+    }
+
+    if (input.assigneeId) {
+      const { error: assigneeError } = await supabase
+        .from('task_assignees')
+        .insert({ task_id: newTaskId, profile_id: input.assigneeId })
+      if (assigneeError) console.error('addPostProdBoardTask assignee insert error:', assigneeError)
+    }
+
+    if (input.isReusable) {
+      let customLaneName: string | null = null
+      if (input.destination.kind === 'custom') {
+        const { data: lane, error: laneError } = await supabase
+          .from('post_prod_lanes')
+          .select('name')
+          .eq('id', input.destination.laneId)
+          .single()
+        if (laneError) console.error('addPostProdBoardTask lane lookup error:', laneError)
+        customLaneName = lane?.name ?? null
+      }
+
+      const { error: libraryError } = await supabase.from('post_prod_task_library').insert({
+        created_by: user.id,
+        title: input.title,
+        description: input.description ?? null,
+        color: input.color ?? null,
+        icon: input.icon ?? null,
+        lane_type: input.destination.kind,
+        custom_lane_name: customLaneName,
+      })
+      if (libraryError) console.error('addPostProdBoardTask library insert error:', libraryError)
     }
 
     revalidatePath('/admin/preprod')
@@ -2300,9 +2433,236 @@ export async function addPlannedPostProdStep(input: {
     revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
 
+    return { ok: true, taskId: newTaskId }
+  } catch (err) {
+    console.error('addPostProdBoardTask unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+/**
+ * Flytter en eksisterende post-prod-oppgave: omplassering innad i samme
+ * lane, eller til en annen lane/parallell-raden. I motsetning til
+ * addPostProdBoardTask jobber denne på allerede lagrede rader, derfor
+ * reorderExistingIds (id-basert) i stedet for computeInsertionOrder
+ * (tittel-basert, for ulagrede rader).
+ */
+export async function moveBoardTask(
+  taskId: string,
+  destination: PostProdDestination,
+  beforeTaskId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('id, project_id')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+
+    let dbSubType: 'video' | 'photo' | null = null
+    if (destination.kind === 'video' || destination.kind === 'photo') {
+      const { data: destProj } = await supabase
+        .from('projects')
+        .select('project_type')
+        .eq('id', task.project_id)
+        .single()
+      dbSubType = destProj?.project_type === 'mixed' ? destination.kind : null
+    }
+
+    if (destination.kind === 'parallel') {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ is_parallel: true, sub_type: null, custom_lane_id: null, sort_order: 0 })
+        .eq('id', taskId)
+
+      if (error) return { ok: false, error: 'Kunne ikke flytte oppgaven' }
+      revalidatePath('/admin/preprod')
+      revalidatePath('/admin/postprod')
+      return { ok: true }
+    }
+
+    let destQuery = supabase
+      .from('tasks')
+      .select('id')
+      .eq('project_id', task.project_id)
+      .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+      .eq('is_parallel', false)
+      .order('sort_order', { ascending: true })
+
+    destQuery = destination.kind === 'custom'
+      ? destQuery.eq('custom_lane_id', destination.laneId)
+      : dbSubType === null
+        ? destQuery.is('sub_type', null).is('custom_lane_id', null)
+        : destQuery.eq('sub_type', dbSubType).is('custom_lane_id', null)
+
+    const { data: destRows, error: destError } = await destQuery
+    if (destError) return { ok: false, error: 'Kunne ikke hente mållanen' }
+
+    const destIds = (destRows ?? []).map((r: { id: string }) => r.id)
+    const idsIncludingSubject = destIds.includes(taskId) ? destIds : [...destIds, taskId]
+    const finalIds = reorderExistingIds(idsIncludingSubject, taskId, beforeTaskId)
+
+    // Kilde-lanen (hvis annerledes) trenger ingen renummerering — gap i
+    // sort_order er harmløst siden ordering alltid leses med ORDER BY.
+    for (let i = 0; i < finalIds.length; i++) {
+      const patch: Record<string, unknown> = { sort_order: i + 1 }
+      if (finalIds[i] === taskId) {
+        patch.is_parallel = false
+        patch.custom_lane_id = destination.kind === 'custom' ? destination.laneId : null
+        patch.sub_type = destination.kind === 'custom' ? null : dbSubType
+      }
+      const { error } = await supabase.from('tasks').update(patch).eq('id', finalIds[i])
+      if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }
+    }
+
+    revalidatePath('/admin/preprod')
+    revalidatePath('/admin/postprod')
     return { ok: true }
   } catch (err) {
-    console.error('addPlannedPostProdStep unexpected error:', err)
+    console.error('moveBoardTask unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function createCustomLane(
+  projectId: string,
+  name: string,
+  color?: string
+): Promise<{ ok: boolean; error?: string; laneId?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const trimmed = name.trim()
+    if (!trimmed) return { ok: false, error: 'Lane trenger et navn' }
+
+    const { count } = await supabase
+      .from('post_prod_lanes')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+
+    const { data, error } = await supabase
+      .from('post_prod_lanes')
+      .insert({
+        project_id: projectId,
+        name: trimmed,
+        color: color ?? null,
+        sort_order: count ?? 0,
+        created_by: user.id,
+      })
+      .select('id')
+      .single()
+
+    if (error || !data) return { ok: false, error: 'Kunne ikke opprette lane' }
+
+    revalidatePath('/admin/preprod')
+    return { ok: true, laneId: data.id }
+  } catch (err) {
+    console.error('createCustomLane unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function updateLaneDeadline(laneId: string, deadline: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase.from('post_prod_lanes').update({ deadline }).eq('id', laneId)
+    revalidatePath('/admin/preprod')
+  } catch (err) {
+    console.error('updateLaneDeadline unexpected error:', err)
+  }
+}
+
+export type PostProdLibraryItem = {
+  id: string
+  title: string
+  description: string | null
+  color: string | null
+  icon: string | null
+  laneType: 'video' | 'photo' | 'custom' | 'parallel'
+  customLaneName: string | null
+}
+
+export async function getTaskLibrary(): Promise<PostProdLibraryItem[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('post_prod_task_library')
+      .select('id, title, description, color, icon, lane_type, custom_lane_name')
+      .order('created_at', { ascending: false })
+
+    if (error) console.error('getTaskLibrary error:', error)
+
+    return (data ?? []).map(
+      (r: { id: string; title: string; description: string | null; color: string | null; icon: string | null; lane_type: 'video' | 'photo' | 'custom' | 'parallel'; custom_lane_name: string | null }) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        color: r.color,
+        icon: r.icon,
+        laneType: r.lane_type,
+        customLaneName: r.custom_lane_name,
+      })
+    )
+  } catch (err) {
+    console.error('getTaskLibrary error:', err)
+    return []
+  }
+}
+
+/** Lagrer en allerede eksisterende oppgave i biblioteket (kopi av felter, ingen videre kobling). */
+export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('title, description, color, icon, sub_type, custom_lane_id, is_parallel')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError) console.error('addTaskToLibrary task lookup error:', taskError)
+    if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+
+    let laneType: 'video' | 'photo' | 'custom' | 'parallel'
+    let customLaneName: string | null = null
+
+    if (task.is_parallel) {
+      laneType = 'parallel'
+    } else if (task.custom_lane_id) {
+      laneType = 'custom'
+      const { data: lane, error: laneError } = await supabase.from('post_prod_lanes').select('name').eq('id', task.custom_lane_id).single()
+      if (laneError) console.error('addTaskToLibrary lane lookup error:', laneError)
+      customLaneName = lane?.name ?? null
+    } else {
+      laneType = task.sub_type === 'photo' ? 'photo' : 'video'
+    }
+
+    const { error } = await supabase.from('post_prod_task_library').insert({
+      created_by: user.id,
+      title: task.title,
+      description: task.description,
+      color: task.color,
+      icon: task.icon,
+      lane_type: laneType,
+      custom_lane_name: customLaneName,
+    })
+
+    if (error) {
+      console.error('addTaskToLibrary insert error:', error)
+      return { ok: false, error: 'Kunne ikke lagre i biblioteket' }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('addTaskToLibrary unexpected error:', err)
     return { ok: false, error: 'Uventet feil' }
   }
 }

@@ -571,6 +571,10 @@ export type Task = {
   notes: string | null
   task_data: Record<string, string> | null
   sub_type: 'video' | 'photo' | null
+  custom_lane_id: string | null
+  is_parallel: boolean
+  color: string | null
+  icon: string | null
   due_date: string | null
   status: 'todo' | 'in_progress' | 'done'
   priority: 'low' | 'medium' | 'high' | null

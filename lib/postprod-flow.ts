@@ -59,3 +59,25 @@ export function assignSortOrder(
 ): (SequenceRow & { sortOrder: number })[] {
   return sequence.map((row, i) => ({ ...row, sortOrder: i + 1 }))
 }
+
+/**
+ * Flytter subjectId til rett før raden med id beforeId i en liste av
+ * eksisterende, allerede lagrede id-er (i motsetning til
+ * computeInsertionOrder, som setter inn en ny, ulagret rad). Hvis beforeId
+ * er null, eller ikke finnes i listen, havner subjectId sist.
+ */
+export function reorderExistingIds(
+  ids: string[],
+  subjectId: string,
+  beforeId: string | null
+): string[] {
+  const rest = ids.filter(id => id !== subjectId)
+  const insertAt = beforeId === null
+    ? rest.length
+    : (() => {
+        const idx = rest.indexOf(beforeId)
+        return idx === -1 ? rest.length : idx
+      })()
+
+  return [...rest.slice(0, insertAt), subjectId, ...rest.slice(insertAt)]
+}

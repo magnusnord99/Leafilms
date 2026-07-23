@@ -3,9 +3,14 @@
 
 import { useEffect, useState } from 'react'
 import {
+  DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   getPostProdBoard, addTaskToLibrary, deleteTask, toggleTaskAssignee, getAllProfiles,
-  createCustomLane, updateLaneDeadline,
-  type PostProdBoard as PostProdBoardData, type PostProdBoardCard, type PostProdBoardLane,
+  createCustomLane, updateLaneDeadline, moveBoardTask,
+  type PostProdBoard as PostProdBoardData, type PostProdBoardCard, type PostProdBoardLane, type PostProdDestination,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -21,6 +26,20 @@ const C = {
   accent:   '#7C5CFC',
   accentBg: 'rgba(124,92,252,0.08)',
   danger:   '#E05555',
+}
+
+function SortableCard({ card, children }: { card: PostProdBoardCard; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  )
 }
 
 function Avatar({ id, name, size = 20 }: { id: string; name: string | null; size?: number }) {
@@ -49,6 +68,46 @@ export function PostProdBoard({
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [openAssigneeFor, setOpenAssigneeFor] = useState<string | null>(null)
   const [newLaneName, setNewLaneName] = useState('')
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  function laneIdToDestination(laneKey: string): PostProdDestination | null {
+    if (laneKey === 'parallel') return { kind: 'parallel' }
+    if (laneKey === 'video' || laneKey === 'photo') return { kind: laneKey }
+    return { kind: 'custom', laneId: laneKey }
+  }
+
+  function findContainerId(cardId: string): string | null {
+    if (board.parallel.some(c => c.id === cardId)) return 'parallel'
+    for (const lane of board.lanes) {
+      if (lane.cards.some(c => c.id === cardId)) return lane.laneId ?? lane.kind
+    }
+    return null
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over) return
+
+    const activeId = active.id as string
+    // over.id er enten en kort-id (sluppet oppå et annet kort) eller en
+    // lane-container-id (sluppet i tomt rom i en lane via data-lane-id).
+    const overId = over.id as string
+    const overIsCard = board.parallel.some(c => c.id === overId) || board.lanes.some(l => l.cards.some(c => c.id === overId))
+
+    const targetContainerId = overIsCard ? findContainerId(overId) : overId
+    if (!targetContainerId) return
+
+    const destination = laneIdToDestination(targetContainerId)
+    if (!destination) return
+
+    const beforeTaskId = overIsCard && overId !== activeId ? overId : null
+
+    // Optimistisk lokal reordering for en umiddelbar respons, faktisk
+    // rekkefølge bekreftes av refetch() etter at moveBoardTask er ferdig.
+    await moveBoardTask(activeId, destination, beforeTaskId)
+    refetch()
+  }
 
   async function refetch() {
     const data = await getPostProdBoard(projectId)
@@ -124,7 +183,8 @@ export function PostProdBoard({
   function renderCard(card: PostProdBoardCard) {
     const isOpen = openAssigneeFor === card.id
     return (
-      <div key={card.id} style={{
+      <SortableCard key={card.id} card={card}>
+      <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 7,
         background: C.surface2, border: `1px solid ${card.color ?? C.border}`, position: 'relative',
       }}>
@@ -173,10 +233,12 @@ export function PostProdBoard({
           </div>
         )}
       </div>
+      </SortableCard>
     )
   }
 
   return (
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
         Post-produksjon
@@ -187,9 +249,11 @@ export function PostProdBoard({
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent, marginBottom: 6 }}>
             Parallelt gjennom hele post-produksjonen
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {board.parallel.map(renderCard)}
-          </div>
+          <SortableContext items={board.parallel.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            <div data-lane-id="parallel" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {board.parallel.map(renderCard)}
+            </div>
+          </SortableContext>
         </div>
       )}
 
@@ -212,9 +276,14 @@ export function PostProdBoard({
               />
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {lane.cards.map(renderCard)}
-          </div>
+          <SortableContext items={lane.cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            <div
+              data-lane-id={lane.laneId ?? lane.kind}
+              style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 8 }}
+            >
+              {lane.cards.map(renderCard)}
+            </div>
+          </SortableContext>
         </div>
       ))}
 
@@ -236,5 +305,6 @@ export function PostProdBoard({
 
       <PostProdTaskForm projectId={projectId} lanes={board.lanes} profiles={profiles} onAdded={refetch} />
     </div>
+    </DndContext>
   )
 }

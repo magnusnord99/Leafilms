@@ -2106,23 +2106,26 @@ type BoardTaskRow = {
   task_assignees: { profile: { id: string; name: string | null; email: string } | null }[]
 }
 
-async function materializeDefaultLane(
+async function shouldMaterializeDefaults(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  projectId: string,
-  subType: 'video' | 'photo',
-  templateProjectType: ProjectType
-): Promise<void> {
+  projectId: string
+): Promise<boolean> {
   const { count } = await supabase
     .from('tasks')
     .select('id', { count: 'exact', head: true })
     .eq('project_id', projectId)
     .eq('pipeline_stage', 'post_prod')
-    .eq('sub_type', subType)
-    .eq('is_parallel', false)
-    .is('custom_lane_id', null)
+    .eq('is_custom', false)
 
-  if ((count ?? 0) > 0) return
+  return (count ?? 0) === 0
+}
 
+async function materializeDefaultLane(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string,
+  dbSubType: 'video' | 'photo' | null,
+  templateProjectType: ProjectType
+): Promise<void> {
   const { data: templates } = await supabase
     .from('task_templates')
     .select('title, description')
@@ -2140,7 +2143,7 @@ async function materializeDefaultLane(
       description: t.description,
       status: 'todo' as const,
       sort_order: i + 1,
-      sub_type: subType,
+      sub_type: dbSubType,
       custom_lane_id: null,
       is_parallel: false,
       is_custom: false,
@@ -2153,9 +2156,9 @@ async function materializeDefaultLane(
 
 /**
  * Henter alt post-produksjon-brettet trenger: Video/Foto-lanes (materialisert
- * fra task_templates hvis de ikke er seedet ennå), prosjektets egendefinerte
- * lanes, og parallell-oppgaver — alt bygget fra ekte tasks-rader, ingen
- * hardkodede rollelister.
+ * fra task_templates hvis prosjektet ikke har noen post-prod-oppgaver i det
+ * hele tatt ennå), prosjektets egendefinerte lanes, og parallell-oppgaver —
+ * alt bygget fra ekte tasks-rader, ingen hardkodede rollelister.
  */
 export async function getPostProdBoard(projectId: string): Promise<PostProdBoard> {
   try {
@@ -2173,11 +2176,26 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
     const subTypes: ('video' | 'photo')[] =
       projectType === 'photo' ? ['photo'] : projectType === 'mixed' ? ['video', 'photo'] : ['video']
 
-    await Promise.all(
-      subTypes.map(subType =>
-        materializeDefaultLane(supabase, projectId, subType, projectType === 'mixed' ? subType : projectType)
+    // Ikke-mixed prosjekter lagrer sub_type=null i DB — samme konvensjon som
+    // seedTasksFromTemplates/reseedPostProdTasks/getTasksForProject bruker
+    // overalt ellers i kodebasen. Kun mixed-prosjekter skiller video/foto via
+    // sub_type. 'video'/'photo' i subTypes over er kun en UI-nøkkel for
+    // hvilken lane som vises, ikke nødvendigvis den faktiske DB-verdien.
+    const dbSubTypeFor = (uiSubType: 'video' | 'photo'): 'video' | 'photo' | null =>
+      projectType === 'mixed' ? uiSubType : null
+
+    if (await shouldMaterializeDefaults(supabase, projectId)) {
+      await Promise.all(
+        subTypes.map(uiSubType =>
+          materializeDefaultLane(
+            supabase,
+            projectId,
+            dbSubTypeFor(uiSubType),
+            projectType === 'mixed' ? uiSubType : projectType
+          )
+        )
       )
-    )
+    }
 
     const [{ data: taskRows }, { data: laneRows }] = await Promise.all([
       supabase
@@ -2210,14 +2228,14 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
 
     const parallel = rows.filter(t => t.is_parallel).map(toCard)
 
-    const builtinLanes: PostProdBoardLane[] = subTypes.map(subType => ({
-      kind: subType,
+    const builtinLanes: PostProdBoardLane[] = subTypes.map(uiSubType => ({
+      kind: uiSubType,
       laneId: null,
-      name: subType === 'video' ? 'Video' : 'Foto',
-      color: subType === 'video' ? '#C49434' : '#4A9EFF',
+      name: uiSubType === 'video' ? 'Video' : 'Foto',
+      color: uiSubType === 'video' ? '#C49434' : '#4A9EFF',
       deadline: null,
       cards: rows
-        .filter(t => t.sub_type === subType && !t.is_parallel && !t.custom_lane_id)
+        .filter(t => t.sub_type === dbSubTypeFor(uiSubType) && !t.is_parallel && !t.custom_lane_id)
         .map(toCard),
     }))
 
@@ -2266,6 +2284,16 @@ export async function addPostProdBoardTask(input: {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { ok: false, error: 'Ikke innlogget' }
 
+    let dbSubType: 'video' | 'photo' | null = null
+    if (input.destination.kind === 'video' || input.destination.kind === 'photo') {
+      const { data: destProj } = await supabase
+        .from('projects')
+        .select('project_type')
+        .eq('id', input.projectId)
+        .single()
+      dbSubType = destProj?.project_type === 'mixed' ? input.destination.kind : null
+    }
+
     let newTaskId: string
 
     if (input.destination.kind === 'parallel') {
@@ -2294,7 +2322,7 @@ export async function addPostProdBoardTask(input: {
       if (error || !data) return { ok: false, error: 'Kunne ikke opprette oppgaven' }
       newTaskId = data.id
     } else {
-      const subType = input.destination.kind === 'custom' ? null : input.destination.kind
+      const subType = input.destination.kind === 'custom' ? null : dbSubType
       const customLaneId = input.destination.kind === 'custom' ? input.destination.laneId : null
 
       let existingQuery = supabase
@@ -2308,7 +2336,9 @@ export async function addPostProdBoardTask(input: {
 
       existingQuery = input.destination.kind === 'custom'
         ? existingQuery.eq('custom_lane_id', customLaneId as string)
-        : existingQuery.eq('sub_type', subType as string).is('custom_lane_id', null)
+        : subType === null
+          ? existingQuery.is('sub_type', null).is('custom_lane_id', null)
+          : existingQuery.eq('sub_type', subType).is('custom_lane_id', null)
 
       const { data: existingRows, error: existingError } = await existingQuery
       if (existingError) return { ok: false, error: 'Kunne ikke hente eksisterende steg' }
@@ -2426,6 +2456,16 @@ export async function moveBoardTask(
 
     if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
 
+    let dbSubType: 'video' | 'photo' | null = null
+    if (destination.kind === 'video' || destination.kind === 'photo') {
+      const { data: destProj } = await supabase
+        .from('projects')
+        .select('project_type')
+        .eq('id', task.project_id)
+        .single()
+      dbSubType = destProj?.project_type === 'mixed' ? destination.kind : null
+    }
+
     if (destination.kind === 'parallel') {
       const { error } = await supabase
         .from('tasks')
@@ -2449,7 +2489,9 @@ export async function moveBoardTask(
 
     destQuery = destination.kind === 'custom'
       ? destQuery.eq('custom_lane_id', destination.laneId)
-      : destQuery.eq('sub_type', destination.kind).is('custom_lane_id', null)
+      : dbSubType === null
+        ? destQuery.is('sub_type', null).is('custom_lane_id', null)
+        : destQuery.eq('sub_type', dbSubType).is('custom_lane_id', null)
 
     const { data: destRows, error: destError } = await destQuery
     if (destError) return { ok: false, error: 'Kunne ikke hente mållanen' }
@@ -2465,7 +2507,7 @@ export async function moveBoardTask(
       if (finalIds[i] === taskId) {
         patch.is_parallel = false
         patch.custom_lane_id = destination.kind === 'custom' ? destination.laneId : null
-        patch.sub_type = destination.kind === 'custom' ? null : destination.kind
+        patch.sub_type = destination.kind === 'custom' ? null : dbSubType
       }
       const { error } = await supabase.from('tasks').update(patch).eq('id', finalIds[i])
       if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }

@@ -288,18 +288,16 @@ export function PostProdBoard({
         Post-produksjon
       </p>
 
-      {board.parallel.length > 0 && (
-        <div>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent, marginBottom: 6 }}>
-            Parallelt gjennom hele post-produksjonen
-          </p>
-          <SortableContext items={board.parallel.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            <DroppableLane id="parallel">
-              {board.parallel.map(renderCard)}
-            </DroppableLane>
-          </SortableContext>
-        </div>
-      )}
+      <div>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent, marginBottom: 6 }}>
+          Parallelt gjennom hele post-produksjonen
+        </p>
+        <SortableContext items={board.parallel.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          <DroppableLane id="parallel">
+            {board.parallel.map(renderCard)}
+          </DroppableLane>
+        </SortableContext>
+      </div>
 
       {board.lanes.map(lane => (
         <div key={lane.laneId ?? lane.kind}>

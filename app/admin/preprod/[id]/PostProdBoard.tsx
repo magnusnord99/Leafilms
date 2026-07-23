@@ -9,12 +9,13 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import {
   getPostProdBoard, addTaskToLibrary, deleteTask, toggleTaskAssignee, getAllProfiles,
-  createCustomLane, updateLaneDeadline, moveBoardTask,
+  createCustomLane, updateLaneDeadline, moveBoardTask, getTaskLibrary, addPostProdBoardTask,
   type PostProdBoard as PostProdBoardData, type PostProdBoardCard, type PostProdBoardLane, type PostProdDestination,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { PostProdTaskForm } from './PostProdTaskForm'
+import { PostProdLibraryPanel } from './PostProdLibraryPanel'
 
 const C = {
   surface:  '#21212D',
@@ -77,6 +78,7 @@ export function PostProdBoard({
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [openAssigneeFor, setOpenAssigneeFor] = useState<string | null>(null)
   const [newLaneName, setNewLaneName] = useState('')
+  const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -99,6 +101,32 @@ export function PostProdBoard({
     if (!over) return
 
     const activeId = active.id as string
+
+    if (activeId.startsWith('lib:')) {
+      const libraryItemId = activeId.slice('lib:'.length)
+      const item = (await getTaskLibrary()).find(i => i.id === libraryItemId)
+      if (!item) return
+
+      const overId = over.id as string
+      const overIsCard = board.parallel.some(c => c.id === overId) || board.lanes.some(l => l.cards.some(c => c.id === overId))
+      const targetContainerId = overIsCard ? findContainerId(overId) : overId
+      if (!targetContainerId) return
+      const destination = laneIdToDestination(targetContainerId)
+      if (!destination) return
+
+      await addPostProdBoardTask({
+        projectId,
+        title: item.title,
+        description: item.description ?? undefined,
+        color: item.color ?? undefined,
+        icon: item.icon ?? undefined,
+        destination,
+        insertBeforeTaskId: overIsCard && overId !== activeId ? overId : null,
+      })
+      refetch()
+      return
+    }
+
     // over.id er enten en kort-id (sluppet oppå et annet kort) eller en
     // lane-container-id (sluppet i tomt rom i en lane via data-lane-id).
     const overId = over.id as string
@@ -123,6 +151,7 @@ export function PostProdBoard({
   async function refetch() {
     const data = await getPostProdBoard(projectId)
     setBoard(data)
+    setLibraryRefreshKey(k => k + 1)
   }
 
   useEffect(() => {
@@ -147,6 +176,7 @@ export function PostProdBoard({
 
   async function handleSaveToLibrary(taskId: string) {
     await addTaskToLibrary(taskId)
+    setLibraryRefreshKey(k => k + 1)
   }
 
   async function handleCreateLane() {
@@ -310,6 +340,8 @@ export function PostProdBoard({
           + Ny lane
         </button>
       </div>
+
+      <PostProdLibraryPanel refreshKey={libraryRefreshKey} />
 
       <PostProdTaskForm projectId={projectId} lanes={board.lanes} profiles={profiles} onAdded={refetch} />
     </div>

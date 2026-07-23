@@ -2361,21 +2361,25 @@ export async function addPostProdBoardTask(input: {
     }
 
     if (input.assigneeId) {
-      await supabase.from('task_assignees').insert({ task_id: newTaskId, profile_id: input.assigneeId })
+      const { error: assigneeError } = await supabase
+        .from('task_assignees')
+        .insert({ task_id: newTaskId, profile_id: input.assigneeId })
+      if (assigneeError) console.error('addPostProdBoardTask assignee insert error:', assigneeError)
     }
 
     if (input.isReusable) {
       let customLaneName: string | null = null
       if (input.destination.kind === 'custom') {
-        const { data: lane } = await supabase
+        const { data: lane, error: laneError } = await supabase
           .from('post_prod_lanes')
           .select('name')
           .eq('id', input.destination.laneId)
           .single()
+        if (laneError) console.error('addPostProdBoardTask lane lookup error:', laneError)
         customLaneName = lane?.name ?? null
       }
 
-      await supabase.from('post_prod_task_library').insert({
+      const { error: libraryError } = await supabase.from('post_prod_task_library').insert({
         created_by: user.id,
         title: input.title,
         description: input.description ?? null,
@@ -2384,6 +2388,7 @@ export async function addPostProdBoardTask(input: {
         lane_type: input.destination.kind,
         custom_lane_name: customLaneName,
       })
+      if (libraryError) console.error('addPostProdBoardTask library insert error:', libraryError)
     }
 
     revalidatePath('/admin/preprod')

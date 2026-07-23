@@ -671,6 +671,7 @@ export default function ProjectHubPage() {
     sammendrag?: string
   }
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
@@ -748,9 +749,12 @@ export default function ProjectHubPage() {
   async function handleAnalyze() {
     if (!notesValue.trim()) return
     setAnalyzing(true)
+    setAnalyzeError(null)
     await saveProjectMeetingNotes(projectId, notesValue)
     const result = await analyzeProjectNotes(projectId, notesValue, project?.title ?? '')
-    if (result) {
+    if ('error' in result) {
+      setAnalyzeError(result.error)
+    } else {
       setSummary(result)
       setHubData(prev => prev ? { ...prev, project: { ...prev.project, meeting_notes: notesValue, meeting_summary: result } } : prev)
     }
@@ -1513,6 +1517,9 @@ export default function ProjectHubPage() {
                   </button>
                   {analyzing && (
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>Claude leser notater...</span>
+                  )}
+                  {!analyzing && analyzeError && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.danger }}>{analyzeError}</span>
                   )}
                 </div>
 

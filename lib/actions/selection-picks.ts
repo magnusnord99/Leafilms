@@ -316,13 +316,13 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
     if (proj?.project_lead_id) profileIds = [proj.project_lead_id]
   }
 
-  // Marker "Seleksjon til kunde"-task som done
+  // Marker "Selektering"-task som done
   const { data: selTask } = await service
     .from('tasks')
     .select('id')
     .eq('project_id', projectId)
     .eq('pipeline_stage', 'post_prod')
-    .ilike('title', 'Seleksjon til kunde')
+    .ilike('title', 'Selektering')
     .maybeSingle()
 
   await Promise.all([

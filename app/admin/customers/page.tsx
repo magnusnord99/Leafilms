@@ -2,22 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { Customer } from '@/lib/types'
-
-const C = {
-  bg:      '#181920',
-  surface: '#21212D',
-  surface2:'#2A2A38',
-  border:  '#3C3C52',
-  text:    '#EEEEF2',
-  text2:   '#B4B4CC',
-  text3:   '#8484A0',
-  accent:  '#7C5CFC',
-  danger:  '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 export default function CustomersPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -109,7 +100,13 @@ export default function CustomersPage() {
             {filtered.map(customer => (
               <div
                 key={customer.id}
-                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/admin/customers/${customer.id}`)}
+                onKeyDown={e => { if (e.key === 'Enter') router.push(`/admin/customers/${customer.id}`) }}
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.accent }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = C.border }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -139,12 +136,7 @@ export default function CustomersPage() {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <Link href={`/admin/customers/${customer.id}/projects`}>
-                    <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
-                      Prosjekter
-                    </button>
-                  </Link>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                   <Link href={`/admin/customers/${customer.id}/edit`}>
                     <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
                       Rediger

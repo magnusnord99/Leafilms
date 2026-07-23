@@ -44,9 +44,10 @@ type Props = {
   readOnly?: boolean
   palette?: BoardPalette
   onOpenBoard: (childBoardId: string) => void
+  onOpenSchedule?: (cardId: string, boardId: string) => void
 }
 
-function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALETTE, onOpenBoard }: Props) {
+function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALETTE, onOpenBoard, onOpenSchedule }: Props) {
   const rf = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<CardNode>(cardsToNodes(initial.cards, initial.childMeta))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(edgesToFlow(initial.edges))
@@ -559,7 +560,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   }, [boardId, markLocalOp, setNodes])
 
   return (
-    <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize }}>
+    <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize, onOpenSchedule }}>
       <div
         style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}
         onDrop={onDrop}

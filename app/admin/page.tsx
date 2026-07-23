@@ -360,7 +360,7 @@ export default function AdminDashboard() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
               {customers.map(customer => (
-                <Link key={customer.id} href={`/admin/customers/${customer.id}/projects`} style={{ textDecoration: 'none' }}>
+                <Link key={customer.id} href={`/admin/customers/${customer.id}`} style={{ textDecoration: 'none' }}>
                   <div
                     style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
                     onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}

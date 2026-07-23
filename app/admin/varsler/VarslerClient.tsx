@@ -8,6 +8,7 @@ import {
   replyToNotification, type Notification,
 } from '@/lib/actions/notifications'
 import { toggleReaction, type MessageType } from '@/lib/actions/reactions'
+import { respondToMeetingInvite } from '@/lib/actions/meetings'
 import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
@@ -59,6 +60,9 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   const [replyError, setReplyError] = useState<string | null>(null)
   // Reaksjoner sendt fra denne siden i denne økten (varsel-id → emoji), for umiddelbar feedback
   const [reacted, setReacted] = useState<Record<string, string>>({})
+  // Møteinvitasjoner besvart i denne økten (varsel-id → status), for umiddelbar feedback
+  const [meetingResponses, setMeetingResponses] = useState<Record<string, 'accepted' | 'declined'>>({})
+  const [respondingId, setRespondingId] = useState<string | null>(null)
   const replyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -133,6 +137,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/projects/${n.project_id}`)
     } else if (n.type === 'direct_message') {
       router.push('/admin/meldinger')
+    } else if (n.type === 'meeting_invite' || n.type === 'meeting_response') {
+      router.push('/admin/calendar')
     } else if (n.type === 'project_message' || n.type === 'project_message_mention' || n.type === 'project_message_reaction') {
       router.push(`/admin/projects/${n.project_id}?chat=1`)
     } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message' || n.type === 'quote_message_reaction') {
@@ -207,6 +213,17 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       setTimeout(() => setSentId((cur) => (cur === n.id ? null : cur)), 2500)
     } else {
       setReplyError(res.error ?? 'Kunne ikke sende')
+    }
+  }
+
+  async function handleMeetingRespond(n: Notification, status: 'accepted' | 'declined') {
+    if (!n.meeting_id || respondingId) return
+    setRespondingId(n.id)
+    const res = await respondToMeetingInvite(n.meeting_id, status)
+    setRespondingId(null)
+    if (res.ok) {
+      setMeetingResponses((prev) => ({ ...prev, [n.id]: status }))
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
     }
   }
 
@@ -317,6 +334,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                         </svg>
+                      ) : n.type === 'meeting_invite' || n.type === 'meeting_response' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4508C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
+                        </svg>
                       ) : (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="1.8">
                           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -344,6 +365,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'feedback_reply' ? 'svarte på tilbakemeldingen din'
                             : n.type === 'contract_signed' ? 'signerte kontrakten'
                             : n.type === 'direct_message' ? 'sendte deg en direktemelding'
+                            : n.type === 'meeting_invite' ? 'inviterte deg til et møte'
+                            : n.type === 'meeting_response' ? 'svarte på møteinvitasjonen din'
                             : n.type === 'project_message_reaction' ? 'reagerte på meldingen din i prosjekt-chatten'
                             : n.type === 'task_message_reaction' ? 'reagerte på meldingen din i en oppgave'
                             : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
@@ -390,6 +413,34 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                       </button>
                     </div>
                   </div>
+
+                  {/* Handlingsrad: godta/avslå møteinvitasjon */}
+                  {n.type === 'meeting_invite' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 18px 12px 58px' }}>
+                      {meetingResponses[n.id] ? (
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: meetingResponses[n.id] === 'accepted' ? '#4CAF7D' : C.danger }}>
+                          {meetingResponses[n.id] === 'accepted' ? 'Godtatt ✓' : 'Avslått'}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleMeetingRespond(n, 'accepted') }}
+                            disabled={respondingId === n.id}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: '#fff', background: '#4CAF7D', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', opacity: respondingId === n.id ? 0.6 : 1 }}
+                          >
+                            Godta
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleMeetingRespond(n, 'declined') }}
+                            disabled={respondingId === n.id}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.danger, background: 'none', border: `1px solid ${C.danger}`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', opacity: respondingId === n.id ? 0.6 : 1 }}
+                          >
+                            Avslå
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Handlingsrad: svar + reaksjoner */}
                   {(canReply || canReact) && (

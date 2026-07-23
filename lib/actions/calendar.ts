@@ -24,17 +24,21 @@ export type TaskEvent = {
   status: 'todo' | 'in_progress' | 'done'
 }
 
-export async function getCalendarEvents(): Promise<{
+/**
+ * `filterProfileId` = null: ufiltrert (dagens oppførsel — admin uten valgt person).
+ * Satt: kun opptak der personen står i prod_crew, og oppgaver personen er tildelt.
+ */
+export async function getCalendarEvents(filterProfileId: string | null = null): Promise<{
   shootings: ShootingEvent[]
   tasks: TaskEvent[]
 }> {
   try {
     const supabase = await createClient()
 
-    const [{ data: projects }, { data: tasks }, { data: signedContracts }] = await Promise.all([
+    const [{ data: projects }, { data: tasks }, { data: signedContracts }, assignedTaskIds] = await Promise.all([
       supabase
         .from('projects')
-        .select('id, title, pipeline_stage, shoot_start, shoot_end, shoot_confirmed, customers(name)')
+        .select('id, title, pipeline_stage, shoot_start, shoot_end, shoot_confirmed, pipeline_data, customers(name)')
         .not('shoot_start', 'is', null),
       supabase
         .from('tasks')
@@ -48,9 +52,16 @@ export async function getCalendarEvents(): Promise<{
         .from('contracts')
         .select('project_id')
         .eq('status', 'signed'),
+      filterProfileId
+        ? supabase.from('task_assignees').select('task_id').eq('profile_id', filterProfileId)
+        : Promise.resolve({ data: null } as { data: { task_id: string }[] | null }),
     ])
 
-    type ProjectCalRow = { id: string; title: string; pipeline_stage: string; shoot_start: string; shoot_end: string | null; shoot_confirmed: boolean; customers?: { name: string | null } | null }
+    type ProjectCalRow = {
+      id: string; title: string; pipeline_stage: string; shoot_start: string; shoot_end: string | null
+      shoot_confirmed: boolean; pipeline_data: { preprod?: { prod_crew?: { profile_id: string }[] } } | null
+      customers?: { name: string | null } | null
+    }
     type TaskCalRow = { id: string; title: string; pipeline_stage: string; status: 'todo' | 'in_progress' | 'done'; due_date: string; project: { id: string; title: string; pipeline_stage: string; customers?: { name: string | null } | null } | null }
 
     // Opptak regnes som bekreftet kun når kontrakten er signert, eller admin har bekreftet manuelt.
@@ -58,7 +69,14 @@ export async function getCalendarEvents(): Promise<{
     // (se advanceFromKontraktUnsigned i lib/actions/pipeline.ts).
     const signedProjectIds = new Set((signedContracts ?? []).map(c => c.project_id as string))
 
-    const shootings: ShootingEvent[] = ((projects ?? []) as unknown as ProjectCalRow[]).map((p) => ({
+    let projectRows = (projects ?? []) as unknown as ProjectCalRow[]
+    if (filterProfileId) {
+      projectRows = projectRows.filter((p) =>
+        (p.pipeline_data?.preprod?.prod_crew ?? []).some((c) => c.profile_id === filterProfileId)
+      )
+    }
+
+    const shootings: ShootingEvent[] = projectRows.map((p) => ({
       projectId: p.id,
       projectTitle: p.title,
       customerName: p.customers?.name ?? null,
@@ -68,8 +86,10 @@ export async function getCalendarEvents(): Promise<{
       pipelineStage: p.pipeline_stage,
     }))
 
+    const assignedIdSet = filterProfileId ? new Set((assignedTaskIds.data ?? []).map((r) => r.task_id)) : null
+
     const taskEvents: TaskEvent[] = ((tasks ?? []) as unknown as TaskCalRow[])
-      .filter((t) => t.project)
+      .filter((t) => t.project && (!assignedIdSet || assignedIdSet.has(t.id)))
       .map((t) => ({
         taskId: t.id,
         taskTitle: t.title,

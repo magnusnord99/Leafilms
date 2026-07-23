@@ -418,11 +418,11 @@ export async function getAllGalleriesOverview(): Promise<{
 }[]> {
   const supabase = await createClient()
 
-  // Hent alle post_prod-prosjekter med aktiv "Seleksjon til kunde"-oppgave
+  // Hent alle post_prod-prosjekter med aktiv "Selektering"-oppgave
   const { data: tasks } = await supabase
     .from('tasks')
     .select('id, status, project_id, projects!inner(id, title, pipeline_stage, project_type)')
-    .ilike('title', 'Seleksjon til kunde')
+    .ilike('title', 'Selektering')
     .neq('status', 'done')
     .eq('projects.pipeline_stage', 'post_prod')
     .in('projects.project_type', ['photo', 'mixed'])

@@ -591,7 +591,7 @@ async function markSeleksjonTaskDone(
     .select('id')
     .eq('project_id', projectId)
     .eq('pipeline_stage', 'post_prod')
-    .ilike('title', 'Seleksjon til kunde')
+    .ilike('title', 'Selektering')
     .maybeSingle()
 
   if (selTask) {

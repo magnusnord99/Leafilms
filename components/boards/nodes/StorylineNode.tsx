@@ -37,7 +37,7 @@ export default function StorylineNode({ id, data, selected }: NodeProps<CardNode
             <input
               type="color"
               className="nodrag"
-              value={content.color ?? P.accent}
+              value={color}
               onChange={e => setPreviewHex(e.target.value)}
               onBlur={e => commit(e.target.value)}
               title="Bytt farge på storyline"

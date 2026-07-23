@@ -5,16 +5,19 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   getPreprodDetail, updatePreprodData, updatePreprodTaskStatus, syncPostCrewToTask,
-  getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
+  getPitchTeamAsProdCrew, setTildelTaskStatus,
+  PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
+import { resolvePostProdTaskForRole } from '@/lib/postprod-role-map'
 import { setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
 import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
 import { getPostProdFlowOptions, type PostProdFlowTrack, type PlannedPostProdStep } from '@/lib/actions/pipeline'
+import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { PostProdFlowPlanner } from './PostProdFlowPlanner'
 import { TaskList } from '@/components/task/TaskList'
 import BoardsButton from './BoardsButton'
 import type { Task } from '@/lib/types'
-import type { PreprodDetail } from '@/lib/actions/preprod'
+import type { PreprodDetail, PostProdTaskLite } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
 const C = {
@@ -680,7 +683,6 @@ const POST_ROLES_VIDEO: { key: string; label: string }[] = [
 ]
 const POST_ROLES_PHOTO: { key: string; label: string }[] = [
   { key: 'photo_selektering',        label: 'Selektering'        },
-  { key: 'photo_seleksjon_til_kunde', label: 'Seleksjon til kunde' },
   { key: 'photo_redigering',         label: 'Redigering'         },
   { key: 'photo_ferdig',             label: 'Ferdig'             },
 ]
@@ -697,14 +699,20 @@ function resolveGroups(projectType: string | null | undefined): RoleGroup[] {
 }
 
 function PostCrewSection({
-  crew, projectId, profiles, projectType, onChange, onCrewAdded,
+  crew, projectId, profiles, projectType, postProdTasks, shootEnd, deadlines,
+  onChange, onCrewAdded, onDueDateChange, onDeadlineChange,
 }: {
   crew: PreprodCrewMember[]
   projectId: string
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
   projectType: string | null | undefined
+  postProdTasks: PostProdTaskLite[]
+  shootEnd: string | null
+  deadlines: { video: string | null; photo: string | null }
   onChange: (crew: PreprodCrewMember[]) => void
   onCrewAdded?: (updated: PreprodCrewMember[]) => void
+  onDueDateChange: (taskId: string, date: string | null) => void
+  onDeadlineChange: (subType: 'video' | 'photo', date: string | null) => void
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -742,20 +750,50 @@ function PostCrewSection({
     onCrewAdded?.(next)
   }
 
+  // Setter leveringsfrist for sporet og foreslår frister bakover for stegene som
+  // ikke allerede har en manuelt satt dato — overskriver aldri rader som er justert.
+  function handleDeadlineInputChange(subType: 'video' | 'photo', roles: RoleGroup['roles'], value: string) {
+    onDeadlineChange(subType, value || null)
+    if (!value) return
+    const start = shootEnd ? new Date(shootEnd) : new Date()
+    const end = new Date(value)
+    const totalMs = Math.max(end.getTime() - start.getTime(), 0)
+    const n = roles.length
+    roles.forEach((role, i) => {
+      const task = resolvePostProdTaskForRole(role.key, postProdTasks)
+      if (!task || task.due_date) return
+      const suggested = new Date(start.getTime() + totalMs * ((i + 1) / n)).toISOString().slice(0, 10)
+      onDueDateChange(task.id, suggested)
+    })
+  }
+
   return (
     <div ref={ref} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
       <SectionTitle>Fordeling — Post-produksjon</SectionTitle>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {groups.map(group => (
+        {groups.map(group => {
+          const groupSubType: 'video' | 'photo' = group.roles[0]?.key.startsWith('photo_') ? 'photo' : 'video'
+          return (
           <div key={group.heading}>
-            {groups.length > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                <span style={{ width: 4, height: 4, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: group.color }}>
-                  {group.heading}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, marginBottom: 6 }}>
+              {groups.length > 1 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: group.color }}>
+                    {group.heading}
+                  </span>
+                </div>
+              ) : <span />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Leveringsfrist</span>
+                <input
+                  type="date"
+                  value={deadlines[groupSubType] ?? ''}
+                  onChange={e => handleDeadlineInputChange(groupSubType, group.roles, e.target.value)}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', outline: 'none' }}
+                />
               </div>
-            )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {group.roles.map(({ key, label }) => {
                 const member = crew.find(c => c.role === key)
@@ -763,6 +801,7 @@ function PostCrewSection({
                 const assigned = member
                   ? profiles.find(p => p.id === member.profile_id) ?? { id: member.profile_id, name: member.name, email: member.name, color: null }
                   : null
+                const task = resolvePostProdTaskForRole(key, postProdTasks)
 
                 return (
                   <div key={key} style={{ position: 'relative' }}>
@@ -776,6 +815,15 @@ function PostCrewSection({
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, flex: 1 }}>
                         {label}
                       </span>
+                      {task && (
+                        <input
+                          type="date"
+                          value={task.due_date ?? ''}
+                          onChange={e => onDueDateChange(task.id, e.target.value || null)}
+                          title="Frist"
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: task.due_date ? C.text2 : C.text3, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', outline: 'none' }}
+                        />
+                      )}
                       {assigned ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <Avatar id={assigned.id} name={assigned.name} color={assigned.color} size={22} />
@@ -858,7 +906,7 @@ function PostCrewSection({
               })}
             </div>
           </div>
-        ))}
+        )})}
       </div>
     </div>
   )
@@ -973,6 +1021,7 @@ export default function PreprodDetailPage() {
 
   const [project, setProject] = useState<PreprodDetail['project'] | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [postProdTasks, setPostProdTasks] = useState<PostProdTaskLite[]>([])
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [preprod, setPreprod] = useState<PreprodData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -989,6 +1038,7 @@ export default function PreprodDetailPage() {
       if (detail) {
         setProject(detail.project)
         setTasks(detail.tasks)
+        setPostProdTasks(detail.postProdTasks)
         setProfiles(detail.profiles)
         setPreprod(detail.project.preprod)
         setProjectLead_(detail.project.project_lead
@@ -1060,6 +1110,20 @@ export default function PreprodDetailPage() {
 
   function handleTaskDeleted(taskId: string) {
     setTasks(prev => prev.filter(t => t.id !== taskId))
+  }
+
+  function handlePostProdDueDateChange(taskId: string, date: string | null) {
+    setPostProdTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: date } : t))
+    updateTaskDueDate(taskId, date)
+  }
+
+  function handlePostDeadlineChange(subType: 'video' | 'photo', date: string | null) {
+    setPreprod(prev => {
+      if (!prev) return prev
+      const next = { ...prev, post_deadlines: { ...prev.post_deadlines, [subType]: date } }
+      updatePreprodData(id, { post_deadlines: next.post_deadlines })
+      return next
+    })
   }
 
   async function handleCrewChanged(updatedProdCrew?: PreprodCrewMember[], updatedPostCrew?: PreprodCrewMember[]) {
@@ -1278,8 +1342,13 @@ export default function PreprodDetailPage() {
               projectId={id}
               profiles={profiles}
               projectType={project.project_type}
+              postProdTasks={postProdTasks}
+              shootEnd={project.shoot_end ?? null}
+              deadlines={preprod.post_deadlines}
               onChange={next => patchPreprod({ post_crew: next })}
               onCrewAdded={next => handleCrewChanged(undefined, next)}
+              onDueDateChange={handlePostProdDueDateChange}
+              onDeadlineChange={handlePostDeadlineChange}
             />
 
             {/* Planlagt for post-produksjon (f.eks. VFX/animasjon) */}

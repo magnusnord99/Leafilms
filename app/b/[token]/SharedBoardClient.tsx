@@ -7,7 +7,7 @@ import type { SharedBoardData } from '@/lib/actions/boards'
 import BoardCanvas from '@/components/boards/BoardCanvas'
 import type { BoardPalette } from '@/components/boards/boardContext'
 
-const CINEMATIC_PALETTE: BoardPalette = {
+export const CINEMATIC_PALETTE: BoardPalette = {
   surface: S.surface2, surface2: S.surface3, border: S.border,
   text: S.text, text2: S.text2, accent: S.gold, canvasBg: S.bg,
 }
@@ -36,6 +36,7 @@ export default function SharedBoardClient({ token, data }: { token: string; data
           readOnly
           palette={CINEMATIC_PALETTE}
           onOpenBoard={id => router.push(`/b/${token}?board=${id}`)}
+          onOpenSchedule={cardId => router.push(`/b/${token}/schedule/${cardId}`)}
         />
       </div>
     </div>

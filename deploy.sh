@@ -61,26 +61,27 @@ print(match.group(1) if match else '')
     --max-instances 10
 else
   # Ny service - trenger environment variables
-  if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$OPENAI_API_KEY" ] || [ -z "$QUOTE_API_URL" ] || [ -z "$QUOTE_API_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+  if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$OPENAI_API_KEY" ] || [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$QUOTE_API_URL" ] || [ -z "$QUOTE_API_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
     echo "❌ Error: Environment variables not set!"
     echo ""
     echo "Please set the following environment variables:"
     echo "  - NEXT_PUBLIC_SUPABASE_URL"
     echo "  - NEXT_PUBLIC_SUPABASE_ANON_KEY"
     echo "  - OPENAI_API_KEY"
+    echo "  - ANTHROPIC_API_KEY"
     echo "  - QUOTE_API_URL"
     echo "  - QUOTE_API_TOKEN"
     echo "  - SUPABASE_SERVICE_ROLE_KEY"
     exit 1
   fi
-  
+
   echo "📦 Building and deploying new Cloud Run service..."
   gcloud run deploy leafilms-pitch \
     --source . \
     --region europe-north1 \
     --platform managed \
     --allow-unauthenticated \
-    --set-env-vars="NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY,OPENAI_API_KEY=$OPENAI_API_KEY,QUOTE_API_URL=$QUOTE_API_URL,QUOTE_API_TOKEN=$QUOTE_API_TOKEN,SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+    --set-env-vars="NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY,OPENAI_API_KEY=$OPENAI_API_KEY,ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY,QUOTE_API_URL=$QUOTE_API_URL,QUOTE_API_TOKEN=$QUOTE_API_TOKEN,SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
     --memory 1Gi \
     --cpu 1 \
     --timeout 300 \

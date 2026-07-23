@@ -6,6 +6,9 @@ import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, Boar
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
+export type BoardLeadProfile = { id: string; name: string | null; email: string; color: string | null }
+export type BoardCustomerContact = { id: string; name: string; role: string | null }
+
 export type BoardData = {
   board: Board
   cards: BoardCard[]
@@ -13,8 +16,16 @@ export type BoardData = {
   breadcrumbs: { id: string; title: string }[]
   projectId: string
   projectTitle: string
+  projectCustomerId: string | null
   customerName: string
+  leadProfile: BoardLeadProfile | null
+  customerContact: BoardCustomerContact | null
   childMeta: Record<string, ChildBoardMeta>
+  // Prosjektinfo til sidepanelet — hentet direkte fra prosjektet, ikke lagret som kort.
+  projectSummary: string | null
+  deliveryDescription: string | null
+  shootStart: string | null
+  shootEnd: string | null
 }
 
 export type CardPositionPatch = {
@@ -32,7 +43,8 @@ const INFO_COLUMN_PAD = 10
 const INFO_COLUMN_HEADER = 44
 const INFO_COLUMN_GAP = 8
 
-function formatShootDates(shootStart: string | null | undefined, shootEnd: string | null | undefined): string {
+// Brukes av getBoardData/getSharedBoard til å formatere Opptak-feltet i sidepanelet.
+export function formatShootDates(shootStart: string | null | undefined, shootEnd: string | null | undefined): string {
   if (!shootStart) return 'Ikke satt ennå.'
   const fmt = (iso: string) => {
     const [y, m, d] = iso.split('-')
@@ -41,58 +53,6 @@ function formatShootDates(shootStart: string | null | undefined, shootEnd: strin
   return shootEnd && shootEnd !== shootStart
     ? `${fmt(shootStart)} – ${fmt(shootEnd)}`
     : fmt(shootStart)
-}
-
-// Seeder en "Prosjektinfo"-kolonne med et kort sammendrag + leveransebeskrivelse på
-// et helt nytt rot-board, slik at man får en rask oversikt uten å måtte hoppe til
-// prosjektsiden. Kun ved førstegangs-opprettelse — feiler stille (boardet finnes uansett).
-async function seedProjectInfoColumn(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  boardId: string,
-  projectId: string
-) {
-  try {
-    const { data: proj } = await supabase
-      .from('projects')
-      .select('meeting_summary, delivery_description, shoot_start, shoot_end, customers(name, company)')
-      .eq('id', projectId)
-      .single()
-    if (!proj) return
-
-    const summary = (proj.meeting_summary as { sammendrag?: string } | null)?.sammendrag?.trim()
-    const customer = (proj as unknown as { customers?: { name: string | null; company: string | null } | null }).customers
-    const delivery = (proj as { delivery_description?: string | null }).delivery_description?.trim()
-    const shootStart = (proj as { shoot_start?: string | null }).shoot_start
-    const shootEnd = (proj as { shoot_end?: string | null }).shoot_end
-
-    const { data: column, error: colError } = await supabase
-      .from('board_cards')
-      .insert({
-        board_id: boardId, type: 'column', x: 40, y: 40,
-        width: INFO_COLUMN_WIDTH, content: { title: 'Prosjektinfo' },
-      })
-      .select('id').single()
-    if (colError || !column) return
-
-    const notes: string[] = [
-      summary || `${customer?.company || customer?.name || 'Ingen kunde satt ennå'} — legg til sammendrag fra møtenotater på prosjektsiden.`,
-      delivery ? `Leveranse:\n${delivery}` : 'Leveranse: ikke beskrevet ennå.',
-      `Opptak:\n${formatShootDates(shootStart, shootEnd)}`,
-    ]
-
-    let y = INFO_COLUMN_HEADER + INFO_COLUMN_GAP
-    for (const [i, text] of notes.entries()) {
-      await supabase.from('board_cards').insert({
-        board_id: boardId, type: 'note', x: INFO_COLUMN_PAD, y,
-        width: INFO_COLUMN_WIDTH - INFO_COLUMN_PAD * 2, column_id: column.id, sort_order: i,
-        content: { text },
-      })
-      // Grovt estimat — riktig høyde restackes uansett på klienten når kortene er målt.
-      y += 90 + INFO_COLUMN_GAP
-    }
-  } catch (err) {
-    console.error('seedProjectInfoColumn:', err)
-  }
 }
 
 export async function getOrCreateRootBoard(projectId: string): Promise<string | null> {
@@ -116,7 +76,6 @@ export async function getOrCreateRootBoard(projectId: string): Promise<string | 
         .eq('project_id', projectId).is('parent_board_id', null).maybeSingle()
       return retry?.id ?? null
     }
-    await seedProjectInfoColumn(supabase, data.id, projectId)
     return data.id
   } catch (err) {
     console.error('getOrCreateRootBoard:', err)
@@ -166,14 +125,27 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const { data: board } = await supabase.from('boards').select('*').eq('id', boardId).single()
     if (!board) return null
 
-    const [{ data: cards }, { data: edges }, { data: project }] = await Promise.all([
+    const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
-      supabase.from('projects').select('id, title, customers(name, company)').eq('id', board.project_id).single(),
+      supabase.from('projects').select('id, title, customer_id, meeting_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
+      board.lead_profile_id
+        ? supabase.from('profiles').select('id, name, email, color').eq('id', board.lead_profile_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      board.customer_contact_id
+        ? supabase.from('customer_contacts').select('id, name, role').eq('id', board.customer_contact_id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ])
     const breadcrumbs = await buildBreadcrumbs(supabase, board)
     const childMeta = await loadChildMeta(supabase, (cards ?? []) as BoardCard[])
     const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const proj = project as unknown as {
+      customer_id?: string | null
+      meeting_summary?: { sammendrag?: string } | null
+      delivery_description?: string | null
+      shoot_start?: string | null
+      shoot_end?: string | null
+    } | null
 
     return {
       board: board as Board,
@@ -182,11 +154,133 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       breadcrumbs,
       projectId: board.project_id,
       projectTitle: project?.title ?? '',
+      projectCustomerId: proj?.customer_id ?? null,
       customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      leadProfile: leadProfile as BoardLeadProfile | null,
+      customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
+      projectSummary: proj?.meeting_summary?.sammendrag?.trim() || null,
+      deliveryDescription: proj?.delivery_description?.trim() || null,
+      shootStart: proj?.shoot_start ?? null,
+      shootEnd: proj?.shoot_end ?? null,
     }
   } catch (err) {
     console.error('getBoardData:', err)
+    return null
+  }
+}
+
+export async function setBoardLead(boardId: string, profileId: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase.from('boards').update({ lead_profile_id: profileId, updated_at: now() }).eq('id', boardId)
+  } catch (err) {
+    console.error('setBoardLead:', err)
+  }
+}
+
+export async function setBoardCustomerContact(boardId: string, contactId: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase.from('boards').update({ customer_contact_id: contactId, updated_at: now() }).eq('id', boardId)
+  } catch (err) {
+    console.error('setBoardCustomerContact:', err)
+  }
+}
+
+export type ScheduleCardPageData = {
+  card: BoardCard
+  boardId: string
+  boardTitle: string
+  projectId: string
+  projectTitle: string
+  customerName: string
+  shootStart: string | null
+  shootEnd: string | null
+}
+
+// Data for den dedikerte /admin/boards/[boardId]/schedule/[cardId]-siden — en enkelt
+// schedule-korttype hentet ut for seg selv (i motsetning til getBoardData som henter
+// alle kort på boardet), pluss prosjektkontekst til side-header og PDF-eksport.
+export async function getScheduleCardData(cardId: string): Promise<ScheduleCardPageData | null> {
+  try {
+    const supabase = await createClient()
+    const { data: card } = await supabase.from('board_cards').select('*').eq('id', cardId).single()
+    if (!card || card.type !== 'schedule') return null
+
+    const { data: board } = await supabase.from('boards').select('id, title, project_id').eq('id', card.board_id).single()
+    if (!board) return null
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id, title, shoot_start, shoot_end, customers(name, company)')
+      .eq('id', board.project_id)
+      .single()
+    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+
+    return {
+      card: card as BoardCard,
+      boardId: board.id,
+      boardTitle: board.title,
+      projectId: board.project_id,
+      projectTitle: project?.title ?? '',
+      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      shootStart: (project as { shoot_start?: string | null } | null)?.shoot_start ?? null,
+      shootEnd: (project as { shoot_end?: string | null } | null)?.shoot_end ?? null,
+    }
+  } catch (err) {
+    console.error('getScheduleCardData:', err)
+    return null
+  }
+}
+
+// Samme data som getScheduleCardData, men for /b/[token]/schedule/[cardId] — den
+// offentlig delte, skrivebeskyttede timeplan-siden. Validerer share_token og at
+// kortets board faktisk ligger i det delte treet, samme mønster som getSharedBoard.
+export async function getSharedScheduleCard(token: string, cardId: string): Promise<ScheduleCardPageData | null> {
+  try {
+    if (!token || token.length < 16) return null
+    const service = createServiceClient()
+
+    const { data: root } = await service.from('boards').select('*').eq('share_token', token).single()
+    if (!root) return null
+
+    const { data: card } = await service.from('board_cards').select('*').eq('id', cardId).single()
+    if (!card || card.type !== 'schedule') return null
+
+    const { data: board } = await service.from('boards').select('id, title, project_id, parent_board_id').eq('id', card.board_id).single()
+    if (!board) return null
+
+    type BoardCursor = { id: string; parent_board_id: string | null }
+    let cursor: BoardCursor | null = board
+    let ok = cursor.id === root.id
+    let guard = 0
+    while (!ok && cursor?.parent_board_id && guard++ < 20) {
+      const { data: parent } = await service.from('boards').select('id, parent_board_id').eq('id', cursor.parent_board_id).single()
+      cursor = parent as BoardCursor | null
+      if (cursor?.id === root.id) ok = true
+    }
+    if (!ok) return null
+
+    const { data: project } = await service
+      .from('projects')
+      .select('id, title, shoot_start, shoot_end, customers(name, company)')
+      .eq('id', root.project_id)
+      .single()
+    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+
+    return {
+      card: card as BoardCard,
+      boardId: board.id,
+      boardTitle: board.title,
+      projectId: board.project_id,
+      projectTitle: project?.title ?? '',
+      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      shootStart: (project as { shoot_start?: string | null } | null)?.shoot_start ?? null,
+      shootEnd: (project as { shoot_end?: string | null } | null)?.shoot_end ?? null,
+    }
+  } catch (err) {
+    console.error('getSharedScheduleCard:', err)
     return null
   }
 }
@@ -699,8 +793,16 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       edges: (edges ?? []) as BoardEdge[],
       breadcrumbs: crumbs,
       projectTitle: (project as { title?: string } | null)?.title ?? '',
+      projectCustomerId: null,
       customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      // Kontaktpersoner og prosjektinfo vises ikke på offentlig delte boards.
+      leadProfile: null,
+      customerContact: null,
       childMeta,
+      projectSummary: null,
+      deliveryDescription: null,
+      shootStart: null,
+      shootEnd: null,
       rootBoardId: root.id,
     }
   } catch (err) {

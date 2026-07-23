@@ -216,7 +216,7 @@ export default function EditCustomer() {
         {/* Header */}
         <div className="mb-10">
           <Link
-            href={`/admin/customers/${customerId}/projects`}
+            href={`/admin/customers/${customerId}`}
             className="flex items-center gap-2 mb-8 transition-colors"
             style={{
               fontFamily: 'var(--font-dm-sans)',
@@ -453,7 +453,7 @@ export default function EditCustomer() {
             >
               {saving ? 'Lagrer...' : 'Lagre endringer'}
             </button>
-            <Link href={`/admin/customers/${customerId}/projects`}>
+            <Link href={`/admin/customers/${customerId}`}>
               <button
                 type="button"
                 style={{

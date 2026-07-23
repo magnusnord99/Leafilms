@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getCalendarEvents, ShootingEvent, TaskEvent } from '@/lib/actions/calendar'
+import {
+  getMeetingsForCalendar, getColleagues, createMeeting, cancelMeeting, updateMeeting,
+  respondToMeetingInvite, MeetingEvent, Colleague,
+} from '@/lib/actions/meetings'
+import { useAuth } from '@/hooks/useAuth'
 
 const C = {
   bg:       '#181920',
@@ -16,6 +21,8 @@ const C = {
   accentBg: 'rgba(124,92,252,0.12)',
   success:  '#4CAF7D',
   warning:  '#F0A500',
+  danger:   '#E05555',
+  meeting:  '#D4508C',
   today:    'rgba(124,92,252,0.18)',
 }
 
@@ -38,12 +45,13 @@ type CalEvent = {
   date: string
   label: string
   sublabel: string | null
-  href: string
+  href: string | null
   color: string
   bgColor: string
   confirmed: boolean
-  type: 'shooting' | 'task'
+  type: 'shooting' | 'task' | 'meeting'
   dashed?: boolean
+  meeting?: MeetingEvent
 }
 
 function dateRange(start: string, end: string | null): string[] {
@@ -58,23 +66,54 @@ function dateRange(start: string, end: string | null): string[] {
   return dates
 }
 
+function fmtTime(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })
+}
+
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 export default function CalendarPage() {
+  const { profile, isAdmin } = useAuth()
+
   const [shootings, setShootings] = useState<ShootingEvent[]>([])
   const [tasks, setTasks] = useState<TaskEvent[]>([])
+  const [meetings, setMeetings] = useState<MeetingEvent[]>([])
+  const [colleagues, setColleagues] = useState<Colleague[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+
+  const [showBooking, setShowBooking] = useState(false)
+  const [detailMeeting, setDetailMeeting] = useState<MeetingEvent | null>(null)
 
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth()) // 0-indexed
 
+  // Ikke-admin ser alltid kun sitt eget filter; admin styrer via selectedPersonId (null = alle)
+  const effectiveFilterId = isAdmin ? selectedPersonId : (profile?.id ?? null)
+
+  async function load() {
+    if (!isAdmin && !profile) return // vent på profil for ikke-admin, ellers filtreres feil (alt) et øyeblikk
+    setLoading(true)
+    const [calData, meetingData] = await Promise.all([
+      getCalendarEvents(effectiveFilterId),
+      getMeetingsForCalendar(effectiveFilterId),
+    ])
+    setShootings(calData.shootings)
+    setTasks(calData.tasks)
+    setMeetings(meetingData)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    getCalendarEvents().then(({ shootings: s, tasks: t }) => {
-      setShootings(s)
-      setTasks(t)
-      setLoading(false)
-    })
-  }, [])
+    load()
+    getColleagues().then(setColleagues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveFilterId, profile?.id, isAdmin])
 
   // Build event map: date string → CalEvent[]
   const eventMap = useMemo(() => {
@@ -127,8 +166,30 @@ export default function CalendarPage() {
       })
     }
 
+    // Meeting events
+    for (const m of meetings) {
+      const date = m.startsAt.split('T')[0]
+      const myStatus = effectiveFilterId
+        ? m.participants.find((p) => p.profileId === effectiveFilterId)?.status
+        : undefined
+      const declined = myStatus === 'declined'
+      add(date, {
+        id: `meeting-${m.id}`,
+        date,
+        label: m.title,
+        sublabel: `${fmtTime(m.startsAt)}${m.endsAt ? `–${fmtTime(m.endsAt)}` : ''}`,
+        href: null,
+        color: C.meeting,
+        bgColor: 'rgba(212,80,140,0.14)',
+        confirmed: true,
+        type: 'meeting',
+        dashed: declined,
+        meeting: m,
+      })
+    }
+
     return map
-  }, [shootings, tasks])
+  }, [shootings, tasks, meetings, effectiveFilterId])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
@@ -161,6 +222,7 @@ export default function CalendarPage() {
     { color: '#7C5CFC', bg: 'rgba(124,92,252,0.14)', label: 'Post-prod oppgave', dashed: false },
     { color: '#F0A500', bg: 'rgba(240,165,0,0.14)', label: 'Produksjonsoppgave', dashed: false },
     { color: '#4A9AC4', bg: 'rgba(74,154,196,0.14)', label: 'Pre-prod oppgave', dashed: false },
+    { color: C.meeting, bg: 'rgba(212,80,140,0.14)', label: 'Møte', dashed: false },
   ]
 
   // Count stats
@@ -179,12 +241,40 @@ export default function CalendarPage() {
               Kalender
             </h1>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-              {confirmedShootings} bekreftede opptak · {unconfirmedShootings} ubekreftede · {postProdTasks} post-prod oppgaver
+              {confirmedShootings} bekreftede opptak · {unconfirmedShootings} ubekreftede · {postProdTasks} post-prod oppgaver · {meetings.length} møter
             </p>
           </div>
 
-          {/* Month navigation */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {isAdmin && (
+              <select
+                value={selectedPersonId ?? ''}
+                onChange={(e) => setSelectedPersonId(e.target.value || null)}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500,
+                  padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                  background: C.surface2, color: C.text2, border: `1px solid ${C.border}`,
+                }}
+              >
+                <option value="">Alle (admin-visning)</option>
+                {colleagues.map((c) => (
+                  <option key={c.id} value={c.id}>Vis som {c.name ?? c.email}</option>
+                ))}
+              </select>
+            )}
+
+            <button
+              onClick={() => setShowBooking(true)}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                background: C.meeting, color: '#fff', border: 'none',
+              }}
+            >
+              + Nytt møte
+            </button>
+
+            {/* Month navigation */}
             <button
               onClick={goToday}
               style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}
@@ -278,13 +368,15 @@ export default function CalendarPage() {
 
                     {/* Events */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {visible.map(ev => (
-                        <Link key={ev.id} href={ev.href} style={{ textDecoration: 'none' }}>
+                      {visible.map(ev => {
+                        const chip = (
                           <div
                             title={`${ev.label}${ev.sublabel ? ` — ${ev.sublabel}` : ''}`}
                             style={{
                               background: ev.bgColor,
                               border: ev.dashed && ev.type === 'shooting'
+                                ? `1px dashed ${ev.color}`
+                                : ev.dashed && ev.type === 'meeting'
                                 ? `1px dashed ${ev.color}`
                                 : `1px solid ${ev.color}30`,
                               borderRadius: 4,
@@ -292,12 +384,11 @@ export default function CalendarPage() {
                               display: 'flex', alignItems: 'center', gap: 4,
                               cursor: 'pointer',
                               transition: 'opacity 0.1s',
-                              opacity: ev.type === 'task' && ev.dashed ? 0.5 : 1,
+                              opacity: (ev.type === 'task' && ev.dashed) || (ev.type === 'meeting' && ev.dashed) ? 0.5 : 1,
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = '0.75' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = ev.type === 'task' && ev.dashed ? '0.5' : '1' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = ((ev.type === 'task' || ev.type === 'meeting') && ev.dashed) ? '0.5' : '1' }}
                           >
-                            {/* Type indicator */}
                             <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
                             <span style={{
                               fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
@@ -308,8 +399,21 @@ export default function CalendarPage() {
                               {ev.label}
                             </span>
                           </div>
-                        </Link>
-                      ))}
+                        )
+                        return ev.type === 'meeting' ? (
+                          <button
+                            key={ev.id}
+                            onClick={() => setDetailMeeting(ev.meeting!)}
+                            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                          >
+                            {chip}
+                          </button>
+                        ) : (
+                          <Link key={ev.id} href={ev.href!} style={{ textDecoration: 'none' }}>
+                            {chip}
+                          </Link>
+                        )
+                      })}
                       {overflow > 0 && (
                         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', color: C.text3, paddingLeft: 4 }}>
                           +{overflow} til
@@ -323,6 +427,266 @@ export default function CalendarPage() {
           </div>
         )}
       </div>
+
+      {showBooking && (
+        <BookingModal
+          colleagues={colleagues}
+          onClose={() => setShowBooking(false)}
+          onCreated={() => { setShowBooking(false); load() }}
+        />
+      )}
+
+      {detailMeeting && (
+        <MeetingDetailModal
+          meeting={detailMeeting}
+          currentUserId={profile?.id ?? null}
+          onClose={() => setDetailMeeting(null)}
+          onChanged={() => { setDetailMeeting(null); load() }}
+        />
+      )}
     </div>
   )
+}
+
+function BookingModal({ colleagues, onClose, onCreated }: {
+  colleagues: Colleague[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState(() => toLocalInputValue(new Date()).slice(0, 10))
+  const [startTime, setStartTime] = useState('10:00')
+  const [endTime, setEndTime] = useState('')
+  const [link, setLink] = useState('')
+  const [notes, setNotes] = useState('')
+  const [participantIds, setParticipantIds] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function toggleParticipant(id: string) {
+    setParticipantIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id])
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!title.trim()) { setError('Møtet trenger en tittel'); return }
+    if (participantIds.length === 0) { setError('Velg minst én kollega'); return }
+
+    setSaving(true)
+    const startsAt = new Date(`${date}T${startTime}`).toISOString()
+    const endsAt = endTime ? new Date(`${date}T${endTime}`).toISOString() : null
+    const result = await createMeeting({
+      title, startsAt, endsAt,
+      meetingLink: link || null,
+      notes: notes || null,
+      participantIds,
+    })
+    setSaving(false)
+    if (!result.ok) { setError(result.error ?? 'Kunne ikke opprette møtet'); return }
+    onCreated()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 420, display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>Nytt møte</h2>
+
+        <Field label="Tittel">
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="F.eks. Ukesplanlegging" style={inputStyle} />
+        </Field>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Field label="Dato" style={{ flex: 1 }}>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Start" style={{ width: 100 }}>
+            <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Slutt (valgfri)" style={{ width: 100 }}>
+            <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+
+        <Field label="Møtelenke (valgfri, limes inn manuelt)">
+          <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." style={inputStyle} />
+        </Field>
+
+        <Field label="Notat (valgfri)">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
+        </Field>
+
+        <Field label="Inviter kolleger">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6 }}>
+            {colleagues.length === 0 && (
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, padding: '4px 6px' }}>Ingen andre kolleger funnet</span>
+            )}
+            {colleagues.map(c => (
+              <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 4, background: participantIds.includes(c.id) ? C.accentBg : 'transparent' }}>
+                <input type="checkbox" checked={participantIds.includes(c.id)} onChange={() => toggleParticipant(c.id)} />
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>{c.name ?? c.email}</span>
+              </label>
+            ))}
+          </div>
+        </Field>
+
+        {error && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>{error}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+          <button type="button" onClick={onClose} style={{ ...buttonSecondary }}>Avbryt</button>
+          <button type="submit" disabled={saving} style={{ ...buttonPrimary(C.meeting), opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Booker...' : 'Book møte'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function MeetingDetailModal({ meeting, currentUserId, onClose, onChanged }: {
+  meeting: MeetingEvent
+  currentUserId: string | null
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [link, setLink] = useState(meeting.meetingLink ?? '')
+  const [editingLink, setEditingLink] = useState(false)
+
+  const isOrganizer = currentUserId === meeting.organizerId
+  const myParticipant = meeting.participants.find(p => p.profileId === currentUserId)
+
+  async function respond(status: 'accepted' | 'declined') {
+    setBusy(true)
+    await respondToMeetingInvite(meeting.id, status)
+    setBusy(false)
+    onChanged()
+  }
+
+  async function saveLink() {
+    setBusy(true)
+    await updateMeeting(meeting.id, { meetingLink: link })
+    setBusy(false)
+    setEditingLink(false)
+    onChanged()
+  }
+
+  async function handleCancel() {
+    if (!confirm(`Avlyse "${meeting.title}"?`)) return
+    setBusy(true)
+    await cancelMeeting(meeting.id)
+    setBusy(false)
+    onChanged()
+  }
+
+  const statusLabel: Record<string, string> = { pending: 'Ikke svart', accepted: 'Godtatt', declined: 'Avslått' }
+  const statusColor: Record<string, string> = { pending: C.text3, accepted: C.success, declined: C.danger }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>{meeting.title}</h2>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginTop: 2 }}>
+            {new Date(meeting.startsAt).toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' })} · {fmtTime(meeting.startsAt)}{meeting.endsAt ? `–${fmtTime(meeting.endsAt)}` : ''}
+          </p>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginTop: 2 }}>Booket av {meeting.organizerName}</p>
+        </div>
+
+        {meeting.notes && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{meeting.notes}</p>
+        )}
+
+        <div>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3 }}>Møtelenke</span>
+          {editingLink ? (
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." style={{ ...inputStyle, flex: 1 }} />
+              <button onClick={saveLink} disabled={busy} style={buttonPrimary(C.meeting)}>Lagre</button>
+            </div>
+          ) : meeting.meetingLink ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <a href={meeting.meetingLink} target="_blank" rel="noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.accent, wordBreak: 'break-all' }}>
+                {meeting.meetingLink}
+              </a>
+              {isOrganizer && <button onClick={() => setEditingLink(true)} style={linkButtonStyle}>Endre</button>}
+            </div>
+          ) : (
+            <div style={{ marginTop: 4 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>Ingen lenke lagt inn ennå</span>
+              {isOrganizer && <button onClick={() => setEditingLink(true)} style={{ ...linkButtonStyle, marginLeft: 8 }}>Legg til</button>}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3 }}>Deltakere</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {meeting.participants.map(p => (
+              <div key={p.profileId} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem' }}>
+                <span style={{ color: C.text }}>{p.name}</span>
+                <span style={{ color: statusColor[p.status] }}>{statusLabel[p.status]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          <div>
+            {isOrganizer && (
+              <button onClick={handleCancel} disabled={busy} style={{ ...buttonSecondary, color: C.danger, borderColor: C.danger }}>
+                Avlys møte
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {myParticipant && myParticipant.status !== 'accepted' && (
+              <button onClick={() => respond('accepted')} disabled={busy} style={buttonPrimary(C.success)}>Godta</button>
+            )}
+            {myParticipant && myParticipant.status !== 'declined' && (
+              <button onClick={() => respond('declined')} disabled={busy} style={{ ...buttonSecondary, color: C.danger, borderColor: C.danger }}>Avslå</button>
+            )}
+            <button onClick={onClose} style={buttonSecondary}>Lukk</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={style}>
+      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text3, marginBottom: 4 }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+  padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
+}
+
+const buttonSecondary: React.CSSProperties = {
+  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+  padding: '7px 14px', borderRadius: 6, cursor: 'pointer',
+  background: 'none', color: C.text2, border: `1px solid ${C.border}`,
+}
+
+function buttonPrimary(bg: string): React.CSSProperties {
+  return {
+    fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+    padding: '7px 14px', borderRadius: 6, cursor: 'pointer',
+    background: bg, color: '#fff', border: 'none',
+  }
+}
+
+const linkButtonStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
+  background: 'none', border: 'none', color: C.accent, cursor: 'pointer', padding: 0,
 }

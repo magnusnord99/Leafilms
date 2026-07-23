@@ -264,7 +264,7 @@ export default function PostProdDetailPage() {
   }
 
   const VENTER_TITLE = 'Venter på tilbakemelding'
-  const SELEKSJON_TITLE = 'Seleksjon til kunde'
+  const SELEKSJON_TITLE = 'Selektering'
 
   // Egendefinerte oppgaver holdes helt utenfor den låste stepperen
   const stepperTasks = tasks.filter(t => !t.is_custom)

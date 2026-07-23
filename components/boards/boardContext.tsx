@@ -20,6 +20,10 @@ type BoardUi = {
   // Kalles når et korts reelle høyde blir kjent etter innlasting (f.eks. et bilde som
   // laster ferdig) — trigger en ny kolonne-restack med korrekt høyde, se BoardCanvas.
   onCardResize: () => void
+  // Åpner den dedikerte timeplan-siden for et schedule-kort. Ulik URL avhengig av om
+  // vi er i admin (/admin/boards/.../schedule/...) eller på et offentlig delt board
+  // (/b/[token]/schedule/...) — se ScheduleNode.
+  onOpenSchedule?: (cardId: string, boardId: string) => void
 }
 
 const BoardUiContext = createContext<BoardUi>({

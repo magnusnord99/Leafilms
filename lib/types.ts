@@ -558,6 +558,10 @@ export type Task = {
   created_at: string
   updated_at: string
   assignees: { id: string; name: string | null; email: string }[]
+  // Kun satt av getMyTasks()/getDailyPlanItems() (lib/task-lock.ts) når oppgaven vises utenfor
+  // sin egen stadie-side — post-prod-steg som venter på et tidligere steg i rekkefølgen.
+  locked?: boolean
+  blockedByTitle?: string | null
 }
 
 export type TaskStatus = Task['status']
@@ -590,6 +594,26 @@ export const TASK_STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
   in_progress: 'done',
   done: 'todo',
 }
+
+// Dagens plan (/admin/tasks) — personlig, sorterbar arbeidsliste for dagen.
+// 'task'-varianten peker på en ekte prosjektoppgave (status leses fra tasks.status,
+// ikke lagret egen "ferdig"-flagg); 'custom'-varianten er et frittstående punkt.
+export type DailyPlanItem =
+  | {
+      id: string
+      kind: 'task'
+      sort_order: number
+      task: Task & {
+        project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null } | null
+      }
+    }
+  | {
+      id: string
+      kind: 'custom'
+      sort_order: number
+      title: string
+      done: boolean
+    }
 
 export type TaskMessage = {
   id: string
@@ -653,7 +677,14 @@ export type LinkContent = { url: string; title?: string; description?: string; i
 export type ColorContent = { hex: string }
 export type TodoItem = { id: string; text: string; checked: boolean }
 export type TodoContent = { title?: string; items: TodoItem[] }
-export type ColumnContent = { title: string }
+export type ColumnContent = {
+  title: string
+  color?: string
+  /** Fyll hele kolonnebakgrunnen med en svak toning av `color` */
+  colorFill?: boolean
+  /** Vis `color` som en stripe øverst på kolonnen (Milanote-stil) */
+  colorStrip?: boolean
+}
 /** title er denormalisert fra boards.title for enkel rendering (holdes i sync av renameBoard) */
 export type BoardRefContent = { child_board_id: string; title: string; color?: string }
 export type SchedulePersonRef =
@@ -696,6 +727,10 @@ export type Board = {
   kind: 'storyline' | null
   /** Bredden på panel-rutenettet på et storyline-board — brukes av legg til kort/rad/kolonne */
   storyline_columns: number | null
+  /** Kontaktperson fra Leafilms (profiles) — satt per board, ikke per prosjekt */
+  lead_profile_id: string | null
+  /** Kontaktperson hos kunden (customer_contacts) — satt per board, ikke per prosjekt */
+  customer_contact_id: string | null
 }
 
 export type BoardCard = {

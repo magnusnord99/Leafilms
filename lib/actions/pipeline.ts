@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
+import { computeStepperLocks } from '@/lib/task-lock'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -858,9 +859,9 @@ export async function analyzeProjectNotes(
   projectId: string,
   notes: string,
   projectTitle: string
-): Promise<{ sammendrag: string } | null> {
+): Promise<{ sammendrag: string } | { error: string }> {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) return null
+    if (!process.env.ANTHROPIC_API_KEY) return { error: 'AI-analyse er ikke konfigurert.' }
     const supabase = await createClient()
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -875,7 +876,7 @@ export async function analyzeProjectNotes(
     })
 
     const sammendrag = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
-    if (!sammendrag) return null
+    if (!sammendrag) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
     const summary = { sammendrag }
 
     await supabase
@@ -886,7 +887,10 @@ export async function analyzeProjectNotes(
     return summary
   } catch (err) {
     console.error('analyzeProjectNotes error:', err)
-    return null
+    if (err instanceof Anthropic.APIError && err.status === 400 && /credit balance/i.test(err.message)) {
+      return { error: 'AI-tjenesten har ikke nok kreditt. Kontakt en administrator.' }
+    }
+    return { error: 'Kunne ikke analysere akkurat nå. Prøv igjen senere.' }
   }
 }
 
@@ -1348,7 +1352,7 @@ export async function getMyTasks(): Promise<(Task & {
       return []
     }
 
-    return ((data ?? []) as unknown as { task: (TaskRow & { project?: unknown }) | null }[])
+    const myTasks = ((data ?? []) as unknown as { task: (TaskRow & { project?: unknown }) | null }[])
       .map((row) => {
         const t = row.task
         if (!t) return null
@@ -1363,6 +1367,9 @@ export async function getMyTasks(): Promise<(Task & {
       .filter(Boolean) as (Task & {
         project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null }
       })[]
+
+    const locks = await computeStepperLocks(supabase, myTasks)
+    return myTasks.map(t => ({ ...t, ...(locks.get(t.id) ?? {}) }))
   } catch (err) {
     console.error('getMyTasks unexpected error:', err)
     return []

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import type { ProjectWithPipeline, Task, PipelineData, TaskRow, ProjectRow } from '@/lib/types'
+import { ROLE_TASK_MAP } from '@/lib/postprod-role-map'
 
 export type PreprodCrewMember = {
   profile_id: string
@@ -27,6 +28,8 @@ export type PreprodData = {
   prod_crew: PreprodCrewMember[]
   post_crew: PreprodCrewMember[]
   packing_list: PackingItem[]
+  // Leveringsfrist per spor, brukt til å foreslå frister bakover på post_prod-oppgavene
+  post_deadlines: { video: string | null; photo: string | null }
 }
 
 const DEFAULT_PREPROD: PreprodData = {
@@ -35,6 +38,14 @@ const DEFAULT_PREPROD: PreprodData = {
   prod_crew: [],
   post_crew: [],
   packing_list: [],
+  post_deadlines: { video: null, photo: null },
+}
+
+export type PostProdTaskLite = {
+  id: string
+  title: string
+  sub_type: 'video' | 'photo' | null
+  due_date: string | null
 }
 
 export type PreprodProject = ProjectWithPipeline & {
@@ -90,6 +101,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
 export type PreprodDetail = {
   project: ProjectWithPipeline & { preprod: PreprodData; quote_equipment: { name: string }[] }
   tasks: Task[]
+  postProdTasks: PostProdTaskLite[]
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
 }
 
@@ -111,6 +123,12 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'pre_prod')
       .order('sort_order', { ascending: true })
+
+    const { data: postProdTasks } = await supabase
+      .from('tasks')
+      .select('id, title, sub_type, due_date')
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
 
     const { data: profiles } = await supabase
       .from('profiles')
@@ -152,6 +170,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
           .map((ta) => ta.profile)
           .filter((pr): pr is NonNullable<typeof pr> => pr !== null),
       })),
+      postProdTasks: (postProdTasks ?? []) as PostProdTaskLite[],
       profiles: (profiles ?? []) as { id: string; name: string | null; email: string; color: string | null }[],
     }
   } catch (err) {
@@ -289,21 +308,7 @@ export async function setTildelTaskStatus(
   }
 }
 
-// Kobler pre-prod post_crew-rolle til task_assignees på faktiske post-prod-oppgaver.
 // Fjerner forrige person og legger til ny på alle matchende oppgavetitler.
-const ROLE_TASK_MAP: Record<string, string[]> = {
-  video_logging:             ['Logging'],
-  video_grovklipp:           ['Grovklipp'],
-  video_klipp:               ['Klipp'],
-  video_farger:              ['Farger'],
-  video_lyd:                 ['Lyd'],
-  video_ferdig:              ['Ferdig'],
-  photo_selektering:         ['Selektering', 'Selektering bilder'],
-  photo_seleksjon_til_kunde: ['Seleksjon til kunde'],
-  photo_redigering:          ['Redigering', 'Redigering bilder'],
-  photo_ferdig:              ['Ferdig'],
-}
-
 export async function syncPostCrewToTask(
   projectId: string,
   roleKey: string,

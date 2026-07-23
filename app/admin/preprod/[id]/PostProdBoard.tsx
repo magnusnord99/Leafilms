@@ -232,7 +232,6 @@ export function PostProdBoard({
         display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 7,
         background: C.surface2, border: `1px solid ${card.color ?? C.border}`, position: 'relative',
       }}>
-        {card.icon && <span style={{ fontSize: '0.85rem' }}>{card.icon}</span>}
         <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text }}>{card.title}</span>
         <input
           type="date"

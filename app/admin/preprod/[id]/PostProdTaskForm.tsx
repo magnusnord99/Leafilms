@@ -15,8 +15,6 @@ const C = {
   accentBg: 'rgba(124,92,252,0.08)',
 }
 
-const ICONS = ['🎬', '🎨', '✂️', '🔊', '✨', '📸', '📁', '⭐']
-
 type DestinationOption = { key: string; label: string; destination: PostProdDestination }
 
 export function PostProdTaskForm({
@@ -43,7 +41,6 @@ export function PostProdTaskForm({
   const [destinationKey, setDestinationKey] = useState(options[0]?.key ?? 'parallel')
   const [assigneeId, setAssigneeId] = useState('')
   const [color, setColor] = useState('#7C5CFC')
-  const [icon, setIcon] = useState(ICONS[0])
   const [isReusable, setIsReusable] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -60,7 +57,6 @@ export function PostProdTaskForm({
       description: description.trim() || undefined,
       assigneeId: assigneeId || undefined,
       color,
-      icon,
       destination,
       isReusable,
     })
@@ -108,17 +104,7 @@ export function PostProdTaskForm({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ width: 32, height: 28, border: `1px solid ${C.border}`, borderRadius: 6, background: 'transparent', padding: 0 }} />
-        <div style={{ display: 'flex', gap: 4 }}>
-          {ICONS.map(i => (
-            <button
-              key={i}
-              onClick={() => setIcon(i)}
-              style={{ fontSize: '0.9rem', padding: '3px 6px', borderRadius: 5, cursor: 'pointer', background: icon === i ? C.accentBg : 'transparent', border: `1px solid ${icon === i ? 'rgba(124,92,252,0.3)' : C.border}` }}
-            >
-              {i}
-            </button>
-          ))}
-        </div>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>Farge</span>
       </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, cursor: 'pointer' }}>

@@ -2529,3 +2529,84 @@ export async function updateLaneDeadline(laneId: string, deadline: string | null
     console.error('updateLaneDeadline unexpected error:', err)
   }
 }
+
+export type PostProdLibraryItem = {
+  id: string
+  title: string
+  description: string | null
+  color: string | null
+  icon: string | null
+  laneType: 'video' | 'photo' | 'custom' | 'parallel'
+  customLaneName: string | null
+}
+
+export async function getTaskLibrary(): Promise<PostProdLibraryItem[]> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('post_prod_task_library')
+      .select('id, title, description, color, icon, lane_type, custom_lane_name')
+      .order('created_at', { ascending: false })
+
+    return (data ?? []).map(
+      (r: { id: string; title: string; description: string | null; color: string | null; icon: string | null; lane_type: 'video' | 'photo' | 'custom' | 'parallel'; custom_lane_name: string | null }) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        color: r.color,
+        icon: r.icon,
+        laneType: r.lane_type,
+        customLaneName: r.custom_lane_name,
+      })
+    )
+  } catch (err) {
+    console.error('getTaskLibrary error:', err)
+    return []
+  }
+}
+
+/** Lagrer en allerede eksisterende oppgave i biblioteket (kopi av felter, ingen videre kobling). */
+export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('title, description, color, icon, sub_type, custom_lane_id, is_parallel')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+
+    let laneType: 'video' | 'photo' | 'custom' | 'parallel'
+    let customLaneName: string | null = null
+
+    if (task.is_parallel) {
+      laneType = 'parallel'
+    } else if (task.custom_lane_id) {
+      laneType = 'custom'
+      const { data: lane } = await supabase.from('post_prod_lanes').select('name').eq('id', task.custom_lane_id).single()
+      customLaneName = lane?.name ?? null
+    } else {
+      laneType = task.sub_type === 'photo' ? 'photo' : 'video'
+    }
+
+    const { error } = await supabase.from('post_prod_task_library').insert({
+      created_by: user.id,
+      title: task.title,
+      description: task.description,
+      color: task.color,
+      icon: task.icon,
+      lane_type: laneType,
+      custom_lane_name: customLaneName,
+    })
+
+    if (error) return { ok: false, error: 'Kunne ikke lagre i biblioteket' }
+    return { ok: true }
+  } catch (err) {
+    console.error('addTaskToLibrary unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}

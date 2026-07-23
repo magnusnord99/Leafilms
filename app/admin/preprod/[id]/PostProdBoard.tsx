@@ -137,7 +137,7 @@ export function PostProdBoard({
           title="Frist"
           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: card.dueDate ? C.text2 : C.text3, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 5px', outline: 'none' }}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: -6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {card.assignees.map(a => <Avatar key={a.id} id={a.id} name={a.name} />)}
         </div>
         <button onClick={() => setOpenAssigneeFor(isOpen ? null : card.id)} title="Tildel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>

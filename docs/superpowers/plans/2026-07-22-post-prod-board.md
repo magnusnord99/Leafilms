@@ -1528,7 +1528,7 @@ export function PostProdBoard({
           title="Frist"
           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: card.dueDate ? C.text2 : C.text3, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 5px', outline: 'none' }}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: -6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {card.assignees.map(a => <Avatar key={a.id} id={a.id} name={a.name} />)}
         </div>
         <button onClick={() => setOpenAssigneeFor(isOpen ? null : card.id)} title="Tildel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>
@@ -1960,6 +1960,30 @@ git commit -m "feat: gjenbrukbart oppgavebibliotek — dra inn i et hvilket som 
 
 **Interfaces:**
 - Consumes: `PostProdBoard` (Task 13/14/15).
+
+- [ ] **Step 0: Legg `post_deadlines` tilbake på `PreprodData`**
+
+Research under Task 10 avdekket at `post_deadlines` (leveringsfrist per video/foto-spor) ikke finnes i `lib/actions/preprod.ts` på denne branchen — det var kun en del av ukommittert WIP på `main` som denne branchen ikke arvet. Dette er ikke en regresjon å unngå, men ny funksjonalitet Magnus har bekreftet han vil ha bygget likevel (se `.superpowers/sdd/progress.md`). Legg feltet til i `lib/actions/preprod.ts`:
+
+```typescript
+export type PreprodData = {
+  millanote_url: string
+  millanote_done: boolean
+  prod_crew: PreprodCrewMember[]
+  packing_list: PackingItem[]
+  post_deadlines: { video: string | null; photo: string | null }
+}
+
+const DEFAULT_PREPROD: PreprodData = {
+  millanote_url: '',
+  millanote_done: false,
+  prod_crew: [],
+  packing_list: [],
+  post_deadlines: { video: null, photo: null },
+}
+```
+
+(`post_crew` ble fjernet fra begge i Task 10 — ikke legg det tilbake.)
 
 - [ ] **Step 1: Fjern døde imports**
 

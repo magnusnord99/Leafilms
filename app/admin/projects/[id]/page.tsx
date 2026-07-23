@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
+import { updateReviewSettings } from '@/lib/actions/reviews'
+import ReviewPanel from '@/components/project/ReviewPanel'
 import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo } from '@/lib/actions/contracts'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
@@ -678,6 +680,12 @@ export default function ProjectHubPage() {
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [reviewSettings, setReviewSettings] = useState({
+    pitch_review_enabled: false,
+    pitch_reviewer_id: null as string | null,
+    quote_review_enabled: false,
+    quote_reviewer_id: null as string | null,
+  })
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [deepLinkNoticeDismissed, setDeepLinkNoticeDismissed] = useState(false)
   const deepLinkTaskId = searchParams?.get('task') ?? null
@@ -702,6 +710,12 @@ export default function ProjectHubPage() {
       setProjectLead_(data.project.project_lead
         ? { ...data.project.project_lead, color: allProfiles.find(p => p.id === data.project.project_lead!.id)?.color ?? null }
         : null)
+      setReviewSettings({
+        pitch_review_enabled: data.project.pitch_review_enabled ?? false,
+        pitch_reviewer_id: data.project.pitch_reviewer_id ?? null,
+        quote_review_enabled: data.project.quote_review_enabled ?? false,
+        quote_reviewer_id: data.project.quote_reviewer_id ?? null,
+      })
       // Kontrakt-status brukes både av stepperen (tilbud_sendt/kontrakt-steg) og av
       // opptak-bekreftelsen — sistnevnte gjelder uansett pipeline_stage, siden prosjekter
       // kan flyttes forbi kontrakt-steget uten signatur (advanceFromKontraktUnsigned)
@@ -1094,6 +1108,13 @@ export default function ProjectHubPage() {
     setProjectLead_(profile)
     const result = await setProjectLead(projectId, profileId)
     if (!result.ok) setProjectLead_(prev)
+  }
+
+  async function handleReviewSettingChange(patch: Partial<typeof reviewSettings>) {
+    const next = { ...reviewSettings, ...patch }
+    setReviewSettings(next)
+    const result = await updateReviewSettings(projectId, patch)
+    if (!result.ok) setReviewSettings(reviewSettings)
   }
 
   if (loading) {
@@ -1624,6 +1645,51 @@ export default function ProjectHubPage() {
 
         {activeTab === 'pitch' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Review-innstillinger */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Review
+              </p>
+              {([
+                { key: 'pitch' as const, label: 'Krev godkjenning av pitch', enabledKey: 'pitch_review_enabled' as const, reviewerKey: 'pitch_reviewer_id' as const },
+                { key: 'quote' as const, label: 'Krev godkjenning av tilbud', enabledKey: 'quote_review_enabled' as const, reviewerKey: 'quote_reviewer_id' as const },
+              ]).map(row => (
+                <div key={row.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={reviewSettings[row.enabledKey]}
+                        onChange={e => handleReviewSettingChange({ [row.enabledKey]: e.target.checked })}
+                      />
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>{row.label}</span>
+                    </label>
+                    {reviewSettings[row.enabledKey] && (
+                      <select
+                        value={reviewSettings[row.reviewerKey] ?? ''}
+                        onChange={e => handleReviewSettingChange({ [row.reviewerKey]: e.target.value || null })}
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                          padding: '4px 8px', borderRadius: 5,
+                          background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
+                        }}
+                      >
+                        <option value="">Velg reviewer...</option>
+                        {profiles.map(p => (
+                          <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <ReviewPanel
+                    projectId={projectId}
+                    subjectType={row.key}
+                    enabled={reviewSettings[row.enabledKey]}
+                    currentUserId={currentUserId}
+                  />
+                </div>
+              ))}
+            </div>
             {!hasSections ? (
               /* Ingen pitch opprettet enda */
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 18px' }}>

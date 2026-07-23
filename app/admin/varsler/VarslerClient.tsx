@@ -143,6 +143,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/projects/${n.project_id}?chat=1`)
     } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message' || n.type === 'quote_message_reaction') {
       router.push(`/admin/projects/${n.project_id}/quote${n.type === 'quote_assigned' ? '' : '?chat=1'}`)
+    } else if (n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded') {
+      router.push(`/admin/projects/${n.project_id}?tab=pitch`)
     } else if (n.type === 'invoice_assigned') {
       router.push(`/admin/faktura/${n.project_id}`)
     } else if (n.type === 'resale_assigned') {
@@ -340,6 +342,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4508C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
                         </svg>
+                      ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
+                        </svg>
                       ) : (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="1.8">
                           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -374,6 +380,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
                             : n.type === 'board_comment_mention' ? 'nevnte deg i en boardkommentar'
                             : n.type === 'board_comment_reply' ? 'svarte på kommentaren din på boardet'
+                            : n.type === 'pitch_review_requested' ? 'ber deg godkjenne pitchen'
+                            : n.type === 'pitch_review_responded' ? 'svarte på review av pitchen'
+                            : n.type === 'quote_review_requested' ? 'ber deg godkjenne tilbudet'
+                            : n.type === 'quote_review_responded' ? 'svarte på review av tilbudet'
                             : 'i en oppgave'}
                         </span>
                       </div>

@@ -169,11 +169,13 @@ statusbadge for `quote.status`) — rundt linje 1363–1400. Dette er det naturl
 eksisterende stedet for all review-UI, i stedet for å spre det ut over redigeringssidene:
 
 - Én ny gjenbrukbar komponent, `components/project/ReviewPanel.tsx`, tar
-  `projectId, subjectType: 'pitch' | 'quote', enabled: boolean, reviewerId: string | null,
-  currentUserId: string, profiles: {id, name, email}[]` som props.
-- Den henter selv sin `getReviewHistory`/siste review ved mount, og rendres to ganger i
-  "Pitch & Tilbud"-fanen — én gang inni "Pitch-dokument"-kortet, én gang inni "Tilbud"-kortet
-  (samme sted som `item.badge` for `quote.status` allerede vises i dag).
+  `projectId: string, subjectType: 'pitch' | 'quote', enabled: boolean,
+  currentUserId: string | null` som props — selvforsynt, henter selv `getReviewHistory` ved
+  mount og gjør egne kall til `requestReview`/`respondToReview`.
+- Rendres to ganger, i et eget "Review"-innstillingsblokk øverst i "Pitch & Tilbud"-fanen (én
+  rad per type, med av/på-bryter + reviewer-dropdown ved siden av), i stedet for inni hvert
+  av de to eksisterende kortene ("Pitch-dokument" / "Tilbud") — enklere å implementere og
+  holder alt review-relatert samlet ett sted, uten å endre de to kortenes egen struktur.
 - Viser: statusbadge (`Ikke sendt til review` grå / `Venter på review` gul / `Godkjent` grønn /
   `Endringer ønsket` rød), en "Send til review"-knapp (kaller `requestReview`), og — når
   innlogget bruker er reviewer og siste review er `pending` — en liten banner med

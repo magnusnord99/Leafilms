@@ -149,6 +149,7 @@ function NewProjectContent() {
   const [loading, setLoading] = useState(false)
   const [generatingStatus, setGeneratingStatus] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [customerInput, setCustomerInput] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     searchParams.get('customer_id') || null
@@ -165,12 +166,17 @@ function NewProjectContent() {
     scope: '',
     context: '',
     pipeline_stage: 'lead' as PipelineStage,
+    pitch_review_enabled: false,
+    pitch_reviewer_id: null as string | null,
+    quote_review_enabled: false,
+    quote_reviewer_id: null as string | null,
   })
 
   const isNewCustomer = customerInput.trim().length > 0 && !selectedCustomerId
 
   useEffect(() => {
     fetchCustomers()
+    fetchProfiles()
     const customerId = searchParams.get('customer_id')
     if (customerId) setSelectedCustomerId(customerId)
     const titleParam = searchParams.get('title')
@@ -197,6 +203,14 @@ function NewProjectContent() {
       .select('*')
       .order('name', { ascending: true })
     if (!error && data) setCustomers(data as Customer[])
+  }
+
+  async function fetchProfiles() {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .order('name', { ascending: true })
+    if (!error && data) setProfiles(data as { id: string; name: string | null; email: string }[])
   }
 
   const toggleMedium = (value: string) => {
@@ -295,6 +309,10 @@ function NewProjectContent() {
             language: formData.language,
             project_type: formData.project_type || null,
             pipeline_stage: formData.pipeline_stage,
+            pitch_review_enabled: formData.pitch_review_enabled,
+            pitch_reviewer_id: formData.pitch_reviewer_id,
+            quote_review_enabled: formData.quote_review_enabled,
+            quote_reviewer_id: formData.quote_reviewer_id,
             metadata
           })
           .select()
@@ -692,6 +710,40 @@ function NewProjectContent() {
                   ))}
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Section: Review */}
+          <div>
+            {sectionDivider('Review')}
+            <div className="space-y-6">
+              {([
+                { key: 'pitch' as const, label: 'Krev godkjenning av pitch', enabledField: 'pitch_review_enabled' as const, reviewerField: 'pitch_reviewer_id' as const },
+                { key: 'quote' as const, label: 'Krev godkjenning av tilbud', enabledField: 'quote_review_enabled' as const, reviewerField: 'quote_reviewer_id' as const },
+              ]).map(row => (
+                <div key={row.key} className="flex items-center gap-3 flex-wrap">
+                  {chipBtn(
+                    formData[row.enabledField],
+                    () => setFormData({ ...formData, [row.enabledField]: !formData[row.enabledField] }),
+                    row.label
+                  )}
+                  {formData[row.enabledField] && (
+                    <select
+                      value={formData[row.reviewerField] ?? ''}
+                      onChange={e => setFormData({ ...formData, [row.reviewerField]: e.target.value || null })}
+                      style={selectStyle}
+                    >
+                      <option value="">Velg reviewer...</option>
+                      {profiles.map(p => (
+                        <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ))}
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, letterSpacing: '0.06em' }}>
+                Valgfritt — kan endres senere på prosjektsiden
+              </p>
             </div>
           </div>
 

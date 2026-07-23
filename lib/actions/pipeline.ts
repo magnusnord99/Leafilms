@@ -6,7 +6,7 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
-import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, type SequenceRow } from '@/lib/postprod-flow'
+import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -2399,6 +2399,83 @@ export async function addPostProdBoardTask(input: {
     return { ok: true, taskId: newTaskId }
   } catch (err) {
     console.error('addPostProdBoardTask unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+/**
+ * Flytter en eksisterende post-prod-oppgave: omplassering innad i samme
+ * lane, eller til en annen lane/parallell-raden. I motsetning til
+ * addPostProdBoardTask jobber denne på allerede lagrede rader, derfor
+ * reorderExistingIds (id-basert) i stedet for computeInsertionOrder
+ * (tittel-basert, for ulagrede rader).
+ */
+export async function moveBoardTask(
+  taskId: string,
+  destination: PostProdDestination,
+  beforeTaskId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('id, project_id')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+
+    if (destination.kind === 'parallel') {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ is_parallel: true, sub_type: null, custom_lane_id: null, sort_order: 0 })
+        .eq('id', taskId)
+
+      if (error) return { ok: false, error: 'Kunne ikke flytte oppgaven' }
+      revalidatePath('/admin/preprod')
+      revalidatePath('/admin/postprod')
+      return { ok: true }
+    }
+
+    let destQuery = supabase
+      .from('tasks')
+      .select('id')
+      .eq('project_id', task.project_id)
+      .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+      .eq('is_parallel', false)
+      .order('sort_order', { ascending: true })
+
+    destQuery = destination.kind === 'custom'
+      ? destQuery.eq('custom_lane_id', destination.laneId)
+      : destQuery.eq('sub_type', destination.kind).is('custom_lane_id', null)
+
+    const { data: destRows, error: destError } = await destQuery
+    if (destError) return { ok: false, error: 'Kunne ikke hente mållanen' }
+
+    const destIds = (destRows ?? []).map((r: { id: string }) => r.id)
+    const idsIncludingSubject = destIds.includes(taskId) ? destIds : [...destIds, taskId]
+    const finalIds = reorderExistingIds(idsIncludingSubject, taskId, beforeTaskId)
+
+    // Kilde-lanen (hvis annerledes) trenger ingen renummerering — gap i
+    // sort_order er harmløst siden ordering alltid leses med ORDER BY.
+    for (let i = 0; i < finalIds.length; i++) {
+      const patch: Record<string, unknown> = { sort_order: i + 1 }
+      if (finalIds[i] === taskId) {
+        patch.is_parallel = false
+        patch.custom_lane_id = destination.kind === 'custom' ? destination.laneId : null
+        patch.sub_type = destination.kind === 'custom' ? null : destination.kind
+      }
+      const { error } = await supabase.from('tasks').update(patch).eq('id', finalIds[i])
+      if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }
+    }
+
+    revalidatePath('/admin/preprod')
+    revalidatePath('/admin/postprod')
+    return { ok: true }
+  } catch (err) {
+    console.error('moveBoardTask unexpected error:', err)
     return { ok: false, error: 'Uventet feil' }
   }
 }

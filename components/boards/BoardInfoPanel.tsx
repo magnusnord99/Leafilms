@@ -1,7 +1,8 @@
 'use client'
 
 import { C } from '@/lib/admin-theme'
-import { formatShootDates, type BoardData } from '@/lib/actions/boards'
+import type { BoardData } from '@/lib/actions/boards'
+import { formatShootDates } from '@/lib/board-format'
 import BoardContacts from './BoardContacts'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {

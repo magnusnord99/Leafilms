@@ -43,18 +43,6 @@ const INFO_COLUMN_PAD = 10
 const INFO_COLUMN_HEADER = 44
 const INFO_COLUMN_GAP = 8
 
-// Brukes av getBoardData/getSharedBoard til å formatere Opptak-feltet i sidepanelet.
-export function formatShootDates(shootStart: string | null | undefined, shootEnd: string | null | undefined): string {
-  if (!shootStart) return 'Ikke satt ennå.'
-  const fmt = (iso: string) => {
-    const [y, m, d] = iso.split('-')
-    return `${d}.${m}.${y}`
-  }
-  return shootEnd && shootEnd !== shootStart
-    ? `${fmt(shootStart)} – ${fmt(shootEnd)}`
-    : fmt(shootStart)
-}
-
 export async function getOrCreateRootBoard(projectId: string): Promise<string | null> {
   try {
     const supabase = await createClient()

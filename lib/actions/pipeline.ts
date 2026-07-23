@@ -2543,10 +2543,12 @@ export type PostProdLibraryItem = {
 export async function getTaskLibrary(): Promise<PostProdLibraryItem[]> {
   try {
     const supabase = await createClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('post_prod_task_library')
       .select('id, title, description, color, icon, lane_type, custom_lane_name')
       .order('created_at', { ascending: false })
+
+    if (error) console.error('getTaskLibrary error:', error)
 
     return (data ?? []).map(
       (r: { id: string; title: string; description: string | null; color: string | null; icon: string | null; lane_type: 'video' | 'photo' | 'custom' | 'parallel'; custom_lane_name: string | null }) => ({
@@ -2587,7 +2589,8 @@ export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; e
       laneType = 'parallel'
     } else if (task.custom_lane_id) {
       laneType = 'custom'
-      const { data: lane } = await supabase.from('post_prod_lanes').select('name').eq('id', task.custom_lane_id).single()
+      const { data: lane, error: laneError } = await supabase.from('post_prod_lanes').select('name').eq('id', task.custom_lane_id).single()
+      if (laneError) console.error('addTaskToLibrary lane lookup error:', laneError)
       customLaneName = lane?.name ?? null
     } else {
       laneType = task.sub_type === 'photo' ? 'photo' : 'video'
@@ -2603,7 +2606,10 @@ export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; e
       custom_lane_name: customLaneName,
     })
 
-    if (error) return { ok: false, error: 'Kunne ikke lagre i biblioteket' }
+    if (error) {
+      console.error('addTaskToLibrary insert error:', error)
+      return { ok: false, error: 'Kunne ikke lagre i biblioteket' }
+    }
     return { ok: true }
   } catch (err) {
     console.error('addTaskToLibrary unexpected error:', err)

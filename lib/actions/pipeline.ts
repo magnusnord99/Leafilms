@@ -2580,6 +2580,7 @@ export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; e
       .eq('id', taskId)
       .single()
 
+    if (taskError) console.error('addTaskToLibrary task lookup error:', taskError)
     if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
 
     let laneType: 'video' | 'photo' | 'custom' | 'parallel'

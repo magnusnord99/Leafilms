@@ -33,7 +33,7 @@ function ProjectCard({ project }: { project: PreprodProject }) {
   const packingTotal = project.preprod.packing_list.length
   const packingDone = project.preprod.packing_list.filter(i => i.checked).length
   const prodCrew = project.preprod.prod_crew.length
-  const postCrew = project.preprod.post_crew.length
+  const postCrew = project.postProdAssignedCount
 
   return (
     <Link href={`/admin/preprod/${project.id}`} style={{ textDecoration: 'none' }}>

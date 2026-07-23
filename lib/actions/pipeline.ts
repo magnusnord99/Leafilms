@@ -2479,3 +2479,53 @@ export async function moveBoardTask(
     return { ok: false, error: 'Uventet feil' }
   }
 }
+
+export async function createCustomLane(
+  projectId: string,
+  name: string,
+  color?: string
+): Promise<{ ok: boolean; error?: string; laneId?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const trimmed = name.trim()
+    if (!trimmed) return { ok: false, error: 'Lane trenger et navn' }
+
+    const { count } = await supabase
+      .from('post_prod_lanes')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+
+    const { data, error } = await supabase
+      .from('post_prod_lanes')
+      .insert({
+        project_id: projectId,
+        name: trimmed,
+        color: color ?? null,
+        sort_order: count ?? 0,
+        created_by: user.id,
+      })
+      .select('id')
+      .single()
+
+    if (error || !data) return { ok: false, error: 'Kunne ikke opprette lane' }
+
+    revalidatePath('/admin/preprod')
+    return { ok: true, laneId: data.id }
+  } catch (err) {
+    console.error('createCustomLane unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function updateLaneDeadline(laneId: string, deadline: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase.from('post_prod_lanes').update({ deadline }).eq('id', laneId)
+    revalidatePath('/admin/preprod')
+  } catch (err) {
+    console.error('updateLaneDeadline unexpected error:', err)
+  }
+}

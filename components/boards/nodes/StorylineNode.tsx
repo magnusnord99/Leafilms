@@ -29,7 +29,7 @@ export default function StorylineNode({ id, data, selected }: NodeProps<CardNode
   }
 
   return (
-    <CardShell selected={!!selected} dropActive={!!data.dropTarget}>
+    <CardShell cardId={id} selected={!!selected} dropActive={!!data.dropTarget}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ position: 'relative', width: 34, height: 34, borderRadius: 8, background: color + '22', border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
           <ClapperboardIcon size={18} />

@@ -29,7 +29,7 @@ export default function ColorNode({ id, data, selected }: NodeProps<CardNode>) {
   }
 
   return (
-    <CardShell selected={!!selected} padding={6}>
+    <CardShell cardId={id} selected={!!selected} padding={6}>
       <div style={{ position: 'relative', width: '100%', height: 90, borderRadius: 5, background: shownHex, border: `1px solid ${P.border}` }}>
         {!readOnly && (
           <input

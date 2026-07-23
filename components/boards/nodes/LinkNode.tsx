@@ -7,7 +7,7 @@ import CardShell from './CardShell'
 import { LinkIcon } from '../icons'
 import type { CardNode } from '../toFlow'
 
-export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
+export default function LinkNode({ id, data, selected }: NodeProps<CardNode>) {
   const { palette: P } = useBoardUi()
   const content = data.card.content as LinkContent
   const host = (() => { try { return new URL(content.url).hostname } catch { return content.url } })()
@@ -18,7 +18,7 @@ export default function LinkNode({ data, selected }: NodeProps<CardNode>) {
   // alle andre kort. Tidligere pakket hele kortet inn i <a className="nodrag">, som
   // gjorde det umulig å flytte lenkekort etter at de var lagt til.
   return (
-    <CardShell selected={!!selected} padding={0}>
+    <CardShell cardId={id} selected={!!selected} padding={0}>
       {content.image_url && (
         <img src={content.image_url} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: '7px 7px 0 0', display: 'block' }} draggable={false} />
       )}

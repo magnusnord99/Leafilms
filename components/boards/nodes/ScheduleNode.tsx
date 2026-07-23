@@ -20,7 +20,7 @@ export default function ScheduleNode({ id, data, selected }: NodeProps<CardNode>
   const openSchedulePage = () => onOpenSchedule?.(id, data.card.board_id)
 
   return (
-    <CardShell selected={!!selected}>
+    <CardShell cardId={id} selected={!!selected}>
       <div onDoubleClick={openSchedulePage} style={{ cursor: 'pointer' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: P.accent + '22', border: `1px solid ${P.accent}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: P.accent, flexShrink: 0 }}>

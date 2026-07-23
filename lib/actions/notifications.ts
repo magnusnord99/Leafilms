@@ -6,13 +6,15 @@ import type { PipelineStage } from '@/lib/types'
 
 export type Notification = {
   id: string
-  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response'
+  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response' | 'board_comment_mention' | 'board_comment_reply'
   project_id: string | null
   task_id: string | null
   lead_id: string | null
   conversation_id: string | null
   message_id: string | null
   meeting_id: string | null
+  board_id: string | null
+  board_card_id: string | null
   message_preview: string
   sender_name: string
   read: boolean

@@ -6,11 +6,11 @@ import { useBoardUi } from '../boardContext'
 import CardShell from './CardShell'
 import type { CardNode } from '../toFlow'
 
-export default function VideoNode({ data, selected }: NodeProps<CardNode>) {
+export default function VideoNode({ id, data, selected }: NodeProps<CardNode>) {
   const { palette: P } = useBoardUi()
   const content = data.card.content as VideoContent
   return (
-    <CardShell selected={!!selected} padding={6}>
+    <CardShell cardId={id} selected={!!selected} padding={6}>
       <div className="nodrag" style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: 4, overflow: 'hidden', background: '#000' }}>
         {content.embed_url ? (
           <iframe

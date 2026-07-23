@@ -3,6 +3,7 @@
 import { randomBytes } from 'crypto'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
+import { getBoardComments, type BoardCommentsByCard } from '@/lib/actions/boardComments'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
@@ -26,6 +27,9 @@ export type BoardData = {
   deliveryDescription: string | null
   shootStart: string | null
   shootEnd: string | null
+  // Fraværende (undefined) for delt/offentlig board-visning (getSharedBoard) —
+  // kommentarer er internt-only (se 2026-07-22-board-comments-design.md).
+  comments?: BoardCommentsByCard
 }
 
 export type CardPositionPatch = {
@@ -113,7 +117,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const { data: board } = await supabase.from('boards').select('*').eq('id', boardId).single()
     if (!board) return null
 
-    const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
+    const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }, comments] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
       supabase.from('projects').select('id, title, customer_id, meeting_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
@@ -123,6 +127,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       board.customer_contact_id
         ? supabase.from('customer_contacts').select('id, name, role').eq('id', board.customer_contact_id).maybeSingle()
         : Promise.resolve({ data: null }),
+      getBoardComments(boardId),
     ])
     const breadcrumbs = await buildBreadcrumbs(supabase, board)
     const childMeta = await loadChildMeta(supabase, (cards ?? []) as BoardCard[])
@@ -151,6 +156,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       deliveryDescription: proj?.delivery_description?.trim() || null,
       shootStart: proj?.shoot_start ?? null,
       shootEnd: proj?.shoot_end ?? null,
+      comments,
     }
   } catch (err) {
     console.error('getBoardData:', err)

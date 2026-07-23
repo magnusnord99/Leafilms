@@ -66,7 +66,7 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
       )}
       {/* padding=0 — bildet skal fylle kortet helt uten en synlig ramme rundt seg,
           samme mønster som LinkNode allerede bruker for sitt forhåndsvisningsbilde. */}
-      <CardShell selected={!!selected} padding={0}>
+      <CardShell cardId={id} selected={!!selected} padding={0}>
         <div style={{ position: 'relative' }}>
           {content.url ? (
             <img

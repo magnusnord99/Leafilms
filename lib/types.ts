@@ -757,3 +757,25 @@ export type BoardEdge = {
   created_at: string
 }
 
+export type BoardCommentThread = {
+  id: string
+  board_id: string
+  card_id: string
+  created_by: string | null
+  resolved: boolean
+  resolved_by: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BoardComment = {
+  id: string
+  thread_id: string
+  board_id: string
+  author_id: string | null
+  content: string
+  mentions: string[]
+  created_at: string
+}
+

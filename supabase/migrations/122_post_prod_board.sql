@@ -1,4 +1,4 @@
--- 121_post_prod_board.sql
+-- 122_post_prod_board.sql
 -- Post-produksjon-brett v2: dra-og-slipp, egendefinerte lanes, parallelle
 -- oppgaver og et gjenbrukbart oppgavebibliotek. Se
 -- docs/superpowers/specs/2026-07-22-post-prod-board-design.md.

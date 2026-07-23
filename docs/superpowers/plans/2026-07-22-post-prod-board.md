@@ -120,7 +120,9 @@ ALTER TABLE tasks
 -- (custom_lane_id), eller parallell (is_parallel) — aldri flere samtidig.
 ALTER TABLE tasks
   ADD CONSTRAINT tasks_lane_exclusive CHECK (
-    NOT is_parallel OR (custom_lane_id IS NULL AND sub_type IS NULL)
+    (CASE WHEN sub_type IS NOT NULL THEN 1 ELSE 0 END
+     + CASE WHEN custom_lane_id IS NOT NULL THEN 1 ELSE 0 END
+     + CASE WHEN is_parallel THEN 1 ELSE 0 END) <= 1
   );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_custom_lane ON tasks(custom_lane_id) WHERE custom_lane_id IS NOT NULL;

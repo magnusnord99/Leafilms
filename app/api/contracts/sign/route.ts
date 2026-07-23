@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     const signedAt = new Date().toISOString()
 
     // Oppdater kontrakt til signert
-    const { error: updateContractError } = await supabase
+    const { data: signedContract, error: updateContractError } = await supabase
       .from('contracts')
       .update({
         status: 'signed',
@@ -143,10 +143,24 @@ export async function POST(request: NextRequest) {
         ...(finalContractText !== baseContractText ? { contract_text: finalContractText } : {}),
       })
       .eq('id', contract.id)
+      .eq('status', contract.status)
+      .select('id')
+      .maybeSingle()
 
     if (updateContractError) {
       console.error('sign contract update error:', updateContractError)
       return Response.json({ error: 'Kunne ikke registrere signering' }, { status: 500 })
+    }
+
+    // Status-sjekken må være del av samme UPDATE som lagrer signaturen. Ellers kan to
+    // samtidige forespørsler begge lese en usignert kontrakt og deretter overskrive
+    // hverandres signaturbevis, PDF og tillegg. Postgres evaluerer filteret på nytt
+    // etter eventuell radlås, så bare den første signeringen får en rad tilbake.
+    if (!signedContract) {
+      return Response.json(
+        { error: 'Kontrakten er allerede signert' },
+        { status: 409 }
+      )
     }
 
     // Generer PDF i minnet (ikke-fatal — kontrakt er allerede signert)

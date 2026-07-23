@@ -25,7 +25,6 @@ export type PreprodData = {
   millanote_url: string
   millanote_done: boolean
   prod_crew: PreprodCrewMember[]
-  post_crew: PreprodCrewMember[]
   packing_list: PackingItem[]
 }
 
@@ -33,13 +32,13 @@ const DEFAULT_PREPROD: PreprodData = {
   millanote_url: '',
   millanote_done: false,
   prod_crew: [],
-  post_crew: [],
   packing_list: [],
 }
 
 export type PreprodProject = ProjectWithPipeline & {
   task_count: number
   done_count: number
+  postProdAssignedCount: number
   preprod: PreprodData
 }
 
@@ -70,6 +69,20 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
       if (t.status === 'done') taskMap[t.project_id].done++
     }
 
+    const { data: postProdRows } = await supabase
+      .from('tasks')
+      .select('project_id, task_assignees(profile_id)')
+      .in('project_id', ids)
+      .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+
+    const assignedCountMap: Record<string, number> = {}
+    for (const t of postProdRows ?? []) {
+      if ((t.task_assignees ?? []).length > 0) {
+        assignedCountMap[t.project_id] = (assignedCountMap[t.project_id] ?? 0) + 1
+      }
+    }
+
     return data.map((row: ProjectRow) => {
       const pd = (row.pipeline_data as PipelineData) ?? {}
       return {
@@ -78,6 +91,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
         customers: undefined,
         task_count: taskMap[row.id]?.total ?? 0,
         done_count: taskMap[row.id]?.done ?? 0,
+        postProdAssignedCount: assignedCountMap[row.id] ?? 0,
         preprod: { ...DEFAULT_PREPROD, ...(pd.preprod ?? {}) },
       }
     }) as PreprodProject[]
@@ -286,67 +300,6 @@ export async function setTildelTaskStatus(
   } catch (err) {
     console.error('setTildelTaskStatus error:', err)
     return null
-  }
-}
-
-// Kobler pre-prod post_crew-rolle til task_assignees på faktiske post-prod-oppgaver.
-// Fjerner forrige person og legger til ny på alle matchende oppgavetitler.
-const ROLE_TASK_MAP: Record<string, string[]> = {
-  video_logging:             ['Logging'],
-  video_grovklipp:           ['Grovklipp'],
-  video_klipp:               ['Klipp'],
-  video_farger:              ['Farger'],
-  video_lyd:                 ['Lyd'],
-  video_ferdig:              ['Ferdig'],
-  photo_selektering:         ['Selektering', 'Selektering bilder'],
-  photo_seleksjon_til_kunde: ['Seleksjon til kunde'],
-  photo_redigering:          ['Redigering', 'Redigering bilder'],
-  photo_ferdig:              ['Ferdig'],
-}
-
-export async function syncPostCrewToTask(
-  projectId: string,
-  roleKey: string,
-  newProfileId: string | null,
-  prevProfileId: string | null
-): Promise<void> {
-  const titles = ROLE_TASK_MAP[roleKey]
-  if (!titles?.length || (!newProfileId && !prevProfileId)) return
-
-  try {
-    const supabase = await createClient()
-
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('project_id', projectId)
-      .eq('pipeline_stage', 'post_prod')
-      .in('title', titles)
-
-    if (!tasks?.length) return
-
-    const taskIds = tasks.map(t => t.id)
-
-    if (prevProfileId) {
-      await supabase
-        .from('task_assignees')
-        .delete()
-        .in('task_id', taskIds)
-        .eq('profile_id', prevProfileId)
-    }
-
-    if (newProfileId) {
-      await supabase
-        .from('task_assignees')
-        .upsert(
-          taskIds.map(task_id => ({ task_id, profile_id: newProfileId })),
-          { onConflict: 'task_id,profile_id' }
-        )
-    }
-
-    revalidatePath(`/admin/postprod/${projectId}`)
-  } catch (err) {
-    console.error('syncPostCrewToTask error:', err)
   }
 }
 

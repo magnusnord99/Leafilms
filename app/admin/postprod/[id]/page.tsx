@@ -266,9 +266,10 @@ export default function PostProdDetailPage() {
   const VENTER_TITLE = 'Venter på tilbakemelding'
   const SELEKSJON_TITLE = 'Selektering'
 
-  // Egendefinerte oppgaver holdes helt utenfor den låste stepperen
-  const stepperTasks = tasks.filter(t => !t.is_custom)
-  const customTasks = tasks.filter(t => t.is_custom)
+  // Egendefinerte oppgaver, parallell-rad og egendefinerte lanes holdes
+  // utenfor den låste stepperen (styres fra post-prod-brettet i preprod).
+  const stepperTasks = tasks.filter(t => !t.is_custom && !t.is_parallel && !t.custom_lane_id)
+  const customTasks = tasks.filter(t => t.is_custom || t.is_parallel || !!t.custom_lane_id)
 
   // For mixed-prosjekter: vis kun tasks for aktiv tab
   const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
@@ -557,7 +558,7 @@ export default function PostProdDetailPage() {
     const newTasks = tasks.filter(t => t.id !== taskId)
     setTasks(newTasks)
     const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
-    const newStepperTasks = newTasks.filter(t => !t.is_custom)
+    const newStepperTasks = newTasks.filter(t => !t.is_custom && !t.is_parallel && !t.custom_lane_id)
     const newDisplayTasks = isMixedProject ? newStepperTasks.filter(t => t.sub_type === activeTab) : newStepperTasks
     setSelectedIdx(getInitialIdx(newDisplayTasks))
   }

@@ -81,3 +81,33 @@ export function reorderExistingIds(
 
   return [...rest.slice(0, insertAt), subjectId, ...rest.slice(insertAt)]
 }
+
+/** Oppgaver i parallell-rad eller egendefinert lane — utenfor den låste sekvensen. */
+export function isOffSequencePostProdTask(t: {
+  is_parallel?: boolean | null
+  custom_lane_id?: string | null
+}): boolean {
+  return !!t.is_parallel || t.custom_lane_id != null
+}
+
+/**
+ * Maloppgaver som Nullstill/reseed skal slette. Parallell/egendefinerte lanes
+ * er alltid utenfor mal-sekvensen — også hvis created_by fortsatt er null
+ * (f.eks. etter drag uten å claim'e eierskap).
+ */
+export function isReseedDeletableTemplate(t: {
+  created_by: string | null
+  is_parallel?: boolean | null
+  custom_lane_id?: string | null
+}): boolean {
+  return t.created_by === null && !isOffSequencePostProdTask(t)
+}
+
+/** Steg som deltar i den låste post-prod-stepperen (ikke custom/parallell/egendefinert). */
+export function isSequentialPostProdStep(t: {
+  is_custom: boolean
+  is_parallel?: boolean | null
+  custom_lane_id?: string | null
+}): boolean {
+  return !t.is_custom && !isOffSequencePostProdTask(t)
+}

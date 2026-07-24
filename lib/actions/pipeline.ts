@@ -6,7 +6,14 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
-import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
+import {
+  computeInsertionOrder,
+  mergeReseededSequence,
+  assignSortOrder,
+  reorderExistingIds,
+  isReseedDeletableTemplate,
+  type SequenceRow,
+} from '@/lib/postprod-flow'
 import { computeStepperLocks } from '@/lib/task-lock'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
@@ -494,11 +501,11 @@ export async function reseedPostProdTasks(
       return { count: 0, error: 'Kunne ikke hente eksisterende oppgaver' }
     }
 
-    // Kun maloppgaver (created_by=null) slettes og regenereres. Alt et
-    // menneske har lagt til — frie egendefinerte oppgaver OG planlagte
-    // post-prod-steg — bevares.
+    // Kun maloppgaver i default-sekvensen slettes og regenereres. Menneske-
+    // lagde steg (created_by satt) og oppgaver i parallell/egendefinerte
+    // lanes bevares — også hvis et mal-kort ble dratt dit uten created_by.
     const toDeleteIds = (existingTasks ?? [])
-      .filter((t: { created_by: string | null }) => t.created_by === null)
+      .filter(isReseedDeletableTemplate)
       .map((t: { id: string }) => t.id)
 
     const preserved: (SequenceRow & { subType: 'video' | 'photo' | null })[] = (existingTasks ?? [])
@@ -1047,6 +1054,9 @@ export async function resetTaskAndSubsequent(
       .update({ status: 'todo', updated_at: new Date().toISOString() })
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+      .eq('is_parallel', false)
+      .is('custom_lane_id', null)
       .gte('sort_order', task.sort_order)
 
     query = task.sub_type
@@ -1098,12 +1108,16 @@ export async function rejectFeedbackAndReset(
       .eq('id', venterTaskId)
 
     // Tilbakestill alt fra sort_order 2 og frem til og med Venter til 'todo'
-    // Filtrerer på sub_type slik at kun riktig flyt nullstilles i mixed-prosjekter
+    // Filtrerer på sub_type slik at kun riktig flyt nullstilles i mixed-prosjekter.
+    // Parallell-/egendefinerte lanes er utenfor den låste sekvensen.
     let resetQuery = supabase
       .from('tasks')
       .update({ status: 'todo', updated_at: new Date().toISOString() })
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
+      .eq('is_custom', false)
+      .eq('is_parallel', false)
+      .is('custom_lane_id', null)
       .gt('sort_order', 1)
       .lte('sort_order', venterTask.sort_order)
 
@@ -2454,14 +2468,23 @@ export async function moveBoardTask(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
 
     const { data: task, error: taskError } = await supabase
       .from('tasks')
-      .select('id, project_id')
+      .select('id, project_id, created_by')
       .eq('id', taskId)
       .single()
 
     if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+
+    // Maloppgaver (created_by=null) som flyttes ut av default-sekvensen må
+    // claim'es — ellers sletter Nullstill dem, og deleteTask nekter sletting.
+    const claimCreatedBy =
+      (destination.kind === 'parallel' || destination.kind === 'custom') && !task.created_by
+        ? user.id
+        : undefined
 
     let dbSubType: 'video' | 'photo' | null = null
     if (destination.kind === 'video' || destination.kind === 'photo') {
@@ -2474,9 +2497,17 @@ export async function moveBoardTask(
     }
 
     if (destination.kind === 'parallel') {
+      const patch: Record<string, unknown> = {
+        is_parallel: true,
+        sub_type: null,
+        custom_lane_id: null,
+        sort_order: 0,
+      }
+      if (claimCreatedBy) patch.created_by = claimCreatedBy
+
       const { error } = await supabase
         .from('tasks')
-        .update({ is_parallel: true, sub_type: null, custom_lane_id: null, sort_order: 0 })
+        .update(patch)
         .eq('id', taskId)
 
       if (error) return { ok: false, error: 'Kunne ikke flytte oppgaven' }
@@ -2515,6 +2546,7 @@ export async function moveBoardTask(
         patch.is_parallel = false
         patch.custom_lane_id = destination.kind === 'custom' ? destination.laneId : null
         patch.sub_type = destination.kind === 'custom' ? null : dbSubType
+        if (claimCreatedBy) patch.created_by = claimCreatedBy
       }
       const { error } = await supabase.from('tasks').update(patch).eq('id', finalIds[i])
       if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }

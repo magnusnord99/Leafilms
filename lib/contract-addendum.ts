@@ -65,6 +65,43 @@ function insertDeliveryImpact(text: string, deliveryLines: string, language: Con
     : text + note
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Fjerner leveranse-/tilleggsavsnitt som tidligere signeringer (eller PDF-forhåndsvisning)
+// har bakt inn i contract_text. unsignContract nullstiller kun status — ikke teksten — så
+// buildContractTextWithAddons må være idempotent, ellers dupliseres avsnittene ved re-signering.
+export function stripPreviousAddonPatches(text: string): string {
+  const deliveryAlt = [STRINGS.no.deliveryNote, STRINGS.en.deliveryNote].map(escapeRegExp).join('|')
+  const addonAlt = [
+    STRINGS.no.addonsInTotal,
+    STRINGS.en.addonsInTotal,
+    STRINGS.no.addonsFallback,
+    STRINGS.en.addonsFallback,
+  ].map(escapeRegExp).join('|')
+
+  let result = text
+
+  // Leveransenotater satt inn rett før §5 (kan finnes flere etter gjentatt unsign→resign).
+  const deliveryBeforeSectionRe = new RegExp(
+    `\\n\\n(?:${deliveryAlt})\\n[\\s\\S]*?(?=\\n\\n(?:(?:${deliveryAlt})|5\\.\\s))`,
+    'g'
+  )
+  result = result.replace(deliveryBeforeSectionRe, '')
+
+  // Tilleggslistinger appendes alltid bakerst — fjern fra første kjente anker til slutten.
+  const addonTailRe = new RegExp(`\\n\\n(?:${addonAlt})\\n[\\s\\S]*$`)
+  result = result.replace(addonTailRe, '')
+
+  // Leveransenotat appendet uten §5-overskrift (insertDeliveryImpact-fallback), evt. etter
+  // at tilleggslistingen over ble strippet bort.
+  const trailingDeliveryRe = new RegExp(`\\n\\n(?:${deliveryAlt})\\n[\\s\\S]*$`)
+  result = result.replace(trailingDeliveryRe, '')
+
+  return result
+}
+
 export function buildContractTextWithAddons(
   baseContractText: string,
   baseFinalPriceExclVat: number,
@@ -73,6 +110,10 @@ export function buildContractTextWithAddons(
   language: ContractLanguage = 'no'
 ): string {
   const t = STRINGS[language]
+  // Start alltid fra ren basetekst — contract_text kan allerede inneholde patch fra forrige signering
+  // (unsignContract bevarer teksten) eller fra admin PDF-nedlasting mens status er 'sent'.
+  const cleanBase = stripPreviousAddonPatches(baseContractText)
+
   // Rabatterbare tillegg (startup/production/post, med mindre discountable er satt til false)
   // rabatteres med samme faktor som resten av tilbudet — 'expenses' rabatteres aldri.
   const addonsTotal = selectedAddons.reduce((sum, a) => sum + addonDiscountedPrice(a, discountFactor), 0)
@@ -88,24 +129,24 @@ export function buildContractTextWithAddons(
     .map((a) => a.deliveryImpact!.trim())
     .join('\n')
 
-  if (TOTALPRIS_RE.test(baseContractText)) {
+  if (TOTALPRIS_RE.test(cleanBase)) {
     // Summen oppdateres alltid til den friske grunnsummen — selv uten valgte tillegg — siden
     // tilbudet kan ha blitt endret etter forrige publisering av kontrakten. Tillegg-avsnittet
     // legges kun ved når kunden faktisk har valgt noe.
-    const updated = baseContractText.replace(TOTALPRIS_RE, `${newTotalStr}$1`)
+    const updated = cleanBase.replace(TOTALPRIS_RE, `${newTotalStr}$1`)
     const withDelivery = insertDeliveryImpact(updated, deliveryLines, language)
     return selectedAddons.length > 0
       ? `${withDelivery}\n\n${t.addonsInTotal}\n${lines}`
       : withDelivery
   }
 
-  if (selectedAddons.length === 0) return baseContractText
+  if (selectedAddons.length === 0) return cleanBase
 
   // Fallback hvis totalprisen i kontrakten ikke er på forventet format
   // (f.eks. admin har fjernet "eks. mva."-teksten manuelt) — legg til som eget avsnitt i stedet,
   // så informasjonen aldri går tapt.
   return (
-    insertDeliveryImpact(baseContractText, deliveryLines, language) +
+    insertDeliveryImpact(cleanBase, deliveryLines, language) +
     `\n\n${t.addonsFallback}\n${lines}\n\n${t.newTotal(fmtKr(baseFinalPriceExclVat + addonsTotal, language))}`
   )
 }

@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
-import { getAdminSelectionPage } from '@/lib/actions/selection-albums'
-import SelectionAdminClient from './SelectionAdminClient'
+import { getGalleryIdForProject } from '@/lib/actions/selections'
+import CreateGalleryForm from './CreateGalleryForm'
 
 export default async function SelectionAdminPage({
   params,
@@ -22,13 +22,8 @@ export default async function SelectionAdminPage({
 
   if (!project) notFound()
 
-  const selectionData = await getAdminSelectionPage(projectId)
+  const gallery = await getGalleryIdForProject(projectId)
+  if (gallery) redirect(`/admin/selections/${gallery.id}`)
 
-  return (
-    <SelectionAdminClient
-      projectId={projectId}
-      projectName={project.title}
-      initialData={selectionData}
-    />
-  )
+  return <CreateGalleryForm projectId={projectId} projectName={project.title} />
 }

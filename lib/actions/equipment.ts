@@ -47,6 +47,7 @@ export type ProjectEquipmentUnit = {
   assignee_name: string | null
   room_id: string | null
   room_name: string | null
+  packed: boolean
 }
 
 type CatalogJoin = { name: string; category: string } | null
@@ -507,13 +508,26 @@ export async function setUnitAssignee(unitId: string, projectId: string, profile
   }
 }
 
+export async function setUnitPacked(unitId: string, projectId: string, packed: boolean): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('equipment_reservations')
+      .update({ packed, updated_at: new Date().toISOString() })
+      .eq('unit_id', unitId)
+      .eq('project_id', projectId)
+  } catch (err) {
+    console.error('setUnitPacked error:', err)
+  }
+}
+
 export async function getProjectEquipment(projectId: string): Promise<ProjectEquipmentUnit[]> {
   try {
     const supabase = await createClient()
 
     const { data } = await supabase
       .from('equipment_reservations')
-      .select('assignee_id, equipment_units(id, unit_label, room_id, price_catalog(name, category), equipment_rooms(name)), assignee:profiles!assignee_id(id, name)')
+      .select('assignee_id, packed, equipment_units(id, unit_label, room_id, price_catalog(name, category), equipment_rooms(name)), assignee:profiles!assignee_id(id, name)')
       .eq('project_id', projectId)
 
     return (data ?? [])
@@ -529,6 +543,7 @@ export async function getProjectEquipment(projectId: string): Promise<ProjectEqu
           assignee_name: assigneeRow?.name ?? null,
           room_id: unitRow?.room_id ?? null,
           room_name: unitRow?.equipment_rooms?.name ?? null,
+          packed: (r as unknown as { packed: boolean }).packed ?? false,
         }
       })
       .sort((a, b) => a.unit_label.localeCompare(b.unit_label))

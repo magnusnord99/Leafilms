@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import {
   createAlbum, updateAlbum, deleteAlbum, deleteAlbumImage, deleteAllAlbumImages,
-  enableAlbumSharing, disableAlbumSharing, updateAlbumPin, getAdminSelectionPage,
+  enableAlbumSharing, disableAlbumSharing, updateAlbumPin, getAdminGalleryPage,
   moveImagesToAlbum,
 } from '@/lib/actions/selection-albums'
 import {
-  createGallery, purgeGalleryImages, reopenGallery,
+  purgeGalleryImages, reopenGallery,
   getSelectedFilenames, registerUploadedImages,
+  linkGalleryToProject, unlinkGalleryFromProject, searchProjectsToLink,
 } from '@/lib/actions/selections'
 import { createVideoReview } from '@/lib/actions/video-reviews'
 import type { AdminSelectionPageData, AlbumWithImages } from '@/lib/actions/selection-albums'
@@ -20,20 +21,17 @@ import { C } from '@/lib/admin-theme'
 // Hoved-komponent
 // ---------------------------------------------------------------------------
 export default function SelectionAdminClient({
-  projectId,
-  projectName,
+  galleryId,
   initialData,
 }: {
-  projectId: string
-  projectName: string
-  initialData: AdminSelectionPageData | null
+  galleryId: string
+  initialData: AdminSelectionPageData
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const backHref = searchParams?.get('from') ?? `/admin/projects/${projectId}`
   const [data, setData] = useState(initialData)
-  const [creating, setCreating] = useState(false)
-  const [targetInput, setTargetInput] = useState('')
+  const linkedProject = data.linkedProject
+  const backHref = searchParams?.get('from') ?? (linkedProject ? `/admin/projects/${linkedProject.id}` : '/admin/selections')
   const [newAlbumName, setNewAlbumName] = useState('')
   const [addingAlbum, setAddingAlbum] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
@@ -44,16 +42,8 @@ export default function SelectionAdminClient({
   const [reopening, setReopening] = useState(false)
 
   async function refresh() {
-    const fresh = await getAdminSelectionPage(projectId)
-    setData(fresh)
-  }
-
-  async function handleCreateGallery() {
-    setCreating(true)
-    await createGallery(projectId, parseInt(targetInput) || undefined)
-    await refresh()
-    setCreating(false)
-    setTargetInput('')
+    const fresh = await getAdminGalleryPage(galleryId)
+    if (fresh) setData(fresh)
   }
 
   async function handleAddAlbum() {
@@ -104,35 +94,6 @@ export default function SelectionAdminClient({
     background: 'none', color: '#C05050', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', cursor: 'pointer',
   }
 
-  // ---- Ingen galleri enda ----
-  if (!data) {
-    return (
-      <div style={{ maxWidth: 560, margin: '48px auto', padding: '0 16px' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginBottom: 4 }}>
-          <button onClick={() => router.push(backHref)} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '0.72rem' }}>← {projectName}</button>
-        </p>
-        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.1rem', fontWeight: 700, color: C.text, marginBottom: 24 }}>Seleksjon</h1>
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '20px 24px' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, fontWeight: 600, marginBottom: 16 }}>Opprett seleksjonsgalleri</p>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Måltall bilder (valgfritt)</label>
-              <input
-                type="number" min={1} value={targetInput}
-                onChange={e => setTargetInput(e.target.value)}
-                placeholder="f.eks. 20"
-                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 7, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', outline: 'none' }}
-              />
-            </div>
-            <button onClick={handleCreateGallery} disabled={creating} style={{ padding: '9px 18px', borderRadius: 7, border: 'none', cursor: 'pointer', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600 }}>
-              {creating ? 'Oppretter...' : 'Opprett galleri'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const { gallery, albums, totalSelected, totalImages } = data
   const isOver = gallery.target_count != null && totalSelected > gallery.target_count
   const statusMap: Record<string, { label: string; color: string; bg: string }> = {
@@ -170,7 +131,7 @@ export default function SelectionAdminClient({
       {/* Topbar */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={() => router.push(backHref)} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'var(--font-dm-sans)' }}>
-          ← {projectName}
+          ← {linkedProject ? linkedProject.title : 'Gallerier'}
         </button>
         <span style={{ color: C.text3 }}>/</span>
         {/* "Seleksjon"-rot er klikkbar hvis vi er inne i et album */}
@@ -243,6 +204,11 @@ export default function SelectionAdminClient({
             <GalleryLinkBox token={gallery.token} pinCode={gallery.pin_code} />
           </div>
 
+          <div style={{ marginBottom: 16 }}>
+            <div style={labelStyle}>Prosjekt</div>
+            <LinkProjectPanel galleryId={gallery.id} linkedProject={linkedProject} onRefresh={refresh} />
+          </div>
+
           <div style={labelStyle}>Handlinger</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {gallery.status === 'submitted' && (
@@ -259,7 +225,7 @@ export default function SelectionAdminClient({
           <AlbumDetailPanel
             key={activeAlbum.id}
             album={activeAlbum}
-            projectId={projectId}
+            linkedProjectId={linkedProject?.id ?? null}
             galleryId={gallery.id}
             galleryPinCode={gallery.pin_code}
             onRefresh={refresh}
@@ -419,11 +385,118 @@ function GalleryLinkBox({ token, pinCode }: { token: string; pinCode: string }) 
 }
 
 // ---------------------------------------------------------------------------
+// Koble galleri til prosjekt (eller fjern koblingen)
+// ---------------------------------------------------------------------------
+function LinkProjectPanel({
+  galleryId,
+  linkedProject,
+  onRefresh,
+}: {
+  galleryId: string
+  linkedProject: { id: string; title: string } | null
+  onRefresh: () => Promise<void>
+}) {
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<{ id: string; title: string }[]>([])
+  const [linking, setLinking] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
+
+  async function handleSearch(value: string) {
+    setQuery(value)
+    if (!value.trim()) { setResults([]); return }
+    const found = await searchProjectsToLink(value)
+    setResults(found)
+  }
+
+  async function handleLink(projectId: string) {
+    setLinking(true)
+    await linkGalleryToProject(galleryId, projectId)
+    await onRefresh()
+    setSearching(false)
+    setQuery('')
+    setResults([])
+    setLinking(false)
+  }
+
+  async function handleUnlink() {
+    if (!confirm('Fjerne koblingen til prosjektet? Galleriet blir stående som frittstående.')) return
+    setUnlinking(true)
+    await unlinkGalleryFromProject(galleryId)
+    await onRefresh()
+    setUnlinking(false)
+  }
+
+  if (linkedProject) {
+    return (
+      <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px' }}>
+        <a
+          href={`/admin/projects/${linkedProject.id}`}
+          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, color: C.text, textDecoration: 'none' }}
+        >
+          {linkedProject.title}
+        </a>
+        <div style={{ marginTop: 6 }}>
+          <button onClick={handleUnlink} disabled={unlinking} style={{ padding: '4px 8px', borderRadius: 5, border: `1px solid ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', cursor: 'pointer' }}>
+            {unlinking ? '...' : 'Fjern kobling'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!searching) {
+    return (
+      <button
+        onClick={() => setSearching(true)}
+        style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px dashed ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', cursor: 'pointer' }}
+      >
+        + Knytt til prosjekt
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px' }}>
+      <input
+        autoFocus
+        value={query}
+        onChange={e => handleSearch(e.target.value)}
+        placeholder="Søk etter prosjekt..."
+        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+      />
+      {results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 140, overflowY: 'auto' }}>
+          {results.map(p => (
+            <button
+              key={p.id}
+              onClick={() => handleLink(p.id)}
+              disabled={linking}
+              style={{ textAlign: 'left', padding: '5px 6px', borderRadius: 4, border: 'none', background: 'none', color: C.text2, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+            >
+              {p.title}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        onClick={() => { setSearching(false); setQuery(''); setResults([]) }}
+        style={{ marginTop: 6, padding: '4px 8px', borderRadius: 5, border: `1px solid ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', cursor: 'pointer' }}
+      >
+        Avbryt
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Albumdetalj-panel — lever i høyre kolonne, sidebar er alltid synlig
 // ---------------------------------------------------------------------------
 function AlbumDetailPanel({
   album,
-  projectId,
+  linkedProjectId,
   galleryId,
   galleryPinCode,
   onRefresh,
@@ -432,7 +505,7 @@ function AlbumDetailPanel({
   allAlbums,
 }: {
   album: AlbumWithImages
-  projectId: string
+  linkedProjectId: string | null
   galleryId: string
   galleryPinCode: string
   onRefresh: () => Promise<void>
@@ -561,14 +634,14 @@ function AlbumDetailPanel({
     if (!file || !file.type.startsWith('video/')) return
     setUploadingVideo(true)
     try {
-      const path = `${projectId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const path = `${galleryId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const { error } = await supabase.storage.from('videos').upload(path, file, { contentType: file.type, upsert: false })
       if (error) {
         alert('Kunne ikke laste opp video: ' + error.message)
         return
       }
       const title = file.name.replace(/\.[^.]+$/, '')
-      await createVideoReview(projectId, title, path, galleryId, album.id)
+      await createVideoReview(linkedProjectId, title, path, galleryId, album.id)
       await onRefresh()
     } finally {
       setUploadingVideo(false)
@@ -918,10 +991,12 @@ function AlbumDetailPanel({
           {album.videos.map(video => (
             <a
               key={video.id}
-              href={`/admin/projects/${projectId}/video`}
+              href={linkedProjectId ? `/admin/projects/${linkedProjectId}/video` : undefined}
+              title={linkedProjectId ? undefined : 'Knytt galleriet til et prosjekt for å åpne videogjennomgangen'}
               style={{
                 borderRadius: 7, overflow: 'hidden', textDecoration: 'none',
                 border: '2px solid transparent', background: C.surface2, position: 'relative', display: 'block',
+                cursor: linkedProjectId ? 'pointer' : 'default',
               }}
             >
               <div style={{ position: 'relative', aspectRatio: '4/3' }}>

@@ -13,6 +13,7 @@ interface Profile {
   name: string | null
   customer_id: string | null
   color: string | null
+  phone: string | null
 }
 
 export function useAuth() {

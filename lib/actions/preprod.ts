@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
-import type { ProjectWithPipeline, Task, PipelineData, TaskRow, ProjectRow } from '@/lib/types'
+import type { ProjectWithPipeline, Task, PipelineData, TaskRow, ProjectRow, PreprodMessage } from '@/lib/types'
 import { ROLE_TASK_MAP } from '@/lib/postprod-role-map'
 
 export type PreprodCrewMember = {
@@ -378,5 +378,74 @@ export async function updatePreprodTaskStatus(
     await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
   } catch (err) {
     console.error('updatePreprodTaskStatus error:', err)
+  }
+}
+
+// ─── Pre-prod-chat ────────────────────────────────────────────────────────
+// Samme mønster som tilbudschatten (lib/actions/quotes.ts) — @mention- og
+// reaksjonsvarsler håndteres av DB-triggerne i 127_preprod_messages.sql.
+
+export async function getPreprodMessages(projectId: string): Promise<PreprodMessage[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('preprod_messages')
+      .select('id, project_id, user_id, message, mentions, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('getPreprodMessages error:', error)
+      return []
+    }
+
+    const rows = data ?? []
+    if (rows.length === 0) return []
+
+    const userIds = [...new Set(rows.map(r => r.user_id))]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .in('id', userIds)
+
+    const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+
+    return rows.map(r => ({
+      ...r,
+      mentions: r.mentions as string[],
+      user: profileMap[r.user_id] ?? null,
+    })) as PreprodMessage[]
+  } catch (err) {
+    console.error('getPreprodMessages unexpected error:', err)
+    return []
+  }
+}
+
+export async function sendPreprodMessage(opts: {
+  projectId: string
+  message: string
+  mentionedUserIds: string[]
+}): Promise<{ ok: boolean }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false }
+
+    const { error } = await supabase.from('preprod_messages').insert({
+      project_id: opts.projectId,
+      user_id: user.id,
+      message: opts.message.trim(),
+      mentions: opts.mentionedUserIds,
+    })
+
+    if (error) {
+      console.error('sendPreprodMessage insert error:', error)
+      return { ok: false }
+    }
+
+    return { ok: true }
+  } catch (err) {
+    console.error('sendPreprodMessage unexpected error:', err)
+    return { ok: false }
   }
 }

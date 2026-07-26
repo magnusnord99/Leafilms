@@ -17,6 +17,7 @@ type QuoteRow = {
   quote_data: QuoteBuilderData | null
   selected_addon_ids: string[] | null
   created_at: string
+  is_current: boolean
 }
 
 type ProjectRow = {
@@ -47,15 +48,20 @@ const STAGE_INDEX: Record<string, number> = Object.fromEntries(
   PIPELINE_STAGES.map((s, i) => [s.value, i])
 )
 
-// Sortert etter created_at desc slik at "nyeste" alltid er entydig — et prosjekt kan i
-// praksis ha flere 'accepted'-tilbud (f.eks. en gammel akseptering fra før et tilbud ble
-// korrigert), og rekkefølgen quotes(...) kommer i fra Supabase er ikke garantert stabil.
+// Et signert/akseptert tilbud er det sterkeste signalet vi har — det vinner alltid, selv om
+// en nyere kladd (f.eks. et tilleggstilbud for ekstraarbeid) senere har blitt "is_current"
+// (satt automatisk hver gang en ny versjon lages, uavhengig av om den forrige var signert).
+// Uten signert tilbud: fall tilbake på is_current (siden-brukeren har bevisst valgt denne),
+// ellers nyeste opprettet — rekkefølgen quotes(...) kommer i fra Supabase er uansett ikke
+// garantert stabil.
 function pickBestQuote(quotes: QuoteRow[]): QuoteRow | null {
   const withData = quotes.filter(q => q.quote_data)
   if (!withData.length) return null
   const byRecency = (a: QuoteRow, b: QuoteRow) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   const accepted = withData.filter(q => q.status === 'accepted').sort(byRecency)
   if (accepted.length) return accepted[0]
+  const current = withData.find(q => q.is_current)
+  if (current) return current
   return withData.sort(byRecency)[0]
 }
 
@@ -224,7 +230,7 @@ export default function OkonomiPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('projects')
-      .select('id, title, pipeline_stage, parent_project_id, updated_at, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at)')
+      .select('id, title, pipeline_stage, parent_project_id, updated_at, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at, is_current)')
       .neq('status', 'archived')
       .neq('status', 'lost')
       .order('created_at', { ascending: false })
@@ -264,7 +270,36 @@ export default function OkonomiPage() {
         })
     }
 
-    setPotential(toAmountRows(POTENTIAL_STAGES))
+    // Et prosjekt med et allerede signert tilbud kan i tillegg ha et NYERE, ikke-signert
+    // tilleggstilbud (kunden ba om noe ekstra etter at hovedjobben var avtalt) — det signerte
+    // beløpet ligger i sitt vanlige steg-basert bøtte (typisk Kommende/Inntjeninger), men
+    // tilleggsbeløpet skal telle som Potensiell inntekt helt til DET også signeres, i stedet
+    // for å stille erstatte det signerte beløpet (jf. Magnus 2026-07-23).
+    const pendingAddonRows: ProjectWithAmount[] = []
+    for (const p of rows) {
+      if (!p.pipeline_stage) continue
+      const quotes = p.quotes ?? []
+      const primary = pickBestQuote(quotes)
+      if (primary?.status !== 'accepted') continue
+      const primaryCreatedAt = new Date(primary.created_at).getTime()
+      // Kun kladder laget ETTER det signerte tilbudet telles som tilleggstilbud — en eldre,
+      // forlatt kladd fra FØR signeringen (f.eks. en tidligere versjon som ble forkastet) er
+      // ikke noe nytt kunden har bedt om i tillegg, bare historikk.
+      const pendingAmount = quotes
+        .filter(q => q.quote_data && q.id !== primary.id && q.status !== 'accepted' && new Date(q.created_at).getTime() > primaryCreatedAt)
+        .reduce((sum, q) => sum + (getAmount(q) ?? 0), 0)
+      if (pendingAmount > 0) {
+        pendingAddonRows.push({
+          id: `${p.id}-addon`,
+          title: `${p.title} (tilleggstilbud)`,
+          customerName: p.customers?.name ?? null,
+          stage: p.pipeline_stage,
+          amount: pendingAmount,
+        })
+      }
+    }
+
+    setPotential([...toAmountRows(POTENTIAL_STAGES), ...pendingAddonRows])
     setUpcoming(toAmountRows(UPCOMING_STAGES))
     setEarned(toAmountRows(EARNED_STAGES))
     setLoading(false)

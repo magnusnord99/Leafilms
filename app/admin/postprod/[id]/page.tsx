@@ -8,7 +8,7 @@ import {
   reseedPostProdTasks, setProjectType,
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
-  getAllProfiles, toggleTaskAssignee, updatePostProdDelivery,
+  getAllProfiles, toggleTaskAssignee,
   getProjectDeliverablesSection,
   updateProjectDeliverablesSection,
   setProjectLead, getTaskMessageCounts,
@@ -19,7 +19,7 @@ import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline } from '@/lib/types'
-import { TaskChat } from '@/components/task/TaskChat'
+import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
@@ -173,6 +173,7 @@ export default function PostProdDetailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const deepLinkTaskId = searchParams?.get('task') ?? null
+  const forceOpenChat = searchParams?.get('chat') === '1'
   const projectId = params.id as string
 
   const [projects, setProjects] = useState<PostProdProject[]>([])
@@ -188,6 +189,10 @@ export default function PostProdDetailPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [reseeding, setReseeding] = useState(false)
   const [seedError, setSeedError] = useState<string | null>(null)
+  // Generisk feilmelding for optimistiske oppdateringer som feiler på serveren
+  // (statusendring m.m.) — se handleAdvance. Vises som en dismissbar boks nederst,
+  // samme mønster som saveError i BoardCanvas.
+  const [actionError, setActionError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string | null; email: string } | null>(null)
   const [showRejectionForm, setShowRejectionForm] = useState(false)
   const [rejectionNote, setRejectionNote] = useState('')
@@ -209,10 +214,6 @@ export default function PostProdDetailPage() {
   const leadDropdownRef = useRef<HTMLDivElement>(null)
 
   // Leveringsinfo
-  const [editingDelivery, setEditingDelivery] = useState(false)
-  const [deliveryVideo, setDeliveryVideo] = useState('')
-  const [deliveryPhoto, setDeliveryPhoto] = useState('')
-  const [savingDelivery, setSavingDelivery] = useState(false)
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   const [editingDeliverables, setEditingDeliverables] = useState(false)
   const [draftDeliverables, setDraftDeliverables] = useState<DeliverableItem[]>([])
@@ -325,29 +326,11 @@ export default function PostProdDetailPage() {
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
-      setDeliveryVideo(currentProj.delivery_video ?? '')
-      setDeliveryPhoto(currentProj.delivery_photo ?? '')
       setProjectLead_(currentProj.project_lead
         ? { ...currentProj.project_lead, color: allProfiles.find(p => p.id === currentProj.project_lead!.id)?.color ?? null }
-        : null)   // ← ny linje
+        : null)
     }
     setLoading(false)
-  }
-
-  async function handleSaveDelivery() {
-    setSavingDelivery(true)
-    await updatePostProdDelivery(
-      projectId,
-      deliveryVideo.trim() || null,
-      deliveryPhoto.trim() || null
-    )
-    setProjects(prev => prev.map(p =>
-      p.id === projectId
-        ? { ...p, delivery_video: deliveryVideo.trim() || null, delivery_photo: deliveryPhoto.trim() || null }
-        : p
-    ))
-    setSavingDelivery(false)
-    setEditingDelivery(false)
   }
 
   function initNotes(taskList: Task[]) {
@@ -452,6 +435,9 @@ export default function PostProdDetailPage() {
 
   async function handleAdvance(taskId: string, to: 'in_progress' | 'done') {
     setTogglingId(taskId)
+    setActionError(null)
+    const prevTask = tasks.find(t => t.id === taskId)
+    const prevSelectedIdx = selectedIdx
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: to } : t))
 
     if (to === 'done') {
@@ -469,7 +455,19 @@ export default function PostProdDetailPage() {
       )
     }
 
-    await updateTaskStatus(taskId, to)
+    const result = await updateTaskStatus(taskId, to)
+    if (!result.ok) {
+      // Rull tilbake den optimistiske endringen — uten dette tror brukeren steget
+      // ble lagret som fullført mens det i realiteten aldri nådde databasen.
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: prevTask?.status ?? t.status } : t))
+      if (to === 'done') {
+        setSelectedIdx(prevSelectedIdx)
+        setProjects(prev =>
+          prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.max(0, p.done_count - 1) })
+        )
+      }
+      setActionError('Kunne ikke lagre statusendringen — sjekk nettverket og prøv igjen.')
+    }
     setTogglingId(null)
   }
 
@@ -480,8 +478,10 @@ export default function PostProdDetailPage() {
     }
     if (!selectedTask) return
     setRejecting(true)
+    setActionError(null)
     const result = await rejectFeedbackAndReset(projectId, selectedTask.id, rejectionNote.trim())
     if (!result.ok) {
+      setActionError(result.error ?? 'Kunne ikke sende tilbake — sjekk nettverket og prøv igjen.')
       setRejecting(false)
       return
     }
@@ -505,20 +505,29 @@ export default function PostProdDetailPage() {
   async function handleGoBack(taskId: string) {
     if (!selectedTask) return
     setTogglingId(taskId)
+    setActionError(null)
     const taskToReset = tasks.find(t => t.id === taskId)
     const subType = taskToReset?.sub_type ?? null
     const sortOrder = taskToReset?.sort_order ?? 0
+    const prevStatuses = new Map(tasks.map(t => [t.id, t.status]))
     // Optimistisk: nullstill denne og alle etter den med samme sub_type lokalt
     setTasks(prev => prev.map(t => {
       if (t.sub_type !== subType) return t
       if (t.sort_order < sortOrder) return t
       return { ...t, status: 'todo' }
     }))
-    setProjects(prev => {
-      const resetCount = stepperTasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
-      return prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.max(0, p.done_count - resetCount) })
-    })
-    await resetTaskAndSubsequent(projectId, taskId)
+    const resetCount = stepperTasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
+    setProjects(prev =>
+      prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.max(0, p.done_count - resetCount) })
+    )
+    const result = await resetTaskAndSubsequent(projectId, taskId)
+    if (!result.ok) {
+      setTasks(prev => prev.map(t => prevStatuses.has(t.id) ? { ...t, status: prevStatuses.get(t.id)! } : t))
+      setProjects(prev =>
+        prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.min(p.done_count + resetCount, p.task_count) })
+      )
+      setActionError(result.error ?? 'Kunne ikke gå tilbake til dette steget — sjekk nettverket og prøv igjen.')
+    }
     setTogglingId(null)
   }
 
@@ -1183,7 +1192,7 @@ export default function PostProdDetailPage() {
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
             {/* Left: task details + notes + action */}
-            <div style={{ flex: '0 0 58%', overflowY: 'auto', padding: '28px 32px', borderRight: `1px solid ${C.border}`, minWidth: 0 }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', minWidth: 0, maxWidth: 760, margin: '0 auto', width: '100%' }}>
 
               {/* Status badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -1756,17 +1765,29 @@ export default function PostProdDetailPage() {
               )}
             </div>
 
-            {/* Right: chat */}
-            <TaskChat
-              taskId={selectedTask.id}
-              taskTitle={selectedTask.title}
-              currentUserId={currentUser?.id ?? null}
-              profiles={profiles}
-            />
-
           </div>
         ) : null}
       </div>
+
+      {actionError && (
+        <div style={{ position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 97, background: '#3a1d1d', color: '#f0b0b0', border: '1px solid #E05555', borderRadius: 8, padding: '8px 14px', fontSize: '0.78rem', fontFamily: 'var(--font-dm-sans)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {actionError}
+          <button onClick={() => setActionError(null)} style={{ background: 'none', border: 'none', color: '#f0b0b0', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {/* Flytende oppgave-chat — samme mønster som tilbuds-chatten på tilbudssiden
+          (knapp øverst til høyre, sleng-inn-panel), i stedet for en permanent
+          delt kolonne som alltid tok opp ~42% av skjermbredden. */}
+      {selectedTask && (
+        <TaskChatPanel
+          taskId={selectedTask.id}
+          taskTitle={selectedTask.title}
+          currentUserId={currentUser?.id ?? null}
+          profiles={profiles}
+          forceOpen={forceOpenChat}
+        />
+      )}
     </div>
   )
 }

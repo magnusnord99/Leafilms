@@ -1,14 +1,18 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
-import { getAllGalleriesOverview } from '@/lib/actions/selection-albums'
+import { getAllGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
+import CreateStandaloneGalleryButton from './CreateStandaloneGalleryButton'
 
 export default async function SelectionsOverviewPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const projects = await getAllGalleriesOverview()
+  const [projects, standaloneGalleries] = await Promise.all([
+    getAllGalleriesOverview(),
+    getStandaloneGalleries(),
+  ])
 
   const C = {
     bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
@@ -25,9 +29,12 @@ export default async function SelectionsOverviewPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px' }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
-        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.2rem', fontWeight: 700, color: C.text, marginBottom: 6 }}>
-          Gallerier
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
+          <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.2rem', fontWeight: 700, color: C.text }}>
+            Gallerier
+          </h1>
+          <CreateStandaloneGalleryButton />
+        </div>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 28 }}>
           Prosjekter i post-prod med aktiv seleksjonsfase
         </p>
@@ -96,6 +103,55 @@ export default async function SelectionsOverviewPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {standaloneGalleries.length > 0 && (
+          <>
+            <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 700, color: C.text, marginTop: 36, marginBottom: 6 }}>
+              Frittstående gallerier
+            </h2>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 14 }}>
+              Ikke knyttet til noe prosjekt
+            </p>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {['Galleri', 'Status', 'Album', 'Valgt', 'Opprettet'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {standaloneGalleries.map((g, i) => {
+                    const st = galleryStatusMap[g.status] ?? galleryStatusMap.open
+                    return (
+                      <tr key={g.galleryId} style={{ borderBottom: i < standaloneGalleries.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                        <td style={{ padding: '13px 16px' }}>
+                          <Link
+                            href={`/admin/selections/${g.galleryId}`}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, textDecoration: 'none' }}
+                          >
+                            Galleri {g.galleryId.slice(0, 8)}
+                          </Link>
+                        </td>
+                        <td style={{ padding: '13px 16px' }}>
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: st.color }}>{st.label}</span>
+                        </td>
+                        <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2 }}>{g.albumCount}</td>
+                        <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2 }}>
+                          {g.totalSelected}{g.targetCount ? ` / ${g.targetCount}` : ''}
+                        </td>
+                        <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                          {new Date(g.createdAt).toLocaleDateString('nb-NO')}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -27,7 +27,7 @@ type Props = {
 
 export default function ScheduleCardPage({ initial, readOnly = false, backHref, palette = ADMIN_BOARD_PALETTE }: Props) {
   return (
-    <BoardUiProvider value={{ palette, readOnly, markLocalOp: () => {}, onCardResize: () => {} }}>
+    <BoardUiProvider value={{ palette, readOnly, markLocalOp: () => {}, onCardResize: () => {}, recordContentEdit: () => {} }}>
       <ScheduleCardPageContent initial={initial} readOnly={readOnly} backHref={backHref} />
     </BoardUiProvider>
   )

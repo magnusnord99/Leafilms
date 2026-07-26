@@ -43,12 +43,16 @@ export default function CardShell({ cardId, selected, dropActive, children, padd
         transition: 'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
       }}
     >
-      {!readOnly && (
-        <>
-          <Handle type="target" position={Position.Left} style={{ width: 8, height: 8, background: P.border, border: 'none' }} />
-          <Handle type="source" position={Position.Right} style={{ width: 8, height: 8, background: P.accent, border: 'none' }} />
-        </>
-      )}
+      {/* Handles må finnes i DOM-et selv i readOnly — React Flow bruker dem til å
+          anker edge-linjene, uten dem forsvinner pilene på delte/offentlige boards. */}
+      <Handle
+        type="target" position={Position.Left} isConnectable={!readOnly}
+        style={{ width: 8, height: 8, background: P.border, border: 'none', ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : {}) }}
+      />
+      <Handle
+        type="source" position={Position.Right} isConnectable={!readOnly}
+        style={{ width: 8, height: 8, background: P.accent, border: 'none', ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : {}) }}
+      />
       {!readOnly && (commentCount > 0 || hovered) && (
         <button
           className="nodrag"

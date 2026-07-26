@@ -23,6 +23,25 @@ export async function updateProfileName(name: string): Promise<{ error?: string 
   return {}
 }
 
+export async function updateProfilePhone(phone: string): Promise<{ error?: string }> {
+  const trimmed = phone.trim()
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke innlogget.' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ phone: trimmed || null })
+    .eq('id', user.id)
+
+  if (error) {
+    console.error('updateProfilePhone error:', error)
+    return { error: 'Kunne ikke lagre telefonnummer.' }
+  }
+  return {}
+}
+
 export async function updateProfileColor(color: string): Promise<{ error?: string }> {
   if (!AVATAR_COLORS.includes(color as AvatarColor)) {
     return { error: 'Ugyldig farge.' }

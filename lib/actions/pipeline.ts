@@ -8,6 +8,7 @@ import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks } from '@/lib/task-lock'
+import { pickBestQuote } from '@/lib/quote-builder-utils'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -384,7 +385,7 @@ export async function setProjectType(
 export async function updateTaskStatus(
   taskId: string,
   status: 'todo' | 'in_progress' | 'done'
-): Promise<{ advanced: boolean; projectId: string | null; nextStage: PipelineStage | null }> {
+): Promise<{ ok: boolean; advanced: boolean; projectId: string | null; nextStage: PipelineStage | null }> {
   try {
     const supabase = await createClient()
 
@@ -402,7 +403,7 @@ export async function updateTaskStatus(
 
     if (error) {
       console.error('updateTaskStatus error:', error)
-      return { advanced: false, projectId: null, nextStage: null }
+      return { ok: false, advanced: false, projectId: null, nextStage: null }
     }
 
     // Auto-advance: når alle tasks i current stage er ferdige → flytt til neste stage
@@ -442,7 +443,7 @@ export async function updateTaskStatus(
             revalidatePath('/admin/pipeline')
             revalidatePath('/admin/projects')
             revalidatePath('/admin/postprod')
-            return { advanced: true, projectId: task.project_id, nextStage: nextStage as PipelineStage }
+            return { ok: true, advanced: true, projectId: task.project_id, nextStage: nextStage as PipelineStage }
           }
         }
       }
@@ -451,10 +452,10 @@ export async function updateTaskStatus(
     revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
     revalidatePath('/admin/postprod')
-    return { advanced: false, projectId: null, nextStage: null }
+    return { ok: true, advanced: false, projectId: null, nextStage: null }
   } catch (err) {
     console.error('updateTaskStatus unexpected error:', err)
-    return { advanced: false, projectId: null, nextStage: null }
+    return { ok: false, advanced: false, projectId: null, nextStage: null }
   }
 }
 
@@ -768,7 +769,12 @@ export async function getProjectHub(projectId: string): Promise<{
         customers (
           id,
           name,
-          company
+          company,
+          org_nummer,
+          address,
+          invoice_email,
+          invoice_reference,
+          invoice_info_skipped
         ),
         project_lead:profiles!project_lead_id (
           id,
@@ -796,19 +802,20 @@ export async function getProjectHub(projectId: string): Promise<{
       ? await getTasksForProject(projectId, project.pipeline_stage)
       : await getTasksForProject(projectId)
 
-    // Hent gjeldende quote-versjon for prosjektet
-    const { data: quoteRow, error: quoteError } = await supabase
+    // Hent tilbudet som best representerer prosjektet nå — et akseptert/signert
+    // tilbud vinner alltid over "gjeldende versjon" (is_current), se pickBestQuote.
+    // Uten dette kan et nyere, usignert tilleggstilbud for samme prosjekt vises som
+    // om DET var det kunden hadde akseptert (feedback 08a0235b).
+    const { data: quoteRows, error: quoteError } = await supabase
       .from('quotes')
       .select('*')
       .eq('project_id', projectId)
-      .eq('is_current', true)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
 
     if (quoteError) {
       console.error('getProjectHub quote error:', quoteError)
     }
+    const quoteRow = pickBestQuote((quoteRows ?? []) as Quote[])
 
     // Hent pitch-token fra project_shares
     const { data: shareRow, error: shareError } = await supabase
@@ -861,32 +868,66 @@ export async function analyzeProjectNotes(
   projectId: string,
   notes: string,
   projectTitle: string
-): Promise<{ sammendrag: string } | { error: string }> {
+): Promise<{ sammendrag: string; shootStart?: string | null; shootEnd?: string | null } | { error: string }> {
   try {
     if (!process.env.ANTHROPIC_API_KEY) return { error: 'AI-analyse er ikke konfigurert.' }
     const supabase = await createClient()
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const today = new Date().toISOString().slice(0, 10)
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 400,
-      system: 'Du er en assistent for et norsk film- og fotoproduksjonsselskap. Du oppsummerer e-posttråder og møtenotater til et kort, lettlest sammendrag som et team-medlem som ikke har sett prosjektet før kan lese på noen sekunder og forstå hva prosjektet handler om. Svar kun med selve sammendragsteksten — ingen overskrift, ingen liste, ingen innledning som "Her er sammendraget".',
+      max_tokens: 500,
+      system: 'Du er en assistent for et norsk film- og fotoproduksjonsselskap. Du oppsummerer e-posttråder og møtenotater til et kort, lettlest sammendrag, og plukker i tillegg ut en eventuell opptaksdato som er nevnt i teksten. Svar KUN med et JSON-objekt — ingen markdown-fences, ingen tekst før eller etter.',
       messages: [{
         role: 'user',
-        content: `Prosjekt: "${projectTitle}"\n\nE-posttråd / møtenotater:\n${notes}\n\nSkriv et sammenhengende sammendrag på 3-5 setninger (vanlig løpende tekst, ikke punktliste) som dekker: hvem kunden er, hva prosjektet går ut på, viktige krav/ønsker, og eventuelt budsjett/tidslinje/kontaktperson hvis det er nevnt.`
+        content: `Dagens dato: ${today}\n\nProsjekt: "${projectTitle}"\n\nE-posttråd / møtenotater:\n${notes}\n\n1. Skriv et sammenhengende sammendrag på 3-5 setninger (vanlig løpende tekst, ikke punktliste) som dekker: hvem kunden er, hva prosjektet går ut på, viktige krav/ønsker, og eventuelt budsjett/tidslinje/kontaktperson hvis det er nevnt.\n\n2. Nevner teksten en konkret opptaksdato eller -periode (filming, innspilling, "vi filmer den...", "opptak i uke ...", osv.)? Regn ut datoen(e) i ISO-format (YYYY-MM-DD) relativt til dagens dato over. Én dag: sett shootEnd likt shootStart. Ingen dato nevnt eller for vagt til å regne ut (f.eks. "en gang i høst"): sett begge til null.\n\nSvar med nøyaktig dette JSON-objektet:\n{"sammendrag": "...", "shootStart": "YYYY-MM-DD eller null", "shootEnd": "YYYY-MM-DD eller null"}`
       }]
     })
 
-    const sammendrag = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
+    const raw = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
+    if (!raw) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    let parsed: { sammendrag?: string; shootStart?: string | null; shootEnd?: string | null } = {}
+    try {
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+    } catch {
+      parsed = {}
+    }
+
+    const sammendrag = (parsed.sammendrag ?? raw).trim()
     if (!sammendrag) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
     const summary = { sammendrag }
 
+    // Skriv aldri over en opptaksdato som allerede er satt (f.eks. bekreftet i kalender
+    // eller kontrakt) — AI-uttrekket fra frittekst skal kun fylle inn en dato som mangler.
+    const { data: existing } = await supabase.from('projects').select('shoot_start').eq('id', projectId).maybeSingle()
+    const extractedStart = typeof parsed.shootStart === 'string' ? parsed.shootStart : null
+    const shouldSetShootDates = !existing?.shoot_start && !!extractedStart
+
     await supabase
       .from('projects')
-      .update({ meeting_notes: notes, meeting_summary: summary, updated_at: new Date().toISOString() })
+      .update({
+        meeting_notes: notes,
+        meeting_summary: summary,
+        updated_at: new Date().toISOString(),
+        ...(shouldSetShootDates && {
+          shoot_start: extractedStart,
+          shoot_end: typeof parsed.shootEnd === 'string' ? parsed.shootEnd : extractedStart,
+        }),
+      })
       .eq('id', projectId)
     revalidatePath(`/admin/projects/${projectId}`)
-    return summary
+    if (shouldSetShootDates) revalidatePath('/admin/calendar')
+
+    return {
+      ...summary,
+      ...(shouldSetShootDates && {
+        shootStart: extractedStart,
+        shootEnd: typeof parsed.shootEnd === 'string' ? parsed.shootEnd : extractedStart,
+      }),
+    }
   } catch (err) {
     console.error('analyzeProjectNotes error:', err)
     if (err instanceof Anthropic.APIError && err.status === 400 && /credit balance/i.test(err.message)) {
@@ -1252,12 +1293,12 @@ export async function updateTaskNotes(taskId: string, notes: string): Promise<vo
 /**
  * Returnerer alle brukerprofiler i systemet — brukes til assignee-picker.
  */
-export async function getAllProfiles(): Promise<{ id: string; name: string | null; email: string; color: string | null }[]> {
+export async function getAllProfiles(): Promise<{ id: string; name: string | null; email: string; color: string | null; phone: string | null }[]> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, color')
+      .select('id, name, email, color, phone')
       .order('name', { ascending: true })
 
     if (error) {
@@ -2663,6 +2704,21 @@ export async function addTaskToLibrary(taskId: string): Promise<{ ok: boolean; e
     return { ok: true }
   } catch (err) {
     console.error('addTaskToLibrary unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function deleteTaskLibraryItem(itemId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase.from('post_prod_task_library').delete().eq('id', itemId)
+    if (error) {
+      console.error('deleteTaskLibraryItem error:', error)
+      return { ok: false, error: 'Kunne ikke slette' }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('deleteTaskLibraryItem unexpected error:', err)
     return { ok: false, error: 'Uventet feil' }
   }
 }

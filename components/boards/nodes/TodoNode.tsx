@@ -10,7 +10,7 @@ import type { CardNode } from '../toFlow'
 
 export default function TodoNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, recordContentEdit } = useBoardUi()
   const content = data.card.content as TodoContent
   const [newText, setNewText] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
@@ -20,6 +20,7 @@ export default function TodoNode({ id, data, selected }: NodeProps<CardNode>) {
     const finalTitle = nextTitle !== undefined ? nextTitle : content.title
     const newContent: TodoContent = { title: finalTitle || undefined, items: nextItems }
     markLocalOp(id)
+    recordContentEdit(id, content, newContent)
     // Oppdater node-data immutabelt så visningen reflekterer lagringen umiddelbart,
     // samtidig som eksterne oppdateringer (realtime, Task 12) fortsatt slår gjennom.
     rf.updateNodeData(id, { card: { ...data.card, content: newContent } })

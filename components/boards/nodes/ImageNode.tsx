@@ -12,7 +12,7 @@ import type { CardNode } from '../toFlow'
 
 export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp, onCardResize } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, onCardResize, recordContentEdit } = useBoardUi()
   const content = data.card.content as ImageContent
   const [lightbox, setLightbox] = useState(false)
   const [editingCaption, setEditingCaption] = useState(false)
@@ -27,6 +27,7 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
     if ('error' in res) { window.alert(res.error); return }
     markLocalOp(id)
     const next = { ...content, url: res.url }
+    recordContentEdit(id, content, next)
     rf.updateNodeData(id, { card: { ...data.card, content: next } })
     updateCardContent(id, next)
   }
@@ -44,6 +45,7 @@ export default function ImageNode({ id, data, selected }: NodeProps<CardNode>) {
     setEditingCaption(false)
     if (caption !== (content.caption ?? '')) {
       markLocalOp(id)
+      recordContentEdit(id, content, { url: content.url, caption })
       // Oppdater node-data immutabelt så visningen reflekterer lagringen umiddelbart,
       // samtidig som eksterne oppdateringer (realtime, Task 12) fortsatt slår gjennom.
       rf.updateNodeData(id, { card: { ...data.card, content: { url: content.url, caption } } })

@@ -8,7 +8,7 @@ import { setBoardLead, setBoardCustomerContact, type BoardLeadProfile, type Boar
 import { getCustomerContacts, createCustomerContact } from '@/lib/actions/schedule-people'
 import type { CustomerContact } from '@/lib/types'
 
-type Profile = { id: string; name: string | null; email: string; color: string | null }
+type Profile = { id: string; name: string | null; email: string; color: string | null; phone: string | null }
 
 function useOutsideClose(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null)
@@ -145,7 +145,7 @@ function CustomerContactPicker({
   async function pick(c: CustomerContact | null) {
     setOpen(false)
     setShowNewForm(false)
-    onChange(c ? { id: c.id, name: c.name, role: c.role } : null)
+    onChange(c ? { id: c.id, name: c.name, role: c.role, phone: c.phone } : null)
     await setBoardCustomerContact(boardId, c?.id ?? null)
   }
 
@@ -169,8 +169,6 @@ function CustomerContactPicker({
     padding: '4px 6px', color: C.text, fontSize: '0.7rem', outline: 'none',
   }
 
-  if (!customerId) return null
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(v => !v)} style={pillStyle(!!contact)}>
@@ -179,7 +177,7 @@ function CustomerContactPicker({
             <Avatar id={contact.id} name={contact.name} />
             {contact.name}
           </>
-        ) : '+ Kundekontakt'}
+        ) : (customerId ? '+ Kundekontakt' : 'Ingen kunde koblet til prosjektet')}
       </button>
       {open && (
         <div style={{
@@ -200,36 +198,44 @@ function CustomerContactPicker({
               Fjern kontakt
             </button>
           )}
-          {contacts.map(c => (
-            <div
-              key={c.id}
-              onClick={() => pick(c)}
-              style={{
-                padding: '6px 4px', fontSize: '0.73rem',
-                color: c.id === contact?.id ? C.accent : C.text, cursor: 'pointer', borderRadius: 4,
-              }}
-            >
-              {c.name}{c.role ? ` · ${c.role}` : ''}
-            </div>
-          ))}
-          {!showNewForm ? (
-            <div onClick={() => setShowNewForm(true)} style={{ marginTop: 4, fontSize: '0.7rem', color: C.accent, cursor: 'pointer', padding: '4px' }}>
-              + Ny kontaktperson
-            </div>
+          {!customerId ? (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, fontStyle: 'italic', margin: 0, padding: '4px' }}>
+              Prosjektet mangler kobling til en kunde — sett kunde på prosjektet for å velge kontaktperson.
+            </p>
           ) : (
-            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <input autoFocus value={newContact.name} onChange={e => setNewContact(n => ({ ...n, name: e.target.value }))} placeholder="Navn *" style={inputStyle} />
-              <input value={newContact.role} onChange={e => setNewContact(n => ({ ...n, role: e.target.value }))} placeholder="Rolle" style={inputStyle} />
-              <input value={newContact.email} onChange={e => setNewContact(n => ({ ...n, email: e.target.value }))} placeholder="E-post" style={inputStyle} />
-              <input value={newContact.phone} onChange={e => setNewContact(n => ({ ...n, phone: e.target.value }))} placeholder="Telefon" style={inputStyle} />
-              <button
-                onClick={submitNewContact}
-                disabled={!newContact.name.trim()}
-                style={{ padding: '5px 0', background: C.accent, color: '#fff', border: 'none', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer' }}
-              >
-                Legg til og velg
-              </button>
-            </div>
+            <>
+              {contacts.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => pick(c)}
+                  style={{
+                    padding: '6px 4px', fontSize: '0.73rem',
+                    color: c.id === contact?.id ? C.accent : C.text, cursor: 'pointer', borderRadius: 4,
+                  }}
+                >
+                  {c.name}{c.role ? ` · ${c.role}` : ''}
+                </div>
+              ))}
+              {!showNewForm ? (
+                <div onClick={() => setShowNewForm(true)} style={{ marginTop: 4, fontSize: '0.7rem', color: C.accent, cursor: 'pointer', padding: '4px' }}>
+                  + Ny kontaktperson
+                </div>
+              ) : (
+                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <input autoFocus value={newContact.name} onChange={e => setNewContact(n => ({ ...n, name: e.target.value }))} placeholder="Navn *" style={inputStyle} />
+                  <input value={newContact.role} onChange={e => setNewContact(n => ({ ...n, role: e.target.value }))} placeholder="Rolle" style={inputStyle} />
+                  <input value={newContact.email} onChange={e => setNewContact(n => ({ ...n, email: e.target.value }))} placeholder="E-post" style={inputStyle} />
+                  <input value={newContact.phone} onChange={e => setNewContact(n => ({ ...n, phone: e.target.value }))} placeholder="Telefon" style={inputStyle} />
+                  <button
+                    onClick={submitNewContact}
+                    disabled={!newContact.name.trim()}
+                    style={{ padding: '5px 0', background: C.accent, color: '#fff', border: 'none', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Legg til og velg
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

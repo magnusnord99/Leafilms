@@ -23,7 +23,7 @@ function renderInline(text: string, key: number) {
 
 export default function NoteNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, recordContentEdit } = useBoardUi()
   const content = data.card.content as NoteContent
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(content.text)
@@ -42,6 +42,7 @@ export default function NoteNode({ id, data, selected }: NodeProps<CardNode>) {
     setEditing(false)
     if (draft !== content.text) {
       markLocalOp(id)
+      recordContentEdit(id, content, { text: draft })
       // Oppdater node-data immutabelt så visningen reflekterer lagringen umiddelbart,
       // samtidig som eksterne oppdateringer (realtime, Task 12) fortsatt slår gjennom.
       rf.updateNodeData(id, { card: { ...data.card, content: { text: draft } } })

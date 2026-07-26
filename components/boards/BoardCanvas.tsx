@@ -12,7 +12,8 @@ import '@xyflow/react/dist/style.css'
 import type { BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent } from '@/lib/types'
 import {
   createBoardCard, createSubBoard, createStorylineBoard, addStorylineCard, addStorylineRow, widenStorylineGrid, createBoardEdge, deleteBoardCards, deleteBoardEdges, saveCardPositions, fetchLinkMetadata, updateCardContent, updateBoardEdgeLabel, updateBoardEdgeEndpoints, moveCardToBoard,
-  type BoardData, type CardPositionPatch,
+  pasteBoardCards, restoreDeletedCards, snapshotBoardSubtrees,
+  type BoardData, type CardPositionPatch, type BoardTreeSnapshot, type PastedEdgeInput,
 } from '@/lib/actions/boards'
 import { postBoardComment, toggleThreadResolved, type BoardCommentsByCard } from '@/lib/actions/boardComments'
 import type { BoardComment, BoardCommentThread } from '@/lib/types'
@@ -53,6 +54,37 @@ type Props = {
   focusCardId?: string
 }
 
+// ---------------------------------------------------------------------------
+// Angre/gjør om (Cmd/Ctrl+Z / Shift+Z) — lokal handlingsstakk, kun denne fanen,
+// forsvinner ved reload/boardbytte. Angrer/gjør om ALDRI andres samtidige
+// endringer, kun egne (speiler markLocalOp/isLocalOp-mønsteret over).
+//
+// 'create'/'delete' er hverandres speilbilde: begge bærer et fullt snapshot av
+// de berørte kortene/pilene (+ ev. hele det nøstede undertreet for et board-/
+// storyline-kort, se snapshotBoardSubtrees) — undo/redo velger bare retning
+// (sett inn med samme id / fjern igjen).
+//
+// Kjent begrensning: å dra et kort INN i et underboard (board-/storyline-kort)
+// spores ikke i angre-stakken — kun vanlig omplassering/kolonne-festing gjør.
+// Kommentartråder på et slettet kort er kaskade-slettet i databasen med det
+// samme og kommer ikke tilbake selv om selve kortet gjenopprettes.
+// ---------------------------------------------------------------------------
+type CardSetSnapshot = { cardsSnapshot: BoardCard[]; edgesSnapshot: BoardEdge[]; subtrees: Record<string, BoardTreeSnapshot> }
+type CardPosState = { x: number; y: number; column_id: string | null; z_index: number; width: number | null }
+type MoveChange = { cardId: string; before: CardPosState; after: CardPosState }
+
+type HistoryEntry =
+  | { kind: 'create'; data: CardSetSnapshot }
+  | { kind: 'delete'; data: CardSetSnapshot }
+  | { kind: 'move'; changes: MoveChange[] }
+  | { kind: 'content'; cardId: string; before: BoardCardContent; after: BoardCardContent }
+  | { kind: 'edge-create'; edge: BoardEdge }
+  | { kind: 'edge-delete'; edge: BoardEdge }
+  | { kind: 'edge-label'; edgeId: string; before: string | null; after: string | null }
+  | { kind: 'edge-reconnect'; edgeId: string; before: { source: string; target: string }; after: { source: string; target: string } }
+
+const HISTORY_LIMIT = 50
+
 function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALETTE, onOpenBoard, onOpenSchedule, focusCardId }: Props) {
   const rf = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<CardNode>(cardsToNodes(initial.cards, initial.childMeta))
@@ -74,6 +106,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     const ts = localOps.current.get(rowId)
     return !!ts && Date.now() - ts < 5000
   }, [])
+
 
   const openThread = useCallback((cardId: string) => setOpenCardId(cardId), [])
   const closeThread = useCallback(() => setOpenCardId(null), [])
@@ -146,6 +179,200 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     setSaveError(ok ? null : SAVE_ERROR_MSG)
   }, [markLocalOp])
 
+  // ---- Angre/gjør om (se HistoryEntry over) ----
+  const undoStackRef = useRef<HistoryEntry[]>([])
+  const redoStackRef = useRef<HistoryEntry[]>([])
+  const pushHistory = useCallback((entry: HistoryEntry) => {
+    undoStackRef.current.push(entry)
+    if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift()
+    redoStackRef.current = []
+  }, [])
+
+  const recordCreate = useCallback(async (cards: BoardCard[], edges: BoardEdge[]) => {
+    if (cards.length === 0 && edges.length === 0) return
+    const nested = cards.filter(c => c.type === 'board' || c.type === 'storyline')
+    const subtrees = nested.length > 0
+      ? await snapshotBoardSubtrees(nested.map(c => ({ id: c.id, type: c.type, content: c.content })))
+      : {}
+    pushHistory({ kind: 'create', data: { cardsSnapshot: cards, edgesSnapshot: edges, subtrees } })
+  }, [pushHistory])
+
+  const buildNodeFromSnapshot = useCallback((card: BoardCard, subtrees: Record<string, BoardTreeSnapshot>) => {
+    const node = cardToNode(card, initial.childMeta)
+    if ((card.type === 'board' || card.type === 'storyline') && !initial.childMeta[(card.content as BoardRefContent).child_board_id]) {
+      const subtree = subtrees[card.id]
+      node.data.meta = { title: (card.content as BoardRefContent).title, cardCount: subtree?.cards.length ?? 0 }
+    }
+    return node
+  }, [initial.childMeta])
+
+  const removeCardSet = useCallback(async (data: CardSetSnapshot) => {
+    const cardIds = data.cardsSnapshot.map(c => c.id)
+    const edgeIds = data.edgesSnapshot.map(e => e.id)
+    cardIds.forEach(markLocalOp)
+    edgeIds.forEach(markLocalOp)
+    setNodes(ns => ns.filter(n => !cardIds.includes(n.id)))
+    setEdges(es => es.filter(e => !edgeIds.includes(e.id)))
+    if (cardIds.length) { const ok = await deleteBoardCards(cardIds); if (!ok) setSaveError(SAVE_ERROR_MSG) }
+    if (edgeIds.length) { const ok = await deleteBoardEdges(edgeIds); if (!ok) setSaveError(SAVE_ERROR_MSG) }
+  }, [markLocalOp, setNodes, setEdges])
+
+  const restoreCardSet = useCallback(async (data: CardSetSnapshot) => {
+    data.cardsSnapshot.forEach(c => markLocalOp(c.id))
+    data.edgesSnapshot.forEach(e => markLocalOp(e.id))
+    const ok = await restoreDeletedCards(data.cardsSnapshot, data.edgesSnapshot, data.subtrees)
+    if (!ok) { setSaveError(SAVE_ERROR_MSG); return }
+    const columns = data.cardsSnapshot.filter(c => c.type === 'column')
+    const rest = data.cardsSnapshot.filter(c => c.type !== 'column')
+    const newNodes = [...columns, ...rest].map(c => buildNodeFromSnapshot(c, data.subtrees))
+    setNodes(ns => [...ns, ...newNodes])
+    setEdges(es => [...es, ...data.edgesSnapshot.map(edgeToFlow)])
+  }, [markLocalOp, setNodes, setEdges, buildNodeFromSnapshot])
+
+  const applyPosState = useCallback((n: CardNode, state: CardPosState): CardNode => ({
+    ...n,
+    parentId: state.column_id ?? undefined,
+    position: { x: state.x, y: state.y },
+    zIndex: n.data.card.type === 'column' ? 0 : state.z_index + 1,
+    data: { ...n.data, card: { ...n.data.card, x: state.x, y: state.y, column_id: state.column_id, z_index: state.z_index } },
+    style: { ...n.style, width: state.width ?? (n.data.card.type === 'column' ? COLUMN_WIDTH : CARD_WIDTH) },
+  }), [])
+
+  const applyMoveEntry = useCallback(async (changes: MoveChange[], useBefore: boolean) => {
+    const byId = new Map(changes.map(c => [c.cardId, useBefore ? c.before : c.after]))
+    changes.forEach(c => markLocalOp(c.cardId))
+    setNodes(ns => {
+      const updated = ns.map(n => byId.has(n.id) ? applyPosState(n, byId.get(n.id)!) : n)
+      const columns = updated.filter(n => n.data.card.type === 'column')
+      const rest = updated.filter(n => n.data.card.type !== 'column')
+      return [...columns, ...rest]
+    })
+    const patches: CardPositionPatch[] = changes.map(c => {
+      const s = useBefore ? c.before : c.after
+      return { id: c.cardId, x: s.x, y: s.y, column_id: s.column_id, z_index: s.z_index, width: s.width ?? undefined }
+    })
+    await persist(patches)
+  }, [markLocalOp, setNodes, applyPosState, persist])
+
+  const applyContentEntry = useCallback(async (cardId: string, content: BoardCardContent) => {
+    markLocalOp(cardId)
+    setNodes(ns => ns.map(n => n.id === cardId ? { ...n, data: { ...n.data, card: { ...n.data.card, content } } } : n))
+    await updateCardContent(cardId, content)
+  }, [markLocalOp, setNodes])
+
+  // Kalt av kort-komponentene (via useBoardUi) rett før de selv lagrer en
+  // innholdsendring — se boardContext.tsx. Selve mutasjonen/lagringen skjer
+  // fortsatt i kort-komponenten som før; dette registrerer den bare i angre-stakken.
+  const recordContentEdit = useCallback((cardId: string, before: BoardCardContent, after: BoardCardContent) => {
+    pushHistory({ kind: 'content', cardId, before, after })
+  }, [pushHistory])
+
+  const applyEdgeAdd = useCallback(async (edge: BoardEdge) => {
+    markLocalOp(edge.id)
+    setEdges(es => es.some(e => e.id === edge.id) ? es : [...es, edgeToFlow(edge)])
+    const ok = await restoreDeletedCards([], [edge], {})
+    if (!ok) setSaveError(SAVE_ERROR_MSG)
+  }, [markLocalOp, setEdges])
+
+  const applyEdgeRemove = useCallback(async (edgeId: string) => {
+    markLocalOp(edgeId)
+    setEdges(es => es.filter(e => e.id !== edgeId))
+    const ok = await deleteBoardEdges([edgeId])
+    if (!ok) setSaveError(SAVE_ERROR_MSG)
+  }, [markLocalOp, setEdges])
+
+  const applyEdgeLabel = useCallback(async (edgeId: string, label: string | null) => {
+    markLocalOp(edgeId)
+    setEdges(es => es.map(e => e.id === edgeId ? { ...e, label: label ?? undefined } : e))
+    await updateBoardEdgeLabel(edgeId, label)
+  }, [markLocalOp, setEdges])
+
+  const applyEdgeEndpoints = useCallback(async (edgeId: string, source: string, target: string) => {
+    markLocalOp(edgeId)
+    setEdges(es => es.map(e => e.id === edgeId ? { ...e, source, target } : e))
+    await updateBoardEdgeEndpoints(edgeId, source, target)
+  }, [markLocalOp, setEdges])
+
+  const applyHistoryEntry = useCallback(async (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+    switch (entry.kind) {
+      case 'create':
+        return direction === 'undo' ? removeCardSet(entry.data) : restoreCardSet(entry.data)
+      case 'delete':
+        return direction === 'undo' ? restoreCardSet(entry.data) : removeCardSet(entry.data)
+      case 'move':
+        return applyMoveEntry(entry.changes, direction === 'undo')
+      case 'content':
+        return applyContentEntry(entry.cardId, direction === 'undo' ? entry.before : entry.after)
+      case 'edge-create':
+        return direction === 'undo' ? applyEdgeRemove(entry.edge.id) : applyEdgeAdd(entry.edge)
+      case 'edge-delete':
+        return direction === 'undo' ? applyEdgeAdd(entry.edge) : applyEdgeRemove(entry.edge.id)
+      case 'edge-label':
+        return applyEdgeLabel(entry.edgeId, direction === 'undo' ? entry.before : entry.after)
+      case 'edge-reconnect': {
+        const s = direction === 'undo' ? entry.before : entry.after
+        return applyEdgeEndpoints(entry.edgeId, s.source, s.target)
+      }
+    }
+  }, [removeCardSet, restoreCardSet, applyMoveEntry, applyContentEntry, applyEdgeAdd, applyEdgeRemove, applyEdgeLabel, applyEdgeEndpoints])
+
+  const performUndo = useCallback(async () => {
+    const entry = undoStackRef.current.pop()
+    if (!entry) return
+    await applyHistoryEntry(entry, 'undo')
+    redoStackRef.current.push(entry)
+  }, [applyHistoryEntry])
+
+  const performRedo = useCallback(async () => {
+    const entry = redoStackRef.current.pop()
+    if (!entry) return
+    await applyHistoryEntry(entry, 'redo')
+    undoStackRef.current.push(entry)
+  }, [applyHistoryEntry])
+
+  // ---- Kopier/lim inn (Cmd/Ctrl+C/V) ----
+  const clipboardRef = useRef<{ cards: BoardCard[]; edges: PastedEdgeInput[] } | null>(null)
+  const pasteOffsetRef = useRef(0)
+
+  const handleCopy = useCallback(() => {
+    const selected = (rf.getNodes() as CardNode[]).filter(n => n.selected)
+    if (selected.length === 0) return
+    const ids = new Set(selected.map(n => n.id))
+    const selectedEdges = (rf.getEdges() as Edge[]).filter(e => ids.has(e.source) && ids.has(e.target))
+    clipboardRef.current = {
+      cards: selected.map(n => n.data.card),
+      edges: selectedEdges.map(e => ({ from_card_id: e.source, to_card_id: e.target, label: (e.label as string) ?? null })),
+    }
+    pasteOffsetRef.current = 0
+  }, [rf])
+
+  const handlePaste = useCallback(async () => {
+    const clip = clipboardRef.current
+    if (!clip || readOnly) return
+    pasteOffsetRef.current += 40
+    const offset = pasteOffsetRef.current
+    const res = await pasteBoardCards(boardId, clip.cards, clip.edges, offset, offset, maxZ() + 1)
+    if (!res) { setSaveError(SAVE_ERROR_MSG); return }
+    res.cards.forEach(c => markLocalOp(c.id))
+    res.edges.forEach(e => markLocalOp(e.id))
+    const columns = res.cards.filter(c => c.type === 'column')
+    const rest = res.cards.filter(c => c.type !== 'column')
+    const newNodes = [...columns, ...rest].map(c => {
+      const node = cardToNode(c, initial.childMeta)
+      if (c.type === 'board' || c.type === 'storyline') {
+        node.data.meta = res.childMeta[(c.content as BoardRefContent).child_board_id]
+      }
+      return node
+    })
+    setNodes(ns => [...ns.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
+    setEdges(es => [...es, ...res.edges.map(edgeToFlow)])
+    const nested = res.cards.filter(c => c.type === 'board' || c.type === 'storyline')
+    const subtrees = nested.length > 0
+      ? await snapshotBoardSubtrees(nested.map(c => ({ id: c.id, type: c.type, content: c.content })))
+      : {}
+    pushHistory({ kind: 'create', data: { cardsSnapshot: res.cards, edgesSnapshot: res.edges, subtrees } })
+  }, [readOnly, boardId, maxZ, markLocalOp, setNodes, setEdges, initial.childMeta, pushHistory])
+
   // Hjelpere for kolonnestabling (Task 9)
   const nodeHeight = useCallback((n: CardNode) => n.measured?.height ?? 100, [])
   const absPos = useCallback((nodeId: string) => {
@@ -166,7 +393,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
     appendOrReplaceNode(cardToNode(card, initial.childMeta))
-  }, [boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ])
+    recordCreate([card], [])
+  }, [boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ, recordCreate])
 
   // Opprette kort ved klikk på canvas i plasseringsmodus
   const onPaneClick = useCallback(async (event: React.MouseEvent) => {
@@ -194,6 +422,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         if (!card) { setSaveError(SAVE_ERROR_MSG); return }
         markLocalOp(card.id)
         appendOrReplaceNode(cardToNode(card, initial.childMeta))
+        recordCreate([card], [])
       } else {
         pendingPosRef.current = pos
         videoInputRef.current?.click()
@@ -212,6 +441,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         if (!card) { setSaveError(SAVE_ERROR_MSG); return }
         markLocalOp(card.id)
         appendOrReplaceNode(cardToNode(card, initial.childMeta))
+        recordCreate([card], [])
         // Fire-and-forget metadata fetch
         fetchLinkMetadata(url).then(meta => {
           markLocalOp(card.id)
@@ -232,6 +462,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       markLocalOp(res.card.id)
       const node = cardToNode(res.card, initial.childMeta)
       appendOrReplaceNode({ ...node, data: { ...node.data, meta: { title, cardCount: 0 } } })
+      recordCreate([res.card], [])
       return
     }
 
@@ -243,6 +474,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       markLocalOp(res.card.id)
       const node = cardToNode(res.card, initial.childMeta)
       appendOrReplaceNode({ ...node, data: { ...node.data, meta: { title: 'Storyline', cardCount: 12 } } })
+      recordCreate([res.card], [])
       return
     }
 
@@ -253,14 +485,27 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     if (!card) { setSaveError(SAVE_ERROR_MSG); return }
     markLocalOp(card.id)
     appendOrReplaceNode(cardToNode(card, initial.childMeta))
-  }, [pendingType, readOnly, rf, boardId, appendOrReplaceNode, setNodes, markLocalOp, initial.childMeta, maxZ, closeThread])
+    recordCreate([card], [])
+  }, [pendingType, readOnly, rf, boardId, appendOrReplaceNode, setNodes, markLocalOp, initial.childMeta, maxZ, closeThread, recordCreate])
+
+  // Posisjon/kolonne/z-index for ALLE kort idet et drag starter — dekker ikke bare
+  // kortet som dras, men også ev. søsken i samme kolonne som blir restablet som
+  // en side-effekt (se restackColumn i onNodeDragStop) — begge trengs for et
+  // presist 'move'-innslag i angre-stakken.
+  const dragStartSnapshotRef = useRef<Map<string, CardPosState>>(new Map())
 
   // Flytt til front ved dragstart, lagre posisjoner ved slipp
   const onNodeDragStart: OnNodeDrag<CardNode> = useCallback((_e, node) => {
+    dragStartSnapshotRef.current = new Map(
+      (rf.getNodes() as CardNode[]).map(n => [n.id, {
+        x: n.position.x, y: n.position.y, column_id: n.parentId ?? null,
+        z_index: n.data.card.z_index, width: (n.style?.width as number | undefined) ?? null,
+      }])
+    )
     const z = maxZ() + 1
     node.data.card.z_index = z
     setNodes(ns => ns.map(n => n.id === node.id ? { ...n, zIndex: n.data.card.type === 'column' ? 0 : z + 1 } : n))
-  }, [setNodes, maxZ])
+  }, [setNodes, maxZ, rf])
 
   // Hover-highlight mens man drar: markerer board-/storyline-kortet man svever over som
   // mottaksklart (se dropTarget i CardNodeData / dropActive i CardShell), så det er
@@ -390,9 +635,21 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       })
     }
 
+    if (patches.length) {
+      const changes: MoveChange[] = patches.map(p => {
+        const finalNode = next.find(n => n.id === p.id)
+        const after: CardPosState = finalNode
+          ? { x: finalNode.position.x, y: finalNode.position.y, column_id: finalNode.parentId ?? null, z_index: finalNode.data.card.z_index, width: (finalNode.style?.width as number | undefined) ?? null }
+          : { x: p.x, y: p.y, column_id: p.column_id ?? null, z_index: p.z_index ?? 0, width: p.width ?? null }
+        const before = dragStartSnapshotRef.current.get(p.id)
+        return { cardId: p.id, before: before ?? after, after }
+      })
+      pushHistory({ kind: 'move', changes })
+    }
+
     setNodes(next)
     if (patches.length) persist(patches)
-  }, [rf, absPos, nodeHeight, persist, setNodes, setEdges, markLocalOp])
+  }, [rf, absPos, nodeHeight, persist, setNodes, setEdges, markLocalOp, pushHistory])
 
   // Etter innlasting: restack kolonner én gang når alle noder er målt, så lagret
   // stabling/høyde vises korrekt fra start (uten dette blir kolonnehøyden feil ved refresh).
@@ -522,8 +779,21 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       }
     }
 
+    if (nodesToDelete.length > 0 || edgesToDelete.length > 0) {
+      const cardsSnapshot = nodesToDelete.map(n => n.data.card)
+      const edgesSnapshot: BoardEdge[] = edgesToDelete.map(e => ({
+        id: e.id, board_id: boardId, from_card_id: e.source, to_card_id: e.target,
+        label: (e.label as string) ?? null, created_at: '',
+      }))
+      const nested = cardsSnapshot.filter(c => c.type === 'board' || c.type === 'storyline')
+      const subtrees = nested.length > 0
+        ? await snapshotBoardSubtrees(nested.map(c => ({ id: c.id, type: c.type, content: c.content })))
+        : {}
+      pushHistory({ kind: 'delete', data: { cardsSnapshot, edgesSnapshot, subtrees } })
+    }
+
     return { nodes: nodesToDelete, edges: edgesToDelete }
-  }, [readOnly, setNodes, markLocalOp])
+  }, [readOnly, setNodes, markLocalOp, boardId, pushHistory])
 
   const onNodesDelete = useCallback((deleted: CardNode[]) => {
     deleted.forEach(n => markLocalOp(n.id))
@@ -541,16 +811,19 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     if (!edge) { setSaveError('Kunne ikke lagre pilen'); return }
     markLocalOp(edge.id)
     appendOrReplaceEdge(edgeToFlow(edge))
-  }, [boardId, appendOrReplaceEdge, markLocalOp])
+    pushHistory({ kind: 'edge-create', edge })
+  }, [boardId, appendOrReplaceEdge, markLocalOp, pushHistory])
 
   const onEdgeDoubleClick = useCallback((_e: React.MouseEvent, edge: Edge) => {
     if (readOnly) return
-    const label = window.prompt('Tekst på pilen (tom for å fjerne teksten):', (edge.label as string) ?? '')
+    const before = (edge.label as string) ?? ''
+    const label = window.prompt('Tekst på pilen (tom for å fjerne teksten):', before)
     if (label === null) return
     markLocalOp(edge.id)
     updateBoardEdgeLabel(edge.id, label.trim() || null)
     setEdges(es => es.map(e => e.id === edge.id ? { ...e, label: label.trim() || undefined } : e))
-  }, [readOnly, setEdges, markLocalOp])
+    pushHistory({ kind: 'edge-label', edgeId: edge.id, before: before || null, after: label.trim() || null })
+  }, [readOnly, setEdges, markLocalOp, pushHistory])
 
   // Høyreklikk for å slette en pil — et alternativ til å måtte velge pilen og
   // trykke Delete-tasten, som ikke er lett å oppdage.
@@ -561,7 +834,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     markLocalOp(edge.id)
     setEdges(es => es.filter(x => x.id !== edge.id))
     deleteBoardEdges([edge.id]).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
-  }, [readOnly, setEdges, markLocalOp])
+    pushHistory({ kind: 'edge-delete', edge: { id: edge.id, board_id: boardId, from_card_id: edge.source, to_card_id: edge.target, label: (edge.label as string) ?? null, created_at: '' } })
+  }, [readOnly, setEdges, markLocalOp, boardId, pushHistory])
 
   // Dra en pilende løs og slipp den på et annet kort for å koble pilen om
   // (React Flows innebygde reconnect — shouldReplaceId: false så vi beholder
@@ -571,7 +845,12 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     markLocalOp(oldEdge.id)
     setEdges(es => reconnectEdge(oldEdge, newConnection, es, { shouldReplaceId: false }))
     updateBoardEdgeEndpoints(oldEdge.id, newConnection.source, newConnection.target)
-  }, [setEdges, markLocalOp])
+    pushHistory({
+      kind: 'edge-reconnect', edgeId: oldEdge.id,
+      before: { source: oldEdge.source, target: oldEdge.target },
+      after: { source: newConnection.source, target: newConnection.target },
+    })
+  }, [setEdges, markLocalOp, pushHistory])
 
   // Slipper man en pilende i løs luft (ikke over et gyldig kort) skal pilen
   // slettes i stedet for å hoppe tilbake til utgangspunktet.
@@ -580,7 +859,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     markLocalOp(edge.id)
     setEdges(es => es.filter(x => x.id !== edge.id))
     deleteBoardEdges([edge.id]).then(ok => setSaveError(ok ? null : SAVE_ERROR_MSG))
-  }, [setEdges, markLocalOp])
+    pushHistory({ kind: 'edge-delete', edge: { id: edge.id, board_id: boardId, from_card_id: edge.source, to_card_id: edge.target, label: (edge.label as string) ?? null, created_at: '' } })
+  }, [setEdges, markLocalOp, boardId, pushHistory])
 
   // Drop fra Finder/Explorer direkte på lerretet — laster opp alle bilde-/videofiler på slippunktet
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -596,10 +876,10 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
         board_id: boardId, type: isVideo ? 'video' : 'image', x: pos.x, y: pos.y,
         content: { url: res.url }, z_index: maxZ() + 1,
       })
-      if (card) { markLocalOp(card.id); appendOrReplaceNode(cardToNode(card, initial.childMeta)) }
+      if (card) { markLocalOp(card.id); appendOrReplaceNode(cardToNode(card, initial.childMeta)); recordCreate([card], []) }
       pos = { x: pos.x + 40, y: pos.y + 40 }
     }
-  }, [readOnly, rf, boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ])
+  }, [readOnly, rf, boardId, appendOrReplaceNode, markLocalOp, initial.childMeta, maxZ, recordCreate])
 
   // Storyline-blueprintets hurtigknapper — «legg til kort/rad» setter inn nye tomme
   // paneler kjedet med piler etter det siste; «legg til kolonne» utvider hele
@@ -612,7 +892,8 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
     res.edges.forEach(e => markLocalOp(e.id))
     setNodes(ns => [...ns, ...res.cards.map(c => cardToNode(c, initial.childMeta))])
     setEdges(es => [...es, ...res.edges.map(edgeToFlow)])
-  }, [markLocalOp, setNodes, setEdges, initial.childMeta])
+    recordCreate(res.cards, res.edges)
+  }, [markLocalOp, setNodes, setEdges, initial.childMeta, recordCreate])
 
   const handleAddStorylineCard = useCallback(async () => {
     applyNewPanels(await addStorylineCard(boardId))
@@ -623,6 +904,12 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   }, [boardId, applyNewPanels])
 
   const handleWidenStorylineGrid = useCallback(async () => {
+    const before = new Map(
+      (rf.getNodes() as CardNode[]).map(n => [n.id, {
+        x: n.position.x, y: n.position.y, column_id: n.parentId ?? null,
+        z_index: n.data.card.z_index, width: (n.style?.width as number | undefined) ?? null,
+      }])
+    )
     const res = await widenStorylineGrid(boardId)
     if (!res) { setSaveError(SAVE_ERROR_MSG); return }
     res.cards.forEach(c => markLocalOp(c.id))
@@ -630,11 +917,41 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
       const updated = res.cards.find(c => c.id === n.id)
       return updated ? { ...n, position: { x: updated.x, y: updated.y } } : n
     }))
-  }, [boardId, markLocalOp, setNodes])
+    const changes: MoveChange[] = res.cards
+      .filter(c => before.has(c.id))
+      .map(c => { const b = before.get(c.id)!; return { cardId: c.id, before: b, after: { ...b, x: c.x, y: c.y } } })
+    if (changes.length) pushHistory({ kind: 'move', changes })
+  }, [boardId, markLocalOp, setNodes, rf, pushHistory])
+
+  // Cmd/Ctrl+C/V/Z(+Shift) — global lytter, ikke bundet til lerretet, siden
+  // React Flow selv ikke tilbyr kopier/lim inn/angre. Skrur seg av når fokus
+  // står i et tekstfelt (inne i et kort), slik at nettleserens EGEN
+  // copy/paste/undo i tekstfelt forblir uendret.
+  useEffect(() => {
+    if (readOnly) return
+    function isEditableTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false
+      return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || isEditableTarget(e.target)) return
+      const key = e.key.toLowerCase()
+      if (key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) performRedo(); else performUndo()
+      } else if (key === 'c') {
+        handleCopy()
+      } else if (key === 'v') {
+        if (clipboardRef.current) { e.preventDefault(); handlePaste() }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [readOnly, performUndo, performRedo, handleCopy, handlePaste])
 
   return (
     <BoardCommentsProvider value={{ threadsByCard, openCardId, openThread, closeThread, postComment, toggleResolved }}>
-    <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize, onOpenSchedule }}>
+    <BoardUiProvider value={{ palette, readOnly, markLocalOp, onCardResize, onOpenSchedule, recordContentEdit }}>
       <div
         style={{ width: '100%', height: '100%', position: 'relative', background: palette.canvasBg }}
         onDrop={onDrop}

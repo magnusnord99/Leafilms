@@ -10,7 +10,7 @@ import type { CardNode } from '../toFlow'
 
 export default function ColorNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, recordContentEdit } = useBoardUi()
   const content = data.card.content as ColorContent
   // Transient buffer mens fargevelgeren er åpen — onChange fyrer kontinuerlig under
   // dragging, så vi previewer kun lokalt og committer ÉN skriving ved blur.
@@ -20,6 +20,7 @@ export default function ColorNode({ id, data, selected }: NodeProps<CardNode>) {
   const commit = (value: string) => {
     if (value !== content.hex) {
       markLocalOp(id)
+      recordContentEdit(id, content, { hex: value })
       // Oppdater node-data immutabelt så visningen reflekterer lagringen umiddelbart,
       // samtidig som eksterne oppdateringer (realtime, Task 12) fortsatt slår gjennom.
       rf.updateNodeData(id, { card: { ...data.card, content: { hex: value } } })

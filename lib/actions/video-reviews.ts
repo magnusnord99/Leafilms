@@ -12,7 +12,7 @@ const SIGNED_URL_EXPIRY = 60 * 60 * 4     // 4 timer
 
 export type VideoReview = {
   id: string
-  project_id: string
+  project_id: string | null
   gallery_id: string | null
   album_id: string | null
   title: string
@@ -52,7 +52,7 @@ function cookieKey(token: string): string {
 // ── Admin-funksjoner ──────────────────────────────────────────────────────────
 
 export async function createVideoReview(
-  projectId: string,
+  projectId: string | null,
   title: string,
   storagePath: string,
   galleryId?: string,

@@ -4,13 +4,18 @@ import { useState, useCallback, useEffect } from 'react'
 import type { SelectionGallery, SelectionImage } from '@/lib/actions/selections'
 import { toggleImageSelection, addImageComment, submitGallery } from '@/lib/actions/selections'
 import { SELECTION_STRINGS, type SelectionLanguage, type SelectionStrings } from './strings'
+import { useGridZoom } from '@/hooks/useGridZoom'
 
 // CSS-klasser håndterer responsivitet — ingen isMobile-state som bryter hydration
 const STYLES = `
   .g-root { display:flex; flex-direction:column; height:100dvh; background:#0C0B09; overflow:hidden; }
   .g-content { flex:1; display:flex; overflow:hidden; }
   .g-grid-wrap { flex:1; overflow-y:auto; padding:10px; }
-  .g-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; }
+  .g-grid { display:grid; gap:6px; }
+  .g-zoom-bar { position:sticky; top:0; z-index:5; display:flex; justify-content:flex-end; pointer-events:none; margin-bottom:8px; }
+  .g-zoom { pointer-events:auto; display:flex; align-items:center; gap:8px; background:rgba(19,18,16,0.92); backdrop-filter:blur(4px); border:1px solid #2A2820; border-radius:20px; padding:6px 12px; }
+  .g-zoom-icon { font-family:sans-serif; font-size:0.7rem; color:#8A8070; line-height:1; user-select:none; }
+  .g-zoom-slider { width:96px; accent-color:#C49434; cursor:pointer; }
   .g-panel { width:300px; flex-shrink:0; border-left:1px solid #2A2820; background:#131210; display:flex; flex-direction:column; }
   .g-send-desktop { padding:12px 14px; border-top:1px solid #2A2820; }
   .g-send-mobile { display:none; padding:12px 0 4px; }
@@ -50,6 +55,7 @@ export default function GalleryClient({
   language?: SelectionLanguage
 }) {
   const t = SELECTION_STRINGS[language]
+  const [zoom, setZoom] = useGridZoom()
   const [images, setImages] = useState(initialImages)
   const [activeImageId, setActiveImageId] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -172,7 +178,23 @@ export default function GalleryClient({
         <div className="g-content">
           {/* Grid */}
           <div className="g-grid-wrap">
-            <div className="g-grid">
+            <div className="g-zoom-bar">
+              <div className="g-zoom">
+                <span className="g-zoom-icon">－</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={260}
+                  step={10}
+                  value={zoom}
+                  onChange={e => setZoom(Number(e.target.value))}
+                  className="g-zoom-slider"
+                  aria-label={t.zoomLabel}
+                />
+                <span className="g-zoom-icon">＋</span>
+              </div>
+            </div>
+            <div className="g-grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${zoom}px, 1fr))` }}>
               {images.map((img, idx) => (
                 <ImageCard
                   key={img.id}

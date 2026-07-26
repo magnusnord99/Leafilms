@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { C } from '@/lib/admin-theme'
 import { AVATAR_COLORS, getAvatarColor } from '@/lib/avatar-colors'
-import { updateProfileName, updateProfileColor, getTakenColors, type ProfileColorOwner } from '@/lib/actions/profile'
+import { updateProfileName, updateProfilePhone, updateProfileColor, getTakenColors, type ProfileColorOwner } from '@/lib/actions/profile'
 
 export default function ProfilePage() {
   const { user, profile, loading } = useAuth()
@@ -15,6 +15,11 @@ export default function ProfilePage() {
   const [nameSaving, setNameSaving] = useState(false)
   const [nameSaved, setNameSaved] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
+
+  const [phone, setPhone] = useState('')
+  const [phoneSaving, setPhoneSaving] = useState(false)
+  const [phoneSaved, setPhoneSaved] = useState(false)
+  const [phoneError, setPhoneError] = useState<string | null>(null)
 
   const [takenColors, setTakenColors] = useState<ProfileColorOwner[]>([])
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
@@ -28,6 +33,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile) {
       setName(profile.name ?? '')
+      setPhone(profile.phone ?? '')
       setSelectedColor(profile.color ?? null)
     }
   }, [profile])
@@ -48,6 +54,20 @@ export default function ProfilePage() {
       setTimeout(() => setNameSaved(false), 2000)
     }
     setNameSaving(false)
+  }
+
+  async function handleSavePhone() {
+    setPhoneSaving(true)
+    setPhoneError(null)
+    setPhoneSaved(false)
+    const result = await updateProfilePhone(phone)
+    if (result.error) {
+      setPhoneError(result.error)
+    } else {
+      setPhoneSaved(true)
+      setTimeout(() => setPhoneSaved(false), 2000)
+    }
+    setPhoneSaving(false)
   }
 
   async function handleSelectColor(color: string) {
@@ -136,6 +156,40 @@ export default function ProfilePage() {
           </div>
           {nameError && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555', marginTop: 8 }}>{nameError}</p>}
           {nameSaved && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#4CAF7D', marginTop: 8 }}>Lagret.</p>}
+        </section>
+
+        <section style={{ marginBottom: 32 }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 10 }}>
+            Telefon
+          </label>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginBottom: 10 }}>
+            Vises til kunden når du er satt som Leafilms-kontakt på et delt board.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="+47 900 00 000"
+              style={{
+                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: C.text,
+                background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px',
+              }}
+            />
+            <button
+              onClick={handleSavePhone}
+              disabled={phoneSaving}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600,
+                padding: '9px 16px', borderRadius: 8, cursor: phoneSaving ? 'wait' : 'pointer',
+                background: C.accent, color: '#fff', border: 'none',
+                opacity: phoneSaving ? 0.6 : 1,
+              }}
+            >
+              Lagre
+            </button>
+          </div>
+          {phoneError && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555', marginTop: 8 }}>{phoneError}</p>}
+          {phoneSaved && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#4CAF7D', marginTop: 8 }}>Lagret.</p>}
         </section>
 
         <section>

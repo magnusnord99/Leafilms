@@ -1,14 +1,14 @@
 // app/admin/preprod/[id]/PostProdBoard.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  getPostProdBoard, addTaskToLibrary, deleteTask, toggleTaskAssignee, getAllProfiles,
+  getPostProdBoard, addTaskToLibrary, deleteTask, toggleTaskAssignee, getAllProfiles, getTaskMessageCounts,
   createCustomLane, updateLaneDeadline, moveBoardTask, getTaskLibrary, addPostProdBoardTask,
   type PostProdBoard as PostProdBoardData, type PostProdBoardCard, type PostProdBoardLane, type PostProdDestination,
 } from '@/lib/actions/pipeline'
@@ -16,6 +16,7 @@ import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { PostProdTaskForm } from './PostProdTaskForm'
 import { PostProdLibraryPanel } from './PostProdLibraryPanel'
+import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 
 const C = {
   surface:  '#21212D',
@@ -67,21 +68,35 @@ function Avatar({ id, name, size = 20 }: { id: string; name: string | null; size
 }
 
 export function PostProdBoard({
-  projectId, shootEnd, postDeadlines, onDeadlineChange, onAssignedChange,
+  projectId, shootEnd, postDeadlines, currentUserId, onDeadlineChange, onAssignedChange,
 }: {
   projectId: string
   shootEnd: string | null
   postDeadlines: { video: string | null; photo: string | null }
+  currentUserId: string | null
   onDeadlineChange: (subType: 'video' | 'photo', date: string | null) => void
   onAssignedChange: (hasAny: boolean) => void
 }) {
   const [board, setBoard] = useState<PostProdBoardData>({ projectType: null, lanes: [], parallel: [] })
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [openAssigneeFor, setOpenAssigneeFor] = useState<string | null>(null)
   const [newLaneName, setNewLaneName] = useState('')
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
+  const assigneePickerRef = useRef<HTMLDivElement>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  useEffect(() => {
+    if (!openAssigneeFor) return
+    function handleClickOutside(e: MouseEvent) {
+      if (assigneePickerRef.current && !assigneePickerRef.current.contains(e.target as Node)) {
+        setOpenAssigneeFor(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [openAssigneeFor])
 
   function laneIdToDestination(laneKey: string): PostProdDestination | null {
     if (laneKey === 'parallel') return { kind: 'parallel' }
@@ -155,6 +170,8 @@ export function PostProdBoard({
     setLibraryRefreshKey(k => k + 1)
     const hasAny = data.lanes.some(l => l.cards.some(c => c.assignees.length > 0)) || data.parallel.some(c => c.assignees.length > 0)
     onAssignedChange(hasAny)
+    const allCardIds = [...data.parallel, ...data.lanes.flatMap(l => l.cards)].map(c => c.id)
+    if (allCardIds.length > 0) getTaskMessageCounts(allCardIds).then(setMessageCounts)
   }
 
   useEffect(() => {
@@ -228,10 +245,13 @@ export function PostProdBoard({
     const isOpen = openAssigneeFor === card.id
     return (
       <SortableCard key={card.id} card={card}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 7,
-        background: C.surface2, border: `1px solid ${card.color ?? C.border}`, position: 'relative',
-      }}>
+      <div
+        ref={isOpen ? assigneePickerRef : undefined}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 7,
+          background: C.surface2, border: `1px solid ${card.color ?? C.border}`, position: 'relative', flexWrap: 'wrap',
+        }}
+      >
         <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text }}>{card.title}</span>
         <input
           type="date"
@@ -248,6 +268,13 @@ export function PostProdBoard({
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
           </svg>
         </button>
+        <TaskChatToggle
+          taskId={card.id}
+          taskTitle={card.title}
+          currentUserId={currentUserId}
+          profiles={profiles}
+          messageCount={messageCounts[card.id] ?? 0}
+        />
         <button onClick={() => handleSaveToLibrary(card.id)} title="Lagre i bibliotek" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, fontSize: '0.7rem' }}>
           ★
         </button>
@@ -264,7 +291,7 @@ export function PostProdBoard({
               return (
                 <button
                   key={p.id}
-                  onClick={() => handleToggleAssignee(card.id, p.id)}
+                  onClick={() => { setOpenAssigneeFor(null); handleToggleAssignee(card.id, p.id) }}
                   style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '7px 12px', background: isAssigned ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                 >
                   <Avatar id={p.id} name={p.name} size={22} />

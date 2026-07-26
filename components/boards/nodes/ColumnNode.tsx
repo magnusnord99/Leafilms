@@ -14,7 +14,7 @@ const MENU_WIDTH = 172
 
 export default function ColumnNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, recordContentEdit } = useBoardUi()
   const content = data.card.content as ColumnContent
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(content.title)
@@ -40,6 +40,7 @@ export default function ColumnNode({ id, data, selected }: NodeProps<CardNode>) 
     const t = draft.trim() || 'Kolonne'
     if (t !== content.title) {
       markLocalOp(id)
+      recordContentEdit(id, content, { ...content, title: t })
       // Oppdater node-data immutabelt så visningen reflekterer lagringen umiddelbart,
       // samtidig som eksterne oppdateringer (realtime, Task 12) fortsatt slår gjennom.
       rf.updateNodeData(id, { card: { ...data.card, content: { ...content, title: t } } })
@@ -49,6 +50,7 @@ export default function ColumnNode({ id, data, selected }: NodeProps<CardNode>) 
 
   const applyContent = (next: ColumnContent) => {
     markLocalOp(id)
+    recordContentEdit(id, content, next)
     rf.updateNodeData(id, { card: { ...data.card, content: next } })
     updateCardContent(id, next)
   }

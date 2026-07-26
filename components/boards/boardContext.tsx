@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react'
 import { C } from '@/lib/admin-theme'
+import type { BoardCardContent } from '@/lib/types'
 
 export type BoardPalette = {
   surface: string; surface2: string; border: string
@@ -24,6 +25,11 @@ type BoardUi = {
   // vi er i admin (/admin/boards/.../schedule/...) eller på et offentlig delt board
   // (/b/[token]/schedule/...) — se ScheduleNode.
   onOpenSchedule?: (cardId: string, boardId: string) => void
+  // Kalles av kort-komponenter RETT FØR de lagrer en innholdsendring (notat/todo/
+  // farge/schedule-tekst osv.), med innholdet slik det var FØR og ETTER endringen —
+  // så Cmd+Z/Cmd+Shift+Z i BoardCanvas kan legge det tilbake/gjøre det om igjen.
+  // No-op default (ScheduleCardPage bruker ikke angre-stakken til hovedlerretet).
+  recordContentEdit: (cardId: string, before: BoardCardContent, after: BoardCardContent) => void
 }
 
 const BoardUiContext = createContext<BoardUi>({
@@ -31,6 +37,7 @@ const BoardUiContext = createContext<BoardUi>({
   readOnly: true,
   markLocalOp: () => {},
   onCardResize: () => {},
+  recordContentEdit: () => {},
 })
 
 export const BoardUiProvider = BoardUiContext.Provider

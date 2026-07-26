@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 
-export type MessageType = 'project' | 'task' | 'quote'
+export type MessageType = 'project' | 'task' | 'quote' | 'preprod'
 
 export type MessageReaction = {
   emoji: string

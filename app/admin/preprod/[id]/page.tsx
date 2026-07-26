@@ -8,10 +8,11 @@ import {
   getPitchTeamAsProdCrew, setTildelTaskStatus, PreprodData, PreprodCrewMember, PackingItem,
 } from '@/lib/actions/preprod'
 import { setInvoiceAssignee, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updatePipelineStage } from '@/lib/actions/pipeline'
-import { getProjectEquipment, setUnitAssignee, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
+import { getProjectEquipment, setUnitAssignee, setUnitPacked, type ProjectEquipmentUnit } from '@/lib/actions/equipment'
 import { PostProdBoard } from './PostProdBoard'
 import { TaskList } from '@/components/task/TaskList'
 import BoardsButton from './BoardsButton'
+import PreprodChat from '@/components/preprod/PreprodChat'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail, PostProdTaskLite } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -216,9 +217,115 @@ function AssigneePicker({
   )
 }
 
+const EQUIPMENT_CATEGORY_ORDER = ['kamera', 'objektiver', 'lys', 'lyd', 'utstyr', 'annet']
+const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
+  kamera: 'Kamera',
+  objektiver: 'Objektiv',
+  lys: 'Lys',
+  lyd: 'Lyd',
+  utstyr: 'Utstyr',
+  annet: 'Annet',
+}
+
+function equipmentCategoryLabel(category: string): string {
+  return EQUIPMENT_CATEGORY_LABELS[category] ?? (category.charAt(0).toUpperCase() + category.slice(1))
+}
+
+type PackingSortMode = 'category' | 'person'
+
+function sortStorageUnits(units: ProjectEquipmentUnit[], mode: PackingSortMode): ProjectEquipmentUnit[] {
+  if (mode === 'person') {
+    return sortByAssignee(units, u => u.assignee_name, u => u.catalog_name)
+  }
+  return [...units].sort((a, b) => {
+    const ai = EQUIPMENT_CATEGORY_ORDER.indexOf(a.catalog_category)
+    const bi = EQUIPMENT_CATEGORY_ORDER.indexOf(b.catalog_category)
+    const catDiff = (ai === -1 ? EQUIPMENT_CATEGORY_ORDER.length : ai) - (bi === -1 ? EQUIPMENT_CATEGORY_ORDER.length : bi)
+    return catDiff !== 0 ? catDiff : a.catalog_name.localeCompare(b.catalog_name)
+  })
+}
+
+function sortByAssignee<T>(items: T[], getName: (item: T) => string | null | undefined, getSecondary: (item: T) => string): T[] {
+  return [...items].sort((a, b) => {
+    const an = getName(a)
+    const bn = getName(b)
+    if (!an && !bn) return getSecondary(a).localeCompare(getSecondary(b))
+    if (!an) return 1
+    if (!bn) return -1
+    const nameDiff = an.localeCompare(bn)
+    return nameDiff !== 0 ? nameDiff : getSecondary(a).localeCompare(getSecondary(b))
+  })
+}
+
+/** Grupperer en allerede sortert liste i påfølgende bolker med samme gruppenøkkel, uten å endre rekkefølgen. */
+function groupConsecutive<T>(items: T[], getGroupLabel: (item: T) => string): { label: string; items: T[] }[] {
+  const groups: { label: string; items: T[] }[] = []
+  for (const item of items) {
+    const label = getGroupLabel(item)
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.items.push(item)
+    else groups.push({ label, items: [item] })
+  }
+  return groups
+}
+
+function groupStorageUnits(units: ProjectEquipmentUnit[], mode: PackingSortMode): { label: string; items: ProjectEquipmentUnit[] }[] {
+  return mode === 'person'
+    ? groupConsecutive(units, u => u.assignee_name ?? 'Ikke tildelt')
+    : groupConsecutive(units, u => equipmentCategoryLabel(u.catalog_category))
+}
+
+function SortToggle({ mode, onChange }: { mode: PackingSortMode; onChange: (mode: PackingSortMode) => void }) {
+  const options: { value: PackingSortMode; label: string }[] = [
+    { value: 'category', label: 'Kategori' },
+    { value: 'person', label: 'Hvem pakker' },
+  ]
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500,
+            padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
+            background: mode === opt.value ? C.accentBg : 'transparent',
+            color: mode === opt.value ? C.accent : C.text3,
+            border: `1px solid ${mode === opt.value ? 'rgba(124,92,252,0.25)' : C.border}`,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function PackedToggle({ packed, onToggle }: { packed: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      title={packed ? 'Merk som ikke pakket' : 'Merk som pakket'}
+      style={{
+        width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+        background: packed ? 'rgba(76,175,125,0.2)' : 'transparent',
+        border: `1.5px solid ${packed ? C.success : C.text3}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+        transition: 'all 0.12s',
+      }}
+    >
+      {packed && (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.success} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 function PackingSection({
-  projectId, freetextItems, quoteEquipment, storageUnits, prodCrew, profiles,
-  onFreetextChange, onAssignUnit,
+  projectId, freetextItems, quoteEquipment, storageUnits, prodCrew, profiles, currentUserId,
+  onFreetextChange, onAssignUnit, onTogglePacked,
 }: {
   projectId: string
   freetextItems: PackingItem[]
@@ -226,11 +333,28 @@ function PackingSection({
   storageUnits: ProjectEquipmentUnit[]
   prodCrew: PreprodCrewMember[]
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
+  currentUserId: string | null
   onFreetextChange: (items: PackingItem[]) => void
   onAssignUnit: (unitId: string, assignee: PackingCandidate | null) => void
+  onTogglePacked: (unitId: string) => void
 }) {
   const [newItem, setNewItem] = useState('')
+  const [sortMode, setSortMode] = useState<PackingSortMode>('category')
+  const [onlyMine, setOnlyMine] = useState(false)
   const candidates = buildPackingCandidates(prodCrew, profiles)
+
+  const visibleStorageUnits = sortStorageUnits(
+    onlyMine ? storageUnits.filter(u => u.assignee_id === currentUserId) : storageUnits,
+    sortMode
+  )
+  const storageGroups = groupStorageUnits(visibleStorageUnits, sortMode)
+  const visibleFreetextItems = sortMode === 'person'
+    ? sortByAssignee(
+        onlyMine ? freetextItems.filter(i => i.assignee_id === currentUserId) : freetextItems,
+        i => i.assignee_name,
+        i => i.name
+      )
+    : (onlyMine ? freetextItems.filter(i => i.assignee_id === currentUserId) : freetextItems)
 
   function save(next: PackingItem[]) {
     onFreetextChange(next)
@@ -268,12 +392,13 @@ function PackingSection({
   }
 
   const freetextDone = freetextItems.filter(i => i.checked).length
-  const totalDone = freetextDone + storageUnits.length
+  const storageDone = storageUnits.filter(u => u.packed).length
+  const totalDone = freetextDone + storageDone
   const totalCount = freetextItems.length + storageUnits.length
 
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <SectionTitle>
           Pakkeliste {totalCount > 0 && `(${totalDone}/${totalCount})`}
         </SectionTitle>
@@ -288,6 +413,21 @@ function PackingSection({
           >
             Importer fra tilbud
           </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+        <SortToggle mode={sortMode} onChange={setSortMode} />
+        {currentUserId && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: onlyMine ? C.accent : C.text3 }}>
+            <input
+              type="checkbox"
+              checked={onlyMine}
+              onChange={e => setOnlyMine(e.target.checked)}
+              style={{ width: 12, height: 12, accentColor: C.accent, cursor: 'pointer' }}
+            />
+            Vis bare mine
+          </label>
         )}
       </div>
 
@@ -308,19 +448,38 @@ function PackingSection({
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
             Ingen utstyr hentet fra lager ennå
           </p>
+        ) : visibleStorageUnits.length === 0 ? (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
+            Ingen utstyr tildelt deg
+          </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {storageUnits.map(unit => (
-              <div key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, flex: 1 }}>
-                  {unit.catalog_name} <span style={{ color: C.text3 }}>{unit.unit_label}</span>
-                </span>
-                <AssigneePicker
-                  assignedId={unit.assignee_id}
-                  assignedName={unit.assignee_name}
-                  candidates={candidates}
-                  onAssign={assignee => onAssignUnit(unit.id, assignee)}
-                />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {storageGroups.map(group => (
+              <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <p style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700,
+                  letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3, margin: '0 0 2px 2px',
+                }}>
+                  {group.label}
+                </p>
+                {group.items.map(unit => (
+                  <div key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}>
+                    <PackedToggle packed={unit.packed} onToggle={() => onTogglePacked(unit.id)} />
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', flex: 1,
+                      color: unit.packed ? C.text3 : C.text,
+                      textDecoration: unit.packed ? 'line-through' : 'none',
+                    }}>
+                      {unit.catalog_name} <span style={{ color: C.text3 }}>{unit.unit_label}</span>
+                    </span>
+                    <AssigneePicker
+                      assignedId={unit.assignee_id}
+                      assignedName={unit.assignee_name}
+                      candidates={candidates}
+                      onAssign={assignee => onAssignUnit(unit.id, assignee)}
+                    />
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -362,29 +521,20 @@ function PackingSection({
           </button>
         </div>
 
-        {freetextItems.length > 0 && (
+        {freetextItems.length > 0 && visibleFreetextItems.length === 0 && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
+            Ingen utstyr tildelt deg
+          </p>
+        )}
+
+        {visibleFreetextItems.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {freetextItems.map(item => (
+            {visibleFreetextItems.map(item => (
               <div
                 key={item.id}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}
               >
-                <button
-                  onClick={() => toggleItem(item.id)}
-                  style={{
-                    width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
-                    background: item.checked ? 'rgba(76,175,125,0.2)' : 'transparent',
-                    border: `1.5px solid ${item.checked ? C.success : C.text3}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-                    transition: 'all 0.12s',
-                  }}
-                >
-                  {item.checked && (
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M1.5 5L4 7.5L8.5 2.5" stroke={C.success} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </button>
+                <PackedToggle packed={item.checked} onToggle={() => toggleItem(item.id)} />
                 <span style={{
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
                   color: item.checked ? C.text3 : C.text,
@@ -773,6 +923,7 @@ export default function PreprodDetailPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const deepLinkTaskId = searchParams?.get('task') ?? null
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [project, setProject] = useState<PreprodDetail['project'] | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -839,6 +990,12 @@ export default function PreprodDetailPage() {
       : u
     ))
     setUnitAssignee(unitId, id, assignee?.id ?? null)
+  }
+
+  function handleTogglePacked(unitId: string) {
+    const next = !storageUnits.find(u => u.id === unitId)?.packed
+    setStorageUnits(prev => prev.map(u => u.id === unitId ? { ...u, packed: next } : u))
+    setUnitPacked(unitId, id, next)
   }
 
   function handleTaskStatusChange(taskId: string, status: Task['status']) {
@@ -1078,6 +1235,7 @@ export default function PreprodDetailPage() {
               projectId={id}
               shootEnd={project.shoot_end ?? null}
               postDeadlines={preprod.post_deadlines}
+              currentUserId={currentUserId}
               onDeadlineChange={handlePostDeadlineChange}
               onAssignedChange={hasAny => {
                 setPostProdHasAssignee(prev => {
@@ -1104,8 +1262,10 @@ export default function PreprodDetailPage() {
               storageUnits={storageUnits}
               prodCrew={preprod.prod_crew}
               profiles={profiles}
+              currentUserId={currentUserId}
               onFreetextChange={next => patchPreprod({ packing_list: next })}
               onAssignUnit={handleAssignUnit}
+              onTogglePacked={handleTogglePacked}
             />
             <InvoiceAssigneeCard
               projectId={id}
@@ -1116,6 +1276,8 @@ export default function PreprodDetailPage() {
 
         </div>
       </div>
+
+      <PreprodChat projectId={id} profiles={profiles} forceOpen={forceOpenChat} />
     </div>
   )
 }

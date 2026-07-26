@@ -11,7 +11,7 @@ import type { CardNode } from '../toFlow'
 
 export default function BoardNode({ id, data, selected }: NodeProps<CardNode>) {
   const rf = useReactFlow()
-  const { palette: P, readOnly, markLocalOp } = useBoardUi()
+  const { palette: P, readOnly, markLocalOp, recordContentEdit } = useBoardUi()
   const content = data.card.content as BoardRefContent
   const count = data.meta?.cardCount
   // Transient buffer mens fargevelgeren er åpen — samme mønster som ColorNode.
@@ -22,6 +22,7 @@ export default function BoardNode({ id, data, selected }: NodeProps<CardNode>) {
     if (value !== content.color) {
       markLocalOp(id)
       const next = { ...content, color: value }
+      recordContentEdit(id, content, next)
       rf.updateNodeData(id, { card: { ...data.card, content: next } })
       updateCardContent(id, next)
     }

@@ -7,8 +7,8 @@ import { getBoardComments, type BoardCommentsByCard } from '@/lib/actions/boardC
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
-export type BoardLeadProfile = { id: string; name: string | null; email: string; color: string | null }
-export type BoardCustomerContact = { id: string; name: string; role: string | null }
+export type BoardLeadProfile = { id: string; name: string | null; email: string; color: string | null; phone: string | null }
+export type BoardCustomerContact = { id: string; name: string; role: string | null; phone: string | null }
 
 export type BoardData = {
   board: Board
@@ -120,12 +120,12 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }, comments] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
-      supabase.from('projects').select('id, title, customer_id, meeting_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
+      supabase.from('projects').select('id, title, customer_id, board_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
       board.lead_profile_id
-        ? supabase.from('profiles').select('id, name, email, color').eq('id', board.lead_profile_id).maybeSingle()
+        ? supabase.from('profiles').select('id, name, email, color, phone').eq('id', board.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
       board.customer_contact_id
-        ? supabase.from('customer_contacts').select('id, name, role').eq('id', board.customer_contact_id).maybeSingle()
+        ? supabase.from('customer_contacts').select('id, name, role, phone').eq('id', board.customer_contact_id).maybeSingle()
         : Promise.resolve({ data: null }),
       getBoardComments(boardId),
     ])
@@ -134,7 +134,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
     const proj = project as unknown as {
       customer_id?: string | null
-      meeting_summary?: { sammendrag?: string } | null
+      board_summary?: string | null
       delivery_description?: string | null
       shoot_start?: string | null
       shoot_end?: string | null
@@ -152,7 +152,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       leadProfile: leadProfile as BoardLeadProfile | null,
       customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
-      projectSummary: proj?.meeting_summary?.sammendrag?.trim() || null,
+      projectSummary: proj?.board_summary?.trim() || null,
       deliveryDescription: proj?.delivery_description?.trim() || null,
       shootStart: proj?.shoot_start ?? null,
       shootEnd: proj?.shoot_end ?? null,
@@ -179,6 +179,36 @@ export async function setBoardCustomerContact(boardId: string, contactId: string
     await supabase.from('boards').update({ customer_contact_id: contactId, updated_at: now() }).eq('id', boardId)
   } catch (err) {
     console.error('setBoardCustomerContact:', err)
+  }
+}
+
+// Prosjektinfo-teksten i boardets sidepanel — vises også til kunden på delte boards
+// (se PublicBoardInfoPanel), derfor egen fritekst-kolonne i stedet for den
+// AI-genererte meeting_summary (som kan inneholde internt-only bakgrunnsinfo).
+export async function updateBoardProjectSummary(projectId: string, summary: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('projects')
+      .update({ board_summary: summary, updated_at: now() })
+      .eq('id', projectId)
+  } catch (err) {
+    console.error('updateBoardProjectSummary:', err)
+  }
+}
+
+// Samme delivery_description som brukes i pipeline/tilbud (lib/actions/pipeline.ts sin
+// updateProjectDeliveryInfo dekker også post_prod_days — unngår den her for ikke å
+// nullstille post_prod_days ved lagring fra board-sidepanelet).
+export async function updateBoardDeliveryDescription(projectId: string, description: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('projects')
+      .update({ delivery_description: description, updated_at: now() })
+      .eq('id', projectId)
+  } catch (err) {
+    console.error('updateBoardDeliveryDescription:', err)
   }
 }
 
@@ -417,6 +447,262 @@ export async function deleteBoardEdges(ids: string[]): Promise<boolean> {
     return !error
   } catch (err) {
     console.error('deleteBoardEdges:', err)
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kopier/lim inn (Cmd/Ctrl+C/V) og angre sletting (Cmd/Ctrl+Z) av board-/
+// storyline-kort — begge trenger å kunne klone et helt nøstet underboard
+// (kort, piler, og eventuelt enda dypere nøstede underboards) rekursivt.
+// snapshotBoardTree leser treet, insertBoardTree skriver det inn igjen et
+// annet sted — enten med FRISKE id-er (kopier/lim inn) eller med de
+// OPPRINNELIGE id-ene gjenbrukt (gjenopprett etter sletting, siden id-ene
+// garantert er ledige rett etter at radene ble slettet).
+// ---------------------------------------------------------------------------
+export type BoardTreeSnapshot = {
+  board: { id: string; title: string; kind: 'storyline' | null; storyline_columns: number | null }
+  cards: BoardCard[]
+  edges: BoardEdge[]
+  children: Record<string, BoardTreeSnapshot>
+}
+
+async function snapshotBoardTree(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  boardId: string
+): Promise<BoardTreeSnapshot | null> {
+  const { data: board } = await supabase.from('boards')
+    .select('id, title, kind, storyline_columns').eq('id', boardId).single()
+  if (!board) return null
+
+  const [{ data: cards }, { data: edges }] = await Promise.all([
+    supabase.from('board_cards').select('*').eq('board_id', boardId),
+    supabase.from('board_edges').select('*').eq('board_id', boardId),
+  ])
+
+  const children: Record<string, BoardTreeSnapshot> = {}
+  for (const c of (cards ?? []) as BoardCard[]) {
+    if (c.type !== 'board' && c.type !== 'storyline') continue
+    const childId = (c.content as BoardRefContent).child_board_id
+    if (!childId) continue
+    const nested = await snapshotBoardTree(supabase, childId)
+    if (nested) children[c.id] = nested
+  }
+
+  return {
+    board: board as BoardTreeSnapshot['board'],
+    cards: (cards ?? []) as BoardCard[],
+    edges: (edges ?? []) as BoardEdge[],
+    children,
+  }
+}
+
+async function insertBoardTree(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  snapshot: BoardTreeSnapshot,
+  parentBoardId: string,
+  projectId: string,
+  userId: string | null,
+  opts: { reuseIds: boolean; titleSuffix?: string }
+): Promise<string> {
+  const boardInsert: Record<string, unknown> = {
+    project_id: projectId,
+    parent_board_id: parentBoardId,
+    title: snapshot.board.title + (opts.titleSuffix ?? ''),
+    kind: snapshot.board.kind,
+    storyline_columns: snapshot.board.storyline_columns,
+    created_by: userId,
+  }
+  if (opts.reuseIds) boardInsert.id = snapshot.board.id
+  const { data: newBoard, error: boardErr } = await supabase.from('boards').insert(boardInsert).select('id').single()
+  if (boardErr || !newBoard) throw new Error(boardErr?.message ?? 'insertBoardTree: kunne ikke opprette board')
+
+  // Pass 1: sett inn alle kort uten column_id (barnet kan komme før forelderen
+  // i listen), og løs opp nøstede board-/storyline-referanser rekursivt underveis.
+  const idMap = new Map<string, string>()
+  for (const c of snapshot.cards) {
+    let content = c.content
+    if ((c.type === 'board' || c.type === 'storyline') && snapshot.children[c.id]) {
+      const nestedId = await insertBoardTree(supabase, snapshot.children[c.id], newBoard.id, projectId, userId, { reuseIds: opts.reuseIds })
+      content = { ...c.content, child_board_id: nestedId }
+    }
+    const cardInsert: Record<string, unknown> = {
+      board_id: newBoard.id, type: c.type, x: c.x, y: c.y, width: c.width,
+      z_index: c.z_index, column_id: null, sort_order: c.sort_order, content,
+    }
+    if (opts.reuseIds) cardInsert.id = c.id
+    const { data: newCard, error: cardErr } = await supabase.from('board_cards').insert(cardInsert).select('id').single()
+    if (cardErr || !newCard) { console.error('insertBoardTree card:', cardErr); continue }
+    idMap.set(c.id, newCard.id)
+  }
+
+  // Pass 2: koble kort til sin (nye) kolonne
+  for (const c of snapshot.cards) {
+    if (c.column_id && idMap.has(c.column_id) && idMap.has(c.id)) {
+      await supabase.from('board_cards').update({ column_id: idMap.get(c.column_id) }).eq('id', idMap.get(c.id))
+    }
+  }
+
+  for (const e of snapshot.edges) {
+    if (!idMap.has(e.from_card_id) || !idMap.has(e.to_card_id)) continue
+    const edgeInsert: Record<string, unknown> = {
+      board_id: newBoard.id, from_card_id: idMap.get(e.from_card_id), to_card_id: idMap.get(e.to_card_id), label: e.label,
+    }
+    if (opts.reuseIds) edgeInsert.id = e.id
+    await supabase.from('board_edges').insert(edgeInsert)
+  }
+
+  return newBoard.id
+}
+
+// Kalles FØR sletting (fra onBeforeDelete) slik at et evt. board-/storyline-kort
+// blant det som slettes kan gjenopprettes med hele undertreet intakt ved Cmd+Z.
+export async function snapshotBoardSubtrees(
+  cards: { id: string; type: BoardCardType; content: BoardCardContent }[]
+): Promise<Record<string, BoardTreeSnapshot>> {
+  try {
+    const supabase = await createClient()
+    const result: Record<string, BoardTreeSnapshot> = {}
+    for (const c of cards) {
+      if (c.type !== 'board' && c.type !== 'storyline') continue
+      const childId = (c.content as BoardRefContent).child_board_id
+      if (!childId) continue
+      const snap = await snapshotBoardTree(supabase, childId)
+      if (snap) result[c.id] = snap
+    }
+    return result
+  } catch (err) {
+    console.error('snapshotBoardSubtrees:', err)
+    return {}
+  }
+}
+
+export type PastedCardInput = {
+  id: string; type: BoardCardType; x: number; y: number; width: number | null
+  column_id: string | null; sort_order: number; content: BoardCardContent
+}
+export type PastedEdgeInput = { from_card_id: string; to_card_id: string; label: string | null }
+
+// Cmd/Ctrl+V — limer inn en tidligere kopiert (Cmd/Ctrl+C) markering på et board.
+// Board-/storyline-kort klones med hele undertreet (nytt underboard, friske id-er);
+// øvrige kort dupliseres som de er. dx/dy forskyver kun toppnivå-kort — barn av en
+// kopiert kolonne beholder sin relative posisjon uendret.
+export async function pasteBoardCards(
+  targetBoardId: string,
+  cards: PastedCardInput[],
+  edges: PastedEdgeInput[],
+  dx: number, dy: number, zIndexStart: number
+): Promise<{ cards: BoardCard[]; edges: BoardEdge[]; childMeta: Record<string, ChildBoardMeta> } | null> {
+  try {
+    const supabase = await createClient()
+    const { data: board } = await supabase.from('boards').select('project_id').eq('id', targetBoardId).single()
+    if (!board) return null
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const idMap = new Map<string, string>()
+    const newCardsById = new Map<string, BoardCard>()
+    const childMeta: Record<string, ChildBoardMeta> = {}
+    let z = zIndexStart
+
+    for (const c of cards) {
+      let content = c.content
+      if (c.type === 'board' || c.type === 'storyline') {
+        const sourceChildId = (c.content as BoardRefContent).child_board_id
+        const snap = sourceChildId ? await snapshotBoardTree(supabase, sourceChildId) : null
+        if (snap) {
+          const newChildId = await insertBoardTree(supabase, snap, targetBoardId, board.project_id, user?.id ?? null, { reuseIds: false, titleSuffix: ' (kopi)' })
+          content = { ...c.content, child_board_id: newChildId, title: (c.content as BoardRefContent).title + ' (kopi)' }
+          childMeta[newChildId] = { title: (content as BoardRefContent).title, cardCount: snap.cards.length }
+        }
+      }
+      const isChild = !!c.column_id
+      const { data: row, error } = await supabase.from('board_cards').insert({
+        board_id: targetBoardId, type: c.type,
+        x: isChild ? c.x : c.x + dx, y: isChild ? c.y : c.y + dy,
+        width: c.width, z_index: z++, column_id: null, sort_order: c.sort_order, content,
+      }).select('*').single()
+      if (error || !row) { console.error('pasteBoardCards card:', error); continue }
+      idMap.set(c.id, row.id)
+      newCardsById.set(row.id, row as BoardCard)
+    }
+
+    for (const c of cards) {
+      if (c.column_id && idMap.has(c.column_id) && idMap.has(c.id)) {
+        const newId = idMap.get(c.id)!
+        const newColId = idMap.get(c.column_id)!
+        await supabase.from('board_cards').update({ column_id: newColId }).eq('id', newId)
+        const card = newCardsById.get(newId)
+        if (card) newCardsById.set(newId, { ...card, column_id: newColId })
+      }
+    }
+
+    const newEdges: BoardEdge[] = []
+    for (const e of edges) {
+      if (!idMap.has(e.from_card_id) || !idMap.has(e.to_card_id)) continue
+      const { data: edgeRow } = await supabase.from('board_edges').insert({
+        board_id: targetBoardId, from_card_id: idMap.get(e.from_card_id), to_card_id: idMap.get(e.to_card_id), label: e.label,
+      }).select('*').single()
+      if (edgeRow) newEdges.push(edgeRow as BoardEdge)
+    }
+
+    return { cards: Array.from(newCardsById.values()), edges: newEdges, childMeta }
+  } catch (err) {
+    console.error('pasteBoardCards:', err)
+    return null
+  }
+}
+
+// Cmd/Ctrl+Z etter en sletting — gjenoppretter kort/piler med sine OPPRINNELIGE
+// id-er (garantert ledige rett etter sletting). `subtrees` (fra snapshotBoardSubtrees,
+// tatt FØR selve slettingen) gjenoppretter et evt. slettet underboard i sin helhet.
+// NB: kommentartråder på de slettede kortene er allerede kaskade-slettet i databasen
+// og kommer ikke tilbake — kun selve kortene/innholdet gjenopprettes.
+export async function restoreDeletedCards(
+  cards: BoardCard[],
+  edges: BoardEdge[],
+  subtrees: Record<string, BoardTreeSnapshot>
+): Promise<boolean> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    let projectIdCache: string | null | undefined
+
+    for (const c of cards) {
+      let content = c.content
+      const subtree = subtrees[c.id]
+      if (subtree) {
+        if (projectIdCache === undefined) {
+          const { data: b } = await supabase.from('boards').select('project_id').eq('id', c.board_id).single()
+          projectIdCache = b?.project_id ?? null
+        }
+        if (projectIdCache) {
+          const restoredChildId = await insertBoardTree(supabase, subtree, c.board_id, projectIdCache, user?.id ?? null, { reuseIds: true })
+          content = { ...c.content, child_board_id: restoredChildId }
+        }
+      }
+      const { error } = await supabase.from('board_cards').insert({
+        id: c.id, board_id: c.board_id, type: c.type, x: c.x, y: c.y, width: c.width,
+        z_index: c.z_index, column_id: null, sort_order: c.sort_order, content,
+      })
+      if (error) console.error('restoreDeletedCards card:', error)
+    }
+
+    for (const c of cards) {
+      if (c.column_id) {
+        await supabase.from('board_cards').update({ column_id: c.column_id }).eq('id', c.id)
+      }
+    }
+
+    for (const e of edges) {
+      const { error } = await supabase.from('board_edges').insert({
+        id: e.id, board_id: e.board_id, from_card_id: e.from_card_id, to_card_id: e.to_card_id, label: e.label,
+      })
+      if (error) console.error('restoreDeletedCards edge:', error)
+    }
+
+    return true
+  } catch (err) {
+    console.error('restoreDeletedCards:', err)
     return false
   }
 }
@@ -749,12 +1035,24 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       target = child as Board
     }
 
-    const [{ data: cards }, { data: edges }, { data: project }] = await Promise.all([
+    const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
       service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
       service.from('board_edges').select('*').eq('board_id', target.id),
-      service.from('projects').select('title, customers(name, company)').eq('id', root.project_id).single(),
+      service.from('projects').select('title, board_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', root.project_id).single(),
+      target.lead_profile_id
+        ? service.from('profiles').select('id, name, email, color, phone').eq('id', target.lead_profile_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      target.customer_contact_id
+        ? service.from('customer_contacts').select('id, name, role, phone').eq('id', target.customer_contact_id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ])
     const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const proj = project as unknown as {
+      board_summary?: string | null
+      delivery_description?: string | null
+      shoot_start?: string | null
+      shoot_end?: string | null
+    } | null
 
     // Brødsmuler begrenset til det delte treet (stopp ved root)
     const crumbs = [{ id: target.id, title: target.title }]
@@ -789,14 +1087,16 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       projectTitle: (project as { title?: string } | null)?.title ?? '',
       projectCustomerId: null,
       customerName: customer?.name || customer?.company || 'Ingen kunde satt',
-      // Kontaktpersoner og prosjektinfo vises ikke på offentlig delte boards.
-      leadProfile: null,
-      customerContact: null,
+      // Prosjektinfo, leveranse, opptak og kontaktpersoner er alle ment for kunden
+      // og vises derfor på delte boards (board_summary er en egen, manuelt
+      // redigert tekst — ikke den interne AI-oppsummeringen av møtenotater).
+      leadProfile: leadProfile as BoardLeadProfile | null,
+      customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
-      projectSummary: null,
-      deliveryDescription: null,
-      shootStart: null,
-      shootEnd: null,
+      projectSummary: proj?.board_summary?.trim() || null,
+      deliveryDescription: proj?.delivery_description?.trim() || null,
+      shootStart: proj?.shoot_start ?? null,
+      shootEnd: proj?.shoot_end ?? null,
       rootBoardId: root.id,
     }
   } catch (err) {

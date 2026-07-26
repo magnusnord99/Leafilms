@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote, EquipmentGroupWithItems } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import QuoteChat from '@/components/quote/QuoteChat'
-import { convertBuilderDataToQuoteData } from '@/lib/quote-builder-utils'
+import { convertBuilderDataToQuoteData, pickBestQuote, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
 
 type Props = {
@@ -68,7 +68,10 @@ export default function ProjectQuotePage({ params }: Props) {
       const members = (teamRes.data || []) as TeamMember[]
       const custs = (customersRes.data || []) as Customer[]
       const allQuotes = (quoteRes.data || []) as Quote[]
-      const existingQuote = allQuotes.find(q => q.is_current) ?? allQuotes[allQuotes.length - 1] ?? null
+      // Et akseptert/signert tilbud vinner alltid over "gjeldende versjon" —
+      // ellers åpnes plutselig et nyere, usignert tilleggstilbud som om DET var
+      // det kunden hadde akseptert (feedback 08a0235b).
+      const existingQuote = pickBestQuote(allQuotes)
 
       setProject(proj)
       setQuotes(allQuotes)
@@ -180,16 +183,22 @@ export default function ProjectQuotePage({ params }: Props) {
         project_id: projectId,
         sheet_url: '',
         version: data.version || 'V1',
-        status: 'draft' as const,
         quote_data: data, // Store raw builder data for future editing
       }
 
       if (existingQuoteId) {
-        await supabase.from('quotes').update({ ...record, quote_data: data }).eq('id', existingQuoteId)
+        // Et allerede akseptert/avslått tilbud er kundens faktiske svar — å lagre en
+        // redigering (eller generere PDF på nytt, se handleGeneratePDF som alltid
+        // kaller handleSave først) skal ALDRI stille det tilbake til kladd under dem.
+        // Kun kladd/sendte tilbud settes til 'draft' igjen ved lagring (feedback 08a0235b).
+        const currentStatus = quotes.find(q => q.id === existingQuoteId)?.status
+        const preserveStatus = currentStatus === 'accepted' || currentStatus === 'rejected'
+        const updatePayload = preserveStatus ? record : { ...record, status: 'draft' as const }
+        await supabase.from('quotes').update(updatePayload).eq('id', existingQuoteId)
         setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data } : q))
       } else {
         // Første tilbud for prosjektet — blir automatisk gjeldende versjon
-        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, is_current: true }).select('*').single()
+        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true }).select('*').single()
         if (newQuote) {
           setExistingQuoteId(newQuote.id)
           setQuotes(prev => [...prev, newQuote as Quote])
@@ -482,6 +491,56 @@ export default function ProjectQuotePage({ params }: Props) {
             })()}
           </div>
         )}
+
+        {/* Kundens valg — tydelig oppsummering av hvilke tilvalg kunden har akseptert/haket
+            av, siden det ellers ikke er synlig noe sted uten å lete gjennom hele
+            tilbudsbyggeren manuelt (feedback 08a0235b). Kun for tilbud kunden faktisk har
+            svart på (akseptert/avslått) — kladder har ingen kundevalg å vise ennå. */}
+        {existingQuoteId && builderData && (() => {
+          const active = quotes.find(q => q.id === existingQuoteId)
+          if (!active || (active.status !== 'accepted' && active.status !== 'rejected')) return null
+          const selectedIds = new Set(active.selected_addon_ids ?? [])
+          const selectedAddons = (builderData.optionalAddons ?? []).filter(a => selectedIds.has(a.id))
+          const total = selectedAddons.reduce((sum, a) => sum + addonTotalPrice(a), 0)
+          const formatNOK = (n: number) => new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
+          const isAccepted = active.status === 'accepted'
+          return (
+            <div style={{
+              marginBottom: 20, padding: '14px 18px', borderRadius: 8,
+              background: isAccepted ? 'rgba(76,175,125,0.08)' : 'rgba(184,64,64,0.08)',
+              border: `1px solid ${isAccepted ? 'rgba(76,175,125,0.3)' : 'rgba(184,64,64,0.3)'}`,
+            }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: isAccepted ? '#4CAF7D' : '#B84040', marginBottom: 6 }}>
+                {isAccepted ? '✓ Akseptert av kunden' : '✗ Avslått av kunden'}
+                {active.accepted_at && ` — ${new Date(active.accepted_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+                {active.accepted_by ? ` (${active.accepted_by})` : ''}
+              </p>
+              {isAccepted && (
+                selectedAddons.length > 0 ? (
+                  <>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginBottom: 6 }}>
+                      Kunden valgte {selectedAddons.length} tilvalg:
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {selectedAddons.map(a => (
+                        <li key={a.id} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, marginBottom: 3 }}>
+                          {a.description || '(uten beskrivelse)'} — {formatNOK(addonTotalPrice(a))}
+                        </li>
+                      ))}
+                    </ul>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginTop: 8, fontWeight: 600 }}>
+                      Sum tilvalg: {formatNOK(total)}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                    Ingen valgfrie tilvalg ble haket av — kunden aksepterte kun grunnpakken.
+                  </p>
+                )
+              )}
+            </div>
+          )
+        })()}
 
         {/* Builder */}
         {builderData && (

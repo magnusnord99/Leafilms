@@ -117,6 +117,8 @@ export type Quote = {
   quote_data: Record<string, unknown> | null
   label: string | null
   is_current: boolean
+  /** IDs (fra quote_data.optionalAddons) på tilleggene kunden har haket av på det publiserte tilbudet. */
+  selected_addon_ids: string[]
   created_at: string
   updated_at: string
 }
@@ -124,6 +126,16 @@ export type Quote = {
 export type QuoteMessage = {
   id: string
   quote_id: string
+  project_id: string
+  user_id: string
+  message: string
+  mentions: string[]
+  created_at: string
+  user: { id: string; name: string | null; email: string } | null
+}
+
+export type PreprodMessage = {
+  id: string
   project_id: string
   user_id: string
   message: string

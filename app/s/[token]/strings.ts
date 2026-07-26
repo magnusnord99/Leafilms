@@ -60,6 +60,7 @@ export const SELECTION_STRINGS = {
     goToReview: 'Gå til gjennomgang',
     backToOverviewTab: '← Oversikt',
     folders: 'Mapper',
+    zoomLabel: 'Bildestørrelse',
   },
   en: {
     photoSelection: 'Photo selection',
@@ -116,6 +117,7 @@ export const SELECTION_STRINGS = {
     goToReview: 'Go to review',
     backToOverviewTab: '← Overview',
     folders: 'Folders',
+    zoomLabel: 'Photo size',
   },
 }
 

@@ -110,10 +110,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Hent gjeldende tilbud for å beregne valgte tillegg — server-side, aldri klientens tall.
+    // Hent gjeldende tilbud — server-side, aldri klientens tall. Henter id-en ALLTID (ikke
+    // bare når tillegg er valgt), slik at "sett status=accepted" lenger ned kan matche på
+    // nøyaktig denne raden i stedet for et skjørt project_id+is_current-søk, som kan treffe
+    // feil rad hvis noen rekker å opprette en ny (usignert) tilbudsversjon i mellomtiden
+    // (samme mønster som forårsaket feedback 08a0235b).
     let quoteData: QuoteBuilderData | null = null
     let quoteRowId: string | null = null
-    if (selectedAddonIds.length > 0) {
+    {
       const { data: quote } = await supabase
         .from('quotes')
         .select('id, quote_data')
@@ -123,9 +127,11 @@ export async function POST(request: NextRequest) {
         .limit(1)
         .maybeSingle()
 
-      if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew)) {
-        quoteData = quote.quote_data as QuoteBuilderData
+      if (quote) {
         quoteRowId = quote.id
+        if (quote.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew)) {
+          quoteData = quote.quote_data as QuoteBuilderData
+        }
       }
     }
 
@@ -253,7 +259,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Sett gjeldende quote-versjon til accepted, og lagre valgte tillegg hvis noen ble valgt
-    const quoteUpdatePayload: Record<string, unknown> = { status: 'accepted', updated_at: signedAt }
+    const quoteUpdatePayload: Record<string, unknown> = {
+      status: 'accepted', updated_at: signedAt, accepted_at: signedAt, accepted_by: signerEmail,
+    }
     if (quoteData && selectedAddons.length > 0 && quoteRowId) {
       quoteUpdatePayload.quote_data = {
         ...quoteData,
@@ -264,11 +272,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: updateQuoteError } = await supabase
-      .from('quotes')
-      .update(quoteUpdatePayload)
-      .eq('project_id', projectId)
-      .eq('is_current', true)
+    // Matcher på den eksakte tilbudsraden vi allerede slo opp over, i stedet for et
+    // skjørt project_id+is_current-søk (se kommentaren ved oppslaget av quoteRowId).
+    let updateQuoteQuery = supabase.from('quotes').update(quoteUpdatePayload)
+    updateQuoteQuery = quoteRowId
+      ? updateQuoteQuery.eq('id', quoteRowId)
+      : updateQuoteQuery.eq('project_id', projectId).eq('is_current', true)
+    const { error: updateQuoteError } = await updateQuoteQuery
 
     if (updateQuoteError) {
       console.error('sign contract quote update error:', updateQuoteError)

@@ -14,7 +14,7 @@ const PIN_LOCKOUT_MINUTES = 15
 // ---------------------------------------------------------------------------
 export type SelectionGallery = {
   id: string
-  project_id: string
+  project_id: string | null
   token: string
   pin_code: string
   target_count: number | null
@@ -58,7 +58,7 @@ function cookieKey(token: string) {
 // ADMIN: Opprett galleri
 // ---------------------------------------------------------------------------
 export async function createGallery(
-  projectId: string,
+  projectId?: string,
   targetCount?: number
 ): Promise<{ token: string; pinCode: string; galleryId: string }> {
   const supabase = await createClient()
@@ -69,7 +69,7 @@ export async function createGallery(
   const { data, error } = await supabase
     .from('selection_galleries')
     .insert({
-      project_id: projectId,
+      project_id: projectId ?? null,
       token,
       pin_code: pinCode,
       target_count: targetCount ?? null,
@@ -84,6 +84,44 @@ export async function createGallery(
   }
 
   return { token, pinCode, galleryId: data.id }
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN: Knytt/løsriv galleri til prosjekt
+// ---------------------------------------------------------------------------
+export async function linkGalleryToProject(galleryId: string, projectId: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('selection_galleries')
+    .update({ project_id: projectId, updated_at: new Date().toISOString() })
+    .eq('id', galleryId)
+
+  if (error) throw new Error('Kunne ikke knytte galleri til prosjekt')
+}
+
+export async function unlinkGalleryFromProject(galleryId: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('selection_galleries')
+    .update({ project_id: null, updated_at: new Date().toISOString() })
+    .eq('id', galleryId)
+
+  if (error) throw new Error('Kunne ikke fjerne prosjekt-koblingen')
+}
+
+export async function searchProjectsToLink(query: string): Promise<{ id: string; title: string }[]> {
+  const supabase = await createClient()
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const { data } = await supabase
+    .from('projects')
+    .select('id, title')
+    .ilike('title', `%${trimmed}%`)
+    .order('title', { ascending: true })
+    .limit(20)
+
+  return data ?? []
 }
 
 // ---------------------------------------------------------------------------
@@ -626,10 +664,12 @@ export async function submitGallery(token: string): Promise<void> {
     .update({ status: 'submitted', submitted_at: now, updated_at: now })
     .eq('id', galleryId)
 
-  await Promise.all([
-    notifyOnSelectionSubmit(gallery.project_id, service),
-    markSeleksjonTaskDone(gallery.project_id, service, now),
-  ])
+  if (gallery.project_id) {
+    await Promise.all([
+      notifyOnSelectionSubmit(gallery.project_id, service),
+      markSeleksjonTaskDone(gallery.project_id, service, now),
+    ])
+  }
 }
 
 // ---------------------------------------------------------------------------

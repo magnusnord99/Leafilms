@@ -76,7 +76,7 @@ type ProjectRow = {
 }
 
 type TaskRow = { project_id: string; pipeline_stage: string; status: string }
-type QuoteRow = { project_id: string; accepted: boolean; total: number; updated_at: string }
+type QuoteRow = { project_id: string; accepted: boolean; total: number; updated_at: string; isCurrent: boolean }
 
 type ProjectCard = {
   rootId: string
@@ -133,7 +133,7 @@ export default function ProjectsPage() {
         supabase.from('tasks').select('project_id, pipeline_stage, status'),
         supabase
           .from('quotes')
-          .select('project_id, status, quote_data, selected_addon_ids, updated_at')
+          .select('project_id, status, quote_data, selected_addon_ids, updated_at, is_current')
           .not('quote_data', 'is', null),
       ])
 
@@ -153,7 +153,7 @@ export default function ProjectsPage() {
 
       setTasks((tasksRes.data ?? []) as TaskRow[])
 
-      type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; selected_addon_ids: string[] | null; updated_at: string }
+      type RawQuote = { project_id: string; status: string; quote_data: QuoteBuilderData; selected_addon_ids: string[] | null; updated_at: string; is_current: boolean }
       setQuotes(((quotesRes.data ?? []) as unknown as RawQuote[]).flatMap(q => {
         // Kundens avkryssede tillegg telles med — samme beregning som Økonomi-siden
         const amount = getQuoteAmountExclVat(q.quote_data, q.selected_addon_ids ?? [])
@@ -163,6 +163,7 @@ export default function ProjectsPage() {
           accepted: q.status === 'accepted',
           total: amount,
           updated_at: q.updated_at,
+          isCurrent: q.is_current,
         }]
       }))
 
@@ -211,10 +212,15 @@ export default function ProjectsPage() {
 
       const stageTasks = tasks.filter(t => allIds.includes(t.project_id) && t.pipeline_stage === stage)
 
+      // Et signert/akseptert tilbud vinner alltid — selv over en nyere is_current-kladd
+      // (f.eks. et tilleggstilbud for ekstraarbeid på et allerede signert prosjekt) — ellers
+      // is_current, ellers sist oppdaterte (samme prioritering som pickBestQuote i
+      // /admin/okonomi og /admin/customers/[id]).
       const groupQuotes = quotes
         .filter(q => allIds.includes(q.project_id))
         .sort((a, b) => {
           if (a.accepted !== b.accepted) return a.accepted ? -1 : 1
+          if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1
           return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         })
       const quote = groupQuotes[0] ?? null

@@ -9,12 +9,17 @@ import type { SelectionAlbum } from '@/lib/actions/selection-albums'
 import type { AlbumForCustomer, GalleryVideo } from '@/lib/actions/selections'
 import type { AlbumImageWithPick } from '@/lib/actions/selection-picks'
 import { SELECTION_STRINGS, type SelectionLanguage, type SelectionStrings } from '../strings'
+import { useGridZoom } from '@/hooks/useGridZoom'
 
 const STYLES = `
   .ag-root { display:flex; flex-direction:column; height:100dvh; background:#0C0B09; overflow:hidden; }
   .ag-content { flex:1; display:flex; overflow:hidden; }
   .ag-grid-wrap { flex:1; overflow-y:auto; padding:10px; }
-  .ag-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; }
+  .ag-grid { display:grid; gap:6px; }
+  .ag-zoom-bar { position:sticky; top:0; z-index:5; display:flex; justify-content:flex-end; pointer-events:none; margin-bottom:8px; }
+  .ag-zoom { pointer-events:auto; display:flex; align-items:center; gap:8px; background:rgba(19,18,16,0.92); backdrop-filter:blur(4px); border:1px solid #2A2820; border-radius:20px; padding:6px 12px; }
+  .ag-zoom-icon { font-family:sans-serif; font-size:0.7rem; color:#8A8070; line-height:1; user-select:none; }
+  .ag-zoom-slider { width:96px; accent-color:#C49434; cursor:pointer; }
   .ag-panel { width:280px; flex-shrink:0; border-left:1px solid #2A2820; background:#131210; display:flex; flex-direction:column; }
   .ag-send-desktop { padding:12px 14px; border-top:1px solid #2A2820; }
   .ag-send-mobile { display:none; padding:12px 0 4px; }
@@ -83,6 +88,7 @@ export default function AlbumGalleryClient({
 }) {
   const t = SELECTION_STRINGS[language]
   const router = useRouter()
+  const [zoom, setZoom] = useGridZoom()
   const [images, setImages] = useState(initialImages)
   const [activeImageId, setActiveImageId] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -267,7 +273,23 @@ export default function AlbumGalleryClient({
         <div className="ag-content">
           {/* Grid */}
           <div className="ag-grid-wrap">
-            <div className="ag-grid">
+            <div className="ag-zoom-bar">
+              <div className="ag-zoom">
+                <span className="ag-zoom-icon">－</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={260}
+                  step={10}
+                  value={zoom}
+                  onChange={e => setZoom(Number(e.target.value))}
+                  className="ag-zoom-slider"
+                  aria-label={t.zoomLabel}
+                />
+                <span className="ag-zoom-icon">＋</span>
+              </div>
+            </div>
+            <div className="ag-grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${zoom}px, 1fr))` }}>
               {!isDirectAlbumLink && allAlbums && (() => {
                 const activeSlug = (album as AlbumForCustomer).slug
                 const currentAlbumMeta = allAlbums.find(a => a.slug === activeSlug)

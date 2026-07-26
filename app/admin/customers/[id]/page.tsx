@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-client'
 import { C } from '@/lib/admin-theme'
 import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData } from '@/lib/types'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
+import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
 
 type QuoteWithAmount = Quote & { quote_data: QuoteBuilderData | null; selected_addon_ids: string[] | null }
@@ -55,13 +56,17 @@ function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
 
-// Samme logikk som /admin/okonomi: nyeste aksepterte tilbud, ellers nyeste tilbud med data.
+// Samme logikk som /admin/okonomi: et signert/akseptert tilbud vinner alltid (selv over en
+// nyere is_current-kladd — f.eks. et tilleggstilbud for ekstraarbeid på et allerede signert
+// prosjekt), ellers is_current, ellers nyeste tilbud med data.
 function pickBestQuote(quotes: QuoteWithAmount[]): QuoteWithAmount | null {
   const withData = quotes.filter(q => q.quote_data)
   if (!withData.length) return null
   const byRecency = (a: QuoteWithAmount, b: QuoteWithAmount) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   const accepted = withData.filter(q => q.status === 'accepted').sort(byRecency)
   if (accepted.length) return accepted[0]
+  const current = withData.find(q => q.is_current)
+  if (current) return current
   return withData.sort(byRecency)[0]
 }
 
@@ -94,6 +99,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+type InvoiceInfoForm = {
+  company: string
+  org_nummer: string
+  address: string
+  invoice_email: string
+  invoice_reference: string
+  invoice_info_skipped: boolean
+}
+
 export default function CustomerDetailPage() {
   const params = useParams()
   const customerId = params.id as string
@@ -102,6 +116,10 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [contacts, setContacts] = useState<CustomerContact[]>([])
   const [projects, setProjects] = useState<ProjectWithDetails[]>([])
+
+  const [invoiceEdit, setInvoiceEdit] = useState(false)
+  const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ company: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
+  const [savingInvoice, setSavingInvoice] = useState(false)
 
   async function fetchData() {
     const supabase = createClient()
@@ -138,7 +156,7 @@ export default function CustomerDetailPage() {
       projectIds.length > 0
         ? supabase
             .from('quotes')
-            .select('id, project_id, version, status, pdf_path, accepted_at, accepted_by, quote_data, selected_addon_ids, created_at, updated_at')
+            .select('id, project_id, version, status, pdf_path, accepted_at, accepted_by, quote_data, selected_addon_ids, created_at, updated_at, is_current')
             .in('project_id', projectIds)
             .order('created_at', { ascending: false })
         : { data: [], error: null },
@@ -184,6 +202,37 @@ export default function CustomerDetailPage() {
     const { error } = await supabase.from('projects').delete().eq('id', project.id)
     if (error) { alert('Kunne ikke slette prosjektet.'); return }
     setProjects(prev => prev.filter(p => p.id !== project.id))
+  }
+
+  function handleOpenInvoiceEdit() {
+    setInvoiceForm({
+      company: customer?.company ?? '',
+      org_nummer: customer?.org_nummer ?? '',
+      address: customer?.address ?? '',
+      invoice_email: customer?.invoice_email ?? '',
+      invoice_reference: customer?.invoice_reference ?? '',
+      invoice_info_skipped: !!customer?.invoice_info_skipped,
+    })
+    setInvoiceEdit(true)
+  }
+
+  async function handleSaveInvoiceInfo() {
+    if (!customer) return
+    setSavingInvoice(true)
+    const patch = {
+      company: invoiceForm.company.trim() || null,
+      org_nummer: invoiceForm.org_nummer.trim() || null,
+      address: invoiceForm.address.trim() || null,
+      invoice_email: invoiceForm.invoice_email.trim() || null,
+      invoice_reference: invoiceForm.invoice_reference.trim() || null,
+      invoice_info_skipped: invoiceForm.invoice_info_skipped,
+    }
+    const result = await updateCustomerInvoiceInfo(customer.id, patch)
+    setSavingInvoice(false)
+    if (result.ok) {
+      setCustomer(prev => prev ? { ...prev, ...patch } : prev)
+      setInvoiceEdit(false)
+    }
   }
 
   async function handleDeleteQuote(quote: QuoteWithAmount) {
@@ -355,6 +404,89 @@ export default function CustomerDetailPage() {
               </p>
             )}
           </div>
+        </div>
+
+        {/* Fakturainformasjon — samme felt som samles inn ved signering (app/api/contracts/sign),
+            vises også skrivebeskyttet på faktura-siden i Økonomi og redigerbart i Kontrakt-fanen. */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 22px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: invoiceEdit ? 14 : 10 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, margin: 0 }}>
+              Fakturainformasjon
+            </p>
+            {!invoiceEdit && (
+              <button
+                onClick={handleOpenInvoiceEdit}
+                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                Rediger
+              </button>
+            )}
+          </div>
+
+          {invoiceEdit ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {([
+                  ['company', 'Firma'],
+                  ['org_nummer', 'Org.nummer'],
+                  ['address', 'Fakturaadresse'],
+                  ['invoice_email', 'Faktura-e-post'],
+                  ['invoice_reference', 'Merking / referanse'],
+                ] as const).map(([key, label]) => (
+                  <div key={key} style={{ flex: '1 1 220px', minWidth: 200 }}>
+                    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 4 }}>{label}</label>
+                    <input
+                      value={invoiceForm[key]}
+                      onChange={e => setInvoiceForm(f => ({ ...f, [key]: e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={invoiceForm.invoice_info_skipped}
+                  onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
+                  style={{ accentColor: C.accent, width: 15, height: 15 }}
+                />
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                  Marker som «ikke klart» (må følges opp manuelt før fakturering)
+                </span>
+              </label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button
+                  onClick={handleSaveInvoiceInfo}
+                  disabled={savingInvoice}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, padding: '7px 14px', borderRadius: 6, background: C.accent, color: '#fff', border: 'none', cursor: 'pointer', opacity: savingInvoice ? 0.6 : 1 }}
+                >
+                  {savingInvoice ? 'Lagrer...' : 'Lagre'}
+                </button>
+                <button
+                  onClick={() => setInvoiceEdit(false)}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '7px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          ) : customer.company || customer.org_nummer || customer.address || customer.invoice_email || customer.invoice_reference ? (
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              {customer.company && <InfoRow label="Firma" value={customer.company} />}
+              {customer.org_nummer && <InfoRow label="Org.nummer" value={customer.org_nummer} />}
+              {customer.address && <InfoRow label="Fakturaadresse" value={customer.address} />}
+              {customer.invoice_email && <InfoRow label="Faktura-e-post" value={customer.invoice_email} />}
+              {customer.invoice_reference && <InfoRow label="Merking / referanse" value={customer.invoice_reference} />}
+            </div>
+          ) : customer.invoice_info_skipped ? (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.danger, margin: 0 }}>
+              ⚠ Kunden hoppet over fakturainformasjon ved signering — følg opp manuelt før fakturering.
+            </p>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', margin: 0 }}>
+              Ikke oppgitt ennå.
+            </p>
+          )}
         </div>
 
         {/* Notater */}

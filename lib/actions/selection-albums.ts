@@ -40,7 +40,7 @@ export type AlbumWithImages = SelectionAlbum & {
 export type AdminSelectionPageData = {
   gallery: {
     id: string
-    project_id: string
+    project_id: string | null
     token: string
     pin_code: string
     target_count: number | null
@@ -48,6 +48,7 @@ export type AdminSelectionPageData = {
     submitted_at: string | null
     created_at: string
   }
+  linkedProject: { id: string; title: string } | null
   albums: AlbumWithImages[]
   ungroupedImages: {
     id: string
@@ -144,19 +145,27 @@ export async function getSelectedImagesForProject(projectId: string): Promise<Se
   }))
 }
 
-export async function getAdminSelectionPage(projectId: string): Promise<AdminSelectionPageData | null> {
+export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelectionPageData | null> {
   const supabase = await createClient()
   const service = createServiceClient()
 
   const { data: gallery } = await supabase
     .from('selection_galleries')
     .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(1)
+    .eq('id', galleryId)
     .maybeSingle()
 
   if (!gallery) return null
+
+  let linkedProject: { id: string; title: string } | null = null
+  if (gallery.project_id) {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('id, title')
+      .eq('id', gallery.project_id)
+      .maybeSingle()
+    linkedProject = proj ?? null
+  }
 
   const { data: albums } = await supabase
     .from('selection_albums')
@@ -238,6 +247,7 @@ export async function getAdminSelectionPage(projectId: string): Promise<AdminSel
 
   return {
     gallery: gallery as AdminSelectionPageData['gallery'],
+    linkedProject,
     albums: albumsWithImages,
     ungroupedImages,
     totalSelected,
@@ -403,6 +413,50 @@ export async function disableAlbumSharing(albumId: string): Promise<void> {
       updated_at: new Date().toISOString(),
     })
     .eq('id', albumId)
+}
+
+export async function getStandaloneGalleries(): Promise<{
+  galleryId: string
+  status: 'open' | 'submitted' | 'purged'
+  albumCount: number
+  totalSelected: number
+  targetCount: number | null
+  submittedAt: string | null
+  createdAt: string
+}[]> {
+  const supabase = await createClient()
+
+  const { data: galleries } = await supabase
+    .from('selection_galleries')
+    .select('id, status, target_count, submitted_at, created_at')
+    .is('project_id', null)
+    .order('created_at', { ascending: false })
+
+  if (!galleries || galleries.length === 0) return []
+
+  return Promise.all(
+    galleries.map(async g => {
+      const { count: ac } = await supabase
+        .from('selection_albums')
+        .select('id', { count: 'exact', head: true })
+        .eq('gallery_id', g.id)
+      const { count: sc } = await supabase
+        .from('selection_images')
+        .select('id', { count: 'exact', head: true })
+        .eq('gallery_id', g.id)
+        .eq('selected', true)
+
+      return {
+        galleryId: g.id,
+        status: g.status as 'open' | 'submitted' | 'purged',
+        albumCount: ac ?? 0,
+        totalSelected: sc ?? 0,
+        targetCount: g.target_count,
+        submittedAt: g.submitted_at,
+        createdAt: g.created_at,
+      }
+    })
+  )
 }
 
 export async function getAllGalleriesOverview(): Promise<{

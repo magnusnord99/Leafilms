@@ -7,6 +7,7 @@ import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, up
 import { updateReviewSettings } from '@/lib/actions/reviews'
 import ReviewPanel from '@/components/project/ReviewPanel'
 import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo } from '@/lib/actions/contracts'
+import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
@@ -242,6 +243,24 @@ function SubCheck({ label, done }: { label: string; done: boolean }) {
       </span>
     </div>
   )
+}
+
+function InvoiceInfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p style={{ margin: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.text3 }}>{label}</p>
+      <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text }}>{value}</p>
+    </div>
+  )
+}
+
+type InvoiceInfoForm = {
+  company: string
+  org_nummer: string
+  address: string
+  invoice_email: string
+  invoice_reference: string
+  invoice_info_skipped: boolean
 }
 
 function TilbudStepper({
@@ -616,6 +635,10 @@ export default function ProjectHubPage() {
   const [titleValue, setTitleValue] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
 
+  const [invoiceEdit, setInvoiceEdit] = useState(false)
+  const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ company: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
+  const [savingInvoice, setSavingInvoice] = useState(false)
+
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false)
   const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string; company: string | null }[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
@@ -671,6 +694,8 @@ export default function ProjectHubPage() {
   const [analyzing, setAnalyzing] = useState(false)
   type MeetingSummary = {
     sammendrag?: string
+    shootStart?: string | null
+    shootEnd?: string | null
   }
   const [summary, setSummary] = useState<MeetingSummary | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -770,7 +795,17 @@ export default function ProjectHubPage() {
       setAnalyzeError(result.error)
     } else {
       setSummary(result)
-      setHubData(prev => prev ? { ...prev, project: { ...prev.project, meeting_notes: notesValue, meeting_summary: result } } : prev)
+      if (result.shootStart) {
+        setShootStart(result.shootStart)
+        setShootEnd(result.shootEnd ?? result.shootStart)
+      }
+      setHubData(prev => prev ? {
+        ...prev,
+        project: {
+          ...prev.project, meeting_notes: notesValue, meeting_summary: result,
+          ...(result.shootStart && { shoot_start: result.shootStart, shoot_end: result.shootEnd ?? result.shootStart }),
+        },
+      } : prev)
     }
     setAnalyzing(false)
   }
@@ -818,6 +853,39 @@ export default function ProjectHubPage() {
     if (result.ok) {
       setHubData(prev => prev ? { ...prev, project: { ...prev.project, title: titleValue.trim() } } : prev)
       setTitleEdit(false)
+    }
+  }
+
+  function handleOpenInvoiceEdit() {
+    const customer = project.customer
+    setInvoiceForm({
+      company: customer?.company ?? '',
+      org_nummer: customer?.org_nummer ?? '',
+      address: customer?.address ?? '',
+      invoice_email: customer?.invoice_email ?? '',
+      invoice_reference: customer?.invoice_reference ?? '',
+      invoice_info_skipped: !!customer?.invoice_info_skipped,
+    })
+    setInvoiceEdit(true)
+  }
+
+  async function handleSaveInvoiceInfo() {
+    const customerId = project.customer?.id
+    if (!customerId) return
+    setSavingInvoice(true)
+    const patch = {
+      company: invoiceForm.company.trim() || null,
+      org_nummer: invoiceForm.org_nummer.trim() || null,
+      address: invoiceForm.address.trim() || null,
+      invoice_email: invoiceForm.invoice_email.trim() || null,
+      invoice_reference: invoiceForm.invoice_reference.trim() || null,
+      invoice_info_skipped: invoiceForm.invoice_info_skipped,
+    }
+    const result = await updateCustomerInvoiceInfo(customerId, patch, projectId)
+    setSavingInvoice(false)
+    if (result.ok) {
+      setHubData(prev => prev ? { ...prev, project: { ...prev.project, customer: prev.project.customer ? { ...prev.project.customer, ...patch } : prev.project.customer } } : prev)
+      setInvoiceEdit(false)
     }
   }
 
@@ -1553,6 +1621,11 @@ export default function ProjectHubPage() {
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, marginTop: 10, lineHeight: 1.6 }}>
                       {summary.sammendrag}
                     </p>
+                    {summary.shootStart && (
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.success, marginTop: 10 }}>
+                        🎬 Opptaksdato hentet fra notatene og satt til {new Date(summary.shootStart + 'T12:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })} — husk å bekrefte den under.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -2113,6 +2186,89 @@ export default function ProjectHubPage() {
                 </p>
               </div>
             </label>
+
+            {/* Fakturainformasjon — samme felt som samles inn ved signering (app/api/contracts/sign),
+                vises også skrivebeskyttet på faktura-siden i Økonomi og redigerbart på kundesiden. */}
+            {project.customer && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: invoiceEdit ? 12 : 8 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, margin: 0 }}>
+                    Fakturainformasjon
+                  </p>
+                  {!invoiceEdit && (
+                    <button
+                      onClick={handleOpenInvoiceEdit}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}
+                    >
+                      Rediger
+                    </button>
+                  )}
+                </div>
+
+                {invoiceEdit ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {([
+                      ['company', 'Firma'],
+                      ['org_nummer', 'Org.nummer'],
+                      ['address', 'Fakturaadresse'],
+                      ['invoice_email', 'Faktura-e-post'],
+                      ['invoice_reference', 'Merking / referanse'],
+                    ] as const).map(([key, label]) => (
+                      <div key={key}>
+                        <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, color: C.text3, marginBottom: 4 }}>{label}</label>
+                        <input
+                          value={invoiceForm[key]}
+                          onChange={e => setInvoiceForm(f => ({ ...f, [key]: e.target.value }))}
+                          style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+                        />
+                      </div>
+                    ))}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={invoiceForm.invoice_info_skipped}
+                        onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
+                        style={{ accentColor: C.accent, width: 15, height: 15 }}
+                      />
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                        Marker som «ikke klart» (må følges opp manuelt før fakturering)
+                      </span>
+                    </label>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <button
+                        onClick={handleSaveInvoiceInfo}
+                        disabled={savingInvoice}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '7px 14px', borderRadius: 6, background: C.accent, color: '#fff', border: 'none', cursor: 'pointer', opacity: savingInvoice ? 0.6 : 1 }}
+                      >
+                        {savingInvoice ? 'Lagrer...' : 'Lagre'}
+                      </button>
+                      <button
+                        onClick={() => setInvoiceEdit(false)}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '7px 12px', borderRadius: 6, cursor: 'pointer' }}
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  </div>
+                ) : project.customer.company || project.customer.org_nummer || project.customer.address || project.customer.invoice_email || project.customer.invoice_reference ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {project.customer.company && <InvoiceInfoLine label="Firma" value={project.customer.company} />}
+                    {project.customer.org_nummer && <InvoiceInfoLine label="Org.nummer" value={project.customer.org_nummer} />}
+                    {project.customer.address && <InvoiceInfoLine label="Fakturaadresse" value={project.customer.address} />}
+                    {project.customer.invoice_email && <InvoiceInfoLine label="Faktura-e-post" value={project.customer.invoice_email} />}
+                    {project.customer.invoice_reference && <InvoiceInfoLine label="Merking / referanse" value={project.customer.invoice_reference} />}
+                  </div>
+                ) : project.customer.invoice_info_skipped ? (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.danger, margin: 0 }}>
+                    ⚠ Kunden hoppet over fakturainformasjon ved signering — følg opp manuelt før fakturering.
+                  </p>
+                ) : (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', margin: 0 }}>
+                    Ikke oppgitt ennå.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Last ned PDF — tilgjengelig så snart det finnes kontrakttekst, uansett
                 publiserings-/signeringsstatus, slik at vi kan se nøyaktig hva kunden ser. */}

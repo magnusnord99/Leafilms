@@ -7,6 +7,24 @@ export function crewMemberCost(m: CrewMember): number {
   return m.dailyRate * m.days
 }
 
+// Et prosjekt kan ha et signert/akseptert hovedtilbud OG et nyere, ikke-signert
+// tilleggstilbud (kunden ba om ekstraarbeid i etterkant, se "Lag ny versjon"). Det
+// signerte skal alltid vinne over "gjeldende versjon" (is_current) — ellers viser
+// UI-et plutselig kladden som om DEN var det kunden har akseptert. Falt tilbake til
+// is_current, så nyeste, hvis ingenting er akseptert ennå. Samme prioritering som
+// er etablert i app/admin/okonomi og customers/[id]-sidene (se feedback 08a0235b).
+export function pickBestQuote<T extends { status: string; is_current: boolean; created_at: string }>(
+  quotes: T[]
+): T | null {
+  if (quotes.length === 0) return null
+  const byRecency = (a: T, b: T) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  const accepted = quotes.filter(q => q.status === 'accepted').sort(byRecency)
+  if (accepted.length) return accepted[0]
+  const current = quotes.find(q => q.is_current)
+  if (current) return current
+  return [...quotes].sort(byRecency)[0]
+}
+
 const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']
 
 // Leser et tillegg sine beløp per kategori — normaliserer gamle rader (price+category, fra før

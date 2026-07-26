@@ -6,7 +6,7 @@ import type { PipelineStage } from '@/lib/types'
 
 export type Notification = {
   id: string
-  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response' | 'board_comment_mention' | 'board_comment_reply' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded'
+  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response' | 'board_comment_mention' | 'board_comment_reply' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded' | 'preprod_mention' | 'preprod_message' | 'preprod_message_reaction'
   project_id: string | null
   task_id: string | null
   lead_id: string | null
@@ -172,6 +172,15 @@ export async function replyToNotification(
         mentions: [],
       })
       if (error) { console.error('replyToNotification quote:', error); return { ok: false, error: 'Kunne ikke sende' } }
+    } else if (n.type === 'preprod_message' || n.type === 'preprod_mention' || n.type === 'preprod_message_reaction') {
+      if (!n.project_id) return { ok: false, error: 'Varselet mangler prosjekt' }
+      const { error } = await supabase.from('preprod_messages').insert({
+        project_id: n.project_id,
+        user_id: user.id,
+        message,
+        mentions: [],
+      })
+      if (error) { console.error('replyToNotification preprod:', error); return { ok: false, error: 'Kunne ikke sende' } }
     } else if (n.type === 'direct_message') {
       if (!n.conversation_id) return { ok: false, error: 'Varselet mangler samtale' }
       const { error } = await supabase.from('conversation_messages').insert({

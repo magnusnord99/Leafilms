@@ -13,7 +13,7 @@ import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
 
-type Channel = 'project' | 'task' | 'quote' | 'direct'
+type Channel = 'project' | 'task' | 'quote' | 'preprod' | 'direct'
 
 // Hvilken meldingskanal varselet hører til — styrer om Svar/reaksjoner vises
 function channelFor(n: Notification): Channel | null {
@@ -30,6 +30,10 @@ function channelFor(n: Notification): Channel | null {
     case 'quote_mention':
     case 'quote_message_reaction':
       return 'quote'
+    case 'preprod_message':
+    case 'preprod_mention':
+    case 'preprod_message_reaction':
+      return 'preprod'
     case 'direct_message':
       return 'direct'
     default:
@@ -143,6 +147,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/projects/${n.project_id}?chat=1`)
     } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message' || n.type === 'quote_message_reaction') {
       router.push(`/admin/projects/${n.project_id}/quote${n.type === 'quote_assigned' ? '' : '?chat=1'}`)
+    } else if (n.type === 'preprod_mention' || n.type === 'preprod_message' || n.type === 'preprod_message_reaction') {
+      router.push(`/admin/preprod/${n.project_id}?chat=1`)
     } else if (n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded') {
       router.push(`/admin/projects/${n.project_id}?tab=pitch`)
     } else if (n.type === 'invoice_assigned') {
@@ -158,7 +164,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       if (!n.task_id) {
         router.push(`/admin/postprod/${n.project_id}`)
       } else if (stage === 'post_prod') {
-        router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}`)
+        // &chat=1 åpner det flytende oppgave-chat-panelet automatisk (samme mønster
+        // som project_message/quote_message/preprod_message under) — uten dette valgte
+        // siden bare riktig oppgave, men chatten forble lukket.
+        router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}&chat=1`)
       } else if (stage === 'pre_prod') {
         router.push(`/admin/preprod/${n.project_id}?task=${n.task_id}`)
       } else {
@@ -319,7 +328,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                   >
                     {/* Ikon */}
                     <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                      {n.type === 'project_message_reaction' || n.type === 'task_message_reaction' || n.type === 'quote_message_reaction' ? (
+                      {n.type === 'project_message_reaction' || n.type === 'task_message_reaction' || n.type === 'quote_message_reaction' || n.type === 'preprod_message_reaction' ? (
                         <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>{n.message_preview}</span>
                       ) : n.type === 'task_assigned' || n.type === 'lead_assigned' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
@@ -329,12 +338,12 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
-                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' || n.type === 'board_comment_mention' ? (
+                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' || n.type === 'board_comment_mention' || n.type === 'preprod_mention' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="4" />
                           <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5" />
                         </svg>
-                      ) : n.type === 'project_message' || n.type === 'quote_message' || n.type === 'direct_message' || n.type === 'board_comment_reply' ? (
+                      ) : n.type === 'project_message' || n.type === 'quote_message' || n.type === 'direct_message' || n.type === 'board_comment_reply' || n.type === 'preprod_message' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                         </svg>
@@ -370,6 +379,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'selection_submitted' ? 'sendte inn bildevalg'
                             : n.type === 'quote_mention' ? 'tagget deg i tilbud'
                             : n.type === 'quote_message' ? 'i tilbudschatten'
+                            : n.type === 'preprod_mention' ? 'tagget deg i pre-prod-chatten'
+                            : n.type === 'preprod_message' ? 'i pre-prod-chatten'
                             : n.type === 'feedback_reply' ? 'svarte på tilbakemeldingen din'
                             : n.type === 'contract_signed' ? 'signerte kontrakten'
                             : n.type === 'direct_message' ? 'sendte deg en direktemelding'
@@ -378,6 +389,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'project_message_reaction' ? 'reagerte på meldingen din i prosjekt-chatten'
                             : n.type === 'task_message_reaction' ? 'reagerte på meldingen din i en oppgave'
                             : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
+                            : n.type === 'preprod_message_reaction' ? 'reagerte på meldingen din i pre-prod-chatten'
                             : n.type === 'board_comment_mention' ? 'nevnte deg i en boardkommentar'
                             : n.type === 'board_comment_reply' ? 'svarte på kommentaren din på boardet'
                             : n.type === 'pitch_review_requested' ? 'ber deg godkjenne pitchen'
@@ -387,7 +399,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : 'i en oppgave'}
                         </span>
                       </div>
-                      {n.type !== 'project_message_reaction' && n.type !== 'task_message_reaction' && n.type !== 'quote_message_reaction' && (
+                      {n.type !== 'project_message_reaction' && n.type !== 'task_message_reaction' && n.type !== 'quote_message_reaction' && n.type !== 'preprod_message_reaction' && (
                         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, fontStyle: 'italic', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           &ldquo;{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}&rdquo;
                         </p>

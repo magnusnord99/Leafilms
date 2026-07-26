@@ -34,23 +34,26 @@ DROP POLICY IF EXISTS "authenticated_insert_daily_plan_items" ON daily_plan_item
 DROP POLICY IF EXISTS "authenticated_update_daily_plan_items" ON daily_plan_items;
 DROP POLICY IF EXISTS "authenticated_delete_daily_plan_items" ON daily_plan_items;
 
+-- Personlig liste: kun eieren (profile_id) kan lese/skrive egne rader.
+-- USING (true) ville latt enhver authenticated JWT (inkl. customer) lese og
+-- slette alle andres dagsplaner via PostgREST.
 CREATE POLICY "authenticated_read_daily_plan_items"
   ON daily_plan_items FOR SELECT
   TO authenticated
-  USING (true);
+  USING (profile_id = auth.uid());
 
 CREATE POLICY "authenticated_insert_daily_plan_items"
   ON daily_plan_items FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (profile_id = auth.uid());
 
 CREATE POLICY "authenticated_update_daily_plan_items"
   ON daily_plan_items FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
 
 CREATE POLICY "authenticated_delete_daily_plan_items"
   ON daily_plan_items FOR DELETE
   TO authenticated
-  USING (true);
+  USING (profile_id = auth.uid());

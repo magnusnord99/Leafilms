@@ -143,7 +143,17 @@ export async function addCustomPlanItem(title: string): Promise<{ ok: boolean; e
 export async function toggleCustomPlanItem(id: string, done: boolean): Promise<void> {
   try {
     const supabase = await createClient()
-    await supabase.from('daily_plan_items').update({ done }).eq('id', id).is('task_id', null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Scope by profile_id so a forged id cannot toggle another user's item
+    // even if RLS were misconfigured.
+    await supabase
+      .from('daily_plan_items')
+      .update({ done })
+      .eq('id', id)
+      .eq('profile_id', user.id)
+      .is('task_id', null)
     revalidatePath('/admin/tasks')
   } catch (err) {
     console.error('toggleCustomPlanItem error:', err)
@@ -153,7 +163,14 @@ export async function toggleCustomPlanItem(id: string, done: boolean): Promise<v
 export async function removePlanItem(id: string): Promise<void> {
   try {
     const supabase = await createClient()
-    await supabase.from('daily_plan_items').delete().eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    await supabase
+      .from('daily_plan_items')
+      .delete()
+      .eq('id', id)
+      .eq('profile_id', user.id)
     revalidatePath('/admin/tasks')
   } catch (err) {
     console.error('removePlanItem error:', err)

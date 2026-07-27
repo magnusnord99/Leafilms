@@ -174,6 +174,10 @@ export async function POST(request: NextRequest) {
           ip,
           signatureImage,
         },
+        // Fryst kopi av leveranselisten på signeringstidspunktet — aldri
+        // oppdatert igjen etter dette (se
+        // docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md).
+        deliverables: quoteData?.deliverables ?? [],
         updated_at: signedAt,
         ...(finalContractText !== baseContractText ? { contract_text: finalContractText } : {}),
       })
@@ -304,6 +308,10 @@ export async function POST(request: NextRequest) {
       .update({
         ...(shouldAdvanceStage ? { pipeline_stage: 'pre_prod' } : {}),
         pipeline_data: { ...existingPipelineData, contract_signed: true, contract_signed_at: signedAt },
+        // Levende kopi av siste signerte leveranseliste — dette er hva
+        // post-prod og resten av systemet leser fra, ikke
+        // contracts.deliverables (den uforanderlige historikken).
+        deliverables: quoteData?.deliverables ?? [],
         updated_at: signedAt,
       })
       .eq('id', projectId)

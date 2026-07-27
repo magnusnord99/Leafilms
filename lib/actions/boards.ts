@@ -424,6 +424,8 @@ export async function deleteBoardEdges(ids: string[]): Promise<boolean> {
 // Flytter et kort til et underboard (dra-og-slipp på et board-kort, se onNodeDragStop
 // i BoardCanvas.tsx). Piler til/fra kortet slettes — de kan ikke krysse boards, siden
 // board_edges er begrenset til ett board_id.
+// Kommentartråder/kommentarer filtreres på board_id (getBoardComments + realtime),
+// så board_id der må følge kortet — ellers forsvinner tråden fra destinasjonen.
 export async function moveCardToBoard(cardId: string, targetBoardId: string, x: number, y: number): Promise<boolean> {
   try {
     const supabase = await createClient()
@@ -435,6 +437,28 @@ export async function moveCardToBoard(cardId: string, targetBoardId: string, x: 
       board_id: targetBoardId, x, y, column_id: null, sort_order: 0, z_index: 0, updated_at: now(),
     }).eq('id', cardId)
     if (error) { console.error('moveCardToBoard:', error); return false }
+
+    const { data: threads, error: threadSelectError } = await supabase
+      .from('board_comment_threads')
+      .select('id')
+      .eq('card_id', cardId)
+    if (threadSelectError) {
+      console.error('moveCardToBoard (comment threads select):', threadSelectError)
+    } else if (threads && threads.length > 0) {
+      const threadIds = threads.map((t) => t.id)
+      const { error: threadError } = await supabase
+        .from('board_comment_threads')
+        .update({ board_id: targetBoardId, updated_at: now() })
+        .in('id', threadIds)
+      if (threadError) console.error('moveCardToBoard (comment threads):', threadError)
+
+      const { error: commentError } = await supabase
+        .from('board_comments')
+        .update({ board_id: targetBoardId })
+        .in('thread_id', threadIds)
+      if (commentError) console.error('moveCardToBoard (comments):', commentError)
+    }
+
     return true
   } catch (err) {
     console.error('moveCardToBoard:', err)

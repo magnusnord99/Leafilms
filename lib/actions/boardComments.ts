@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import type { BoardComment, BoardCommentThread } from '@/lib/types'
 
 export type BoardCommentsByCard = Record<string, { thread: BoardCommentThread; comments: BoardComment[] }>
@@ -8,6 +9,8 @@ export type BoardCommentsByCard = Record<string, { thread: BoardCommentThread; c
 export async function getBoardComments(boardId: string): Promise<BoardCommentsByCard> {
   try {
     const supabase = await createClient()
+    if (!(await getAuthenticatedStaffUser(supabase))) return {}
+
     const { data: threads } = await supabase
       .from('board_comment_threads').select('*').eq('board_id', boardId)
     if (!threads || threads.length === 0) return {}
@@ -40,7 +43,7 @@ export async function postBoardComment(
     const trimmed = content.trim()
     if (!trimmed) return null
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user) return null
 
     let thread: BoardCommentThread | null = null
@@ -48,6 +51,18 @@ export async function postBoardComment(
       .from('board_comment_threads').select('*').eq('card_id', cardId).maybeSingle()
     if (existing) {
       thread = existing as BoardCommentThread
+      // Reparerer stale board_id hvis kortet ble flyttet før moveCardToBoard
+      // begynte å migrere kommentarer (eller hvis en eldre flytting feilet delvis).
+      if (thread.board_id !== boardId) {
+        const { data: repaired } = await supabase
+          .from('board_comment_threads')
+          .update({ board_id: boardId, updated_at: new Date().toISOString() })
+          .eq('id', thread.id)
+          .select('*')
+          .single()
+        if (repaired) thread = repaired as BoardCommentThread
+        await supabase.from('board_comments').update({ board_id: boardId }).eq('thread_id', thread.id)
+      }
     } else {
       const { data: created, error } = await supabase
         .from('board_comment_threads')
@@ -80,9 +95,10 @@ export async function postBoardComment(
 export async function toggleThreadResolved(threadId: string, resolved: boolean): Promise<BoardCommentThread | null> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
+    if (!user) return null
     const patch = resolved
-      ? { resolved: true, resolved_by: user?.id ?? null, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      ? { resolved: true, resolved_by: user.id, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }
       : { resolved: false, resolved_by: null, resolved_at: null, updated_at: new Date().toISOString() }
     const { data, error } = await supabase
       .from('board_comment_threads').update(patch).eq('id', threadId).select('*').single()
@@ -97,7 +113,7 @@ export async function toggleThreadResolved(threadId: string, resolved: boolean):
 export async function deleteBoardComment(id: string): Promise<boolean> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedStaffUser(supabase)
     if (!user) return false
     const { data: existing } = await supabase.from('board_comments').select('author_id').eq('id', id).single()
     if (!existing || existing.author_id !== user.id) return false

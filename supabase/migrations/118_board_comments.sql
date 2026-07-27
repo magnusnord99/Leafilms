@@ -31,19 +31,27 @@ CREATE TABLE IF NOT EXISTS board_comments (
 CREATE INDEX IF NOT EXISTS idx_board_comments_thread ON board_comments(thread_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_board_comments_board ON board_comments(board_id);
 
--- RLS: samme "authenticated full access"-mønster som boards/board_cards/board_edges (098_boards.sql)
+-- RLS: staff-only (matcher harden-mønsteret for boards; se også 124_harden_board_comments_rls.sql)
 ALTER TABLE board_comment_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE board_comments        ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_comment_threads' AND policyname = 'authenticated full access board_comment_threads') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access board_comment_threads" ON board_comment_threads FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'board_comments' AND policyname = 'authenticated full access board_comments') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access board_comments" ON board_comments FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access board_comment_threads" ON board_comment_threads;
+DROP POLICY IF EXISTS "staff full access board_comment_threads" ON board_comment_threads;
+CREATE POLICY "staff full access board_comment_threads"
+  ON board_comment_threads
+  FOR ALL
+  TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
+
+DROP POLICY IF EXISTS "authenticated full access board_comments" ON board_comments;
+DROP POLICY IF EXISTS "staff full access board_comments" ON board_comments;
+CREATE POLICY "staff full access board_comments"
+  ON board_comments
+  FOR ALL
+  TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
 -- Realtime (mønster: 098_boards.sql)
 ALTER TABLE board_comment_threads REPLICA IDENTITY FULL;

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
-import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow } from '@/lib/types'
+import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks } from '@/lib/task-lock'
@@ -2135,9 +2135,23 @@ export type PostProdBoardLane = {
   cards: PostProdBoardCard[]
 }
 
+// Én per video i projects.deliverables, kun bygget når det er 2+ videoer —
+// se PostProdBoard.videoTabs. lane.laneId er alltid null her (id-en for
+// dra-og-slipp-ruting er tab.id, ikke lane.laneId — se laneIdToDestination
+// i PostProdBoard.tsx).
+export type VideoDeliverableTab = {
+  id: string
+  name: string
+  lane: PostProdBoardLane
+}
+
 export type PostProdBoard = {
   projectType: ProjectType | null
   lanes: PostProdBoardLane[]
+  // Ikke-null kun når prosjektet har 2+ video-leveranser — da inneholder
+  // `lanes` IKKE lenger noen 'video'-kind lane (den er erstattet av disse to).
+  videoShared: PostProdBoardLane | null
+  videoTabs: VideoDeliverableTab[] | null
   parallel: PostProdBoardCard[]
 }
 
@@ -2146,6 +2160,7 @@ type BoardTaskRow = {
   title: string
   description: string | null
   sub_type: 'video' | 'photo' | null
+  deliverable_id: string | null
   custom_lane_id: string | null
   is_parallel: boolean
   color: string | null
@@ -2203,6 +2218,120 @@ async function materializeDefaultLane(
 }
 
 /**
+ * Seeder video-post-prod for prosjekter med 2+ video-leveranser. Idempotent —
+ * trygt å kalle på hver getPostProdBoard-forespørsel:
+ * 1. Kort som matcher en `per_deliverable`-mal og fortsatt har
+ *    deliverable_id=NULL tilhørte den gamle flate lanen (1 video) — de
+ *    reassignes til den FØRSTE leveransen. Kjøres dette igjen senere finnes
+ *    ingen slike kort lenger, så UPDATE treffer 0 rader.
+ * 2. Delt-seksjonen (`shared`-maler) seedes kun hvis prosjektet aldri har
+ *    hatt video-kort i det hele tatt.
+ * 3. Hver leveranse uten egne kort ennå (helt ny, eller lagt til i en senere
+ *    re-signering) får friskt seedede per-leveranse-steg.
+ * Se docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §3.
+ */
+async function ensureVideoDeliverablesSeeded(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string,
+  // Typet identisk med dbSubTypeFor()s returtype i getPostProdBoard (ikke bare
+  // 'video' | null) — TS narrower ikke dbSubTypeFor('video') sin returtype til
+  // undermengden basert på det bokstavelige argumentet, siden funksjonen alltid
+  // er deklarert til å returnere hele unionen uansett input.
+  videoDbSubType: 'video' | 'photo' | null,
+  videoDeliverables: DeliverableItem[]
+): Promise<void> {
+  const { data: scopedTemplates } = await supabase
+    .from('task_templates')
+    .select('title, description, default_scope, sort_order')
+    .eq('pipeline_stage', 'post_prod')
+    .eq('project_type', 'video')
+    .order('sort_order', { ascending: true })
+
+  const sharedTemplates = (scopedTemplates ?? []).filter(
+    (t: { default_scope: string | null }) => t.default_scope === 'shared'
+  )
+  const perDeliverableTemplates = (scopedTemplates ?? []).filter(
+    (t: { default_scope: string | null }) => t.default_scope === 'per_deliverable'
+  )
+
+  let videoTaskQuery = supabase
+    .from('tasks')
+    .select('id, title, deliverable_id')
+    .eq('project_id', projectId)
+    .eq('pipeline_stage', 'post_prod')
+    .eq('is_custom', false)
+    .eq('is_parallel', false)
+    .is('custom_lane_id', null)
+  videoTaskQuery = videoDbSubType === null
+    ? videoTaskQuery.is('sub_type', null)
+    : videoTaskQuery.eq('sub_type', videoDbSubType)
+  const { data: existingVideoTasks } = await videoTaskQuery
+
+  const perDeliverableTitles = new Set(perDeliverableTemplates.map((t: { title: string }) => t.title))
+  const unassigned = (existingVideoTasks ?? []).filter(
+    (t: { title: string; deliverable_id: string | null }) =>
+      t.deliverable_id === null && perDeliverableTitles.has(t.title)
+  )
+
+  if (unassigned.length > 0) {
+    const firstId = videoDeliverables[0].id
+    await supabase.from('tasks')
+      .update({ deliverable_id: firstId })
+      .in('id', unassigned.map((t: { id: string }) => t.id))
+  }
+
+  if ((existingVideoTasks ?? []).length === 0 && sharedTemplates.length > 0) {
+    await supabase.from('tasks').insert(
+      sharedTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+        project_id: projectId,
+        pipeline_stage: 'post_prod',
+        title: t.title,
+        description: t.description,
+        status: 'todo' as const,
+        sort_order: i + 1,
+        sub_type: videoDbSubType,
+        deliverable_id: null,
+        custom_lane_id: null,
+        is_parallel: false,
+        is_custom: false,
+        created_by: null,
+        due_date: null,
+        priority: null,
+      }))
+    )
+  }
+
+  for (const deliverable of videoDeliverables) {
+    const { count } = await supabase
+      .from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .eq('deliverable_id', deliverable.id)
+
+    if ((count ?? 0) === 0 && perDeliverableTemplates.length > 0) {
+      await supabase.from('tasks').insert(
+        perDeliverableTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+          project_id: projectId,
+          pipeline_stage: 'post_prod',
+          title: t.title,
+          description: t.description,
+          status: 'todo' as const,
+          sort_order: i + 1,
+          sub_type: videoDbSubType,
+          deliverable_id: deliverable.id,
+          custom_lane_id: null,
+          is_parallel: false,
+          is_custom: false,
+          created_by: null,
+          due_date: null,
+          priority: null,
+        }))
+      )
+    }
+  }
+}
+
+/**
  * Henter alt post-produksjon-brettet trenger: Video/Foto-lanes (materialisert
  * fra task_templates hvis prosjektet ikke har noen post-prod-oppgaver i det
  * hele tatt ennå), prosjektets egendefinerte lanes, og parallell-oppgaver —
@@ -2214,12 +2343,16 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
 
     const { data: proj } = await supabase
       .from('projects')
-      .select('project_type')
+      .select('project_type, deliverables')
       .eq('id', projectId)
       .single()
 
     const projectType = (proj?.project_type ?? null) as ProjectType | null
-    if (!projectType) return { projectType: null, lanes: [], parallel: [] }
+    if (!projectType) return { projectType: null, lanes: [], videoShared: null, videoTabs: null, parallel: [] }
+
+    const deliverables = (proj?.deliverables ?? []) as DeliverableItem[]
+    const videoDeliverables = deliverables.filter(d => d.type === 'video')
+    const hasVideoTabs = videoDeliverables.length >= 2
 
     const subTypes: ('video' | 'photo')[] =
       projectType === 'photo' ? ['photo'] : projectType === 'mixed' ? ['video', 'photo'] : ['video']
@@ -2232,9 +2365,14 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
     const dbSubTypeFor = (uiSubType: 'video' | 'photo'): 'video' | 'photo' | null =>
       projectType === 'mixed' ? uiSubType : null
 
-    if (await shouldMaterializeDefaults(supabase, projectId)) {
+    // Når video splittes i faner, seedes den via ensureVideoDeliverablesSeeded
+    // under i stedet for her — å inkludere 'video' i denne loopen ville seedet
+    // hele video-malsettet en gang til, uavhengig av delt/per-leveranse.
+    const materializeSubTypes = hasVideoTabs ? subTypes.filter(t => t !== 'video') : subTypes
+
+    if (materializeSubTypes.length > 0 && await shouldMaterializeDefaults(supabase, projectId)) {
       await Promise.all(
-        subTypes.map(uiSubType =>
+        materializeSubTypes.map(uiSubType =>
           materializeDefaultLane(
             supabase,
             projectId,
@@ -2245,10 +2383,14 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
       )
     }
 
+    if (hasVideoTabs && subTypes.includes('video')) {
+      await ensureVideoDeliverablesSeeded(supabase, projectId, dbSubTypeFor('video'), videoDeliverables)
+    }
+
     const [{ data: taskRows }, { data: laneRows }] = await Promise.all([
       supabase
         .from('tasks')
-        .select('id, title, description, sub_type, custom_lane_id, is_parallel, color, icon, due_date, task_assignees(profile:profiles(id, name, email))')
+        .select('id, title, description, sub_type, deliverable_id, custom_lane_id, is_parallel, color, icon, due_date, task_assignees(profile:profiles(id, name, email))')
         .eq('project_id', projectId)
         .eq('pipeline_stage', 'post_prod')
         .eq('is_custom', false)
@@ -2276,16 +2418,51 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
 
     const parallel = rows.filter(t => t.is_parallel).map(toCard)
 
-    const builtinLanes: PostProdBoardLane[] = subTypes.map(uiSubType => ({
-      kind: uiSubType,
-      laneId: null,
-      name: uiSubType === 'video' ? 'Video' : 'Foto',
-      color: uiSubType === 'video' ? '#C49434' : '#4A9EFF',
-      deadline: null,
-      cards: rows
-        .filter(t => t.sub_type === dbSubTypeFor(uiSubType) && !t.is_parallel && !t.custom_lane_id)
-        .map(toCard),
-    }))
+    let videoShared: PostProdBoardLane | null = null
+    let videoTabs: VideoDeliverableTab[] | null = null
+
+    // Eksplisitt typet mellomsteg: TS 5.5+ inferrer et type predicate for
+    // `.filter(t => t !== 'video')` og snevrer uiSubType til kun 'photo' i
+    // .map under — det gjør ternaryen for 'video' (uendret, se pre-eksisterende
+    // mønster) til en TS2367-feil. Ingen atferdsendring, kun for å unngå at
+    // tsc feiler på dette laget.
+    const nonVideoSubTypes: ('video' | 'photo')[] = subTypes.filter(t => t !== 'video')
+    const builtinLanes: PostProdBoardLane[] = nonVideoSubTypes
+      .map(uiSubType => ({
+        kind: uiSubType,
+        laneId: null,
+        name: uiSubType === 'video' ? 'Video' : 'Foto',
+        color: uiSubType === 'video' ? '#C49434' : '#4A9EFF',
+        deadline: null,
+        cards: rows
+          .filter(t => t.sub_type === dbSubTypeFor(uiSubType) && !t.is_parallel && !t.custom_lane_id)
+          .map(toCard),
+      }))
+
+    if (subTypes.includes('video')) {
+      const videoDbSubType = dbSubTypeFor('video')
+      const videoRows = rows.filter(t => t.sub_type === videoDbSubType && !t.is_parallel && !t.custom_lane_id)
+
+      if (hasVideoTabs) {
+        videoShared = {
+          kind: 'video', laneId: null, name: 'Video — Delt', color: '#C49434', deadline: null,
+          cards: videoRows.filter(t => t.deliverable_id === null).map(toCard),
+        }
+        videoTabs = videoDeliverables.map(d => ({
+          id: d.id,
+          name: d.name,
+          lane: {
+            kind: 'video', laneId: null, name: d.name, color: '#C49434', deadline: null,
+            cards: videoRows.filter(t => t.deliverable_id === d.id).map(toCard),
+          },
+        }))
+      } else {
+        builtinLanes.unshift({
+          kind: 'video', laneId: null, name: 'Video', color: '#C49434', deadline: null,
+          cards: videoRows.map(toCard),
+        })
+      }
+    }
 
     const customLanes: PostProdBoardLane[] = (laneRows ?? []).map(
       (lane: { id: string; name: string; color: string | null; deadline: string | null }) => ({
@@ -2298,10 +2475,10 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
       })
     )
 
-    return { projectType, lanes: [...builtinLanes, ...customLanes], parallel }
+    return { projectType, lanes: [...builtinLanes, ...customLanes], videoShared, videoTabs, parallel }
   } catch (err) {
     console.error('getPostProdBoard error:', err)
-    return { projectType: null, lanes: [], parallel: [] }
+    return { projectType: null, lanes: [], videoShared: null, videoTabs: null, parallel: [] }
   }
 }
 

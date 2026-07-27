@@ -2484,6 +2484,7 @@ export async function getPostProdBoard(projectId: string): Promise<PostProdBoard
 
 export type PostProdDestination =
   | { kind: 'video' }
+  | { kind: 'video_deliverable'; deliverableId: string }
   | { kind: 'photo' }
   | { kind: 'custom'; laneId: string }
   | { kind: 'parallel' }
@@ -2510,13 +2511,14 @@ export async function addPostProdBoardTask(input: {
     if (!user) return { ok: false, error: 'Ikke innlogget' }
 
     let dbSubType: 'video' | 'photo' | null = null
-    if (input.destination.kind === 'video' || input.destination.kind === 'photo') {
+    if (input.destination.kind === 'video' || input.destination.kind === 'video_deliverable' || input.destination.kind === 'photo') {
       const { data: destProj } = await supabase
         .from('projects')
         .select('project_type')
         .eq('id', input.projectId)
         .single()
-      dbSubType = destProj?.project_type === 'mixed' ? input.destination.kind : null
+      const uiKind = input.destination.kind === 'video_deliverable' ? 'video' : input.destination.kind
+      dbSubType = destProj?.project_type === 'mixed' ? uiKind : null
     }
 
     let newTaskId: string
@@ -2549,6 +2551,7 @@ export async function addPostProdBoardTask(input: {
     } else {
       const subType = input.destination.kind === 'custom' ? null : dbSubType
       const customLaneId = input.destination.kind === 'custom' ? input.destination.laneId : null
+      const deliverableId = input.destination.kind === 'video_deliverable' ? input.destination.deliverableId : null
 
       let existingQuery = supabase
         .from('tasks')
@@ -2564,6 +2567,10 @@ export async function addPostProdBoardTask(input: {
         : subType === null
           ? existingQuery.is('sub_type', null).is('custom_lane_id', null)
           : existingQuery.eq('sub_type', subType).is('custom_lane_id', null)
+
+      existingQuery = deliverableId === null
+        ? existingQuery.is('deliverable_id', null)
+        : existingQuery.eq('deliverable_id', deliverableId)
 
       const { data: existingRows, error: existingError } = await existingQuery
       if (existingError) return { ok: false, error: 'Kunne ikke hente eksisterende steg' }
@@ -2597,6 +2604,7 @@ export async function addPostProdBoardTask(input: {
               status: 'todo' as const,
               sort_order: row.sortOrder,
               sub_type: subType,
+              deliverable_id: deliverableId,
               custom_lane_id: customLaneId,
               is_parallel: false,
               color: input.color ?? null,
@@ -2634,13 +2642,17 @@ export async function addPostProdBoardTask(input: {
         customLaneName = lane?.name ?? null
       }
 
+      // 'video_deliverable' finnes ikke i post_prod_task_library.lane_type sin
+      // CHECK-constraint (kun 'video'|'photo'|'custom'|'parallel') — biblioteket
+      // er prosjekt-uavhengig, så «hvilken navngitt video» gir ingen mening der.
+      const libraryLaneType = input.destination.kind === 'video_deliverable' ? 'video' : input.destination.kind
       const { error: libraryError } = await supabase.from('post_prod_task_library').insert({
         created_by: user.id,
         title: input.title,
         description: input.description ?? null,
         color: input.color ?? null,
         icon: input.icon ?? null,
-        lane_type: input.destination.kind,
+        lane_type: libraryLaneType,
         custom_lane_name: customLaneName,
       })
       if (libraryError) console.error('addPostProdBoardTask library insert error:', libraryError)
@@ -2682,19 +2694,20 @@ export async function moveBoardTask(
     if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
 
     let dbSubType: 'video' | 'photo' | null = null
-    if (destination.kind === 'video' || destination.kind === 'photo') {
+    if (destination.kind === 'video' || destination.kind === 'video_deliverable' || destination.kind === 'photo') {
       const { data: destProj } = await supabase
         .from('projects')
         .select('project_type')
         .eq('id', task.project_id)
         .single()
-      dbSubType = destProj?.project_type === 'mixed' ? destination.kind : null
+      const uiKind = destination.kind === 'video_deliverable' ? 'video' : destination.kind
+      dbSubType = destProj?.project_type === 'mixed' ? uiKind : null
     }
 
     if (destination.kind === 'parallel') {
       const { error } = await supabase
         .from('tasks')
-        .update({ is_parallel: true, sub_type: null, custom_lane_id: null, sort_order: 0 })
+        .update({ is_parallel: true, sub_type: null, custom_lane_id: null, deliverable_id: null, sort_order: 0 })
         .eq('id', taskId)
 
       if (error) return { ok: false, error: 'Kunne ikke flytte oppgaven' }
@@ -2702,6 +2715,8 @@ export async function moveBoardTask(
       revalidatePath('/admin/postprod')
       return { ok: true }
     }
+
+    const deliverableId = destination.kind === 'video_deliverable' ? destination.deliverableId : null
 
     let destQuery = supabase
       .from('tasks')
@@ -2718,6 +2733,10 @@ export async function moveBoardTask(
         ? destQuery.is('sub_type', null).is('custom_lane_id', null)
         : destQuery.eq('sub_type', dbSubType).is('custom_lane_id', null)
 
+    destQuery = deliverableId === null
+      ? destQuery.is('deliverable_id', null)
+      : destQuery.eq('deliverable_id', deliverableId)
+
     const { data: destRows, error: destError } = await destQuery
     if (destError) return { ok: false, error: 'Kunne ikke hente mållanen' }
 
@@ -2733,6 +2752,7 @@ export async function moveBoardTask(
         patch.is_parallel = false
         patch.custom_lane_id = destination.kind === 'custom' ? destination.laneId : null
         patch.sub_type = destination.kind === 'custom' ? null : dbSubType
+        patch.deliverable_id = deliverableId
       }
       const { error } = await supabase.from('tasks').update(patch).eq('id', finalIds[i])
       if (error) return { ok: false, error: 'Kunne ikke oppdatere rekkefølgen' }

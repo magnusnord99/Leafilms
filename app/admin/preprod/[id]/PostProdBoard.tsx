@@ -11,6 +11,7 @@ import {
   getPostProdBoard, addTaskToLibrary, deleteTask, toggleTaskAssignee, getAllProfiles, getTaskMessageCounts,
   createCustomLane, updateLaneDeadline, moveBoardTask, getTaskLibrary, addPostProdBoardTask,
   type PostProdBoard as PostProdBoardData, type PostProdBoardCard, type PostProdBoardLane, type PostProdDestination,
+  type VideoDeliverableTab,
 } from '@/lib/actions/pipeline'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -77,7 +78,8 @@ export function PostProdBoard({
   onDeadlineChange: (subType: 'video' | 'photo', date: string | null) => void
   onAssignedChange: (hasAny: boolean) => void
 }) {
-  const [board, setBoard] = useState<PostProdBoardData>({ projectType: null, lanes: [], parallel: [] })
+  const [board, setBoard] = useState<PostProdBoardData>({ projectType: null, lanes: [], videoShared: null, videoTabs: null, parallel: [] })
+  const [activeVideoTabId, setActiveVideoTabId] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string; color: string | null }[]>([])
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({})
   const [openAssigneeFor, setOpenAssigneeFor] = useState<string | null>(null)
@@ -98,14 +100,26 @@ export function PostProdBoard({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [openAssigneeFor])
 
+  // Default til første fane når fanelisten endres og ingen gyldig fane er valgt.
+  useEffect(() => {
+    if (!board.videoTabs || board.videoTabs.length === 0) { setActiveVideoTabId(null); return }
+    if (!board.videoTabs.some(t => t.id === activeVideoTabId)) setActiveVideoTabId(board.videoTabs[0].id)
+  }, [board.videoTabs, activeVideoTabId])
+
   function laneIdToDestination(laneKey: string): PostProdDestination | null {
     if (laneKey === 'parallel') return { kind: 'parallel' }
-    if (laneKey === 'video' || laneKey === 'photo') return { kind: laneKey }
+    if (laneKey === 'video') return { kind: 'video' }
+    if (laneKey === 'photo') return { kind: 'photo' }
+    if (laneKey.startsWith('video-tab:')) return { kind: 'video_deliverable', deliverableId: laneKey.slice('video-tab:'.length) }
     return { kind: 'custom', laneId: laneKey }
   }
 
   function findContainerId(cardId: string): string | null {
     if (board.parallel.some(c => c.id === cardId)) return 'parallel'
+    if (board.videoShared?.cards.some(c => c.id === cardId)) return 'video'
+    for (const tab of board.videoTabs ?? []) {
+      if (tab.lane.cards.some(c => c.id === cardId)) return `video-tab:${tab.id}`
+    }
     for (const lane of board.lanes) {
       if (lane.cards.some(c => c.id === cardId)) return lane.laneId ?? lane.kind
     }
@@ -307,6 +321,39 @@ export function PostProdBoard({
     )
   }
 
+  // Delt av board.lanes-loopen under OG av videoShared/faner — én kilde til
+  // sannhet for lane-header + dra-og-slipp-container. droppableId er eksplisitt
+  // (ikke lane.laneId ?? lane.kind) fordi hver fane bruker samme lane.kind='video'
+  // men trenger sin egen unike drop-container-id (video-tab:<deliverableId>).
+  function renderLaneBlock(lane: PostProdBoardLane, droppableId: string) {
+    return (
+      <div key={droppableId}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: lane.color ?? C.accent, flexShrink: 0 }} />
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: lane.color ?? C.text3 }}>
+              {lane.name}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Leveringsfrist</span>
+            <input
+              type="date"
+              value={laneDeadlineValue(lane)}
+              onChange={e => handleLaneDeadlineChange(lane, e.target.value)}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', outline: 'none' }}
+            />
+          </div>
+        </div>
+        <SortableContext items={lane.cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          <DroppableLane id={droppableId}>
+            {lane.cards.map(renderCard)}
+          </DroppableLane>
+        </SortableContext>
+      </div>
+    )
+  }
+
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -325,32 +372,35 @@ export function PostProdBoard({
         </SortableContext>
       </div>
 
-      {board.lanes.map(lane => (
-        <div key={lane.laneId ?? lane.kind}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, marginBottom: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: lane.color ?? C.accent, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: lane.color ?? C.text3 }}>
-                {lane.name}
-              </span>
+      {board.videoTabs && board.videoTabs.length > 0 && (
+        <>
+          {board.videoShared && renderLaneBlock(board.videoShared, 'video')}
+
+          <div>
+            <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 10 }}>
+              {board.videoTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveVideoTabId(tab.id)}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
+                    padding: '7px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                    color: activeVideoTabId === tab.id ? C.accent : C.text3,
+                    borderBottom: activeVideoTabId === tab.id ? `2px solid ${C.accent}` : '2px solid transparent',
+                  }}
+                >
+                  {tab.name}
+                </button>
+              ))}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Leveringsfrist</span>
-              <input
-                type="date"
-                value={laneDeadlineValue(lane)}
-                onChange={e => handleLaneDeadlineChange(lane, e.target.value)}
-                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', outline: 'none' }}
-              />
-            </div>
+            {board.videoTabs
+              .filter(tab => tab.id === activeVideoTabId)
+              .map(tab => <div key={tab.id}>{renderLaneBlock(tab.lane, `video-tab:${tab.id}`)}</div>)}
           </div>
-          <SortableContext items={lane.cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            <DroppableLane id={lane.laneId ?? lane.kind}>
-              {lane.cards.map(renderCard)}
-            </DroppableLane>
-          </SortableContext>
-        </div>
-      ))}
+        </>
+      )}
+
+      {board.lanes.map(lane => renderLaneBlock(lane, lane.laneId ?? lane.kind))}
 
       <div style={{ display: 'flex', gap: 6 }}>
         <input
@@ -370,7 +420,14 @@ export function PostProdBoard({
 
       <PostProdLibraryPanel refreshKey={libraryRefreshKey} />
 
-      <PostProdTaskForm projectId={projectId} lanes={board.lanes} profiles={profiles} onAdded={refetch} />
+      <PostProdTaskForm
+        projectId={projectId}
+        lanes={board.lanes}
+        videoShared={board.videoShared}
+        videoTabs={board.videoTabs}
+        profiles={profiles}
+        onAdded={refetch}
+      />
     </div>
     </DndContext>
   )

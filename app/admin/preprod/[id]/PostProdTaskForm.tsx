@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { addPostProdBoardTask, type PostProdDestination } from '@/lib/actions/pipeline'
-import type { PostProdBoardLane } from '@/lib/actions/pipeline'
+import type { PostProdBoardLane, VideoDeliverableTab } from '@/lib/actions/pipeline'
 
 const C = {
   surface2: '#2A2A38',
@@ -18,14 +18,28 @@ const C = {
 type DestinationOption = { key: string; label: string; destination: PostProdDestination }
 
 export function PostProdTaskForm({
-  projectId, lanes, profiles, onAdded,
+  projectId, lanes, videoShared, videoTabs, profiles, onAdded,
 }: {
   projectId: string
   lanes: PostProdBoardLane[]
+  videoShared: PostProdBoardLane | null
+  videoTabs: VideoDeliverableTab[] | null
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onAdded: () => void
 }) {
+  const videoOptions: DestinationOption[] = videoTabs && videoTabs.length > 0
+    ? [
+        ...(videoShared ? [{ key: 'video', label: videoShared.name, destination: { kind: 'video' as const } }] : []),
+        ...videoTabs.map(tab => ({
+          key: `video-tab:${tab.id}`,
+          label: `Video — ${tab.name}`,
+          destination: { kind: 'video_deliverable' as const, deliverableId: tab.id },
+        })),
+      ]
+    : []
+
   const options: DestinationOption[] = [
+    ...videoOptions,
     ...lanes.map(lane => ({
       key: lane.laneId ?? lane.kind,
       label: lane.name,

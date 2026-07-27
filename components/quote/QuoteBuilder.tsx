@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem } from '@/lib/types'
 import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
@@ -38,6 +38,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     paymentInfo: '14 dager',
     deliveryDate: '',
     deliveryDescription: '',
+    deliverables: [],
     terms: DEFAULT_TERMS,
     language: 'NO',
     startupCrew: [],
@@ -654,6 +655,62 @@ function AddonsSection({
   )
 }
 
+// Fryses til contracts/projects.deliverables ved signering (se
+// docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md).
+// Separat fra deliveryDescription-friteksten over — denne listen driver kun
+// post-prod-brettets struktur, ikke kontraktens juridiske ordlyd.
+function DeliverablesSection({
+  items, onChange,
+}: {
+  items: DeliverableItem[]
+  onChange: (items: DeliverableItem[]) => void
+}) {
+  const update = (id: string, field: 'type' | 'name', value: string) =>
+    onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
+  const add = () => onChange([...items, { id: newId(), type: 'video', name: '' }])
+  const remove = (id: string) => onChange(items.filter(i => i.id !== id))
+
+  return (
+    <div>
+      <div style={sectionHeaderStyle}>
+        <span style={sectionLabelStyle}>Leveranser (video/foto)</span>
+        <Button size="sm" variant="ghost" onClick={add} type="button">+ Legg til leveranse</Button>
+      </div>
+
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(item => (
+            <div key={item.id} className="group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <select
+                style={{ ...inputBase, width: 100, flexShrink: 0 }}
+                value={item.type}
+                onChange={e => update(item.id, 'type', e.target.value)}
+              >
+                <option value="video">Video</option>
+                <option value="photo">Foto</option>
+              </select>
+              <input
+                style={{ ...inputBase, flex: 1 }}
+                value={item.name}
+                onChange={e => update(item.id, 'name', e.target.value)}
+                placeholder="F.eks. Hovedfilm, Reel, Produktbilder"
+              />
+              <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                title="Fjern">×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {items.length === 0 && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen leveranser lagt til ennå — én video antas som default.</p>}
+      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
+        Fryses som fasit når kontrakten signeres. 2+ videoer gir egne faner i post-produksjon (Logging/Ferdig delt, resten per video).
+      </p>
+    </div>
+  )
+}
+
 // ─── Post-produksjon (combined crew + items) ──────────────────────────────────
 function PostProductionSection({
   crew, items, teamMembers, catalog, onCrewChange, onItemsChange,
@@ -1046,6 +1103,7 @@ export function QuoteBuilder({
     discountFactor: initialData.discountFactor ?? 0,
     companyEmail: initialData.companyEmail ?? 'eivind@leafilms.no',
     optionalAddons: initialData.optionalAddons ?? [],
+    deliverables: initialData.deliverables ?? [],
   })
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     if (!initialData.customerNumber) return ''
@@ -1243,6 +1301,10 @@ export function QuoteBuilder({
                 placeholder={'F.eks.\n2 kampanjefilmer á 90 sek\n30 retuserte produktbilder'}
               />
             </div>
+            <DeliverablesSection
+              items={data.deliverables ?? []}
+              onChange={v => set('deliverables', v)}
+            />
             {customers.length > 0 && (
               <CustomerSelector customers={customers} selectedCustomerId={selectedCustomerId} onSelect={handleCustomerSelect} />
             )}

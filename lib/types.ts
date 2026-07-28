@@ -595,6 +595,8 @@ export type Task = {
   notes: string | null
   task_data: Record<string, string> | null
   sub_type: 'video' | 'photo' | null
+  /** Matcher en DeliverableItem.id fra projects.deliverables — NULL for delte steg (Logging/Ferdig) og for prosjekter med 0-1 video-leveranse. */
+  deliverable_id: string | null
   custom_lane_id: string | null
   is_parallel: boolean
   color: string | null

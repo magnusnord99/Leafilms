@@ -1075,7 +1075,7 @@ export async function resetTaskAndSubsequent(
 
     const { data: task, error: taskError } = await supabase
       .from('tasks')
-      .select('sort_order, sub_type')
+      .select('sort_order, sub_type, deliverable_id')
       .eq('id', taskId)
       .single()
 
@@ -1093,6 +1093,14 @@ export async function resetTaskAndSubsequent(
     query = task.sub_type
       ? query.eq('sub_type', task.sub_type)
       : query.is('sub_type', null)
+
+    // Et delt steg (deliverable_id=NULL, f.eks. Logging) nullstiller alle leveranser — et
+    // per-leveranse-steg nullstiller kun samme leveranse pluss delte steg som Ferdig (den
+    // er ikke lenger ferdig hvis ett steg i én leveranse går tilbake), aldri andre
+    // leveransers oppgaver. Se docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.3.
+    if (task.deliverable_id) {
+      query = query.or(`deliverable_id.eq.${task.deliverable_id},deliverable_id.is.null`)
+    }
 
     const { error } = await query
 
@@ -1124,7 +1132,7 @@ export async function rejectFeedbackAndReset(
 
     const { data: venterTask, error: venterError } = await supabase
       .from('tasks')
-      .select('sort_order, sub_type')
+      .select('sort_order, sub_type, deliverable_id')
       .eq('id', venterTaskId)
       .single()
 
@@ -1151,6 +1159,11 @@ export async function rejectFeedbackAndReset(
     resetQuery = venterTask.sub_type
       ? resetQuery.eq('sub_type', venterTask.sub_type)
       : resetQuery.is('sub_type', null)
+
+    // Samme leveranse-skopering som resetTaskAndSubsequent over.
+    if (venterTask.deliverable_id) {
+      resetQuery = resetQuery.or(`deliverable_id.eq.${venterTask.deliverable_id},deliverable_id.is.null`)
+    }
 
     const { error: resetError } = await resetQuery
 

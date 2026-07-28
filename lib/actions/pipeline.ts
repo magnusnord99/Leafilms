@@ -2282,13 +2282,17 @@ async function ensureVideoDeliverablesSeeded(
 
   if ((existingVideoTasks ?? []).length === 0 && sharedTemplates.length > 0) {
     await supabase.from('tasks').insert(
-      sharedTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+      sharedTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
         project_id: projectId,
         pipeline_stage: 'post_prod',
         title: t.title,
         description: t.description,
         status: 'todo' as const,
-        sort_order: i + 1,
+        // Malens EGEN sort_order (ikke indeksbasert i+1) — slik at delt og
+        // per-leveranse-steg deler samme 1..7-nummerering og kan slås sammen til én
+        // virtuell sekvens i stepper-siden (app/admin/postprod/[id]/page.tsx). Se
+        // docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.1.
+        sort_order: t.sort_order,
         sub_type: videoDbSubType,
         deliverable_id: null,
         custom_lane_id: null,
@@ -2310,13 +2314,13 @@ async function ensureVideoDeliverablesSeeded(
 
     if ((count ?? 0) === 0 && perDeliverableTemplates.length > 0) {
       await supabase.from('tasks').insert(
-        perDeliverableTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+        perDeliverableTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
           project_id: projectId,
           pipeline_stage: 'post_prod',
           title: t.title,
           description: t.description,
           status: 'todo' as const,
-          sort_order: i + 1,
+          sort_order: t.sort_order,
           sub_type: videoDbSubType,
           deliverable_id: deliverable.id,
           custom_lane_id: null,

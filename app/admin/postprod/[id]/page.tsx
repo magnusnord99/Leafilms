@@ -18,7 +18,7 @@ import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
-import type { ProjectType, Task, ProjectWithPipeline } from '@/lib/types'
+import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -168,6 +168,25 @@ function StepItem({
   )
 }
 
+// Delt av toppnivå-renderingen og av alle handlere som må regne ut en fersk
+// displayTasks-liste rett etter en mutasjon (før React-state faktisk har oppdatert seg).
+// Video-leveranse-faner er nøstet under video/foto-fanen: de vises kun når prosjektet har
+// 2+ video-leveranser OG (prosjektet ikke er mixed ELLER video-fanen er aktiv). Se
+// docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.2.
+function computeDisplayTasks(
+  taskList: Task[],
+  isMixedProject: boolean,
+  tab: 'video' | 'photo',
+  deliverableId: string | null,
+  videoDeliverableCount: number
+): Task[] {
+  const subTypeFiltered = isMixedProject ? taskList.filter(t => t.sub_type === tab) : taskList
+  const useVideoTabs = videoDeliverableCount >= 2 && (!isMixedProject || tab === 'video')
+  return useVideoTabs
+    ? subTypeFiltered.filter(t => t.deliverable_id === null || t.deliverable_id === deliverableId)
+    : subTypeFiltered
+}
+
 export default function PostProdDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -206,6 +225,7 @@ export default function PostProdDetailPage() {
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
 
   const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
+  const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
 
   const [dueDates, setDueDates] = useState<Record<string, string>>({})
 
@@ -273,7 +293,10 @@ export default function PostProdDetailPage() {
 
   // For mixed-prosjekter: vis kun tasks for aktiv tab
   const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
-  const displayTasks = isMixed ? stepperTasks.filter(t => t.sub_type === activeTab) : stepperTasks
+  const videoDeliverables = ((projects.find(p => p.id === projectId)?.deliverables ?? []) as SignedDeliverableItem[])
+    .filter(d => d.type === 'video')
+  const hasVideoTabs = videoDeliverables.length >= 2 && (!isMixed || activeTab === 'video')
+  const displayTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
 
   const activeIdx = displayTasks.findIndex(t => t.status !== 'done')
   const allDone = displayTasks.length > 0 && activeIdx === -1
@@ -313,7 +336,8 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed'))
+      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
       setLoading(false)
       return
     }
@@ -322,7 +346,8 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed'))
+    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
@@ -367,13 +392,15 @@ export default function PostProdDetailPage() {
   // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
   // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
   // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
-  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean): number {
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
     const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
+    if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
+    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
     if (isMixedProject && deepTask?.sub_type) {
       setActiveTab(deepTask.sub_type)
-      return getInitialIdx(list.filter(t => t.sub_type === deepTask.sub_type), deepLinkTaskId)
+      return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)
     }
-    const filtered = isMixedProject ? list.filter(t => t.sub_type === activeTab) : list
+    const filtered = computeDisplayTasks(list, isMixedProject, activeTab, resolvedDeliverableId, videoDeliverableCount)
     return getInitialIdx(filtered, deepLinkTaskId)
   }
 
@@ -485,6 +512,7 @@ export default function PostProdDetailPage() {
       setRejecting(false)
       return
     }
+    const rejectedDeliverableId = selectedTask?.deliverable_id ?? null
     const [newProjects, newTasks] = await Promise.all([
       getPostProdProjects(),
       getTasksForProject(projectId, 'post_prod'),
@@ -493,8 +521,9 @@ export default function PostProdDetailPage() {
     setTasks(newTasks)
     initNotes(newTasks)
     initTaskData(newTasks)
-    // Naviger til klipping-steget (sort_order 2 = index 1)
-    const klippingIdx = newTasks.findIndex(t => t.sort_order === 2)
+    // Naviger til klipping-steget (sort_order 2 = index 1) — innenfor samme leveranse som
+    // den avviste oppgaven tilhørte, slik at man ikke hopper til en annen video-fane.
+    const klippingIdx = newTasks.findIndex(t => t.sort_order === 2 && t.deliverable_id === rejectedDeliverableId)
     const gotoIdx = klippingIdx >= 0 ? klippingIdx : 0
     setSelectedIdx(gotoIdx)
     setShowRejectionForm(false)
@@ -509,14 +538,19 @@ export default function PostProdDetailPage() {
     const taskToReset = tasks.find(t => t.id === taskId)
     const subType = taskToReset?.sub_type ?? null
     const sortOrder = taskToReset?.sort_order ?? 0
+    const deliverableId = taskToReset?.deliverable_id ?? null
     const prevStatuses = new Map(tasks.map(t => [t.id, t.status]))
-    // Optimistisk: nullstill denne og alle etter den med samme sub_type lokalt
+    // Optimistisk: nullstill denne og alle etter den med samme sub_type OG samme leveranse
+    // (eller delte steg som Ferdig) lokalt — speiler resetTaskAndSubsequent (lib/actions/pipeline.ts).
+    const matchesDeliverable = (t: Task) =>
+      deliverableId === null || t.deliverable_id === deliverableId || t.deliverable_id === null
     setTasks(prev => prev.map(t => {
       if (t.sub_type !== subType) return t
+      if (!matchesDeliverable(t)) return t
       if (t.sort_order < sortOrder) return t
       return { ...t, status: 'todo' }
     }))
-    const resetCount = stepperTasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
+    const resetCount = stepperTasks.filter(t => t.sub_type === subType && matchesDeliverable(t) && t.sort_order >= sortOrder && t.status === 'done').length
     setProjects(prev =>
       prev.map(p => p.id !== projectId ? p : { ...p, done_count: Math.max(0, p.done_count - resetCount) })
     )
@@ -567,7 +601,7 @@ export default function PostProdDetailPage() {
     setTasks(newTasks)
     const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
     const newStepperTasks = newTasks.filter(t => !t.is_custom)
-    const newDisplayTasks = isMixedProject ? newStepperTasks.filter(t => t.sub_type === activeTab) : newStepperTasks
+    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixedProject, activeTab, activeVideoDeliverableId, videoDeliverables.length)
     setSelectedIdx(getInitialIdx(newDisplayTasks))
   }
 
@@ -583,7 +617,30 @@ export default function PostProdDetailPage() {
       updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
     }
     setActiveTab(tab)
-    const tabTasks = stepperTasks.filter(t => t.sub_type === tab)
+    const nextDeliverableId = tab === 'video' && videoDeliverables.length >= 2
+      ? (videoDeliverables.some(d => d.id === activeVideoDeliverableId) ? activeVideoDeliverableId : videoDeliverables[0].id)
+      : null
+    setActiveVideoDeliverableId(nextDeliverableId)
+    const tabTasks = computeDisplayTasks(stepperTasks, isMixed, tab, nextDeliverableId, videoDeliverables.length)
+    const initIdx = getInitialIdx(tabTasks)
+    setSelectedIdx(initIdx)
+    setShowRejectionForm(false)
+    setRejectionNote('')
+  }
+
+  function handleSwitchVideoTab(deliverableId: string) {
+    if (selectedTask && notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current)
+      notesTimerRef.current = null
+      updateTaskNotes(selectedTask.id, notes[selectedTask.id] ?? '')
+    }
+    if (selectedTask && taskDataTimerRef.current) {
+      clearTimeout(taskDataTimerRef.current)
+      taskDataTimerRef.current = null
+      updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
+    }
+    setActiveVideoDeliverableId(deliverableId)
+    const tabTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, deliverableId, videoDeliverables.length)
     const initIdx = getInitialIdx(tabTasks)
     setSelectedIdx(initIdx)
     setShowRejectionForm(false)
@@ -1091,6 +1148,49 @@ export default function PostProdDetailPage() {
                 </svg>
                 Info om levering
               </button>
+            </div>
+          )}
+
+          {/* Video-leveranse-faner — nøstet under Film/Bilder-fanene for mixed-prosjekter.
+              Se docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.2. */}
+          {hasVideoTabs && stepperTasks.length > 0 && !reseeding && (
+            <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${C.border}` }}>
+              {videoDeliverables.map(d => {
+                const tabTasks = (isMixed ? stepperTasks.filter(t => t.sub_type === 'video') : stepperTasks)
+                  .filter(t => t.deliverable_id === d.id)
+                const tabDone = tabTasks.filter(t => t.status === 'done').length
+                const tabTotal = tabTasks.length
+                const tabComplete = tabTotal > 0 && tabDone === tabTotal
+                const isActive = activeVideoDeliverableId === d.id
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => handleSwitchVideoTab(d.id)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: isActive ? 600 : 400,
+                      padding: '10px 20px', cursor: 'pointer', background: 'none',
+                      borderBottom: `2px solid ${isActive ? C.accent : 'transparent'}`,
+                      borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                      color: isActive ? C.text : C.text3,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      transition: 'color 0.15s',
+                    }}
+                  >
+                    {d.name}
+                    {tabTotal > 0 && (
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
+                        padding: '1px 6px', borderRadius: 10,
+                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'rgba(255,255,255,0.05)',
+                        color: tabComplete ? C.success : isActive ? C.accent : C.text3,
+                        border: `1px solid ${tabComplete ? 'rgba(76,175,125,0.25)' : isActive ? 'rgba(124,92,252,0.25)' : C.border}`,
+                      }}>
+                        {tabDone}/{tabTotal}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           )}
 

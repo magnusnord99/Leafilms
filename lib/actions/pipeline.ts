@@ -491,7 +491,7 @@ export async function reseedPostProdTasks(
 
     const { data: existingTasks, error: existingError } = await supabase
       .from('tasks')
-      .select('id, title, description, sub_type, custom_lane_id, is_parallel, created_by')
+      .select('id, title, description, sub_type, custom_lane_id, is_parallel, created_by, is_custom')
       .eq('project_id', projectId)
       .eq('pipeline_stage', 'post_prod')
       .order('sort_order', { ascending: true })
@@ -508,12 +508,17 @@ export async function reseedPostProdTasks(
       .filter((t: { created_by: string | null }) => t.created_by === null)
       .map((t: { id: string }) => t.id)
 
-    const preserved: (SequenceRow & { subType: 'video' | 'photo' | null })[] = (existingTasks ?? [])
+    // isCustom skiller "frie egendefinerte oppgaver" (is_custom=true, vises i "Egendefinerte
+    // oppgaver"-seksjonen, ALDRI en del av den låste sekvensen) fra "planlagte post-prod-steg"
+    // (is_custom=false, satt inn i selve Video/Foto-sekvensen via addPostProdBoardTask) — kun
+    // sistnevnte kan narre ensureVideoDeliverablesSeededs "allerede seedet?"-sjekk under
+    // (den filtrerer eksplisitt på is_custom=false), så kun de skal slettes der.
+    const preserved: (SequenceRow & { subType: 'video' | 'photo' | null; isCustom: boolean })[] = (existingTasks ?? [])
       .filter((t: { created_by: string | null; custom_lane_id: string | null; is_parallel: boolean }) =>
         t.created_by !== null && !t.custom_lane_id && !t.is_parallel
       )
-      .map((t: { id: string; title: string; description: string | null; sub_type: 'video' | 'photo' | null }) => ({
-        id: t.id, title: t.title, description: t.description, origin: 'existing' as const, subType: t.sub_type,
+      .map((t: { id: string; title: string; description: string | null; sub_type: 'video' | 'photo' | null; is_custom: boolean }) => ({
+        id: t.id, title: t.title, description: t.description, origin: 'existing' as const, subType: t.sub_type, isCustom: t.is_custom,
       }))
 
     if (toDeleteIds.length > 0) {
@@ -547,7 +552,9 @@ export async function reseedPostProdTasks(
       // 2+-leveranse-tilfellet blir en ekte blank tavle før seeding.
       const isVideoTrack = proj.project_type === 'mixed' ? subType === 'video' : proj.project_type === 'video'
       if (isVideoTrack && hasVideoTabs) {
-        const preservedVideoIds = preserved.filter(p => p.subType === subType).map(p => p.id as string)
+        const preservedVideoIds = preserved
+          .filter(p => p.subType === subType && !p.isCustom)
+          .map(p => p.id as string)
         if (preservedVideoIds.length > 0) {
           const { error: deletePreservedError } = await supabase.from('tasks').delete().in('id', preservedVideoIds)
           if (deletePreservedError) {

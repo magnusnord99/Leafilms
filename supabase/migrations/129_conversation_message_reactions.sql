@@ -1,4 +1,4 @@
--- 128_conversation_message_reactions.sql
+-- 129_conversation_message_reactions.sql
 -- Emoji-reaksjoner på DM-er og produksjonschat-meldinger (conversation_messages) —
 -- samme mønster som prosjekt/oppgave/tilbud/pre-prod (091_message_reactions.sql,
 -- 127_preprod_messages.sql), men RLS må stramme inn: message_reactions sine

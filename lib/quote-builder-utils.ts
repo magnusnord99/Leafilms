@@ -25,6 +25,24 @@ export function pickBestQuote<T extends { status: string; is_current: boolean; c
   return [...quotes].sort(byRecency)[0]
 }
 
+// Kontraktoperasjoner (signering, PDF-patching) MÅ bruke tilbudet som ble fryst på
+// contracts.quote_id ved publisering — ikke "det som er is_current nå". Staff kan
+// ha laget en ny kladd-versjon ("Lag ny versjon") mens den publiserte kontrakten
+// fortsatt venter på kundens signatur; is_current peker da på kladden, og å
+// markere/patch'e den ville akseptere feil tilbud (samme klasse feil som
+// feedback 08a0235b). Legacy-rader uten quote_id faller tilbake til is_current.
+export type ContractQuoteLookup =
+  | { mode: 'by_id'; quoteId: string }
+  | { mode: 'fallback_current'; projectId: string }
+
+export function resolveContractQuoteLookup(
+  contractQuoteId: string | null | undefined,
+  projectId: string
+): ContractQuoteLookup {
+  if (contractQuoteId) return { mode: 'by_id', quoteId: contractQuoteId }
+  return { mode: 'fallback_current', projectId }
+}
+
 const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']
 
 // Leser et tillegg sine beløp per kategori — normaliserer gamle rader (price+category, fra før

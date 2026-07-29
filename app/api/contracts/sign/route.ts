@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { OurSignature, QuoteBuilderData } from '@/lib/types'
-import { calculateQuoteTotals, addonDiscountedPrice } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, addonDiscountedPrice, resolveContractQuoteLookup } from '@/lib/quote-builder-utils'
 import { buildContractTextWithAddons } from '@/lib/contract-addendum'
 import { generateContractPDF } from '../pdf-generator'
 
@@ -45,10 +45,10 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Ugyldig delelenke for dette prosjektet' }, { status: 403 })
     }
 
-    // Hent gjeldende kontrakt for prosjektet
+    // Hent gjeldende kontrakt for prosjektet (inkl. quote_id fryst ved publisering)
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
-      .select('id, published_at, status, contract_text, our_signature')
+      .select('id, quote_id, published_at, status, contract_text, our_signature')
       .eq('project_id', projectId)
       .eq('is_current', true)
       .order('created_at', { ascending: false })
@@ -110,22 +110,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Hent gjeldende tilbud — server-side, aldri klientens tall. Henter id-en ALLTID (ikke
-    // bare når tillegg er valgt), slik at "sett status=accepted" lenger ned kan matche på
-    // nøyaktig denne raden i stedet for et skjørt project_id+is_current-søk, som kan treffe
-    // feil rad hvis noen rekker å opprette en ny (usignert) tilbudsversjon i mellomtiden
-    // (samme mønster som forårsaket feedback 08a0235b).
+    // Hent tilbudet kontrakten ble publisert mot — server-side, aldri klientens tall.
+    // Bruker contracts.quote_id (fryst ved publishContract), ikke is_current: staff kan
+    // ha laget en ny kladd-versjon mens kontrakten venter på signatur, og is_current
+    // peker da på feil rad (feedback 08a0235b). Legacy uten quote_id → is_current.
     let quoteData: QuoteBuilderData | null = null
     let quoteRowId: string | null = null
     {
-      const { data: quote } = await supabase
-        .from('quotes')
-        .select('id, quote_data')
-        .eq('project_id', projectId)
-        .eq('is_current', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const lookup = resolveContractQuoteLookup(contract.quote_id, projectId)
+      let quoteQuery = supabase.from('quotes').select('id, quote_data')
+      quoteQuery = lookup.mode === 'by_id'
+        ? quoteQuery.eq('id', lookup.quoteId)
+        : quoteQuery.eq('project_id', lookup.projectId).eq('is_current', true)
+            .order('created_at', { ascending: false }).limit(1)
+      const { data: quote } = await quoteQuery.maybeSingle()
 
       if (quote) {
         quoteRowId = quote.id
@@ -272,8 +270,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Matcher på den eksakte tilbudsraden vi allerede slo opp over, i stedet for et
-    // skjørt project_id+is_current-søk (se kommentaren ved oppslaget av quoteRowId).
+    // Matcher på den eksakte tilbudsraden vi slo opp via contract.quote_id over.
     let updateQuoteQuery = supabase.from('quotes').update(quoteUpdatePayload)
     updateQuoteQuery = quoteRowId
       ? updateQuoteQuery.eq('id', quoteRowId)

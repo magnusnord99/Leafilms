@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { OurSignature, QuoteBuilderData } from '@/lib/types'
 import { generateContractPDF, type CustomerSignature } from '../pdf-generator'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, resolveContractQuoteLookup } from '@/lib/quote-builder-utils'
 import { buildContractTextWithAddons } from '@/lib/contract-addendum'
 
 // Admin-only: last ned kontrakten som PDF før kunden har signert (eller etterpå) —
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const supabase = createServiceClient()
     const { data: contract, error } = await supabase
       .from('contracts')
-      .select('contract_text, our_signature, status, signed_at, signed_by, signature_data')
+      .select('quote_id, contract_text, our_signature, status, signed_at, signed_by, signature_data')
       .eq('project_id', projectId)
       .eq('is_current', true)
       .order('created_at', { ascending: false })
@@ -50,16 +50,16 @@ export async function POST(req: NextRequest) {
     // admin-nedlastingen den originale, upatchede summen fra publiseringstidspunktet.
     // Signerte kontrakter har allerede fått tillegg bakt inn i contract_text ved signering
     // (sign/route.ts) — patcher vi da på nytt her, telles tilleggene dobbelt.
+    // Tilbudet hentes via contracts.quote_id (ikke is_current) — samme regel som sign/route.
     let contractText = contract.contract_text
     if (contract.status !== 'signed') {
-      const { data: quote } = await supabase
-        .from('quotes')
-        .select('quote_data, selected_addon_ids')
-        .eq('project_id', projectId)
-        .eq('is_current', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const lookup = resolveContractQuoteLookup(contract.quote_id, projectId)
+      let quoteQuery = supabase.from('quotes').select('quote_data, selected_addon_ids')
+      quoteQuery = lookup.mode === 'by_id'
+        ? quoteQuery.eq('id', lookup.quoteId)
+        : quoteQuery.eq('project_id', lookup.projectId).eq('is_current', true)
+            .order('created_at', { ascending: false }).limit(1)
+      const { data: quote } = await quoteQuery.maybeSingle()
 
       const selectedAddonIds: string[] = Array.isArray(quote?.selected_addon_ids) ? quote.selected_addon_ids : []
       if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew) && selectedAddonIds.length > 0) {

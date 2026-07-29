@@ -21,7 +21,6 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin',         label: 'Dashboard', exact: true },
       { href: '/admin/projects', label: 'Prosjekter' },
-      { href: '/admin/pipeline', label: 'Pipeline' },
       { href: '/admin/tasks',   label: 'Mine oppgaver' },
       { href: '/admin/internal', label: 'Interne oppgaver' },
       { href: '/admin/varsler', label: 'Varsler' },

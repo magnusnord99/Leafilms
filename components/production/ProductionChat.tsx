@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase-client'
 import { markConversationRead, type ConversationParticipant } from '@/lib/actions/messages'
 import { addConversationMember, removeConversationMember } from '@/lib/actions/production-chat'
+import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
+import { MessageReactions } from '@/components/shared/MessageReactions'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { C } from '@/lib/admin-theme'
 
@@ -44,6 +46,7 @@ function Avatar({ p, size = 26 }: { p: ConversationParticipant; size?: number })
 export function ProductionChat({ conversationId, currentUser, initialMembers, allProfiles }: Props) {
   const [members, setMembers] = useState<ConversationParticipant[]>(initialMembers)
   const [messages, setMessages] = useState<ConversationMessage[]>([])
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showAddPicker, setShowAddPicker] = useState(false)
@@ -54,7 +57,14 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
     let cancelled = false
     fetch(`/api/messages/${conversationId}`)
       .then((res) => res.json())
-      .then((data) => { if (!cancelled) setMessages(data.messages ?? []) })
+      .then((data) => {
+        if (cancelled) return
+        const list: ConversationMessage[] = data.messages ?? []
+        setMessages(list)
+        if (list.length > 0) {
+          getReactions('conversation', list.map((m) => m.id)).then((r) => { if (!cancelled) setReactions(r) })
+        }
+      })
     markConversationRead(conversationId)
     return () => { cancelled = true }
   }, [conversationId])
@@ -75,6 +85,44 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
 
     return () => { supabase.removeChannel(channel) }
   }, [conversationId, currentUser.id])
+
+  // Sanntidsoppdatering av reaksjoner i denne produksjonschatten
+  useEffect(() => {
+    const channel = supabase
+      .channel(`production-chat-reactions-${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.conversation' },
+        (payload) => {
+          const r = payload.new as { message_id: string; emoji: string; user_id: string }
+          const profile = allProfiles.find((p) => p.id === r.user_id)
+          setReactions((prev) => {
+            const list = prev[r.message_id] ?? []
+            if (list.some((x) => x.userId === r.user_id && x.emoji === r.emoji)) return prev
+            return { ...prev, [r.message_id]: [...list, { emoji: r.emoji, userId: r.user_id, userName: displayName(profile ?? { name: null, email: 'Ukjent' }) }] }
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.conversation' },
+        (payload) => {
+          const r = payload.old as { message_id: string; emoji: string; user_id: string }
+          setReactions((prev) => {
+            const list = prev[r.message_id]
+            if (!list) return prev
+            return { ...prev, [r.message_id]: list.filter((x) => !(x.userId === r.user_id && x.emoji === r.emoji)) }
+          })
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [conversationId, allProfiles])
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    await toggleReaction('conversation', messageId, emoji)
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -215,7 +263,7 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
           const sender = members.find((m) => m.id === msg.sender_id)
           const own = msg.sender_id === currentUser.id
           return (
-            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: own ? 'flex-end' : 'flex-start', gap: 3 }}>
+            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: own ? 'flex-end' : 'flex-start', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.text3 }}>
                   {own ? 'Deg' : sender ? displayName(sender) : 'Ukjent'}
@@ -237,6 +285,10 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
                   {msg.content}
                 </p>
               </div>
+              <MessageReactions
+                reactions={reactions[msg.id] ?? []}
+                onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+              />
             </div>
           )
         })}

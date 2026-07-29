@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 
-export type MessageType = 'project' | 'task' | 'quote' | 'preprod'
+export type MessageType = 'project' | 'task' | 'quote' | 'preprod' | 'conversation'
 
 export type MessageReaction = {
   emoji: string
@@ -10,8 +10,8 @@ export type MessageReaction = {
   userName: string
 }
 
-// Delt mellom prosjekt-chat, oppgave-chat og tilbud-chat — én reaksjonstabell for alle tre
-// meldingstypene (se supabase/migrations/091_message_reactions.sql).
+// Delt mellom prosjekt-, oppgave-, tilbud-, pre-prod- og samtale-chat (DM/produksjonschat) —
+// én reaksjonstabell for alle meldingstypene (se supabase/migrations/091/127/128).
 export async function getReactions(
   messageType: MessageType,
   messageIds: string[]

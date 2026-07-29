@@ -75,7 +75,6 @@ export async function updatePipelineStage(
 
     await seedTasksFromTemplates(projectId, stage, supabase)
 
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
   } catch (err) {
     console.error('updatePipelineStage unexpected error:', err)
@@ -372,7 +371,7 @@ export async function setProjectType(
 
     await seedTasksFromTemplates(projectId, 'post_prod')
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
   } catch (err) {
     console.error('setProjectType unexpected error:', err)
   }
@@ -440,7 +439,6 @@ export async function updateTaskStatus(
 
           if (total && done && total === done) {
             await updatePipelineStage(task.project_id, nextStage as PipelineStage)
-            revalidatePath('/admin/pipeline')
             revalidatePath('/admin/projects')
             revalidatePath('/admin/postprod')
             return { ok: true, advanced: true, projectId: task.project_id, nextStage: nextStage as PipelineStage }
@@ -449,7 +447,6 @@ export async function updateTaskStatus(
       }
     }
 
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
     revalidatePath('/admin/postprod')
     return { ok: true, advanced: false, projectId: null, nextStage: null }
@@ -694,7 +691,6 @@ export async function createTask(data: {
       return null
     }
 
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
 
     return { ...created, assignees: [] } as Task
@@ -734,7 +730,6 @@ export async function deleteTask(taskId: string): Promise<{ ok: boolean; error?:
       return { ok: false, error: 'Kunne ikke slette oppgaven' }
     }
 
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
 
     return { ok: true }
@@ -1053,7 +1048,7 @@ Returner KUN e-postteksten, ingen subject-linje.`
       return { success: false, error: 'Kunne ikke lagre møtelink' }
     }
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
 
     return { success: true }
   } catch (err) {
@@ -1826,7 +1821,7 @@ export async function advanceFromKontraktUnsigned(
 
     await seedTasksFromTemplates(projectId, 'pre_prod')
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/projects/${projectId}`)
 
     return { ok: true }
@@ -1860,7 +1855,7 @@ export async function setQuoteAssignee(
         preview: project?.title ?? '',
       })
     }
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/projects/${projectId}`)
     return { ok: true }
   } catch (err) {
@@ -1893,7 +1888,7 @@ export async function setInvoiceAssignee(
         preview: project?.title ?? '',
       })
     }
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/faktura/${projectId}`)
     return { ok: true }
   } catch (err) {
@@ -1941,7 +1936,7 @@ export async function assignQuoteAndMove(
       preview: project.title,
     })
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/projects/${projectId}`)
 
     return { ok: true }
@@ -1975,7 +1970,7 @@ export async function setResaleAssignee(
         preview: project?.title ?? '',
       })
     }
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/projects/${projectId}`)
     return { ok: true }
   } catch (err) {
@@ -2023,7 +2018,7 @@ export async function assignResaleAndMove(
       preview: project.title,
     })
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath(`/admin/projects/${projectId}`)
 
     return { ok: true }
@@ -2471,7 +2466,6 @@ export async function addPostProdBoardTask(input: {
 
     revalidatePath('/admin/preprod')
     revalidatePath('/admin/postprod')
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
 
     return { ok: true, taskId: newTaskId }

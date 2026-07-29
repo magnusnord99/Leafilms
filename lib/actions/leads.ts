@@ -121,7 +121,7 @@ export async function createLead(data: {
       })
     }
 
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     revalidatePath('/admin/leads')
 
     return { leadId: lead.id, projectId: project.id }
@@ -317,7 +317,7 @@ export async function deleteLead(leadId: string): Promise<boolean> {
     }
 
     revalidatePath('/admin/leads')
-    revalidatePath('/admin/pipeline')
+    revalidatePath('/admin/projects')
     return true
   } catch (err) {
     console.error('deleteLead unexpected:', err)

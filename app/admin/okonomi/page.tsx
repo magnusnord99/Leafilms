@@ -94,7 +94,30 @@ function StageBadge({ stage }: { stage: PipelineStage | null }) {
   )
 }
 
+// Teller raskt opp fra 0 til beløpet når kortet først vises (siden lastes/åpnes) —
+// ease-out så den bremser inn mot sluttverdien i stedet for å stoppe brått.
+function useCountUp(target: number, durationMs = 500): number {
+  const [value, setValue] = useState(0)
+
+  useEffect(() => {
+    const start = performance.now()
+    let frame: number
+
+    function tick(now: number) {
+      const progress = Math.min((now - start) / durationMs, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(target * eased))
+      if (progress < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [target, durationMs])
+
+  return value
+}
+
 function SummaryCard({ label, amount, color }: { label: string; amount: number; color: string }) {
+  const displayed = useCountUp(amount)
   return (
     <div style={{
       background: C.surface,
@@ -108,7 +131,7 @@ function SummaryCard({ label, amount, color }: { label: string; amount: number; 
         {label}
       </p>
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color, margin: 0 }}>
-        {formatNok(amount)}
+        {formatNok(displayed)}
       </p>
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: 0, marginTop: 4 }}>
         eks. MVA

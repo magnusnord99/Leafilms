@@ -35,6 +35,7 @@ function channelFor(n: Notification): Channel | null {
     case 'preprod_message_reaction':
       return 'preprod'
     case 'direct_message':
+    case 'conversation_message_reaction':
       return 'direct'
     default:
       return null
@@ -139,7 +140,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
     } else if (n.type === 'task_assigned') {
       router.push(`/admin/projects/${n.project_id}`)
-    } else if (n.type === 'direct_message') {
+    } else if (n.type === 'direct_message' || n.type === 'conversation_message_reaction') {
       router.push('/admin/meldinger')
     } else if (n.type === 'meeting_invite' || n.type === 'meeting_response') {
       router.push('/admin/calendar')
@@ -328,7 +329,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                   >
                     {/* Ikon */}
                     <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                      {n.type === 'project_message_reaction' || n.type === 'task_message_reaction' || n.type === 'quote_message_reaction' || n.type === 'preprod_message_reaction' ? (
+                      {n.type === 'project_message_reaction' || n.type === 'task_message_reaction' || n.type === 'quote_message_reaction' || n.type === 'preprod_message_reaction' || n.type === 'conversation_message_reaction' ? (
                         <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>{n.message_preview}</span>
                       ) : n.type === 'task_assigned' || n.type === 'lead_assigned' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round">
@@ -390,6 +391,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'task_message_reaction' ? 'reagerte på meldingen din i en oppgave'
                             : n.type === 'quote_message_reaction' ? 'reagerte på meldingen din i tilbudschatten'
                             : n.type === 'preprod_message_reaction' ? 'reagerte på meldingen din i pre-prod-chatten'
+                            : n.type === 'conversation_message_reaction' ? 'reagerte på meldingen din'
                             : n.type === 'board_comment_mention' ? 'nevnte deg i en boardkommentar'
                             : n.type === 'board_comment_reply' ? 'svarte på kommentaren din på boardet'
                             : n.type === 'pitch_review_requested' ? 'ber deg godkjenne pitchen'
@@ -399,7 +401,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : 'i en oppgave'}
                         </span>
                       </div>
-                      {n.type !== 'project_message_reaction' && n.type !== 'task_message_reaction' && n.type !== 'quote_message_reaction' && n.type !== 'preprod_message_reaction' && (
+                      {n.type !== 'project_message_reaction' && n.type !== 'task_message_reaction' && n.type !== 'quote_message_reaction' && n.type !== 'preprod_message_reaction' && n.type !== 'conversation_message_reaction' && (
                         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, fontStyle: 'italic', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           &ldquo;{n.message_preview}{n.message_preview.length >= 80 ? '…' : ''}&rdquo;
                         </p>

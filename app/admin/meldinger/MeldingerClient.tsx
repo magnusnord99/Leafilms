@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase-client'
 import { getConversations, startConversation, markConversationRead, type ConversationListItem, type ConversationParticipant } from '@/lib/actions/messages'
+import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
+import { MessageReactions } from '@/components/shared/MessageReactions'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { C } from '@/lib/admin-theme'
 
@@ -30,6 +32,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [selectedId, setSelectedId] = useState<string | null>(initialConversations[0]?.id ?? null)
   const [messages, setMessages] = useState<DirectMessage[]>([])
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
@@ -65,18 +68,66 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   useEffect(() => {
     if (!selectedId) {
       setMessages([])
+      setReactions({})
       return
     }
     let cancelled = false
     fetch(`/api/messages/${selectedId}`)
       .then((res) => res.json())
-      .then((data) => { if (!cancelled) setMessages(data.messages ?? []) })
+      .then((data) => {
+        if (cancelled) return
+        const list: DirectMessage[] = data.messages ?? []
+        setMessages(list)
+        setReactions({})
+        if (list.length > 0) {
+          getReactions('conversation', list.map((m) => m.id)).then((r) => { if (!cancelled) setReactions(r) })
+        }
+      })
     markConversationRead(selectedId).then(() => {
       if (cancelled) return
       setConversations((prev) => prev.map((c) => (c.id === selectedId ? { ...c, unreadCount: 0 } : c)))
     })
     return () => { cancelled = true }
   }, [selectedId])
+
+  // Sanntidsoppdatering av reaksjoner i den åpne tråden
+  useEffect(() => {
+    if (!selectedId) return
+    const channel = supabase
+      .channel(`dm-thread-reactions-${selectedId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.conversation' },
+        (payload) => {
+          const r = payload.new as { message_id: string; emoji: string; user_id: string }
+          const profile = allProfiles.find((p) => p.id === r.user_id)
+          setReactions((prev) => {
+            const list = prev[r.message_id] ?? []
+            if (list.some((x) => x.userId === r.user_id && x.emoji === r.emoji)) return prev
+            return { ...prev, [r.message_id]: [...list, { emoji: r.emoji, userId: r.user_id, userName: displayName(profile ?? { name: null, email: 'Ukjent' }) }] }
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.conversation' },
+        (payload) => {
+          const r = payload.old as { message_id: string; emoji: string; user_id: string }
+          setReactions((prev) => {
+            const list = prev[r.message_id]
+            if (!list) return prev
+            return { ...prev, [r.message_id]: list.filter((x) => !(x.userId === r.user_id && x.emoji === r.emoji)) }
+          })
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [selectedId, allProfiles])
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    await toggleReaction('conversation', messageId, emoji)
+  }
 
   // Sanntidsoppdatering av den åpne tråden
   useEffect(() => {
@@ -321,7 +372,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
               {messages.map((msg) => {
                 const own = msg.sender_id === currentUser.id
                 return (
-                  <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: own ? 'flex-end' : 'flex-start', gap: 3 }}>
+                  <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: own ? 'flex-end' : 'flex-start', gap: 3 }}>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
                       {formatDate(msg.created_at)} {formatTime(msg.created_at)}
                     </span>
@@ -338,6 +389,10 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                         {msg.content}
                       </p>
                     </div>
+                    <MessageReactions
+                      reactions={reactions[msg.id] ?? []}
+                      onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+                    />
                   </div>
                 )
               })}

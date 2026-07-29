@@ -25,7 +25,6 @@ export async function markAsLost(
       .eq('id', projectId)
 
     if (error) return { error: error.message }
-    revalidatePath('/admin/pipeline')
     revalidatePath('/admin/projects')
     revalidatePath('/admin/tapte')
     return { error: null }

@@ -17,6 +17,7 @@ type StepperTaskLite = {
   sort_order: number
   is_custom: boolean
   status: string
+  deliverable_id: string | null
 }
 
 export async function computeStepperLocks(
@@ -31,7 +32,7 @@ export async function computeStepperLocks(
 
   const { data: siblings, error } = await supabase
     .from('tasks')
-    .select('project_id, sub_type, sort_order, status, title')
+    .select('project_id, sub_type, sort_order, status, title, deliverable_id')
     .in('project_id', projectIds)
     .eq('pipeline_stage', 'post_prod')
     .eq('is_custom', false)
@@ -42,7 +43,19 @@ export async function computeStepperLocks(
   }
 
   for (const task of candidates) {
-    const groupSiblings = siblings.filter(s => s.project_id === task.project_id && s.sub_type === task.sub_type)
+    // Samme leveranse-skoperingsregel som resetTaskAndSubsequent/rejectFeedbackAndReset
+    // i lib/actions/pipeline.ts: to oppgaver hører til samme "sekvens" hvis de har lik
+    // deliverable_id, ELLER minst én av dem er delt (deliverable_id=NULL, f.eks. Logging/
+    // Ferdig). Dette hindrer at et per-leveranse-steg i én leveranse blokkeres av et
+    // ikke-ferdig steg i en ANNEN leveranse (som deler samme sort_order), samtidig som
+    // delte steg fortsatt korrekt låser/låser opp per-leveranse-steg og andre delte steg.
+    // For prosjekter med 0-1 video-leveranser er deliverable_id alltid NULL på begge sider,
+    // så betingelsen er da alltid triviell sann — uendret oppførsel.
+    const groupSiblings = siblings.filter(s =>
+      s.project_id === task.project_id &&
+      s.sub_type === task.sub_type &&
+      (s.deliverable_id === task.deliverable_id || s.deliverable_id === null || task.deliverable_id === null)
+    )
     const blocking = groupSiblings
       .filter(s => s.sort_order < task.sort_order && s.status !== 'done')
       .sort((a, b) => a.sort_order - b.sort_order)[0]

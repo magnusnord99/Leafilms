@@ -71,6 +71,12 @@ export type CustomerContact = {
   updated_at: string
 }
 
+export type DeliverableItem = {
+  id: string
+  type: 'video' | 'photo'
+  name: string
+}
+
 export type Project = {
   id: string
   title: string
@@ -86,6 +92,8 @@ export type Project = {
   delivery_description?: string | null
   delivery_video?: string | null
   delivery_photo?: string | null
+  /** Levende kopi av leveranselisten fra siste signerte kontrakt — se Contract.deliverables for den uforanderlige historikken. */
+  deliverables?: DeliverableItem[] | null
   post_prod_days?: number | null
   shoot_start?: string | null
   shoot_end?: string | null
@@ -214,6 +222,8 @@ export type QuoteBuilderData = {
   paymentInfo: string
   deliveryDate: string
   deliveryDescription: string
+  /** Strukturert leveranseliste, separat fra deliveryDescription-friteksten — fryses til contracts/projects.deliverables ved signering. */
+  deliverables: DeliverableItem[]
   terms: string
   language: 'NO' | 'EN'
   startupCrew: CrewMember[]
@@ -275,6 +285,8 @@ export type Contract = {
   quote_id: string
   project_id: string
   pdf_path: string | null
+  /** Uforanderlig kopi av leveranselisten på signeringstidspunktet — satt kun ved signering, aldri oppdatert igjen. */
+  deliverables: DeliverableItem[] | null
   status: 'pending' | 'sent' | 'signed' | 'cancelled'
   signed_at: string | null
   signed_by: string | null
@@ -583,6 +595,8 @@ export type Task = {
   notes: string | null
   task_data: Record<string, string> | null
   sub_type: 'video' | 'photo' | null
+  /** Matcher en DeliverableItem.id fra projects.deliverables — NULL for delte steg (Logging/Ferdig) og for prosjekter med 0-1 video-leveranse. */
+  deliverable_id: string | null
   custom_lane_id: string | null
   is_parallel: boolean
   color: string | null

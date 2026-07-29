@@ -1954,3 +1954,1035 @@ npx eslint lib/actions/pipeline.ts "app/admin/preprod/[id]/PostProdBoard.tsx" "a
 ```
 
 Expected: no tsc errors, no new eslint errors beyond any pre-existing warnings already in those files.
+
+**Status note (2026-07-28):** while executing this task, live verification against a real project
+surfaced a gap not covered by the original plan — see the addendum below (Tasks 10-13). Finish
+those before re-attempting this task's steps; Task 13 supersedes the verification flow above with
+one that covers both post-prod pages.
+
+---
+
+## Addendum (2026-07-28): `/admin/postprod/[id]` stepper page
+
+See spec §7 (`docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md`) for the
+full rationale. Summary: a second page, `app/admin/postprod/[id]/page.tsx`, also shows post-prod
+tasks (as a linear "Steg X av N" stepper) and was missed during the original research/planning —
+it has no concept of `deliverable_id` and today shows a broken duplicated sequence for 2+-video
+projects. Magnus confirmed: give it the same tab treatment as the board.
+
+**Additional Global Constraints for this addendum:**
+- `app/admin/postprod/[id]/page.tsx` already has a local type named `DeliverableItem` (pitch-page
+  leftover, unrelated) — the import of the new `DeliverableItem` from `@/lib/types` MUST be
+  aliased (`SignedDeliverableItem`) to avoid colliding with it.
+- `StepItem` (the circle-and-connector renderer) needs no changes — it is already purely
+  index/list-based.
+- The existing `isMixed`/`activeTab` (video/photo) tab mechanism is untouched and composes with
+  the new video-deliverable tabs (nested: video-deliverable tabs only show when `activeTab==='video'`
+  for mixed projects, or unconditionally for pure-video projects).
+
+### Task 10: Fix `sort_order` collision in `ensureVideoDeliverablesSeeded`
+
+**Files:**
+- Modify: `lib/actions/pipeline.ts`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: seeded video tasks now carry the SAME `sort_order` numbering scheme regardless of
+  whether they're shared or per-deliverable (`Logging=1, Grovklipp=2, Klipp=3, Farger=4, Lyd=5,
+  Venter på tilbakemelding=6, Ferdig=7`) — Task 12's stepper merge logic depends on this.
+
+- [ ] **Step 1: Use the template's own `sort_order` instead of re-indexing**
+
+Find:
+
+```ts
+  if ((existingVideoTasks ?? []).length === 0 && sharedTemplates.length > 0) {
+    await supabase.from('tasks').insert(
+      sharedTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+        project_id: projectId,
+        pipeline_stage: 'post_prod',
+        title: t.title,
+        description: t.description,
+        status: 'todo' as const,
+        sort_order: i + 1,
+        sub_type: videoDbSubType,
+        deliverable_id: null,
+        custom_lane_id: null,
+        is_parallel: false,
+        is_custom: false,
+        created_by: null,
+        due_date: null,
+        priority: null,
+      }))
+    )
+  }
+```
+
+Replace with:
+
+```ts
+  if ((existingVideoTasks ?? []).length === 0 && sharedTemplates.length > 0) {
+    await supabase.from('tasks').insert(
+      sharedTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
+        project_id: projectId,
+        pipeline_stage: 'post_prod',
+        title: t.title,
+        description: t.description,
+        status: 'todo' as const,
+        // Malens EGEN sort_order (ikke indeksbasert i+1) — slik at delt og
+        // per-leveranse-steg deler samme 1..7-nummerering og kan slås sammen til én
+        // virtuell sekvens i stepper-siden (app/admin/postprod/[id]/page.tsx). Se
+        // docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.1.
+        sort_order: t.sort_order,
+        sub_type: videoDbSubType,
+        deliverable_id: null,
+        custom_lane_id: null,
+        is_parallel: false,
+        is_custom: false,
+        created_by: null,
+        due_date: null,
+        priority: null,
+      }))
+    )
+  }
+```
+
+- [ ] **Step 2: Same fix for the per-deliverable insert**
+
+Find:
+
+```ts
+    if ((count ?? 0) === 0 && perDeliverableTemplates.length > 0) {
+      await supabase.from('tasks').insert(
+        perDeliverableTemplates.map((t: { title: string; description: string | null }, i: number) => ({
+          project_id: projectId,
+          pipeline_stage: 'post_prod',
+          title: t.title,
+          description: t.description,
+          status: 'todo' as const,
+          sort_order: i + 1,
+          sub_type: videoDbSubType,
+          deliverable_id: deliverable.id,
+          custom_lane_id: null,
+          is_parallel: false,
+          is_custom: false,
+          created_by: null,
+          due_date: null,
+          priority: null,
+        }))
+      )
+    }
+```
+
+Replace with:
+
+```ts
+    if ((count ?? 0) === 0 && perDeliverableTemplates.length > 0) {
+      await supabase.from('tasks').insert(
+        perDeliverableTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
+          project_id: projectId,
+          pipeline_stage: 'post_prod',
+          title: t.title,
+          description: t.description,
+          status: 'todo' as const,
+          sort_order: t.sort_order,
+          sub_type: videoDbSubType,
+          deliverable_id: deliverable.id,
+          custom_lane_id: null,
+          is_parallel: false,
+          is_custom: false,
+          created_by: null,
+          due_date: null,
+          priority: null,
+        }))
+      )
+    }
+```
+
+- [ ] **Step 3: Typecheck**
+
+Run: `npx tsc --noEmit -p .`
+Expected: no errors.
+
+- [ ] **Step 4: Verify against a fresh seed**
+
+The existing test project (`55c576d8-2735-4fd8-b81c-95c760872617`, if still present) has task rows
+seeded under the OLD buggy logic. Delete its post-prod tasks so the next board load reseeds with
+the fix:
+
+```js
+// /tmp/verify-sort-order-fix.js
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617"
+  const { count } = await sb.from("tasks").delete({ count: "exact" }).eq("project_id", projectId)
+  console.log("cleared", count, "old task rows")
+})()
+```
+
+Run: `export $(grep -E "^NEXT_PUBLIC_SUPABASE_URL|^SUPABASE_SERVICE_ROLE_KEY" .env.local | xargs) && node /tmp/verify-sort-order-fix.js`
+
+Then, with a dev server running (`npm run dev -- -p 3300`), the NEXT `getPostProdBoard` call for
+this project will reseed. Verify with a direct query afterward:
+
+```js
+// /tmp/verify-sort-order-fix-2.js
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617"
+  const { data } = await sb.from("tasks").select("title, sort_order, deliverable_id").eq("project_id", projectId).eq("pipeline_stage", "post_prod").order("sort_order")
+  console.log(data)
+})()
+```
+
+Expected: `Logging` sort_order 1 (deliverable_id null), `Ferdig` sort_order 7 (deliverable_id null),
+and for EACH deliverable: `Grovklipp`=2, `Klipp`=3, `Farger`=4, `Lyd`=5,
+`Venter på tilbakemelding`=6 — i.e. sort_order values 2-6 appear TWICE (once per deliverable) but
+`1` and `7` appear only for the shared rows. (You'll need to actually load the board/stepper page
+once, or call `getPostProdBoard` indirectly, to trigger reseeding — deleting rows alone doesn't
+reseed them.)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/actions/pipeline.ts
+git commit -m "fix: use template sort_order instead of per-bucket reindex in video deliverable seeding"
+```
+
+---
+
+### Task 11: `Task.deliverable_id` type + scope reset/reject by deliverable
+
+**Files:**
+- Modify: `lib/types.ts`
+- Modify: `lib/actions/pipeline.ts`
+
+**Interfaces:**
+- Produces: `Task.deliverable_id: string | null` — Task 12 (stepper page) reads this field.
+  `resetTaskAndSubsequent`/`rejectFeedbackAndReset` no longer cross-contaminate between video
+  deliverables when going back or rejecting feedback on one deliverable's task.
+
+- [ ] **Step 1: Add the field to `Task`**
+
+Find:
+
+```ts
+export type Task = {
+  id: string
+  project_id: string
+  pipeline_stage: PipelineStage
+  title: string
+  description: string | null
+  notes: string | null
+  task_data: Record<string, string> | null
+  sub_type: 'video' | 'photo' | null
+  custom_lane_id: string | null
+```
+
+Replace with:
+
+```ts
+export type Task = {
+  id: string
+  project_id: string
+  pipeline_stage: PipelineStage
+  title: string
+  description: string | null
+  notes: string | null
+  task_data: Record<string, string> | null
+  sub_type: 'video' | 'photo' | null
+  /** Matcher en DeliverableItem.id fra projects.deliverables — NULL for delte steg (Logging/Ferdig) og for prosjekter med 0-1 video-leveranse. */
+  deliverable_id: string | null
+  custom_lane_id: string | null
+```
+
+- [ ] **Step 2: Scope `resetTaskAndSubsequent` by deliverable**
+
+Find:
+
+```ts
+export async function resetTaskAndSubsequent(
+  projectId: string,
+  taskId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('sort_order, sub_type')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) {
+      return { ok: false, error: 'Fant ikke oppgaven' }
+    }
+
+    let query = supabase
+      .from('tasks')
+      .update({ status: 'todo', updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .gte('sort_order', task.sort_order)
+
+    query = task.sub_type
+      ? query.eq('sub_type', task.sub_type)
+      : query.is('sub_type', null)
+
+    const { error } = await query
+```
+
+Replace with:
+
+```ts
+export async function resetTaskAndSubsequent(
+  projectId: string,
+  taskId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('sort_order, sub_type, deliverable_id')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) {
+      return { ok: false, error: 'Fant ikke oppgaven' }
+    }
+
+    let query = supabase
+      .from('tasks')
+      .update({ status: 'todo', updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .gte('sort_order', task.sort_order)
+
+    query = task.sub_type
+      ? query.eq('sub_type', task.sub_type)
+      : query.is('sub_type', null)
+
+    // Et delt steg (deliverable_id=NULL, f.eks. Logging) nullstiller alle leveranser — et
+    // per-leveranse-steg nullstiller kun samme leveranse pluss delte steg som Ferdig (den
+    // er ikke lenger ferdig hvis ett steg i én leveranse går tilbake), aldri andre
+    // leveransers oppgaver. Se docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.3.
+    if (task.deliverable_id) {
+      query = query.or(`deliverable_id.eq.${task.deliverable_id},deliverable_id.is.null`)
+    }
+
+    const { error } = await query
+```
+
+- [ ] **Step 3: Scope `rejectFeedbackAndReset` by deliverable**
+
+Find:
+
+```ts
+export async function rejectFeedbackAndReset(
+  projectId: string,
+  venterTaskId: string,
+  rejectionNote: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: venterTask, error: venterError } = await supabase
+      .from('tasks')
+      .select('sort_order, sub_type')
+      .eq('id', venterTaskId)
+      .single()
+
+    if (venterError || !venterTask) {
+      return { ok: false, error: 'Fant ikke oppgaven' }
+    }
+
+    // Lagre begrunnelsesnotatet på Venter-tasken
+    await supabase
+      .from('tasks')
+      .update({ notes: rejectionNote, updated_at: new Date().toISOString() })
+      .eq('id', venterTaskId)
+
+    // Tilbakestill alt fra sort_order 2 og frem til og med Venter til 'todo'
+    // Filtrerer på sub_type slik at kun riktig flyt nullstilles i mixed-prosjekter
+    let resetQuery = supabase
+      .from('tasks')
+      .update({ status: 'todo', updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .gt('sort_order', 1)
+      .lte('sort_order', venterTask.sort_order)
+
+    resetQuery = venterTask.sub_type
+      ? resetQuery.eq('sub_type', venterTask.sub_type)
+      : resetQuery.is('sub_type', null)
+
+    const { error: resetError } = await resetQuery
+```
+
+Replace with:
+
+```ts
+export async function rejectFeedbackAndReset(
+  projectId: string,
+  venterTaskId: string,
+  rejectionNote: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+
+    const { data: venterTask, error: venterError } = await supabase
+      .from('tasks')
+      .select('sort_order, sub_type, deliverable_id')
+      .eq('id', venterTaskId)
+      .single()
+
+    if (venterError || !venterTask) {
+      return { ok: false, error: 'Fant ikke oppgaven' }
+    }
+
+    // Lagre begrunnelsesnotatet på Venter-tasken
+    await supabase
+      .from('tasks')
+      .update({ notes: rejectionNote, updated_at: new Date().toISOString() })
+      .eq('id', venterTaskId)
+
+    // Tilbakestill alt fra sort_order 2 og frem til og med Venter til 'todo'
+    // Filtrerer på sub_type slik at kun riktig flyt nullstilles i mixed-prosjekter
+    let resetQuery = supabase
+      .from('tasks')
+      .update({ status: 'todo', updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('pipeline_stage', 'post_prod')
+      .gt('sort_order', 1)
+      .lte('sort_order', venterTask.sort_order)
+
+    resetQuery = venterTask.sub_type
+      ? resetQuery.eq('sub_type', venterTask.sub_type)
+      : resetQuery.is('sub_type', null)
+
+    // Samme leveranse-skopering som resetTaskAndSubsequent over.
+    if (venterTask.deliverable_id) {
+      resetQuery = resetQuery.or(`deliverable_id.eq.${venterTask.deliverable_id},deliverable_id.is.null`)
+    }
+
+    const { error: resetError } = await resetQuery
+```
+
+- [ ] **Step 4: Typecheck**
+
+Run: `npx tsc --noEmit -p .`
+Expected: new errors in `app/admin/postprod/[id]/page.tsx`'s `StepItem`/`Task`-typed code are NOT
+expected here (the added field is optional-safe, nothing reads it yet) — confirm no errors
+anywhere. If any appear in files that spread/construct `Task` objects manually (not from a DB
+row), add `deliverable_id: null` to satisfy the type — search first: `grep -rn "): Task =>" app lib`
+and check each result.
+
+- [ ] **Step 5: Verify the query logic against real data**
+
+```js
+// /tmp/verify-reset-scoping.js
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617" // reseeded by Task 10 step 4
+  const { data: farger } = await sb.from("tasks").select("id, deliverable_id, sort_order").eq("project_id", projectId).eq("title", "Farger").eq("deliverable_id", "e2e-1").single()
+  console.log("Farger (e2e-1):", farger)
+
+  // Mark it done, then reset it, and confirm ONLY e2e-1's later steps + shared Ferdig reset —
+  // e2e-2 must be untouched.
+  await sb.from("tasks").update({ status: "done" }).eq("project_id", projectId).eq("deliverable_id", "e2e-2").in("title", ["Grovklipp", "Klipp", "Farger"])
+  const before = await sb.from("tasks").select("title, deliverable_id, status").eq("project_id", projectId).order("sort_order")
+  console.log("before reset:", before.data)
+})()
+```
+
+Run it, note the "before reset" output (e2e-2's Grovklipp/Klipp/Farger should show `status: 'done'`),
+then call `resetTaskAndSubsequent(projectId, farger.id)` — easiest via a one-off script that
+imports is not possible for a `'use server'` file directly, so instead trigger it through the
+running app (open the stepper page, select e2e-1's Farger step, click "Gå tilbake") once Task 12
+is done — for now, just confirm this SQL-equivalent manually:
+
+```js
+// /tmp/verify-reset-scoping-2.js — run this to directly exercise the same query the function builds
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617"
+  const { data: farger } = await sb.from("tasks").select("sort_order, sub_type, deliverable_id").eq("project_id", projectId).eq("title", "Farger").eq("deliverable_id", "e2e-1").single()
+  let query = sb.from("tasks").update({ status: "todo" }).eq("project_id", projectId).eq("pipeline_stage", "post_prod").gte("sort_order", farger.sort_order).is("sub_type", null)
+  if (farger.deliverable_id) query = query.or(`deliverable_id.eq.${farger.deliverable_id},deliverable_id.is.null`)
+  const { error, count } = await query.select("*", { count: "exact" })
+  console.log("reset error:", error, "rows affected:", count)
+  const after = await sb.from("tasks").select("title, deliverable_id, status").eq("project_id", projectId).order("sort_order")
+  console.log("after reset:", after.data)
+})()
+```
+
+Expected: e2e-1's Farger/Lyd/Venter på tilbakemelding go back to `todo`, shared `Ferdig` goes back
+to `todo`, but e2e-2's Grovklipp/Klipp/Farger STAY `done` (untouched).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/types.ts lib/actions/pipeline.ts
+git commit -m "fix: scope task reset/reject actions by deliverable_id to prevent cross-video contamination"
+```
+
+---
+
+### Task 12: Stepper page — video-deliverable tabs
+
+**Files:**
+- Modify: `app/admin/postprod/[id]/page.tsx`
+
+**Interfaces:**
+- Consumes: `Task.deliverable_id` (Task 11), `Project.deliverables` (already present from the main
+  plan's Task 2 — `ProjectWithPipeline` extends `Project`).
+- Produces: nothing consumed elsewhere — this is the leaf of the addendum chain (Task 13 verifies it).
+
+This is one task despite its size because every edit below is part of the same interdependent
+change — a partial application would leave the page in a broken intermediate state (e.g. new state
+without the render that uses it, or the render without the state).
+
+- [ ] **Step 1: Alias the `DeliverableItem` import**
+
+Find:
+
+```ts
+import type { ProjectType, Task, ProjectWithPipeline } from '@/lib/types'
+```
+
+Replace with:
+
+```ts
+import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
+```
+
+- [ ] **Step 2: Add the reusable display-tasks helper**
+
+Find (the end of the `StepItem` component, right before the page component):
+
+```ts
+      <span style={{
+        fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem',
+        fontWeight: isSelected ? 600 : 400,
+        color: isSelected ? (isDone ? C.success : isActive ? C.accent : C.text2) : (isDone ? C.success : C.text3),
+        whiteSpace: 'nowrap', maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
+      }}>
+        {task.title}
+      </span>
+    </button>
+  )
+}
+
+export default function PostProdDetailPage() {
+```
+
+Replace with:
+
+```ts
+      <span style={{
+        fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem',
+        fontWeight: isSelected ? 600 : 400,
+        color: isSelected ? (isDone ? C.success : isActive ? C.accent : C.text2) : (isDone ? C.success : C.text3),
+        whiteSpace: 'nowrap', maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
+      }}>
+        {task.title}
+      </span>
+    </button>
+  )
+}
+
+// Delt av toppnivå-renderingen og av alle handlere som må regne ut en fersk
+// displayTasks-liste rett etter en mutasjon (før React-state faktisk har oppdatert seg).
+// Video-leveranse-faner er nøstet under video/foto-fanen: de vises kun når prosjektet har
+// 2+ video-leveranser OG (prosjektet ikke er mixed ELLER video-fanen er aktiv). Se
+// docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.2.
+function computeDisplayTasks(
+  taskList: Task[],
+  isMixedProject: boolean,
+  tab: 'video' | 'photo',
+  deliverableId: string | null,
+  videoDeliverableCount: number
+): Task[] {
+  const subTypeFiltered = isMixedProject ? taskList.filter(t => t.sub_type === tab) : taskList
+  const useVideoTabs = videoDeliverableCount >= 2 && (!isMixedProject || tab === 'video')
+  return useVideoTabs
+    ? subTypeFiltered.filter(t => t.deliverable_id === null || t.deliverable_id === deliverableId)
+    : subTypeFiltered
+}
+
+export default function PostProdDetailPage() {
+```
+
+- [ ] **Step 3: New state**
+
+Find:
+
+```ts
+  const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
+```
+
+Replace with:
+
+```ts
+  const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
+  const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
+```
+
+- [ ] **Step 4: Use the helper for the top-level `displayTasks`**
+
+Find:
+
+```ts
+  // Egendefinerte oppgaver holdes helt utenfor den låste stepperen
+  const stepperTasks = tasks.filter(t => !t.is_custom)
+  const customTasks = tasks.filter(t => t.is_custom)
+
+  // For mixed-prosjekter: vis kun tasks for aktiv tab
+  const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
+  const displayTasks = isMixed ? stepperTasks.filter(t => t.sub_type === activeTab) : stepperTasks
+```
+
+Replace with:
+
+```ts
+  // Egendefinerte oppgaver holdes helt utenfor den låste stepperen
+  const stepperTasks = tasks.filter(t => !t.is_custom)
+  const customTasks = tasks.filter(t => t.is_custom)
+
+  // For mixed-prosjekter: vis kun tasks for aktiv tab
+  const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
+  const videoDeliverables = ((projects.find(p => p.id === projectId)?.deliverables ?? []) as SignedDeliverableItem[])
+    .filter(d => d.type === 'video')
+  const hasVideoTabs = videoDeliverables.length >= 2 && (!isMixed || activeTab === 'video')
+  const displayTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
+```
+
+- [ ] **Step 5: `resolveDeepLinkIdx` — resolve the video-deliverable tab too**
+
+Find:
+
+```ts
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean): number {
+    const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
+    if (isMixedProject && deepTask?.sub_type) {
+      setActiveTab(deepTask.sub_type)
+      return getInitialIdx(list.filter(t => t.sub_type === deepTask.sub_type), deepLinkTaskId)
+    }
+    const filtered = isMixedProject ? list.filter(t => t.sub_type === activeTab) : list
+    return getInitialIdx(filtered, deepLinkTaskId)
+  }
+```
+
+Replace with:
+
+```ts
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
+    const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
+    if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
+    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    if (isMixedProject && deepTask?.sub_type) {
+      setActiveTab(deepTask.sub_type)
+      return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)
+    }
+    const filtered = computeDisplayTasks(list, isMixedProject, activeTab, resolvedDeliverableId, videoDeliverableCount)
+    return getInitialIdx(filtered, deepLinkTaskId)
+  }
+```
+
+- [ ] **Step 6: Update both `resolveDeepLinkIdx` call sites in `fetchAll`**
+
+Find:
+
+```ts
+      const seeded = await getTasksForProject(projectId, 'post_prod')
+      setProjects(allProj)
+      setTasks(seeded)
+      initNotes(seeded)
+      initTaskData(seeded)
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed'))
+      setLoading(false)
+      return
+    }
+
+    setProjects(allProj)
+    setTasks(projectTasks)
+    initNotes(projectTasks)
+    initTaskData(projectTasks)
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed'))
+```
+
+Replace with:
+
+```ts
+      const seeded = await getTasksForProject(projectId, 'post_prod')
+      setProjects(allProj)
+      setTasks(seeded)
+      initNotes(seeded)
+      initTaskData(seeded)
+      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
+      setLoading(false)
+      return
+    }
+
+    setProjects(allProj)
+    setTasks(projectTasks)
+    initNotes(projectTasks)
+    initTaskData(projectTasks)
+    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
+```
+
+- [ ] **Step 7: `handleSwitchTab` — reset/default the video-deliverable tab, add `handleSwitchVideoTab`**
+
+Find:
+
+```ts
+  function handleSwitchTab(tab: 'video' | 'photo') {
+    if (selectedTask && notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current)
+      notesTimerRef.current = null
+      updateTaskNotes(selectedTask.id, notes[selectedTask.id] ?? '')
+    }
+    if (selectedTask && taskDataTimerRef.current) {
+      clearTimeout(taskDataTimerRef.current)
+      taskDataTimerRef.current = null
+      updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
+    }
+    setActiveTab(tab)
+    const tabTasks = stepperTasks.filter(t => t.sub_type === tab)
+    const initIdx = getInitialIdx(tabTasks)
+    setSelectedIdx(initIdx)
+    setShowRejectionForm(false)
+    setRejectionNote('')
+  }
+```
+
+Replace with:
+
+```ts
+  function handleSwitchTab(tab: 'video' | 'photo') {
+    if (selectedTask && notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current)
+      notesTimerRef.current = null
+      updateTaskNotes(selectedTask.id, notes[selectedTask.id] ?? '')
+    }
+    if (selectedTask && taskDataTimerRef.current) {
+      clearTimeout(taskDataTimerRef.current)
+      taskDataTimerRef.current = null
+      updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
+    }
+    setActiveTab(tab)
+    const nextDeliverableId = tab === 'video' && videoDeliverables.length >= 2
+      ? (videoDeliverables.some(d => d.id === activeVideoDeliverableId) ? activeVideoDeliverableId : videoDeliverables[0].id)
+      : null
+    setActiveVideoDeliverableId(nextDeliverableId)
+    const tabTasks = computeDisplayTasks(stepperTasks, isMixed, tab, nextDeliverableId, videoDeliverables.length)
+    const initIdx = getInitialIdx(tabTasks)
+    setSelectedIdx(initIdx)
+    setShowRejectionForm(false)
+    setRejectionNote('')
+  }
+
+  function handleSwitchVideoTab(deliverableId: string) {
+    if (selectedTask && notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current)
+      notesTimerRef.current = null
+      updateTaskNotes(selectedTask.id, notes[selectedTask.id] ?? '')
+    }
+    if (selectedTask && taskDataTimerRef.current) {
+      clearTimeout(taskDataTimerRef.current)
+      taskDataTimerRef.current = null
+      updateTaskData(selectedTask.id, pendingTaskDataRef.current[selectedTask.id] ?? {})
+    }
+    setActiveVideoDeliverableId(deliverableId)
+    const tabTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, deliverableId, videoDeliverables.length)
+    const initIdx = getInitialIdx(tabTasks)
+    setSelectedIdx(initIdx)
+    setShowRejectionForm(false)
+    setRejectionNote('')
+  }
+```
+
+- [ ] **Step 8: `handleDeleteStepperTask` — use the helper**
+
+Find:
+
+```ts
+  async function handleDeleteStepperTask(taskId: string) {
+    const result = await deleteTask(taskId)
+    if (!result.ok) return
+    const newTasks = tasks.filter(t => t.id !== taskId)
+    setTasks(newTasks)
+    const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
+    const newStepperTasks = newTasks.filter(t => !t.is_custom)
+    const newDisplayTasks = isMixedProject ? newStepperTasks.filter(t => t.sub_type === activeTab) : newStepperTasks
+    setSelectedIdx(getInitialIdx(newDisplayTasks))
+  }
+```
+
+Replace with:
+
+```ts
+  async function handleDeleteStepperTask(taskId: string) {
+    const result = await deleteTask(taskId)
+    if (!result.ok) return
+    const newTasks = tasks.filter(t => t.id !== taskId)
+    setTasks(newTasks)
+    const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
+    const newStepperTasks = newTasks.filter(t => !t.is_custom)
+    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixedProject, activeTab, activeVideoDeliverableId, videoDeliverables.length)
+    setSelectedIdx(getInitialIdx(newDisplayTasks))
+  }
+```
+
+- [ ] **Step 9: `handleGoBack` — mirror the server's deliverable scoping optimistically**
+
+Find:
+
+```ts
+  async function handleGoBack(taskId: string) {
+    if (!selectedTask) return
+    setTogglingId(taskId)
+    setActionError(null)
+    const taskToReset = tasks.find(t => t.id === taskId)
+    const subType = taskToReset?.sub_type ?? null
+    const sortOrder = taskToReset?.sort_order ?? 0
+    const prevStatuses = new Map(tasks.map(t => [t.id, t.status]))
+    // Optimistisk: nullstill denne og alle etter den med samme sub_type lokalt
+    setTasks(prev => prev.map(t => {
+      if (t.sub_type !== subType) return t
+      if (t.sort_order < sortOrder) return t
+      return { ...t, status: 'todo' }
+    }))
+    const resetCount = stepperTasks.filter(t => t.sub_type === subType && t.sort_order >= sortOrder && t.status === 'done').length
+```
+
+Replace with:
+
+```ts
+  async function handleGoBack(taskId: string) {
+    if (!selectedTask) return
+    setTogglingId(taskId)
+    setActionError(null)
+    const taskToReset = tasks.find(t => t.id === taskId)
+    const subType = taskToReset?.sub_type ?? null
+    const sortOrder = taskToReset?.sort_order ?? 0
+    const deliverableId = taskToReset?.deliverable_id ?? null
+    const prevStatuses = new Map(tasks.map(t => [t.id, t.status]))
+    // Optimistisk: nullstill denne og alle etter den med samme sub_type OG samme leveranse
+    // (eller delte steg som Ferdig) lokalt — speiler resetTaskAndSubsequent (lib/actions/pipeline.ts).
+    const matchesDeliverable = (t: Task) =>
+      deliverableId === null || t.deliverable_id === deliverableId || t.deliverable_id === null
+    setTasks(prev => prev.map(t => {
+      if (t.sub_type !== subType) return t
+      if (!matchesDeliverable(t)) return t
+      if (t.sort_order < sortOrder) return t
+      return { ...t, status: 'todo' }
+    }))
+    const resetCount = stepperTasks.filter(t => t.sub_type === subType && matchesDeliverable(t) && t.sort_order >= sortOrder && t.status === 'done').length
+```
+
+- [ ] **Step 10: `handleReject` — stay within the same deliverable's tab after rejecting**
+
+Find:
+
+```ts
+    const [newProjects, newTasks] = await Promise.all([
+      getPostProdProjects(),
+      getTasksForProject(projectId, 'post_prod'),
+    ])
+    setProjects(newProjects as PostProdProject[])
+    setTasks(newTasks)
+    initNotes(newTasks)
+    initTaskData(newTasks)
+    // Naviger til klipping-steget (sort_order 2 = index 1)
+    const klippingIdx = newTasks.findIndex(t => t.sort_order === 2)
+    const gotoIdx = klippingIdx >= 0 ? klippingIdx : 0
+    setSelectedIdx(gotoIdx)
+```
+
+Replace with:
+
+```ts
+    const rejectedDeliverableId = selectedTask?.deliverable_id ?? null
+    const [newProjects, newTasks] = await Promise.all([
+      getPostProdProjects(),
+      getTasksForProject(projectId, 'post_prod'),
+    ])
+    setProjects(newProjects as PostProdProject[])
+    setTasks(newTasks)
+    initNotes(newTasks)
+    initTaskData(newTasks)
+    // Naviger til klipping-steget (sort_order 2 = index 1) — innenfor samme leveranse som
+    // den avviste oppgaven tilhørte, slik at man ikke hopper til en annen video-fane.
+    const klippingIdx = newTasks.findIndex(t => t.sort_order === 2 && t.deliverable_id === rejectedDeliverableId)
+    const gotoIdx = klippingIdx >= 0 ? klippingIdx : 0
+    setSelectedIdx(gotoIdx)
+```
+
+- [ ] **Step 11: New tab-bar UI, rendered after the existing Film/Bilder tabs**
+
+Find:
+
+```tsx
+              </button>
+            </div>
+          )}
+
+          {/* Task stepper */}
+          {displayTasks.length > 0 && !reseeding && (
+```
+
+Replace with:
+
+```tsx
+              </button>
+            </div>
+          )}
+
+          {/* Video-leveranse-faner — nøstet under Film/Bilder-fanene for mixed-prosjekter.
+              Se docs/superpowers/specs/2026-07-27-signed-deliverables-postprod-design.md §7.2. */}
+          {hasVideoTabs && stepperTasks.length > 0 && !reseeding && (
+            <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${C.border}` }}>
+              {videoDeliverables.map(d => {
+                const tabTasks = (isMixed ? stepperTasks.filter(t => t.sub_type === 'video') : stepperTasks)
+                  .filter(t => t.deliverable_id === d.id)
+                const tabDone = tabTasks.filter(t => t.status === 'done').length
+                const tabTotal = tabTasks.length
+                const tabComplete = tabTotal > 0 && tabDone === tabTotal
+                const isActive = activeVideoDeliverableId === d.id
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => handleSwitchVideoTab(d.id)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: isActive ? 600 : 400,
+                      padding: '10px 20px', cursor: 'pointer', background: 'none',
+                      borderBottom: `2px solid ${isActive ? C.accent : 'transparent'}`,
+                      borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                      color: isActive ? C.text : C.text3,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      transition: 'color 0.15s',
+                    }}
+                  >
+                    {d.name}
+                    {tabTotal > 0 && (
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
+                        padding: '1px 6px', borderRadius: 10,
+                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'rgba(255,255,255,0.05)',
+                        color: tabComplete ? C.success : isActive ? C.accent : C.text3,
+                        border: `1px solid ${tabComplete ? 'rgba(76,175,125,0.25)' : isActive ? 'rgba(124,92,252,0.25)' : C.border}`,
+                      }}>
+                        {tabDone}/{tabTotal}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Task stepper */}
+          {displayTasks.length > 0 && !reseeding && (
+```
+
+- [ ] **Step 12: Typecheck**
+
+Run: `npx tsc --noEmit -p .`
+Expected: no errors.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add "app/admin/postprod/[id]/page.tsx"
+git commit -m "feat: add video-deliverable tabs to the post-prod stepper page"
+```
+
+---
+
+### Task 13: End-to-end verification (both post-prod pages)
+
+**Files:**
+- None (verification only).
+
+Supersedes the original Task 9 verification for the board — repeat it against the reseeded test
+project, then verify the stepper page too.
+
+- [ ] **Step 1: Confirm the test project is in a clean, correct state**
+
+```js
+// /tmp/verify-final.js
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617"
+  await sb.from("projects").update({ pipeline_stage: "pre_prod", project_type: "video", deliverables: [
+    { id: "e2e-1", type: "video", name: "E2E Hovedfilm" },
+    { id: "e2e-2", type: "video", name: "E2E Reel" },
+  ] }).eq("id", projectId)
+  await sb.from("tasks").delete().eq("project_id", projectId)
+  console.log("test project reset — next page load will reseed with the Task 10 fix")
+})()
+```
+
+Run it, then start the dev server: `npm run dev -- -p 3300` (kill anything already on that port first
+with `lsof -ti:3300 | xargs -r kill`).
+
+- [ ] **Step 2: Board — confirm the fix (this was the original Task 9, interrupted)**
+
+Ask Magnus to open `http://localhost:3300/admin/preprod/55c576d8-2735-4fd8-b81c-95c760872617`
+(note: **preprod**, not postprod) and confirm: "Video — Delt" section with Logging + Ferdig, tabs
+for "E2E Hovedfilm"/"E2E Reel", each showing Grovklipp/Klipp/Farger/Lyd/Venter på tilbakemelding
+independently. Drag a card between Delt and a tab, reload, confirm it stuck.
+
+- [ ] **Step 3: Stepper — confirm the new tabs**
+
+Ask Magnus to open `http://localhost:3300/admin/postprod/55c576d8-2735-4fd8-b81c-95c760872617` and
+confirm: a tab row reading "E2E Hovedfilm" / "E2E Reel" appears (below any Film/Bilder tabs, since
+this project isn't mixed there won't be any), each with its own `0/5` progress badge (the tab
+badge counts only that deliverable's own steps — Grovklipp/Klipp/Farger/Lyd/Venter på
+tilbakemelding — not the shared Logging/Ferdig, matching how the existing Film/Bilder tab badges
+already only count that sub_type's own tasks). The stepper itself shows a 7-step merged sequence
+per tab (Logging→Grovklipp→Klipp→Farger→Lyd→Venter på tilbakemelding→Ferdig) — NOT the old
+duplicated 12-step list.
+Advance a step in one tab, switch to the other tab, confirm its steps are unaffected. Click "Gå
+tilbake" on a step in one tab, confirm only that tab's later steps (and — once all tabs are done —
+Ferdig) reset, not the other tab's.
+
+- [ ] **Step 4: Clean up**
+
+```js
+// /tmp/cleanup-final.js
+const { createClient } = require("@supabase/supabase-js")
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async () => {
+  const projectId = "55c576d8-2735-4fd8-b81c-95c760872617"
+  await sb.from("tasks").delete().eq("project_id", projectId)
+  await sb.from("projects").delete().eq("id", projectId)
+  console.log("test project fully removed")
+})()
+```
+
+Kill the dev server: `lsof -ti:3300 | xargs -r kill`.
+
+- [ ] **Step 5: Final project-wide typecheck and lint**
+
+```bash
+npx tsc --noEmit -p .
+npx eslint lib/actions/pipeline.ts lib/types.ts "app/admin/postprod/[id]/page.tsx"
+```
+
+Expected: no tsc errors, no new eslint errors.
+
+- [ ] **Step 6: Hand off to final review**
+
+Once this passes, proceed to `superpowers:requesting-code-review`'s final whole-branch review
+(`scripts/review-package` against `git merge-base main HEAD`..`HEAD`), then
+`superpowers:finishing-a-development-branch`.

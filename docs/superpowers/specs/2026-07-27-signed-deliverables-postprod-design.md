@@ -162,3 +162,91 @@ funksjonen er driftsatt.
   opp de enkelte leveransene der kan vurderes senere.
 - Foto splittes aldri i egne faner (avklart med Magnus 2026-07-27) — kun video-typen har
   Delt+faner-logikken i §3.
+
+## 7. Addendum (2026-07-28) — `/admin/postprod/[id]` stepper-siden
+
+Oppdaget under egen-verifisering av Task 9: det finnes **to** sider som viser post-prod-oppgaver,
+og kun én (`PostProdBoard.tsx`, §3) ble oppdatert. Den andre, `app/admin/postprod/[id]/page.tsx` —
+en låst, lineær stepper («Steg 2 av 12») som brukes til å jobbe gjennom oppgavene i rekkefølge —
+leser oppgaver via `getTasksForProject` og har ingen kjennskap til `deliverable_id`. Med 2+
+video-leveranser viser den i dag en ødelagt, duplisert sekvens (Logging, Grovklipp, Grovklipp,
+Klipp, Klipp, Farger, Farger, Lyd, Lyd, Venter på tilbakemelding, Venter på tilbakemelding, Ferdig)
+— bekreftet med skjermbilde. Dette sto ikke i den opprinnelige spec-en fordi denne siden ikke ble
+oppdaget under research-fasen.
+
+Avklart med Magnus: stepper-siden skal få **samme fane-inndeling som brettet** — faner øverst
+(én per video), Logging/Ferdig vist én gang uansett hvilken fane som er valgt, og en egen lineær
+stepper (Grovklipp→Klipp→Farger→Lyd→Venter på tilbakemelding) per valgt fane.
+
+### 7.1 Sort_order-bug i `ensureVideoDeliverablesSeeded` (§2) — må fikses først
+
+`ensureVideoDeliverablesSeeded` seeder i dag med `sort_order: i + 1` beregnet **separat** for
+`sharedTemplates` og for hver leveranses `perDeliverableTemplates` — dvs. Logging=1, Ferdig=2
+(delt-settet har 2 rader), mens Grovklipp=1, Klipp=2, Farger=3, Lyd=4, Venter=5 (per-leveranse-
+settet har 5 rader) — **for hver leveranse uavhengig**. Dette gir overlappende `sort_order`-verdier
+på tvers av delt/per-leveranse (Ferdig=2 kolliderer med Klipp=2, osv.). Brettet (§3) rammes ikke —
+det sammenligner aldri `sort_order` på tvers av bøtter (Delt-lane og hver fane bygges hver for seg
+fra samme forhåndssorterte rekke). Stepper-siden derimot MÅ kunne slå sammen delt+valgt-leveranse
+til én virtuell sekvens sortert på `sort_order` (§7.2) — det krever at `sort_order` gjenspeiler den
+opprinnelige malrekkefølgen (Logging=1, Grovklipp=2, Klipp=3, Farger=4, Lyd=5,
+Venter på tilbakemelding=6, Ferdig=7) **likt for alle leveranser**, ikke gjenstartet per bøtte.
+
+**Fix:** bruk malens egen `sort_order`-verdi direkte (`t.sort_order`, allerede hentet i
+`scopedTemplates`-spørringen) i stedet for indeksbasert `i + 1`, i begge insert-blokkene.
+
+### 7.2 Stepper-siden: video-leveranse-faner
+
+`app/admin/postprod/[id]/page.tsx` har allerede et fane-konsept for `mixed`-prosjekter
+(`activeTab: 'video' | 'photo'`, filtrerer `stepperTasks` på `sub_type`). Video-leveranse-fanene
+er et **eget, nøstet** lag under dette — en `mixed`-prosjekt kan i prinsippet også ha 2+
+video-leveranser, og skal da vise video-leveranse-faner når «Film»-fanen er valgt.
+
+- Ny state: `activeVideoDeliverableId: string | null`, default til første leveranse (samme
+  mønster som `activeVideoTabId` i `PostProdBoard.tsx`).
+- `videoDeliverables = (currentProject?.deliverables ?? []).filter(d => d.type === 'video')`,
+  `hasVideoTabs = videoDeliverables.length >= 2`.
+- `displayTasks` (i dag: `isMixed ? stepperTasks.filter(sub_type===activeTab) : stepperTasks`)
+  filtreres i tillegg, når `hasVideoTabs`, til
+  `t.deliverable_id === null || t.deliverable_id === activeVideoDeliverableId` — og siden §7.1
+  retter opp `sort_order` til å være globalt konsistent, gir den vanlige
+  `.order('sort_order')`-sorteringen fra `getTasksForProject` automatisk riktig virtuell rekkefølge
+  (Logging→Grovklipp→Klipp→Farger→Lyd→Venter→Ferdig) uten egen sammenflettingslogikk.
+- Ny fane-rad (samme visuelle mønster som eksisterende Film/Bilder-faner, inkl. per-fane
+  fullført-telling) rendres når `hasVideoTabs` — under Film/Bilder-faner hvis `isMixed`, ellers på
+  samme sted disse ville stått.
+- `handleSwitchTab` får en søsterfunksjon `handleSwitchVideoTab(deliverableId)` med identisk
+  mønster (lagre notater/task_data for gjeldende valgt oppgave, sette ny aktiv fane, sette
+  `selectedIdx` via `getInitialIdx` på den nye `displayTasks`-listen).
+- `getInitialIdx`/`resolveDeepLinkIdx` utvides til også å sette `activeVideoDeliverableId` når en
+  deep-linket oppgave har en `deliverable_id`.
+- `StepItem`/selve stepper-rendringen (sirklene) trenger **ingen endring** — den er allerede
+  rent indeks-/listebasert og bryr seg ikke om hvor listen kommer fra.
+
+### 7.3 «Gå tilbake» / «Ikke godkjent» må skoperes på `deliverable_id`
+
+`resetTaskAndSubsequent` og `rejectFeedbackAndReset` (`lib/actions/pipeline.ts`) nullstiller i dag
+kun basert på `sub_type` + `sort_order >=/<=`. For et rent video-prosjekt med 2+ leveranser er
+`sub_type` `NULL` for **alle** video-oppgaver uansett leveranse — uten en tilleggsskopering ville
+«Gå tilbake» på ett steg i én fane feilaktig nullstille samme steg (og alt etter) i **alle** faner.
+
+**Fix (begge funksjoner):** hent også `deliverable_id` på oppgaven som nullstilles. Hvis den er
+`NULL` (en delt oppgave som Logging), nullstill alle oppgaver med `sort_order >=/<=` grensen,
+uavhengig av `deliverable_id` (delt-steg gjelder alle leveranser). Hvis den er satt (en
+per-leveranse-oppgave), nullstill kun oppgaver der `deliverable_id` er lik DENNE leveransen
+**eller** er `NULL` (delte steg som Ferdig skal fortsatt nullstilles — leveransen er ikke lenger
+ferdig hvis ett steg i den går tilbake), aldri andre leveransers oppgaver.
+
+Klientens optimistiske oppdatering i `handleGoBack` (samme fil, `page.tsx`) speiler i dag kun
+`sub_type`-filteret og må oppdateres identisk, ellers vil den optimistiske UI-oppdateringen vise
+feil resultat inntil neste refetch.
+
+### 7.4 Andre mindre ting
+
+- `Task`-typen (`lib/types.ts`) mangler `deliverable_id: string | null` — rådataene har den
+  allerede (kolonnen finnes, `getTasksForProject` bruker `select('*')`), men TypeScript kjenner
+  den ikke uten dette feltet.
+- `page.tsx` har allerede en **lokal** type kalt `DeliverableItem` (linje ~222, urelatert —
+  pitch-sidens gamle leveranse-liste, `{id?, title?, description?, quantity?, format?}`, brukt av
+  «Info om levering»-modalen). Importen av det nye `DeliverableItem` fra `lib/types.ts` MÅ
+  aliaseres (f.eks. `SignedDeliverableItem`) for å unngå navnekollisjon — de to er helt urelaterte
+  konsepter som tilfeldigvis heter det samme.

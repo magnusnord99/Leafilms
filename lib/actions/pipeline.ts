@@ -471,7 +471,7 @@ export async function reseedPostProdTasks(
 
     const { data: proj, error: projError } = await supabase
       .from('projects')
-      .select('project_type')
+      .select('project_type, deliverables')
       .eq('id', projectId)
       .single()
 
@@ -482,6 +482,12 @@ export async function reseedPostProdTasks(
     if (!proj.project_type) {
       return { count: 0, error: 'Innholdstype ikke satt på prosjektet' }
     }
+
+    // Samme mønster som getPostProdBoard: video-sporet seedes annerledes (delt +
+    // per-leveranse) når prosjektet har 2+ video-leveranser.
+    const deliverables = (proj.deliverables ?? []) as DeliverableItem[]
+    const videoDeliverables = deliverables.filter(d => d.type === 'video')
+    const hasVideoTabs = videoDeliverables.length >= 2
 
     const { data: existingTasks, error: existingError } = await supabase
       .from('tasks')
@@ -523,6 +529,25 @@ export async function reseedPostProdTasks(
 
     for (const subType of subTypeTracks) {
       const templateProjectType = proj.project_type === 'mixed' ? subType! : proj.project_type
+
+      // Video-sporet for prosjekter med 2+ video-leveranser følger en annen struktur
+      // (delt + per-leveranse-kort, samme sort_order gjenbrukt per leveranse) enn
+      // merge-baserte flate reseed-logikken under, som forutsetter én kort-per-tittel.
+      // ensureVideoDeliverablesSeeded er allerede idempotent og gjør riktig ting rett
+      // etter delete-steget over (ingen video-tasks igjen => seeder delt+per-leveranse ferskt).
+      //
+      // KJENT GAP: preserved (menneske-lagte "planlagte post-prod-steg" som normalt
+      // overlever en reseed via mergeReseededSequence/computeInsertionOrder) blir IKKE
+      // gjeninnsatt for video-sporet her, fordi ensureVideoDeliverablesSeeded kun kjenner
+      // det faste delt/per-leveranse-malsettet og ikke har noe konsept for hvilken
+      // leveranse et menneske-lagt planlagt steg tilhører. Dette er et bevisst,
+      // udefinert produktspørsmål (ikke en bug) — ingen prosjekt har foreløpig truffet
+      // denne kombinasjonen (2+ video-leveranser + preserved planlagte steg på videosporet).
+      const isVideoTrack = proj.project_type === 'mixed' ? subType === 'video' : proj.project_type === 'video'
+      if (isVideoTrack && hasVideoTabs) {
+        await ensureVideoDeliverablesSeeded(supabase, projectId, subType, videoDeliverables)
+        continue
+      }
 
       const { data: templates, error: templatesError } = await supabase
         .from('task_templates')

@@ -533,18 +533,28 @@ export async function reseedPostProdTasks(
       // Video-sporet for prosjekter med 2+ video-leveranser følger en annen struktur
       // (delt + per-leveranse-kort, samme sort_order gjenbrukt per leveranse) enn
       // merge-baserte flate reseed-logikken under, som forutsetter én kort-per-tittel.
-      // ensureVideoDeliverablesSeeded er allerede idempotent og gjør riktig ting rett
-      // etter delete-steget over (ingen video-tasks igjen => seeder delt+per-leveranse ferskt).
-      //
-      // KJENT GAP: preserved (menneske-lagte "planlagte post-prod-steg" som normalt
-      // overlever en reseed via mergeReseededSequence/computeInsertionOrder) blir IKKE
-      // gjeninnsatt for video-sporet her, fordi ensureVideoDeliverablesSeeded kun kjenner
-      // det faste delt/per-leveranse-malsettet og ikke har noe konsept for hvilken
-      // leveranse et menneske-lagt planlagt steg tilhører. Dette er et bevisst,
-      // udefinert produktspørsmål (ikke en bug) — ingen prosjekt har foreløpig truffet
-      // denne kombinasjonen (2+ video-leveranser + preserved planlagte steg på videosporet).
+      // ensureVideoDeliverablesSeeded er allerede idempotent — MEN kun hvis den faktisk
+      // ser null video-tasks der den forventer en tom tavle. Preserved planlagte steg
+      // (menneske-lagte, som normalt overlever en reseed via
+      // mergeReseededSequence/computeInsertionOrder) har ingen definert plass i
+      // delt/per-leveranse-strukturen, OG hvis de blir liggende narrer de
+      // ensureVideoDeliverablesSeededs "er dette allerede seedet?"-sjekk — den ser det
+      // gjenværende kortet, tror delt-stegene (Logging/Ferdig) alt finnes og hopper over
+      // å seede dem, og 1→2-overgangslogikken kan i tillegg feilaktig kreve én leveranse
+      // «ferdig seedet» uten at den er det. Derfor slettes preserved video-steg her, som
+      // del av den samme fulle nullstillingen «Nullstill»-knappen allerede advarer om
+      // («Fremdrift, notater og chat-meldinger går tapt») — videosporet i
+      // 2+-leveranse-tilfellet blir en ekte blank tavle før seeding.
       const isVideoTrack = proj.project_type === 'mixed' ? subType === 'video' : proj.project_type === 'video'
       if (isVideoTrack && hasVideoTabs) {
+        const preservedVideoIds = preserved.filter(p => p.subType === subType).map(p => p.id as string)
+        if (preservedVideoIds.length > 0) {
+          const { error: deletePreservedError } = await supabase.from('tasks').delete().in('id', preservedVideoIds)
+          if (deletePreservedError) {
+            console.error('reseedPostProdTasks delete preserved video error:', deletePreservedError)
+            return { count: 0, error: 'Kunne ikke slette gamle videooppgaver' }
+          }
+        }
         await ensureVideoDeliverablesSeeded(supabase, projectId, subType, videoDeliverables)
         continue
       }

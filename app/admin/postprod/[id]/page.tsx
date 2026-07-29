@@ -674,8 +674,8 @@ export default function PostProdDetailPage() {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 48px)', overflow: 'hidden', background: C.bg }}>
 
-      {/* Sidebar */}
-      <aside style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.sidebar, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      {/* Sidebar — kun prosjekt-bytter; "Alle →"-lenken gir samme lav-risiko tilgang på mobil */}
+      <aside className="hidden md:flex" style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.sidebar, flexDirection: 'column', overflowY: 'auto' }}>
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Post-prod

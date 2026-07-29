@@ -163,7 +163,8 @@ function CashflowSection({
           </p>
         </div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
               {(['Prosjekt', 'Kunde', 'Stadium', 'Beløp eks. MVA'] as const).map((h, i) => (
@@ -215,6 +216,7 @@ function CashflowSection({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

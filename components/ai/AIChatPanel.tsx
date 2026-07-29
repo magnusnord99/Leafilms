@@ -86,7 +86,7 @@ export function AIChatPanel({ onClose }: Props) {
         position: 'fixed',
         bottom: 68,
         right: 20,
-        width: 360,
+        width: 'min(360px, calc(100vw - 40px))',
         maxHeight: 520,
         display: 'flex',
         flexDirection: 'column',

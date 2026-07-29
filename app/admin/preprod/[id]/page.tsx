@@ -307,7 +307,7 @@ function PackedToggle({ packed, onToggle }: { packed: boolean; onToggle: () => v
       onClick={onToggle}
       title={packed ? 'Merk som ikke pakket' : 'Merk som pakket'}
       style={{
-        width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+        width: 22, height: 22, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
         background: packed ? 'rgba(76,175,125,0.2)' : 'transparent',
         border: `1.5px solid ${packed ? C.success : C.text3}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
@@ -1197,7 +1197,7 @@ export default function PreprodDetailPage() {
         </div>
 
         {/* Main layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px]" style={{ gap: 20, alignItems: 'start' }}>
 
           {/* Left: Oppgaver + Fordeling */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

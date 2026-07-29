@@ -141,7 +141,7 @@ export function HeroSection({
     <header
       ref={headerRef}
       onClick={hasVideo ? undefined : (editMode ? handleBackgroundClick : undefined)}
-      className={`relative min-h-screen flex items-end justify-start overflow-hidden ${
+      className={`relative min-h-dvh flex items-end justify-start overflow-hidden ${
         editMode && !hasVideo ? 'cursor-pointer' : ''
       }`}
       style={{ background: '#0C0B09' }}

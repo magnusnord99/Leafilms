@@ -47,7 +47,8 @@ export default async function SelectionsOverviewPage() {
           </div>
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                   {['Prosjekt', 'Galleri', 'Album', 'Valgt', 'Innsendt'].map(h => (
@@ -102,6 +103,7 @@ export default async function SelectionsOverviewPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
@@ -114,7 +116,8 @@ export default async function SelectionsOverviewPage() {
               Ikke knyttet til noe prosjekt
             </p>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     {['Galleri', 'Status', 'Album', 'Valgt', 'Opprettet'].map(h => (
@@ -150,6 +153,7 @@ export default async function SelectionsOverviewPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           </>
         )}

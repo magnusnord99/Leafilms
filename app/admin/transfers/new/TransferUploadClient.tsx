@@ -423,7 +423,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24, alignItems: 'start' }}>
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_380px]" style={{ gap: 24, alignItems: 'start' }}>
 
       {/* Venstre: Upload-sone */}
       <div>

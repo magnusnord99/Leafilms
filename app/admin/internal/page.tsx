@@ -140,7 +140,7 @@ function TaskRow({
       <button
         onClick={onStatusChange}
         style={{
-          flexShrink: 0, width: 20, height: 20, borderRadius: 5, cursor: 'pointer', padding: 0,
+          flexShrink: 0, width: 24, height: 24, borderRadius: 5, cursor: 'pointer', padding: 0,
           background: task.status === 'done' ? 'rgba(76,175,125,0.18)' : task.status === 'in_progress' ? 'rgba(240,165,0,0.12)' : 'transparent',
           border: `1.5px solid ${STATUS_COLOR[task.status]}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s',

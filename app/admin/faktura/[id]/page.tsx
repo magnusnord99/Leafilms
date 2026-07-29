@@ -147,7 +147,7 @@ export default function FakturaPage() {
               onClick={handleMarkDone}
               disabled={marking}
               style={{
-                width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: taskDone ? 'default' : 'pointer',
+                width: 26, height: 26, borderRadius: 6, flexShrink: 0, cursor: taskDone ? 'default' : 'pointer',
                 background: taskDone ? C.success : 'transparent',
                 border: `2px solid ${taskDone ? C.success : C.border}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',

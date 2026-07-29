@@ -373,7 +373,7 @@ export default function ContractSigningSection({
                     padding: '0.65rem 0.9rem',
                     color: '#E8E1D5',
                     fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.85rem',
+                    fontSize: '1rem',
                     outline: 'none',
                     width: '100%',
                     boxSizing: 'border-box',
@@ -407,7 +407,7 @@ export default function ContractSigningSection({
                     padding: '0.65rem 0.9rem',
                     color: '#E8E1D5',
                     fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '0.85rem',
+                    fontSize: '1rem',
                     outline: 'none',
                     width: '100%',
                     boxSizing: 'border-box',
@@ -450,7 +450,7 @@ export default function ContractSigningSection({
                         value={invoiceCompany}
                         onChange={(e) => setInvoiceCompany(e.target.value)}
                         placeholder={t.invoiceCompanyPlaceholder}
-                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
 
@@ -464,7 +464,7 @@ export default function ContractSigningSection({
                         value={invoiceOrgNummer}
                         onChange={(e) => setInvoiceOrgNummer(e.target.value)}
                         placeholder={t.invoiceOrgNummerPlaceholder}
-                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
 
@@ -478,7 +478,7 @@ export default function ContractSigningSection({
                         onChange={(e) => setInvoiceAddress(e.target.value)}
                         placeholder={t.invoiceAddressPlaceholder}
                         rows={2}
-                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
                       />
                     </div>
 
@@ -492,7 +492,7 @@ export default function ContractSigningSection({
                         value={invoiceEmail}
                         onChange={(e) => setInvoiceEmail(e.target.value)}
                         placeholder={t.invoiceEmailPlaceholder}
-                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
 
@@ -506,7 +506,7 @@ export default function ContractSigningSection({
                         value={invoiceReference}
                         onChange={(e) => setInvoiceReference(e.target.value)}
                         placeholder={t.invoiceReferencePlaceholder}
-                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                        style={{ background: '#201D18', border: '1px solid #2A261F', padding: '0.65rem 0.9rem', color: '#E8E1D5', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
                   </>

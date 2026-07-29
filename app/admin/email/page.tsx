@@ -297,7 +297,7 @@ export default function EmailCrmPage() {
             {needsFollowUp.length > 0 && (
               <section>
                 <SectionHeader title="Trenger oppfølging" count={needsFollowUp.length} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(400px, 100%), 1fr))', gap: 6 }}>
                   {needsFollowUp.map(s => (
                     <ProjectRow key={s.project.id} summary={s} />
                   ))}
@@ -309,7 +309,7 @@ export default function EmailCrmPage() {
             {sentRecently.length > 0 && (
               <section>
                 <SectionHeader title="Sendt nylig" count={sentRecently.length} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(400px, 100%), 1fr))', gap: 6 }}>
                   {sentRecently.map(s => (
                     <ProjectRow key={s.project.id} summary={s} />
                   ))}

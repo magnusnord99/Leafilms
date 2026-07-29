@@ -96,7 +96,7 @@ export default function ProduksjonPage() {
           {info.title}
         </h1>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'start' }}>
+        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr]" style={{ gap: 20, alignItems: 'start' }}>
           {/* Nøkkelinfo */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 20px' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>

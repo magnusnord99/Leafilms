@@ -30,14 +30,17 @@ export function ProjectNav({ projectId, projectTitle, customerName, activeTab }:
     >
       {/* Toprad: tilbake-lenke + kontekst-tittel */}
       <div
+        className="px-4 md:px-8"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '16px 32px 12px',
+          gap: 12,
+          paddingTop: 16,
+          paddingBottom: 12,
         }}
       >
-        <Link href="/admin/pitches" style={{ textDecoration: 'none' }}>
+        <Link href="/admin/pitches" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span
             style={{
               fontFamily: 'var(--font-dm-sans)',
@@ -68,8 +71,8 @@ export function ProjectNav({ projectId, projectTitle, customerName, activeTab }:
           </span>
         </Link>
 
-        {/* Kundenavn · Prosjekttittel */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Kundenavn · Prosjekttittel — trunkeres i stedet for å presse siden bredere på mobil */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
           {customerName && (
             <>
               <span
@@ -78,11 +81,13 @@ export function ProjectNav({ projectId, projectTitle, customerName, activeTab }:
                   fontSize: '0.6rem',
                   letterSpacing: '0.06em',
                   color: '#62594E',
+                  flexShrink: 0,
                 }}
+                className="hidden sm:inline"
               >
                 {customerName}
               </span>
-              <span style={{ color: '#38332A', fontSize: '0.55rem' }}>·</span>
+              <span style={{ color: '#38332A', fontSize: '0.55rem', flexShrink: 0 }} className="hidden sm:inline">·</span>
             </>
           )}
           <span
@@ -91,6 +96,9 @@ export function ProjectNav({ projectId, projectTitle, customerName, activeTab }:
               fontSize: '0.6rem',
               letterSpacing: '0.06em',
               color: '#E8E1D5',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
             {projectTitle}
@@ -98,12 +106,14 @@ export function ProjectNav({ projectId, projectTitle, customerName, activeTab }:
         </div>
       </div>
 
-      {/* Tabrad */}
+      {/* Tabrad — scroller horisontalt på mobil i stedet for å overflowe siden */}
       <div
+        className="px-4 md:px-8"
         style={{
           display: 'flex',
           gap: 0,
-          padding: '0 32px',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         {TABS.map((tab) => {

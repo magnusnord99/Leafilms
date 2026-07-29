@@ -119,7 +119,7 @@ export function FeedbackButton() {
           <div
             style={{
               background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: 12, padding: 20, width: 320,
+              borderRadius: 12, padding: 20, width: 'min(320px, calc(100vw - 40px))',
               boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             }}
             onClick={e => e.stopPropagation()}

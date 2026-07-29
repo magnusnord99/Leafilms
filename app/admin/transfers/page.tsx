@@ -132,7 +132,8 @@ export default async function TransfersPage() {
           </div>
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                   {['Fil', 'Mottaker', 'Størrelse', 'Nedlastinger', 'Utløper', 'Status', ''].map(h => (
@@ -225,6 +226,7 @@ export default async function TransfersPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>

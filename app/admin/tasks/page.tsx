@@ -127,7 +127,7 @@ function TaskRow({ task, onStatusChange, onSettled }: {
         aria-label={isDone ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
         style={{
           flexShrink: 0,
-          width: 20, height: 20,
+          width: 24, height: 24,
           borderRadius: 5,
           border: `2px solid ${isDone ? C.success : C.border}`,
           background: isDone ? C.success : 'transparent',
@@ -277,7 +277,11 @@ function PlanRow({ item, onToggle, onRemove }: {
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
-      <span {...attributes} {...listeners} title="Dra for å endre rekkefølge" style={{ cursor: 'grab', color: C.text3, flexShrink: 0, lineHeight: 0 }}>
+      <span
+        {...attributes} {...listeners}
+        title="Dra for å endre rekkefølge"
+        style={{ cursor: 'grab', color: C.text3, flexShrink: 0, lineHeight: 0, padding: 10, margin: -10, touchAction: 'none' }}
+      >
         <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
           <circle cx="2.5" cy="2.5" r="1.3" /><circle cx="7.5" cy="2.5" r="1.3" />
           <circle cx="2.5" cy="7" r="1.3" /><circle cx="7.5" cy="7" r="1.3" />
@@ -291,7 +295,7 @@ function PlanRow({ item, onToggle, onRemove }: {
         title={locked ? `Venter på «${blockedByTitle ?? 'forrige steg'}»` : undefined}
         aria-label={done ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
         style={{
-          flexShrink: 0, width: 19, height: 19, borderRadius: 5,
+          flexShrink: 0, width: 24, height: 24, borderRadius: 5,
           border: `2px solid ${done ? C.success : C.border}`,
           background: done ? C.success : 'transparent',
           cursor: locked ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -369,7 +373,7 @@ function TaskPicker({ candidates, onPick, onClose }: {
 
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, width: 320, maxHeight: 280, overflowY: 'auto',
+      position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, width: 'min(320px, calc(100vw - 32px))', maxHeight: 280, overflowY: 'auto',
       background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: 4,
     }}>
       {candidates.length === 0 ? (
@@ -662,7 +666,7 @@ export default function MyTasksPage() {
         <DailyPlanPanel myTasks={tasks} onTaskStatusChange={handleStatusChange} onTaskStatusSettled={refreshTasks} />
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
+        <div className="grid grid-cols-2 md:grid-cols-4" style={{ gap: 10, marginBottom: 28 }}>
           {stats.map(s => (
             <div key={s.label} style={{
               background: C.surface,

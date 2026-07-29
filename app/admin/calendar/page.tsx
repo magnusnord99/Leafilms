@@ -231,7 +231,7 @@ export default function CalendarPage() {
   const postProdTasks = tasks.filter(t => t.pipelineStage === 'post_prod').length
 
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', padding: '28px 32px 48px', color: C.text }}>
+    <div className="px-4 md:px-8" style={{ background: C.bg, minHeight: '100vh', paddingTop: 28, paddingBottom: 48, color: C.text }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         {/* Header */}
@@ -312,6 +312,10 @@ export default function CalendarPage() {
           </div>
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+            {/* Scroller — på mobil crusher et fast 7-kolonners rutenett til uleselige striper,
+                så vi lar det heller beholde en lesbar min-bredde og scrolle horisontalt der. */}
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 630 }}>
             {/* Day headers */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${C.border}` }}>
               {DAYS_NO.map(d => (
@@ -380,7 +384,7 @@ export default function CalendarPage() {
                                 ? `1px dashed ${ev.color}`
                                 : `1px solid ${ev.color}30`,
                               borderRadius: 4,
-                              padding: '2px 5px',
+                              padding: '4px 6px',
                               display: 'flex', alignItems: 'center', gap: 4,
                               cursor: 'pointer',
                               transition: 'opacity 0.1s',
@@ -423,6 +427,8 @@ export default function CalendarPage() {
                   </div>
                 )
               })}
+            </div>
+            </div>
             </div>
           </div>
         )}
@@ -492,7 +498,7 @@ function BookingModal({ colleagues, onClose, onCreated }: {
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 420, display: 'flex', flexDirection: 'column', gap: 12 }}
+        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 'min(420px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}
       >
         <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>Nytt møte</h2>
 
@@ -588,7 +594,7 @@ function MeetingDetailModal({ meeting, currentUserId, onClose, onChanged }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 'min(420px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>{meeting.title}</h2>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginTop: 2 }}>

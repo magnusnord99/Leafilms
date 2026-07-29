@@ -73,7 +73,7 @@ function KontraktWarningModal({
       onClick={onCancel}
     >
       <div
-        style={{ background: C.surface, border: `1px solid rgba(240,165,0,0.3)`, borderRadius: 10, padding: '24px 28px', width: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+        style={{ background: C.surface, border: `1px solid rgba(240,165,0,0.3)`, borderRadius: 10, padding: '24px 28px', width: 'min(360px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -131,7 +131,7 @@ function TilbudAssignModal({
       onClick={onCancel}
     >
       <div
-        style={{ background: C.surface, border: `1px solid rgba(124,92,252,0.5)`, borderRadius: 12, padding: '24px 28px', width: 380, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
+        style={{ background: C.surface, border: `1px solid rgba(124,92,252,0.5)`, borderRadius: 12, padding: '24px 28px', width: 'min(380px, calc(100vw - 32px))', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}
       >
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text, marginBottom: 6 }}>
@@ -199,7 +199,7 @@ function ResaleAssignModal({
       onClick={onCancel}
     >
       <div
-        style={{ background: C.surface, border: `1px solid rgba(124,92,252,0.5)`, borderRadius: 12, padding: '24px 28px', width: 380, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
+        style={{ background: C.surface, border: `1px solid rgba(124,92,252,0.5)`, borderRadius: 12, padding: '24px 28px', width: 'min(380px, calc(100vw - 32px))', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}
       >
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text, marginBottom: 6 }}>
@@ -261,7 +261,7 @@ function TypeModal({
       onClick={onCancel}
     >
       <div
-        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '24px 28px', width: 320, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '24px 28px', width: 'min(320px, calc(100vw - 32px))', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}
       >
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>
@@ -884,15 +884,16 @@ function DraggableCard({
               {project.title}
             </Link>
           )}
-          <svg
+          <span
             {...(isDragOverlay ? {} : { ...attributes, ...listeners })}
-            width="12" height="12" viewBox="0 0 12 12" fill="none"
-            style={{ flexShrink: 0, marginTop: 2, opacity: 0.35, cursor: isDragOverlay ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' }}
+            style={{ flexShrink: 0, padding: 9, margin: -9, marginTop: -7, lineHeight: 0, display: 'inline-flex', cursor: isDragOverlay ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' }}
           >
-            <circle cx="4" cy="3" r="1" fill={C.text2} /><circle cx="8" cy="3" r="1" fill={C.text2} />
-            <circle cx="4" cy="6" r="1" fill={C.text2} /><circle cx="8" cy="6" r="1" fill={C.text2} />
-            <circle cx="4" cy="9" r="1" fill={C.text2} /><circle cx="8" cy="9" r="1" fill={C.text2} />
-          </svg>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.35 }}>
+              <circle cx="4" cy="3" r="1" fill={C.text2} /><circle cx="8" cy="3" r="1" fill={C.text2} />
+              <circle cx="4" cy="6" r="1" fill={C.text2} /><circle cx="8" cy="6" r="1" fill={C.text2} />
+              <circle cx="4" cy="9" r="1" fill={C.text2} /><circle cx="8" cy="9" r="1" fill={C.text2} />
+            </svg>
+          </span>
         </div>
         {project.customer && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 2 }}>

@@ -164,8 +164,11 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 48px)', background: C.bg }}>
-      {/* Samtaleliste */}
-      <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
+      {/* Samtaleliste — full bredde på mobil (skjules når en samtale er åpnet), fast 280px på desktop */}
+      <div
+        className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-[280px] flex-shrink-0`}
+        style={{ borderRight: `1px solid ${C.border}` }}
+      >
         <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}` }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Meldinger
@@ -276,8 +279,8 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         </div>
       </div>
 
-      {/* Tråd */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {/* Tråd — skjult på mobil til en samtale er valgt */}
+      <div className={`${selected ? 'flex' : 'hidden md:flex'} flex-col flex-1`} style={{ minWidth: 0 }}>
         {!selected ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>
@@ -287,6 +290,17 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         ) : (
           <>
             <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="md:hidden"
+                aria-label="Tilbake til samtaler"
+                style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', lineHeight: 0 }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 3.5L5.5 9l5.5 5.5" />
+                </svg>
+              </button>
               <span style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(selected.otherParticipant), color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700,

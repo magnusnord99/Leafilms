@@ -244,21 +244,15 @@ export function TimelineSection({
   }
 
   return (
-    // Outer tall div — gives the scroll room needed for the animation.
-    // The sticky inner content stays fixed while user scrolls through this space.
+    // Outer tall div — gives the scroll room needed for the desktop scroll-jack animation.
+    // Below lg the section is a static card + prev/next carousel, so it doesn't need the
+    // extra scroll room — a 280vh spacer there would just be ~7 empty screens to scroll past.
     <div
       ref={timelineSectionRef}
-      style={{ position: 'relative', height: '280vh' }}
+      className="relative lg:h-[280vh]"
     >
-      {/* Sticky viewport — stays fixed while parent scrolls */}
-      <div style={{
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
+      {/* Sticky viewport — stays fixed while parent scrolls (desktop only) */}
+      <div className="flex flex-col justify-center py-16 lg:py-0 lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden" style={{
         paddingTop: 'env(safe-area-inset-top)',
       }}>
         {/*

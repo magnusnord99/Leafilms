@@ -19,6 +19,7 @@ import type { AdminSelectionPageData, AlbumWithImages } from '@/lib/actions/sele
 import { requestGalleryReview, getGalleryReviewHistory } from '@/lib/actions/gallery-reviews'
 import type { GalleryReview } from '@/lib/types'
 import { getAllProfiles } from '@/lib/actions/pipeline'
+import { useGridZoom } from '@/hooks/useGridZoom'
 import { C } from '@/lib/admin-theme'
 
 // ---------------------------------------------------------------------------
@@ -665,6 +666,9 @@ function AlbumDetailPanel({
   const [newSubAlbumName, setNewSubAlbumName] = useState('')
   const [addingSubAlbum, setAddingSubAlbum] = useState(false)
 
+  // Bildestørrelse i grid-en — delt innstilling med kundesidens galleri (samme hook/localStorage-nøkkel)
+  const [gridZoom, setGridZoom] = useGridZoom()
+
   // Velg-modus og bildeflytting
   const [selectMode, setSelectMode] = useState(false)
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set())
@@ -889,6 +893,23 @@ function AlbumDetailPanel({
         </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Bildestørrelse */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: '0.68rem', color: C.text3, userSelect: 'none' }}>－</span>
+            <input
+              type="range"
+              min={100}
+              max={260}
+              step={10}
+              value={gridZoom}
+              onChange={e => setGridZoom(Number(e.target.value))}
+              style={{ width: 90, accentColor: C.accent, cursor: 'pointer' }}
+              aria-label="Bildestørrelse"
+              title="Bildestørrelse"
+            />
+            <span style={{ fontSize: '0.68rem', color: C.text3, userSelect: 'none' }}>＋</span>
+          </div>
+
           {/* Slett alle bilder */}
           {album.images.length > 0 && !selectMode && (
             <button
@@ -1073,7 +1094,7 @@ function AlbumDetailPanel({
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridZoom}px, 1fr))`, gap: 6 }}>
           {album.images.map((img, idx) => {
             const isSelected = selectedImageIds.has(img.id)
             return (

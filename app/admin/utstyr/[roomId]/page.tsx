@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
-  getRoomDetail, deleteRoom, addEquipmentUnits, checkOutUnits, returnUnits, setRoomOwner, cancelReservation,
-  RoomDetail, EquipmentUnitRow, CheckedOutUnitRow, BookingConflict,
+  getRoomDetail, getRooms, deleteRoom, addEquipmentUnits, checkOutUnits, returnUnits, setRoomOwner, cancelReservation,
+  RoomDetail, EquipmentRoom, EquipmentUnitRow, CheckedOutUnitRow, BookingConflict,
 } from '@/lib/actions/equipment'
 import { EQUIPMENT_CATEGORY_LABELS } from '@/lib/equipment-constants'
 import EquipmentPickerPanel from '@/components/admin/EquipmentPickerPanel'
@@ -117,9 +117,11 @@ export default function RoomDetailPage() {
   const lockedProjectId = searchParams.get('project') ?? ''
 
   const [detail, setDetail] = useState<RoomDetail | null>(null)
+  const [allRooms, setAllRooms] = useState<EquipmentRoom[]>([])
   const [loading, setLoading] = useState(true)
   const [targetProjectId, setTargetProjectId] = useState(lockedProjectId)
   const [selectedInRoom, setSelectedInRoom] = useState<Set<string>>(new Set())
+  const [moveTargetRoomId, setMoveTargetRoomId] = useState('')
   const [selectedCheckedOut, setSelectedCheckedOut] = useState<Set<string>>(new Set())
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [checkoutConflicts, setCheckoutConflicts] = useState<BookingConflict[] | null>(null)
@@ -136,6 +138,7 @@ export default function RoomDetailPage() {
       setDetail(data)
       setLoading(false)
     })
+    getRooms().then(setAllRooms)
   }, [roomId])
 
   useEffect(() => { load() }, [load])
@@ -172,6 +175,17 @@ export default function RoomDetailPage() {
     setSelectedInRoom(new Set())
     load()
     setPanelRefreshTick(t => t + 1)
+  }
+
+  async function handleMove() {
+    if (selectedInRoom.size === 0 || !moveTargetRoomId) return
+    setBusy(true)
+    await returnUnits(Array.from(selectedInRoom), moveTargetRoomId)
+    setSelectedInRoom(new Set())
+    setMoveTargetRoomId('')
+    load()
+    setPanelRefreshTick(t => t + 1)
+    setBusy(false)
   }
 
   async function handleCancelReservation(unitId: string, projectId: string) {
@@ -550,20 +564,50 @@ export default function RoomDetailPage() {
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                 {selectedInRoom.size} valgt
               </span>
-              <button
-                onClick={handleCheckOut}
-                disabled={!targetProjectId || busy}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
-                  padding: '7px 12px', borderRadius: 6,
-                  cursor: targetProjectId ? 'pointer' : 'not-allowed',
-                  background: targetProjectId ? C.accentBg : 'transparent',
-                  color: targetProjectId ? C.accent : C.text3,
-                  border: `1px solid ${targetProjectId ? 'rgba(124,92,252,0.25)' : C.border}`,
-                }}
-              >
-                {targetProjectId ? `Reserver ${selectedInRoom.size} til «${targetProjectTitle}»` : 'Velg mål-shoot først'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <select
+                  value={moveTargetRoomId}
+                  onChange={e => setMoveTargetRoomId(e.target.value)}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
+                    color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
+                    borderRadius: 6, padding: '7px 8px', outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <option value="">Flytt til rom...</option>
+                  {allRooms.filter(r => r.id !== roomId).map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleMove}
+                  disabled={!moveTargetRoomId || busy}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                    padding: '7px 12px', borderRadius: 6,
+                    cursor: moveTargetRoomId ? 'pointer' : 'not-allowed',
+                    background: moveTargetRoomId ? C.accentBg : 'transparent',
+                    color: moveTargetRoomId ? C.accent : C.text3,
+                    border: `1px solid ${moveTargetRoomId ? 'rgba(124,92,252,0.25)' : C.border}`,
+                  }}
+                >
+                  Flytt
+                </button>
+                <button
+                  onClick={handleCheckOut}
+                  disabled={!targetProjectId || busy}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                    padding: '7px 12px', borderRadius: 6,
+                    cursor: targetProjectId ? 'pointer' : 'not-allowed',
+                    background: targetProjectId ? C.accentBg : 'transparent',
+                    color: targetProjectId ? C.accent : C.text3,
+                    border: `1px solid ${targetProjectId ? 'rgba(124,92,252,0.25)' : C.border}`,
+                  }}
+                >
+                  {targetProjectId ? `Reserver ${selectedInRoom.size} til «${targetProjectTitle}»` : 'Velg mål-shoot først'}
+                </button>
+              </div>
             </div>
           )}
 

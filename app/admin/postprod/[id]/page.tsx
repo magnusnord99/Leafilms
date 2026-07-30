@@ -1464,7 +1464,17 @@ export default function PostProdDetailPage() {
               {/* Task links */}
               {(() => {
                 const linkFields = TASK_LINK_FIELDS[selectedTask.title] ?? []
-                if (linkFields.length === 0) return null
+                // Lenker fra tidligere steg i pipelinen (f.eks. filemail-linken fra
+                // Logging) — vises videre gjennom hele flyten som read-only referanser,
+                // slik at den som klipper ikke må hoppe tilbake til et tidligere steg.
+                const priorLinks = displayTasks.slice(0, selectedIdx).flatMap(t => {
+                  const fields = TASK_LINK_FIELDS[t.title] ?? []
+                  const data = (t.task_data as Record<string, string> | null) ?? {}
+                  return fields
+                    .filter(f => data[f.key])
+                    .map(f => ({ stageTitle: t.title, label: f.label, value: data[f.key] }))
+                })
+                if (linkFields.length === 0 && priorLinks.length === 0) return null
                 const currentData = taskData[selectedTask.id] ?? {}
                 return (
                   <div style={{ marginBottom: 24 }}>
@@ -1476,6 +1486,30 @@ export default function PostProdDetailPage() {
                         {taskDataSaving ? 'Lagrer...' : taskDataSaved ? 'Lagret ✓' : ''}
                       </span>
                     </div>
+                    {priorLinks.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: linkFields.length > 0 ? 14 : 0 }}>
+                        {priorLinks.map((pl, i) => (
+                          <a
+                            key={`${pl.stageTitle}-${i}`}
+                            href={pl.value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={pl.label}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+                              color: C.text2, textDecoration: 'none',
+                              padding: '6px 10px', borderRadius: 6,
+                              background: C.surface, border: `1px solid ${C.border}`,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <span style={{ color: C.text3, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{pl.stageTitle}</span>
+                            {pl.label} ↗
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {linkFields.map(field => {
                       const val = currentData[field.key] ?? ''
                       return (

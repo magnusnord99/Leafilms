@@ -9,6 +9,7 @@ import {
 } from '@/lib/actions/notifications'
 import { toggleReaction, type MessageType } from '@/lib/actions/reactions'
 import { respondToMeetingInvite } from '@/lib/actions/meetings'
+import { PushNotificationToggle } from '@/components/admin/PushNotificationToggle'
 import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
@@ -277,23 +278,26 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               Varsler
             </h1>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {readCount > 0 && (
-              <button
-                onClick={handleDeleteRead}
-                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
-              >
-                Fjern alle leste
-              </button>
-            )}
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAll}
-                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
-              >
-                Merk alle som lest
-              </button>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <PushNotificationToggle />
+            <div style={{ display: 'flex', gap: 8 }}>
+              {readCount > 0 && (
+                <button
+                  onClick={handleDeleteRead}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Fjern alle leste
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAll}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Merk alle som lest
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

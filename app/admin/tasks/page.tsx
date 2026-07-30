@@ -605,15 +605,19 @@ export default function MyTasksPage() {
   }
 
   const totalCount = tasks.length
-  const activeCount = tasks.filter(t => t.status !== 'done').length
+  const activeCount = tasks.filter(t => t.status !== 'done' && !t.locked).length
   const doneCount = tasks.filter(t => t.status === 'done').length
   const overdueCount = tasks.filter(t => isOverdue(t.due_date) && t.status !== 'done').length
 
   const filtered = tasks.filter(t => {
-    if (filter === 'active') return t.status !== 'done'
+    if (filter === 'active') return t.status !== 'done' && !t.locked
     if (filter === 'done') return t.status === 'done'
     return true
   }).sort((a, b) => {
+    // Åpne oppgaver først, låste ("venter på ...") sist — uansett forfallsdato
+    const aLocked = a.locked ? 1 : 0
+    const bLocked = b.locked ? 1 : 0
+    if (aLocked !== bLocked) return aLocked - bLocked
     // Sort: overdue first, then by due_date, then by sort_order
     const aOverdue = isOverdue(a.due_date) && a.status !== 'done' ? 0 : 1
     const bOverdue = isOverdue(b.due_date) && b.status !== 'done' ? 0 : 1

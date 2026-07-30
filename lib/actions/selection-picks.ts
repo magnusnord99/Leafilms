@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { SelectionAlbum } from './selection-albums'
 import { getAlbumVideos } from './video-reviews'
-import type { GalleryVideo } from './selections'
+import { getCommentsForImages, type GalleryVideo, type ImageComment } from './selections'
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIGNED_URL_EXPIRY = 60 * 60 * 2
@@ -15,7 +15,6 @@ export type SelectionAlbumPick = {
   image_id: string
   selected: boolean
   selected_at: string | null
-  comment: string | null
 }
 
 export type AlbumImageWithPick = {
@@ -25,6 +24,7 @@ export type AlbumImageWithPick = {
   sort_order: number
   album_id: string | null
   signedUrl: string
+  comments: ImageComment[]
   pick: SelectionAlbumPick | null
 }
 
@@ -79,7 +79,7 @@ export async function albumTokenExists(token: string): Promise<boolean> {
 
 export async function getAlbumForCustomer(
   albumToken: string
-): Promise<CustomerAlbumData | null> {
+): Promise<CustomerAlbumData | 'not_ready' | null> {
   const cookieStore = await cookies()
   const albumId = cookieStore.get(albumCookieKey(albumToken))?.value
   if (!albumId) return null
@@ -95,10 +95,23 @@ export async function getAlbumForCustomer(
 
   if (!album) return null
 
+  // Samme sperre som galleriets hoved-token — gjelder hele galleriet, ikke bare
+  // dette albumet (se lib/actions/gallery-reviews.ts / getGalleryForCustomer)
+  const { data: latestReview } = await service
+    .from('gallery_reviews')
+    .select('status')
+    .eq('gallery_id', album.gallery_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (latestReview && latestReview.status !== 'approved') return 'not_ready'
+
   const { data: images } = await service
     .from('selection_images')
     .select('*')
     .eq('album_id', albumId)
+    .eq('hidden_from_client', false)
     .order('sort_order', { ascending: true })
 
   const imgs = (images ?? []) as {
@@ -126,9 +139,12 @@ export async function getAlbumForCustomer(
   const pickMap: Record<string, SelectionAlbumPick> = {}
   for (const p of picks ?? []) pickMap[p.image_id] = p as SelectionAlbumPick
 
+  const commentsByImage = await getCommentsForImages(service, imgs.map(i => i.id))
+
   const imagesWithPicks: AlbumImageWithPick[] = imgs.map(img => ({
     ...img,
     signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
+    comments: commentsByImage[img.id] ?? [],
     pick: pickMap[img.id] ?? null,
   }))
 
@@ -192,8 +208,12 @@ export async function toggleAlbumImagePick(
 export async function addAlbumImagePickComment(
   albumToken: string,
   imageId: string,
-  comment: string
-): Promise<void> {
+  text: string,
+  authorName?: string
+): Promise<ImageComment> {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error('Kommentaren kan ikke være tom')
+
   const cookieStore = await cookies()
   const albumId = cookieStore.get(albumCookieKey(albumToken))?.value
   if (!albumId) throw new Error('Ikke autorisert')
@@ -208,28 +228,14 @@ export async function addAlbumImagePickComment(
 
   if (img?.album_id !== albumId) throw new Error('Ikke autorisert')
 
-  const { data: existing } = await service
-    .from('selection_album_picks')
-    .select('selected')
-    .eq('album_id', albumId)
-    .eq('image_id', imageId)
-    .maybeSingle()
+  const { data, error } = await service
+    .from('image_comments')
+    .insert({ image_id: imageId, text: trimmed, author_name: authorName?.trim() || null })
+    .select()
+    .single()
 
-  const trimmedComment = comment.trim() || null
-  await Promise.all([
-    service
-      .from('selection_album_picks')
-      .upsert({
-        album_id: albumId,
-        image_id: imageId,
-        comment: trimmedComment,
-        selected: existing?.selected ?? false,
-      }, { onConflict: 'album_id,image_id' }),
-    service
-      .from('selection_images')
-      .update({ comment: trimmedComment })
-      .eq('id', imageId),
-  ])
+  if (error || !data) throw new Error(error?.message ?? 'Kunne ikke legge til kommentar')
+  return data as ImageComment
 }
 
 export async function submitAlbumPicks(albumToken: string): Promise<void> {
@@ -250,13 +256,14 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
 
   // Hent alle picks og alle bilder i albumet
   const [{ data: picks }, { data: images }] = await Promise.all([
-    service.from('selection_album_picks').select('image_id, selected, comment').eq('album_id', albumId),
+    service.from('selection_album_picks').select('image_id, selected').eq('album_id', albumId),
     service.from('selection_images').select('id').eq('album_id', albumId),
   ])
 
   const pickMap = Object.fromEntries((picks ?? []).map(p => [p.image_id, p]))
 
-  // Synk alle bilder til selection_images
+  // Synk seleksjonsstatus til selection_images (kommentarer ligger allerede samlet
+  // i image_comments, uavhengig av album, og trenger ingen synk)
   await Promise.all(
     (images ?? []).map(img => {
       const pick = pickMap[img.id]
@@ -265,7 +272,6 @@ export async function submitAlbumPicks(albumToken: string): Promise<void> {
         .update({
           selected: pick?.selected ?? false,
           selected_at: pick?.selected ? now : null,
-          comment: pick?.comment ?? null,
         })
         .eq('id', img.id)
     })

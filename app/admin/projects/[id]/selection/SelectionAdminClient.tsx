@@ -6,15 +6,19 @@ import { supabase } from '@/lib/supabase-client'
 import {
   createAlbum, updateAlbum, deleteAlbum, deleteAlbumImage, deleteAllAlbumImages,
   enableAlbumSharing, disableAlbumSharing, updateAlbumPin, getAdminGalleryPage,
-  moveImagesToAlbum,
+  moveImagesToAlbum, unhideImageFromClient,
 } from '@/lib/actions/selection-albums'
 import {
   purgeGalleryImages, reopenGallery,
   getSelectedFilenames, registerUploadedImages,
   linkGalleryToProject, unlinkGalleryFromProject, searchProjectsToLink,
+  deleteImageComment,
 } from '@/lib/actions/selections'
 import { createVideoReview } from '@/lib/actions/video-reviews'
 import type { AdminSelectionPageData, AlbumWithImages } from '@/lib/actions/selection-albums'
+import { requestGalleryReview, getGalleryReviewHistory } from '@/lib/actions/gallery-reviews'
+import type { GalleryReview } from '@/lib/types'
+import { getAllProfiles } from '@/lib/actions/pipeline'
 import { C } from '@/lib/admin-theme'
 
 // ---------------------------------------------------------------------------
@@ -198,6 +202,8 @@ export default function SelectionAdminClient({
               </div>
             )}
           </div>
+
+          <GalleryReviewPanel galleryId={gallery.id} />
 
           <div style={{ marginBottom: 16 }}>
             <div style={labelStyle}>Hoved-gallerilenke</div>
@@ -492,6 +498,132 @@ function LinkProjectPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Intern review — send galleriet til gjennomsyn hos et teammedlem før kunden
+// får tilgang. Reviewer velges fritt hver gang, ikke fast per galleri.
+// ---------------------------------------------------------------------------
+const REVIEW_STATUS_MAP: Record<GalleryReview['status'], { label: string; color: string; bg: string }> = {
+  pending:            { label: 'Venter på review', color: '#C49434', bg: 'rgba(196,148,52,0.1)' },
+  approved:           { label: 'Godkjent', color: '#4CAF7D', bg: 'rgba(76,175,125,0.1)' },
+  changes_requested:  { label: 'Endringer ønsket', color: '#D4645A', bg: 'rgba(212,100,90,0.1)' },
+}
+
+function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
+  const [history, setHistory] = useState<GalleryReview[] | null>(null)
+  const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+  const [picking, setPicking] = useState(false)
+  const [reviewerId, setReviewerId] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [sending, setSending] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+
+  async function refresh() {
+    setHistory(await getGalleryReviewHistory(galleryId))
+  }
+
+  useEffect(() => {
+    refresh()
+    getAllProfiles().then(setProfiles)
+  }, [galleryId])
+
+  async function handleSend() {
+    if (!reviewerId) return
+    setSending(true)
+    await requestGalleryReview(galleryId, reviewerId, dueDate || undefined)
+    await refresh()
+    setSending(false)
+    setPicking(false)
+    setReviewerId('')
+    setDueDate('')
+  }
+
+  if (history === null) return null
+
+  const latest = history[0] ?? null
+  const statusStyle = latest ? REVIEW_STATUS_MAP[latest.status] : null
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text3, marginBottom: 6 }}>Intern review</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>Status</span>
+        {statusStyle ? (
+          <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600, fontFamily: 'var(--font-dm-sans)', color: statusStyle.color, background: statusStyle.bg }}>{statusStyle.label}</span>
+        ) : (
+          <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600, fontFamily: 'var(--font-dm-sans)', color: C.text3, background: C.surface2 }}>Ikke sendt</span>
+        )}
+      </div>
+      {latest?.status === 'changes_requested' && latest.comment && (
+        <div style={{ background: 'rgba(212,100,90,0.08)', border: '1px solid rgba(212,100,90,0.25)', borderRadius: 6, padding: '6px 8px', margin: '4px 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2 }}>
+          {latest.comment}
+        </div>
+      )}
+
+      {picking ? (
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', marginTop: 6 }}>
+          <select
+            value={reviewerId}
+            onChange={e => setReviewerId(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+          >
+            <option value="">Velg reviewer...</option>
+            {profiles.map(p => (
+              <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={e => setDueDate(e.target.value)}
+            title="Ønsket frist for reviewen (valgfritt)"
+            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button onClick={handleSend} disabled={sending || !reviewerId} style={{ flex: 1, padding: '6px', borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>
+              {sending ? '...' : 'Send'}
+            </button>
+            <button onClick={() => { setPicking(false); setReviewerId('') }} style={{ padding: '6px 10px', borderRadius: 5, border: `1px solid ${C.border}`, background: 'none', color: C.text2, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', cursor: 'pointer' }}>
+              Avbryt
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setPicking(true)}
+          style={{ width: '100%', marginTop: 6, padding: '7px 10px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'none', color: C.text2, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', cursor: 'pointer' }}
+        >
+          Send til review
+        </button>
+      )}
+
+      {history.length > 0 && (
+        <button
+          onClick={() => setShowHistory(v => !v)}
+          style={{ marginTop: 6, padding: 0, border: 'none', background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          {showHistory ? 'Skjul historikk' : 'Vis review-historikk'}
+        </button>
+      )}
+      {showHistory && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+          {history.map(r => {
+            const s = REVIEW_STATUS_MAP[r.status]
+            return (
+              <div key={r.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2 }}>
+                  <span>{r.requester?.name ?? r.requester?.email} → {r.reviewer?.name ?? r.reviewer?.email}</span>
+                  <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
+                </div>
+                {r.comment && <div style={{ marginTop: 3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{r.comment}</div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Albumdetalj-panel — lever i høyre kolonne, sidebar er alltid synlig
 // ---------------------------------------------------------------------------
 function AlbumDetailPanel({
@@ -663,6 +795,16 @@ function AlbumDetailPanel({
     await deleteAlbumImage(imageId, storagePath)
     await onRefresh()
     setDeletingId(null)
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    await deleteImageComment(commentId)
+    await onRefresh()
+  }
+
+  async function handleUnhide(imageId: string) {
+    await unhideImageFromClient(imageId)
+    await onRefresh()
   }
 
   async function handleAddSubAlbum() {
@@ -943,7 +1085,7 @@ function AlbumDetailPanel({
                   borderRadius: 7, overflow: 'hidden',
                   border: `2px solid ${isSelected ? C.accent : 'transparent'}`,
                   background: C.surface2, position: 'relative',
-                  opacity: deletingId === img.id ? 0.4 : 1,
+                  opacity: deletingId === img.id ? 0.4 : img.hidden_from_client ? 0.5 : 1,
                   transition: 'opacity 0.15s, border-color 0.1s',
                   cursor: 'pointer',
                 }}
@@ -966,8 +1108,13 @@ function AlbumDetailPanel({
                       <svg width="8" height="8" viewBox="0 0 10 10"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </div>
                   )}
-                  {img.comment && (
+                  {img.comments.length > 0 && (
                     <div style={{ position: 'absolute', top: 4, left: isSelected ? 26 : 4, width: 7, height: 7, borderRadius: '50%', background: '#C49434' }} />
+                  )}
+                  {img.hidden_from_client && (
+                    <div style={{ position: 'absolute', bottom: 4, left: 4, padding: '2px 6px', borderRadius: 8, background: 'rgba(212,134,58,0.9)', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', fontWeight: 600 }}>
+                      Skjult
+                    </div>
                   )}
                   {!selectMode && (
                     <button
@@ -1051,8 +1198,23 @@ function AlbumDetailPanel({
                 {img.selected && (
                   <span style={{ padding: '2px 8px', borderRadius: 10, background: C.accentBg, color: C.accent, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600 }}>Valgt av kunde</span>
                 )}
-                {img.comment && (
-                  <span style={{ padding: '2px 8px', borderRadius: 10, background: 'rgba(196,148,52,0.1)', color: '#C49434', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem' }}>Kommentar</span>
+                {img.comments.length > 0 && (
+                  <span style={{ padding: '2px 8px', borderRadius: 10, background: 'rgba(196,148,52,0.1)', color: '#C49434', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem' }}>
+                    {img.comments.length === 1 ? 'Kommentar' : `${img.comments.length} kommentarer`}
+                  </span>
+                )}
+                {img.hidden_from_client && (
+                  <>
+                    <span style={{ padding: '2px 8px', borderRadius: 10, background: 'rgba(212,134,58,0.15)', color: '#D4863A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600 }}>
+                      Skjult for kunde (review)
+                    </span>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleUnhide(img.id) }}
+                      style={{ padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', color: C.text2, fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', cursor: 'pointer' }}
+                    >
+                      Vis for kunde igjen
+                    </button>
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1077,9 +1239,18 @@ function AlbumDetailPanel({
             {/* Bunntekst */}
             <div style={{ padding: '10px 16px', flexShrink: 0, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#5A5448', margin: 0 }}>{img.filename}</p>
-              {img.comment && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', marginTop: 6, fontStyle: 'italic' }}>"{img.comment}"</p>
-              )}
+              {img.comments.map(c => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', fontStyle: 'italic', margin: 0 }}>
+                    &ldquo;{c.text}&rdquo;{c.author_name && <span style={{ color: '#8A8070', fontStyle: 'normal' }}> — {c.author_name}</span>}
+                  </p>
+                  <button
+                    onClick={() => handleDeleteComment(c.id)}
+                    title="Slett kommentar"
+                    style={{ background: 'none', border: 'none', color: '#5A5448', cursor: 'pointer', fontSize: '0.72rem', padding: 0 }}
+                  >×</button>
+                </div>
+              ))}
             </div>
           </div>
         )

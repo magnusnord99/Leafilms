@@ -10,6 +10,7 @@ import PinClient from './PinClient'
 import GalleryClient from './GalleryClient'
 import AlbumOverviewClient from './AlbumOverviewClient'
 import AlbumGalleryClient from './[album]/AlbumGalleryClient'
+import NotReadyMessage from './NotReadyMessage'
 
 export default async function SelectionPage({
   params,
@@ -22,6 +23,9 @@ export default async function SelectionPage({
   if (await albumTokenExists(token)) {
     const language = await getAlbumLanguage(token)
     const albumData = await getAlbumForCustomer(token)
+    if (albumData === 'not_ready') {
+      return <NotReadyMessage language={language} />
+    }
     if (!albumData) {
       return <PinClient token={token} verifyAction={verifyAlbumPin} language={language} />
     }
@@ -39,13 +43,16 @@ export default async function SelectionPage({
 
   // Galleri-token
   const data = await getGalleryForCustomer(token)
+  const language = await getGalleryLanguage(token)
+
+  if (data === 'not_ready') {
+    return <NotReadyMessage language={language} />
+  }
 
   if (!data) {
     if (!(await galleryTokenExists(token))) notFound()
-    return <PinClient token={token} verifyAction={verifyGalleryPin} language={await getGalleryLanguage(token)} />
+    return <PinClient token={token} verifyAction={verifyGalleryPin} language={language} />
   }
-
-  const language = await getGalleryLanguage(token)
 
   // Bakoverkompatibilitet: ingen album → gammel flat visning
   if (data.albums.length === 0) {

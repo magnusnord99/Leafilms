@@ -3,6 +3,7 @@ import { getGalleryForCustomer, galleryTokenExists, verifyGalleryPin } from '@/l
 import { getGalleryLanguage } from '@/lib/customer-language'
 import PinClient from '../PinClient'
 import AlbumGalleryClient from './AlbumGalleryClient'
+import NotReadyMessage from '../NotReadyMessage'
 
 export default async function AlbumPage({
   params,
@@ -12,6 +13,10 @@ export default async function AlbumPage({
   const { token, album: albumSlug } = await params
 
   const data = await getGalleryForCustomer(token)
+
+  if (data === 'not_ready') {
+    return <NotReadyMessage language={await getGalleryLanguage(token)} />
+  }
 
   if (!data) {
     if (!(await galleryTokenExists(token))) notFound()

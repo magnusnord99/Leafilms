@@ -36,6 +36,7 @@ export const SELECTION_STRINGS = {
     noCommentYet: 'Ingen kommentar enda',
     writeComment: 'Skriv en kommentar...',
     writeCommentToPhotographer: 'Skriv en kommentar til fotografen...',
+    yourNameOptional: 'Ditt navn (valgfritt)',
     confirmTitle: 'Send inn utvalg?',
     confirmOverWarning: (n: number, over: number) =>
       `Du har valgt ${n} bilder — ${over} over avtalt antall. Dette kan medføre tilleggskostnad.`,
@@ -61,6 +62,8 @@ export const SELECTION_STRINGS = {
     backToOverviewTab: '← Oversikt',
     folders: 'Mapper',
     zoomLabel: 'Bildestørrelse',
+    notReadyTitle: 'Galleriet er ikke klart ennå',
+    notReadyBody: 'Vi kvalitetssikrer utvalget internt før det blir tilgjengelig. Prøv igjen litt senere.',
   },
   en: {
     photoSelection: 'Photo selection',
@@ -93,6 +96,7 @@ export const SELECTION_STRINGS = {
     noCommentYet: 'No comments yet',
     writeComment: 'Write a comment...',
     writeCommentToPhotographer: 'Write a comment to the photographer...',
+    yourNameOptional: 'Your name (optional)',
     confirmTitle: 'Submit selection?',
     confirmOverWarning: (n: number, over: number) =>
       `You have selected ${n} photos — ${over} more than agreed. This may incur an additional charge.`,
@@ -118,6 +122,8 @@ export const SELECTION_STRINGS = {
     backToOverviewTab: '← Overview',
     folders: 'Folders',
     zoomLabel: 'Photo size',
+    notReadyTitle: 'The gallery isn’t ready yet',
+    notReadyBody: 'We’re doing an internal quality check on the selection before it becomes available. Please check back soon.',
   },
 }
 

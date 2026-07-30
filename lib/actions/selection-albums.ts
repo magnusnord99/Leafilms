@@ -2,6 +2,7 @@
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { VideoReview } from './video-reviews'
+import { getCommentsForImages, type ImageComment } from './selections'
 
 const SIGNED_URL_EXPIRY = 60 * 60 * 2
 
@@ -28,9 +29,10 @@ export type AlbumWithImages = SelectionAlbum & {
     storage_path: string | null
     sort_order: number
     selected: boolean
-    comment: string | null
+    comments: ImageComment[]
     selected_at: string | null
     album_id: string | null
+    hidden_from_client: boolean
     signedUrl: string
   }[]
   videos: (VideoReview & { signedUrl: string })[]
@@ -56,9 +58,10 @@ export type AdminSelectionPageData = {
     storage_path: string | null
     sort_order: number
     selected: boolean
-    comment: string | null
+    comments: ImageComment[]
     selected_at: string | null
     album_id: string | null
+    hidden_from_client: boolean
     signedUrl: string
   }[]
   totalSelected: number
@@ -88,7 +91,7 @@ export type SelectedImageForEditor = {
   id: string
   filename: string
   signedUrl: string
-  comment: string | null
+  comments: ImageComment[]
   albumName: string | null
   sort_order: number
 }
@@ -117,7 +120,7 @@ export async function getSelectedImagesForProject(projectId: string): Promise<Se
 
   const { data: images } = await supabase
     .from('selection_images')
-    .select('id, filename, storage_path, comment, album_id, sort_order')
+    .select('id, filename, storage_path, album_id, sort_order')
     .eq('gallery_id', gallery.id)
     .eq('selected', true)
     .order('sort_order', { ascending: true })
@@ -135,11 +138,13 @@ export async function getSelectedImagesForProject(projectId: string): Promise<Se
     }
   }
 
+  const commentsByImage = await getCommentsForImages(service, images.map(i => i.id))
+
   return images.map(img => ({
     id: img.id,
     filename: img.filename,
     signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
-    comment: img.comment,
+    comments: commentsByImage[img.id] ?? [],
     albumName: img.album_id ? (albumNameById[img.album_id] ?? null) : null,
     sort_order: img.sort_order,
   }))
@@ -207,13 +212,14 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
     signedUrl: videoSignedUrlMap[v.storage_path] ?? '',
   }))
 
-  const imgs = (allImages ?? []) as {
+  const rawImgs = (allImages ?? []) as {
     id: string; filename: string; storage_path: string | null
-    sort_order: number; selected: boolean; comment: string | null
+    sort_order: number; selected: boolean
     selected_at: string | null; album_id: string | null
+    hidden_from_client: boolean
   }[]
 
-  const paths = imgs.filter(i => i.storage_path).map(i => i.storage_path!)
+  const paths = rawImgs.filter(i => i.storage_path).map(i => i.storage_path!)
   const signedUrlMap: Record<string, string> = {}
 
   if (paths.length > 0) {
@@ -225,8 +231,11 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
     }
   }
 
-  const withUrl = imgs.map(img => ({
+  const commentsByImage = await getCommentsForImages(service, rawImgs.map(i => i.id))
+
+  const withUrl = rawImgs.map(img => ({
     ...img,
+    comments: commentsByImage[img.id] ?? [],
     signedUrl: img.storage_path ? (signedUrlMap[img.storage_path] ?? '') : '',
   }))
 
@@ -251,7 +260,7 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
     albums: albumsWithImages,
     ungroupedImages,
     totalSelected,
-    totalImages: imgs.length,
+    totalImages: rawImgs.length,
   }
 }
 
@@ -360,6 +369,13 @@ export async function deleteAlbumImage(imageId: string, storagePath: string | nu
   await supabase.from('selection_images').delete().eq('id', imageId)
 }
 
+// Opphever en intern reviewers skjuling av et bilde (se lib/actions/gallery-reviews.ts) —
+// bildet blir synlig for kunden igjen.
+export async function unhideImageFromClient(imageId: string): Promise<void> {
+  const supabase = await createClient()
+  await supabase.from('selection_images').update({ hidden_from_client: false }).eq('id', imageId)
+}
+
 export async function reorderAlbums(albumIds: string[]): Promise<void> {
   const supabase = await createClient()
   await Promise.all(
@@ -459,7 +475,7 @@ export async function getStandaloneGalleries(): Promise<{
   )
 }
 
-export async function getAllGalleriesOverview(): Promise<{
+export type GalleryOverviewRow = {
   projectId: string
   projectName: string
   taskStatus: string
@@ -469,17 +485,23 @@ export async function getAllGalleriesOverview(): Promise<{
   totalSelected: number
   targetCount: number | null
   submittedAt: string | null
-}[]> {
+}
+
+// Delt mellom getAllGalleriesOverview (Selektering ikke ferdig — aktiv seleksjonsfase)
+// og getHiddenGalleriesOverview (Selektering ferdig — kunden har sendt inn, prosjektet
+// har gått videre til redigering). Samme prosjekt kan aldri havne i begge listene.
+async function getGalleriesOverviewByTaskDone(done: boolean): Promise<GalleryOverviewRow[]> {
   const supabase = await createClient()
 
-  // Hent alle post_prod-prosjekter med aktiv "Selektering"-oppgave
-  const { data: tasks } = await supabase
+  let query = supabase
     .from('tasks')
     .select('id, status, project_id, projects!inner(id, title, pipeline_stage, project_type)')
     .ilike('title', 'Selektering')
-    .neq('status', 'done')
     .eq('projects.pipeline_stage', 'post_prod')
     .in('projects.project_type', ['photo', 'mixed'])
+  query = done ? query.eq('status', 'done') : query.neq('status', 'done')
+
+  const { data: tasks } = await query
 
   if (!tasks || tasks.length === 0) return []
 
@@ -542,4 +564,15 @@ export async function getAllGalleriesOverview(): Promise<{
       }
     })
   )
+}
+
+// Aktiv seleksjonsfase: kunden har ikke sendt inn ennå.
+export async function getAllGalleriesOverview(): Promise<GalleryOverviewRow[]> {
+  return getGalleriesOverviewByTaskDone(false)
+}
+
+// Skjult-fanen: kunden har sendt inn, prosjektet er videre i redigering —
+// vises fortsatt her slik at galleriet ikke rett og slett forsvinner.
+export async function getHiddenGalleriesOverview(): Promise<GalleryOverviewRow[]> {
+  return getGalleriesOverviewByTaskDone(true)
 }

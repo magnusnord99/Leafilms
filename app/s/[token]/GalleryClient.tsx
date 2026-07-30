@@ -63,6 +63,7 @@ export default function GalleryClient({
   const [submitted, setSubmitted] = useState(gallery.status === 'submitted')
   const [showConfirm, setShowConfirm] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
+  const [commentAuthor, setCommentAuthor] = useState('')
   const [savingComment, setSavingComment] = useState(false)
 
   const selectedCount = images.filter(i => i.selected).length
@@ -74,7 +75,7 @@ export default function GalleryClient({
   const [prevActiveImageId, setPrevActiveImageId] = useState(activeImageId)
   if (prevActiveImageId !== activeImageId) {
     setPrevActiveImageId(activeImageId)
-    setCommentDraft(activeImage?.comment ?? '')
+    setCommentDraft('')
   }
 
   function nav(dir: number) {
@@ -111,11 +112,16 @@ export default function GalleryClient({
     await toggleImageSelection(token, imageId, newSelected)
   }, [images, token, submitted])
 
-  async function saveComment(imageId: string, text: string) {
+  async function saveComment(imageId: string, text: string, authorName: string) {
+    if (!text.trim()) return
     setSavingComment(true)
-    await addImageComment(token, imageId, text.trim())
-    setImages(prev => prev.map(i => i.id === imageId ? { ...i, comment: text.trim() || null } : i))
-    setSavingComment(false)
+    try {
+      const newComment = await addImageComment(token, imageId, text, authorName || undefined)
+      setImages(prev => prev.map(i => i.id === imageId ? { ...i, comments: [...i.comments, newComment] } : i))
+      setCommentDraft('')
+    } finally {
+      setSavingComment(false)
+    }
   }
 
   function openLightbox(idx: number) {
@@ -218,7 +224,9 @@ export default function GalleryClient({
               image={activeImage}
               commentDraft={commentDraft}
               onCommentChange={setCommentDraft}
-              onSave={() => activeImage && saveComment(activeImage.id, commentDraft)}
+              commentAuthor={commentAuthor}
+              onAuthorChange={setCommentAuthor}
+              onSave={() => activeImage && saveComment(activeImage.id, commentDraft, commentAuthor)}
               saving={savingComment}
               t={t}
             />
@@ -246,7 +254,9 @@ export default function GalleryClient({
             index={lightboxIndex}
             commentDraft={commentDraft}
             onCommentChange={setCommentDraft}
-            onSaveComment={() => activeImage && saveComment(activeImage.id, commentDraft)}
+            commentAuthor={commentAuthor}
+            onAuthorChange={setCommentAuthor}
+            onSaveComment={() => activeImage && saveComment(activeImage.id, commentDraft, commentAuthor)}
             savingComment={savingComment}
             onClose={() => setLightboxIndex(null)}
             onPrev={() => nav(-1)}
@@ -307,7 +317,7 @@ function ImageCard({ img, isActive, onActivate, onLightbox, onToggle, t }: {
               <span style={{ fontSize: '0.6rem', color: S.text3, padding: 4, textAlign: 'center' }}>{img.filename}</span>
             </div>
         }
-        {img.comment && (
+        {img.comments.length > 0 && (
           <div style={{ position: 'absolute', top: 4, left: 4, width: 7, height: 7, borderRadius: '50%', background: S.gold }} />
         )}
         <button
@@ -340,14 +350,13 @@ function ImageCard({ img, isActive, onActivate, onLightbox, onToggle, t }: {
 
 // ---------------------------------------------------------------------------
 
-function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving, t }: {
+function CommentPanel({ image, commentDraft, onCommentChange, commentAuthor, onAuthorChange, onSave, saving, t }: {
   image: ImageWithUrl | null
   commentDraft: string; onCommentChange: (text: string) => void
+  commentAuthor: string; onAuthorChange: (text: string) => void
   onSave: () => void; saving: boolean
   t: SelectionStrings
 }) {
-  const isDirty = commentDraft !== (image?.comment ?? '')
-
   if (!image) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -371,17 +380,24 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving, t 
       </div>
 
       {/* Chat */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 8 }}>
-        {image.comment ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <div style={{ maxWidth: '88%', padding: '9px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
-              <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
-                {image.comment}
-              </p>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {image.comments.length > 0 ? (
+          image.comments.map(c => (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ maxWidth: '88%', padding: '9px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
+                <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
+                  {c.text}
+                </p>
+                {c.author_name && (
+                  <p style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 4, textAlign: 'right' }}>
+                    — {c.author_name}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          ))
         ) : (
-          <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: S.text3, textAlign: 'center' }}>
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: S.text3, textAlign: 'center', margin: 'auto 0' }}>
             {t.noCommentYet}
           </p>
         )}
@@ -389,6 +405,16 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving, t 
 
       {/* Input */}
       <div style={{ padding: '8px 12px 10px', borderTop: `1px solid ${S.border}`, flexShrink: 0 }}>
+        <input
+          value={commentAuthor}
+          onChange={e => onAuthorChange(e.target.value)}
+          placeholder={t.yourNameOptional}
+          style={{
+            width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.76rem',
+            color: S.text, background: S.bg, border: `1px solid ${S.border}`,
+            borderRadius: 8, padding: '6px 10px', outline: 'none', marginBottom: 6,
+          }}
+        />
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={commentDraft}
@@ -403,12 +429,12 @@ function CommentPanel({ image, commentDraft, onCommentChange, onSave, saving, t 
           />
           <button
             onClick={onSave}
-            disabled={saving || !isDirty}
+            disabled={saving || !commentDraft.trim()}
             style={{
               width: 34, height: 34, borderRadius: '50%', border: 'none', flexShrink: 0,
-              background: isDirty ? S.gold : S.surface2,
-              color: isDirty ? '#0C0B09' : S.text3,
-              cursor: isDirty ? 'pointer' : 'default',
+              background: commentDraft.trim() ? S.gold : S.surface2,
+              color: commentDraft.trim() ? '#0C0B09' : S.text3,
+              cursor: commentDraft.trim() ? 'pointer' : 'default',
               fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 0.15s',
             }}
@@ -477,16 +503,16 @@ function ConfirmModal({ selectedCount, target, isOver, onConfirm, onCancel, load
 
 // ---------------------------------------------------------------------------
 
-function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment, savingComment, onClose, onPrev, onNext, onToggle, t }: {
+function Lightbox({ images, index, commentDraft, onCommentChange, commentAuthor, onAuthorChange, onSaveComment, savingComment, onClose, onPrev, onNext, onToggle, t }: {
   images: ImageWithUrl[]; index: number
   commentDraft: string; onCommentChange: (text: string) => void
+  commentAuthor: string; onAuthorChange: (text: string) => void
   onSaveComment: () => void; savingComment: boolean
   onClose: () => void; onPrev: () => void; onNext: () => void
   onToggle: (id: string) => void
   t: SelectionStrings
 }) {
   const img = images[index]
-  const isDirty = commentDraft !== (img?.comment ?? '')
 
   return (
     <div
@@ -530,16 +556,35 @@ function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment,
           {img?.selected ? t.selectedShort : t.selectThisPhoto}
         </button>
 
-        {img?.comment && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-            <div style={{ maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
-              <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
-                {img.comment}
-              </p>
-            </div>
+        {img && img.comments.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, maxHeight: 140, overflowY: 'auto' }}>
+            {img.comments.map(c => (
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
+                  <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
+                    {c.text}
+                  </p>
+                  {c.author_name && (
+                    <p style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 4, textAlign: 'right' }}>
+                      — {c.author_name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
+        <input
+          value={commentAuthor}
+          onChange={e => onAuthorChange(e.target.value)}
+          placeholder={t.yourNameOptional}
+          style={{
+            width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.78rem',
+            color: S.text, background: S.bg, border: `1px solid ${S.border}`,
+            borderRadius: 8, padding: '7px 10px', outline: 'none', marginBottom: 8,
+          }}
+        />
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={commentDraft}
@@ -550,12 +595,12 @@ function Lightbox({ images, index, commentDraft, onCommentChange, onSaveComment,
           />
           <button
             onClick={onSaveComment}
-            disabled={savingComment || !isDirty}
+            disabled={savingComment || !commentDraft.trim()}
             style={{
               width: 38, height: 38, borderRadius: '50%', border: 'none', flexShrink: 0,
-              background: isDirty ? S.gold : S.surface2,
-              color: isDirty ? '#0C0B09' : S.text3,
-              cursor: isDirty ? 'pointer' : 'default', fontSize: '1rem',
+              background: commentDraft.trim() ? S.gold : S.surface2,
+              color: commentDraft.trim() ? '#0C0B09' : S.text3,
+              cursor: commentDraft.trim() ? 'pointer' : 'default', fontSize: '1rem',
             }}
           >
             {savingComment ? '…' : '↑'}

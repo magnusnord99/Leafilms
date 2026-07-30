@@ -18,6 +18,7 @@ import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
+import { deleteImageComment, getGalleryIdForProject } from '@/lib/actions/selections'
 import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
@@ -223,6 +224,7 @@ export default function PostProdDetailPage() {
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
+  const [gallerySummary, setGallerySummary] = useState<{ id: string; status: 'open' | 'submitted' | 'purged' } | null>(null)
 
   const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
   const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
@@ -302,19 +304,28 @@ export default function PostProdDetailPage() {
   const allDone = displayTasks.length > 0 && activeIdx === -1
   const selectedTask = displayTasks[selectedIdx] ?? null
 
+  async function handleDeleteSelectionComment(imageId: string, commentId: string) {
+    await deleteImageComment(commentId)
+    setSelectionImages(prev => prev.map(img =>
+      img.id === imageId ? { ...img, comments: img.comments.filter(c => c.id !== commentId) } : img
+    ))
+  }
+
   async function fetchAll() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs] = await Promise.all([
+    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
       getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
       getProjectDeliverablesSection(projectId),
       getSelectedImagesForProject(projectId),
+      getGalleryIdForProject(projectId),
     ])
     setSelectionImages(selImgs)
+    setGallerySummary(gallerySumm)
     setDeliverableItems(delivSection?.items ?? [])
     setProfiles(allProfiles)
 
@@ -1389,7 +1400,7 @@ export default function PostProdDetailPage() {
                           ? <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
                           : <div style={{ width: '100%', height: '100%' }} />
                         }
-                        {img.comment && (
+                        {img.comments.length > 0 && (
                           <div style={{ position: 'absolute', bottom: 3, left: 3, width: 7, height: 7, borderRadius: '50%', background: '#C49434' }} />
                         )}
                         {img.albumName && (
@@ -1414,9 +1425,20 @@ export default function PostProdDetailPage() {
                             ? <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
                             : <div style={{ width: 400, height: 300, background: C.surface2 }} />
                           }
-                          {img?.comment && (
-                            <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
-                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: '#E8E0D0', lineHeight: 1.5, margin: 0 }}>{img.comment}</p>
+                          {img && img.comments.length > 0 && (
+                            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {img.comments.map(c => (
+                                <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
+                                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: '#E8E0D0', lineHeight: 1.5, margin: 0 }}>
+                                    {c.text}{c.author_name && <span style={{ color: C.text3 }}> — {c.author_name}</span>}
+                                  </p>
+                                  <button
+                                    onClick={() => handleDeleteSelectionComment(img.id, c.id)}
+                                    title="Slett kommentar"
+                                    style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0, padding: 0 }}
+                                  >×</button>
+                                </div>
+                              ))}
                             </div>
                           )}
                           {img?.albumName && (
@@ -1764,6 +1786,47 @@ export default function PostProdDetailPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              ) : isSelectedActive && selectedTask.title === SELEKSJON_TITLE ? (
+                /* Spesialbehandling: Selektering fullføres normalt av kundens innsending,
+                   ikke av en manuell "ferdig"-knapp (se lib/actions/selections.ts
+                   submitGallery / lib/actions/selection-picks.ts submitAlbumPicks) */
+                <div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {selectedTask.status === 'todo' && (
+                      <button
+                        onClick={() => handleAdvance(selectedTask.id, 'in_progress')}
+                        disabled={togglingId === selectedTask.id}
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+                          padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
+                          background: C.surface2, color: C.text, border: `1px solid ${C.border}`,
+                          opacity: togglingId === selectedTask.id ? 0.6 : 1, transition: 'opacity 0.15s',
+                        }}
+                      >
+                        Sett i gang
+                      </button>
+                    )}
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, fontStyle: 'italic' }}>
+                      {gallerySummary?.status === 'open'
+                        ? '🕒 Venter på at kunden sender inn sitt bildevalg'
+                        : 'Opprett galleriet og send lenken til kunden — steget fullføres automatisk når kunden sender inn sitt valg.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!confirm('Marker Selektering som fullført uten at kunden har sendt inn? Bruk kun dette hvis dere har blitt enige utenom systemet.')) return
+                      handleAdvance(selectedTask.id, 'done')
+                    }}
+                    disabled={togglingId === selectedTask.id}
+                    style={{
+                      marginTop: 10, background: 'none', border: 'none', padding: 0,
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3,
+                      textDecoration: 'underline', cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
+                    }}
+                  >
+                    Marker som fullført manuelt
+                  </button>
                 </div>
               ) : isSelectedActive ? (
                 /* Normal handlingsknapper */

@@ -16,6 +16,7 @@ import {
   reopenGallery,
   getSelectedFilenames,
   getAdminGallery,
+  deleteImageComment,
 } from '@/lib/actions/selections'
 import type { SelectionGallery as Gallery, SelectionImage } from '@/lib/actions/selections'
 
@@ -127,6 +128,11 @@ export default function SelectionGallery({
     await removeImage(imageId)
     await refreshData()
     setRemovingId(null)
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    await deleteImageComment(commentId)
+    await refreshData()
   }
 
   async function handlePurge() {
@@ -384,7 +390,7 @@ export default function SelectionGallery({
                       </svg>
                     </div>
                   )}
-                  {img.comment && (
+                  {img.comments.length > 0 && (
                     <div style={{
                       position: 'absolute', bottom: 2, left: 2, width: 12, height: 12,
                       borderRadius: '50%', background: 'rgba(196,148,52,0.8)', fontSize: '0.5rem',
@@ -428,6 +434,7 @@ export default function SelectionGallery({
           onNext={() => setLightboxIndex(i => Math.min((i ?? 0) + 1, images.length - 1))}
           onRemove={handleRemoveImage}
           removingId={removingId}
+          onDeleteComment={handleDeleteComment}
         />
       )}
     </div>
@@ -491,7 +498,7 @@ function ProgressDot({ status }: { status: UploadStatus['progress'] }) {
 }
 
 function AdminLightbox({
-  images, signedUrls, index, onClose, onPrev, onNext, onRemove, removingId,
+  images, signedUrls, index, onClose, onPrev, onNext, onRemove, removingId, onDeleteComment,
 }: {
   images: SelectionImage[]
   signedUrls: Record<string, string>
@@ -501,6 +508,7 @@ function AdminLightbox({
   onNext: () => void
   onRemove: (id: string) => void
   removingId: string | null
+  onDeleteComment: (commentId: string) => void
 }) {
   const img = images[index]
   const url = img.storage_path ? (signedUrls[img.storage_path] ?? '') : ''
@@ -522,9 +530,8 @@ function AdminLightbox({
             Ingen forhåndsvisning
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 10 }}>
           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>{img.filename}</span>
-          {img.comment && <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>💬 {img.comment}</span>}
           <button
             onClick={() => onRemove(img.id)}
             disabled={removingId === img.id}
@@ -533,6 +540,22 @@ function AdminLightbox({
             {removingId === img.id ? '...' : 'Fjern'}
           </button>
         </div>
+        {img.comments.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+            {img.comments.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                  💬 {c.author_name ? `${c.author_name}: ${c.text}` : c.text}
+                </span>
+                <button
+                  onClick={() => onDeleteComment(c.id)}
+                  title="Slett kommentar"
+                  style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0, padding: 0 }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {index > 0 && (

@@ -1,16 +1,23 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
-import { getAllGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
+import { getAllGalleriesOverview, getHiddenGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
 import CreateStandaloneGalleryButton from './CreateStandaloneGalleryButton'
 
-export default async function SelectionsOverviewPage() {
+export default async function SelectionsOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { tab } = await searchParams
+  const showHidden = tab === 'hidden'
+
   const [projects, standaloneGalleries] = await Promise.all([
-    getAllGalleriesOverview(),
+    showHidden ? getHiddenGalleriesOverview() : getAllGalleriesOverview(),
     getStandaloneGalleries(),
   ])
 
@@ -35,14 +42,38 @@ export default async function SelectionsOverviewPage() {
           </h1>
           <CreateStandaloneGalleryButton />
         </div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 28 }}>
-          Prosjekter i post-prod med aktiv seleksjonsfase
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 18 }}>
+          {showHidden
+            ? 'Kunden har sendt inn sitt bildevalg — prosjektet er videre i redigering'
+            : 'Prosjekter i post-prod med aktiv seleksjonsfase'}
         </p>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+          {[{ key: 'active', label: 'Aktive' }, { key: 'hidden', label: 'Skjulte' }].map(t => {
+            const isActive = (t.key === 'hidden') === showHidden
+            return (
+              <Link
+                key={t.key}
+                href={t.key === 'hidden' ? '/admin/selections?tab=hidden' : '/admin/selections'}
+                style={{
+                  padding: '6px 14px', borderRadius: 7,
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+                  textDecoration: 'none',
+                  background: isActive ? C.accentBg : 'transparent',
+                  color: isActive ? C.accent : C.text3,
+                  border: `1px solid ${isActive ? C.accent : C.border}`,
+                }}
+              >
+                {t.label}
+              </Link>
+            )
+          })}
+        </div>
 
         {projects.length === 0 ? (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '40px 24px', textAlign: 'center' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>
-              Ingen prosjekter i seleksjonsfasen akkurat nå.
+              {showHidden ? 'Ingen skjulte gallerier ennå.' : 'Ingen prosjekter i seleksjonsfasen akkurat nå.'}
             </p>
           </div>
         ) : (
@@ -107,7 +138,7 @@ export default async function SelectionsOverviewPage() {
           </div>
         )}
 
-        {standaloneGalleries.length > 0 && (
+        {!showHidden && standaloneGalleries.length > 0 && (
           <>
             <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 700, color: C.text, marginTop: 36, marginBottom: 6 }}>
               Frittstående gallerier

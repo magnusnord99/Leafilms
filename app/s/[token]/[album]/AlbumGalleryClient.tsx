@@ -58,11 +58,6 @@ function isSelected(img: AnyImage, isDirect: boolean): boolean {
   return (img as MainImage).selected
 }
 
-function getComment(img: AnyImage, isDirect: boolean): string | null {
-  if (isDirect) return (img as AlbumImageWithPick).pick?.comment ?? null
-  return (img as MainImage).comment
-}
-
 export default function AlbumGalleryClient({
   token,
   galleryToken,
@@ -96,6 +91,7 @@ export default function AlbumGalleryClient({
   const [submitted, setSubmitted] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
+  const [commentAuthor, setCommentAuthor] = useState('')
   const [savingComment, setSavingComment] = useState(false)
 
   const activeImage = activeImageId ? images.find(i => i.id === activeImageId) ?? null : null
@@ -106,11 +102,11 @@ export default function AlbumGalleryClient({
   const target = isDirectAlbumLink ? (album as SelectionAlbum).album_target_count : (targetCount ?? null)
   const isOver = target != null && displayTotal > target
 
-  // Sync comment draft when active image changes
+  // Reset draft når aktivt bilde skifter
   const [prevActiveImageId, setPrevActiveImageId] = useState(activeImageId)
   if (prevActiveImageId !== activeImageId) {
     setPrevActiveImageId(activeImageId)
-    setCommentDraft(activeImage ? (getComment(activeImage, isDirectAlbumLink) ?? '') : '')
+    setCommentDraft('')
   }
 
   function nav(dir: number) {
@@ -141,7 +137,7 @@ export default function AlbumGalleryClient({
       if (i.id !== imageId) return i
       if (isDirectAlbumLink) {
         const cast = i as AlbumImageWithPick
-        return { ...cast, pick: { ...(cast.pick ?? { id: '', album_id: '', image_id: imageId, comment: null }), selected: newSelected, selected_at: newSelected ? new Date().toISOString() : null } }
+        return { ...cast, pick: { ...(cast.pick ?? { id: '', album_id: '', image_id: imageId }), selected: newSelected, selected_at: newSelected ? new Date().toISOString() : null } }
       }
       return { ...(i as MainImage), selected: newSelected, selected_at: newSelected ? new Date().toISOString() : null }
     }))
@@ -152,23 +148,21 @@ export default function AlbumGalleryClient({
     }
   }, [images, token, galleryToken, isDirectAlbumLink])
 
-  async function saveComment(imageId: string, text: string) {
-    setSavingComment(true)
+  async function saveComment(imageId: string, text: string, authorName: string) {
     const trimmed = text.trim()
-    if (isDirectAlbumLink) {
-      await addAlbumImagePickComment(token, imageId, trimmed)
-      setImages(prev => prev.map(i => {
-        if (i.id !== imageId) return i
-        const cast = i as AlbumImageWithPick
-        return { ...cast, pick: { ...(cast.pick ?? { id: '', album_id: '', image_id: imageId, selected: false, selected_at: null }), comment: trimmed || null } }
-      }))
-    } else {
-      await addImageComment(galleryToken!, imageId, trimmed)
+    if (!trimmed) return
+    setSavingComment(true)
+    try {
+      const newComment = isDirectAlbumLink
+        ? await addAlbumImagePickComment(token, imageId, trimmed, authorName || undefined)
+        : await addImageComment(galleryToken!, imageId, trimmed, authorName || undefined)
       setImages(prev => prev.map(i =>
-        i.id === imageId ? { ...(i as MainImage), comment: trimmed || null } : i
+        i.id === imageId ? { ...i, comments: [...i.comments, newComment] } : i
       ))
+      setCommentDraft('')
+    } finally {
+      setSavingComment(false)
     }
-    setSavingComment(false)
   }
 
   function openLightbox(idx: number) {
@@ -326,7 +320,6 @@ export default function AlbumGalleryClient({
               })()}
               {images.map((img, idx) => {
                 const sel = isSelected(img, isDirectAlbumLink)
-                const comment = getComment(img, isDirectAlbumLink)
                 const signedUrl = (img as { signedUrl: string }).signedUrl
                 const isActive = activeImageId === img.id
                 return (
@@ -347,7 +340,7 @@ export default function AlbumGalleryClient({
                             <span style={{ fontSize: '0.6rem', color: S.text3, padding: 4, textAlign: 'center' }}>{img.filename}</span>
                           </div>
                       }
-                      {comment && (
+                      {img.comments.length > 0 && (
                         <div style={{ position: 'absolute', top: 4, left: 4, width: 7, height: 7, borderRadius: '50%', background: S.gold }} />
                       )}
                       <button
@@ -419,10 +412,11 @@ export default function AlbumGalleryClient({
           <div className="ag-panel">
             <CommentPanel
               image={activeImage}
-              isDirectAlbumLink={isDirectAlbumLink}
               commentDraft={commentDraft}
               onCommentChange={setCommentDraft}
-              onSave={() => activeImage && saveComment(activeImage.id, commentDraft)}
+              commentAuthor={commentAuthor}
+              onAuthorChange={setCommentAuthor}
+              onSave={() => activeImage && saveComment(activeImage.id, commentDraft, commentAuthor)}
               saving={savingComment}
               t={t}
             />
@@ -468,8 +462,6 @@ export default function AlbumGalleryClient({
           const img = images[lightboxIndex]
           const signedUrl = (img as { signedUrl: string }).signedUrl
           const sel = isSelected(img, isDirectAlbumLink)
-          const existingComment = getComment(img, isDirectAlbumLink)
-          const isDirty = commentDraft !== (existingComment ?? '')
 
           return (
             <div
@@ -503,13 +495,30 @@ export default function AlbumGalleryClient({
                 >
                   {sel ? t.selectedShort : t.selectThisPhoto}
                 </button>
-                {existingComment && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                    <div style={{ maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
-                      <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>{existingComment}</p>
-                    </div>
+                {img.comments.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, maxHeight: 140, overflowY: 'auto' }}>
+                    {img.comments.map(c => (
+                      <div key={c.id} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
+                          <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>{c.text}</p>
+                          {c.author_name && (
+                            <p style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 4, textAlign: 'right' }}>— {c.author_name}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
+                <input
+                  value={commentAuthor}
+                  onChange={e => setCommentAuthor(e.target.value)}
+                  placeholder={t.yourNameOptional}
+                  style={{
+                    width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.78rem',
+                    color: S.text, background: S.bg, border: `1px solid ${S.border}`,
+                    borderRadius: 8, padding: '7px 10px', outline: 'none', marginBottom: 8,
+                  }}
+                />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                   <textarea
                     value={commentDraft}
@@ -519,9 +528,9 @@ export default function AlbumGalleryClient({
                     style={{ flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.85rem', color: S.text, background: S.bg, border: `1px solid ${S.border}`, borderRadius: 10, padding: '8px 10px', outline: 'none' }}
                   />
                   <button
-                    onClick={() => saveComment(img.id, commentDraft)}
-                    disabled={savingComment || !isDirty}
-                    style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', flexShrink: 0, background: isDirty ? S.gold : S.surface2, color: isDirty ? '#0C0B09' : S.text3, cursor: isDirty ? 'pointer' : 'default', fontSize: '1rem' }}
+                    onClick={() => saveComment(img.id, commentDraft, commentAuthor)}
+                    disabled={savingComment || !commentDraft.trim()}
+                    style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', flexShrink: 0, background: commentDraft.trim() ? S.gold : S.surface2, color: commentDraft.trim() ? '#0C0B09' : S.text3, cursor: commentDraft.trim() ? 'pointer' : 'default', fontSize: '1rem' }}
                   >
                     {savingComment ? '…' : '↑'}
                   </button>
@@ -537,11 +546,12 @@ export default function AlbumGalleryClient({
 
 // ---------------------------------------------------------------------------
 
-function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange, onSave, saving, t }: {
+function CommentPanel({ image, commentDraft, onCommentChange, commentAuthor, onAuthorChange, onSave, saving, t }: {
   image: AnyImage | null
-  isDirectAlbumLink: boolean
   commentDraft: string
   onCommentChange: (text: string) => void
+  commentAuthor: string
+  onAuthorChange: (text: string) => void
   onSave: () => void
   saving: boolean
   t: SelectionStrings
@@ -549,9 +559,6 @@ function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange,
   if (!image) {
     return <div style={{ flex: 1 }} />
   }
-
-  const existingComment = getComment(image, isDirectAlbumLink)
-  const isDirty = commentDraft !== (existingComment ?? '')
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -566,20 +573,41 @@ function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange,
       </div>
 
       {/* Kommentar-visning */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 8 }}>
-        {existingComment && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <div style={{ maxWidth: '88%', padding: '9px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
-              <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
-                {existingComment}
-              </p>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {image.comments.length > 0 ? (
+          image.comments.map(c => (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ maxWidth: '88%', padding: '9px 12px', borderRadius: '14px 14px 2px 14px', background: S.goldBg, border: '1px solid rgba(196,148,52,0.2)' }}>
+                <p style={{ fontFamily: 'sans-serif', fontSize: '0.82rem', color: S.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>
+                  {c.text}
+                </p>
+                {c.author_name && (
+                  <p style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: S.text2, marginTop: 4, textAlign: 'right' }}>
+                    — {c.author_name}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          ))
+        ) : (
+          <p style={{ fontFamily: 'sans-serif', fontSize: '0.72rem', color: S.text3, textAlign: 'center', margin: 'auto 0' }}>
+            {t.noCommentYet}
+          </p>
         )}
       </div>
 
       {/* Input */}
       <div style={{ padding: '8px 12px 10px', borderTop: `1px solid ${S.border}`, flexShrink: 0 }}>
+        <input
+          value={commentAuthor}
+          onChange={e => onAuthorChange(e.target.value)}
+          placeholder={t.yourNameOptional}
+          style={{
+            width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.76rem',
+            color: S.text, background: S.bg, border: `1px solid ${S.border}`,
+            borderRadius: 8, padding: '6px 10px', outline: 'none', marginBottom: 6,
+          }}
+        />
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={commentDraft}
@@ -594,12 +622,12 @@ function CommentPanel({ image, isDirectAlbumLink, commentDraft, onCommentChange,
           />
           <button
             onClick={onSave}
-            disabled={saving || !isDirty}
+            disabled={saving || !commentDraft.trim()}
             style={{
               width: 34, height: 34, borderRadius: '50%', border: 'none', flexShrink: 0,
-              background: isDirty ? S.gold : S.surface2,
-              color: isDirty ? '#0C0B09' : S.text3,
-              cursor: isDirty ? 'pointer' : 'default',
+              background: commentDraft.trim() ? S.gold : S.surface2,
+              color: commentDraft.trim() ? '#0C0B09' : S.text3,
+              cursor: commentDraft.trim() ? 'pointer' : 'default',
               fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 0.15s',
             }}

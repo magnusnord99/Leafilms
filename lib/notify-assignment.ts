@@ -6,10 +6,12 @@ import { createClient, createServiceClient } from '@/lib/supabase-server'
  */
 export async function notifyAssignment(opts: {
   recipientId: string
-  type: 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'resale_assigned' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded'
+  type: 'task_assigned' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'resale_assigned' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded' | 'gallery_review_requested' | 'gallery_review_responded'
   projectId: string | null
   taskId?: string | null
   leadId?: string | null
+  galleryId?: string | null
+  galleryReviewId?: string | null
   preview: string
 }): Promise<void> {
   try {
@@ -30,6 +32,8 @@ export async function notifyAssignment(opts: {
       project_id: opts.projectId,
       task_id: opts.taskId ?? null,
       lead_id: opts.leadId ?? null,
+      gallery_id: opts.galleryId ?? null,
+      gallery_review_id: opts.galleryReviewId ?? null,
       message_preview: opts.preview.slice(0, 200),
       sender_name: profile?.name ?? profile?.email ?? 'Ukjent',
     })

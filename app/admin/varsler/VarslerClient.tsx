@@ -152,6 +152,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/preprod/${n.project_id}?chat=1`)
     } else if (n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded') {
       router.push(`/admin/projects/${n.project_id}?tab=pitch`)
+    } else if (n.type === 'gallery_review_requested') {
+      router.push(`/admin/selections/${n.gallery_id}/review/${n.gallery_review_id}`)
+    } else if (n.type === 'gallery_review_responded') {
+      router.push(`/admin/selections/${n.gallery_id}`)
     } else if (n.type === 'invoice_assigned') {
       router.push(`/admin/faktura/${n.project_id}`)
     } else if (n.type === 'resale_assigned') {
@@ -352,7 +356,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4508C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
                         </svg>
-                      ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' ? (
+                      ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' || n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
                         </svg>
@@ -398,6 +402,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'pitch_review_responded' ? 'svarte på review av pitchen'
                             : n.type === 'quote_review_requested' ? 'ber deg godkjenne tilbudet'
                             : n.type === 'quote_review_responded' ? 'svarte på review av tilbudet'
+                            : n.type === 'gallery_review_requested' ? 'ber deg gjennomgå et bildeutvalg'
+                            : n.type === 'gallery_review_responded' ? 'svarte på review av bildeutvalget'
                             : 'i en oppgave'}
                         </span>
                       </div>

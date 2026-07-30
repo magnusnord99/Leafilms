@@ -170,6 +170,31 @@ export type Review = {
   reviewer: { id: string; name: string | null; email: string } | null
 }
 
+export type GalleryReviewStatus = 'pending' | 'approved' | 'changes_requested'
+
+export type GalleryReview = {
+  id: string
+  gallery_id: string
+  status: GalleryReviewStatus
+  requested_by: string
+  reviewer_id: string
+  comment: string | null
+  requested_at: string
+  responded_at: string | null
+  created_at: string
+  admin_task_id: string | null
+  requester: { id: string; name: string | null; email: string } | null
+  reviewer: { id: string; name: string | null; email: string } | null
+}
+
+export type GalleryReviewMark = {
+  id: string
+  review_id: string
+  image_id: string
+  keep: boolean
+  note: string | null
+}
+
 export type CrewMember = {
   id: string
   role: string

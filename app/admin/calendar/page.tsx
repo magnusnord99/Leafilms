@@ -7,6 +7,9 @@ import {
   getMeetingsForCalendar, getColleagues, createMeeting, cancelMeeting, updateMeeting,
   respondToMeetingInvite, MeetingEvent, Colleague,
 } from '@/lib/actions/meetings'
+import {
+  getUnavailability, createUnavailability, deleteUnavailability, UnavailabilityBlock,
+} from '@/lib/actions/unavailability'
 import { useAuth } from '@/hooks/useAuth'
 
 const C = {
@@ -22,7 +25,8 @@ const C = {
   success:  '#4CAF7D',
   warning:  '#F0A500',
   danger:   '#E05555',
-  meeting:  '#D4508C',
+  meeting:  '#3B82F6',
+  unavail:  '#E05555',
   today:    'rgba(124,92,252,0.18)',
 }
 
@@ -49,9 +53,10 @@ type CalEvent = {
   color: string
   bgColor: string
   confirmed: boolean
-  type: 'shooting' | 'task' | 'meeting'
+  type: 'shooting' | 'task' | 'meeting' | 'unavailable'
   dashed?: boolean
   meeting?: MeetingEvent
+  unavail?: UnavailabilityBlock
 }
 
 function dateRange(start: string, end: string | null): string[] {
@@ -82,12 +87,16 @@ export default function CalendarPage() {
   const [shootings, setShootings] = useState<ShootingEvent[]>([])
   const [tasks, setTasks] = useState<TaskEvent[]>([])
   const [meetings, setMeetings] = useState<MeetingEvent[]>([])
+  const [unavailability, setUnavailability] = useState<UnavailabilityBlock[]>([])
   const [colleagues, setColleagues] = useState<Colleague[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
 
-  const [showBooking, setShowBooking] = useState(false)
+  const [dayMenuDate, setDayMenuDate] = useState<string | null>(null)
+  const [bookingDate, setBookingDate] = useState<string | null>(null)
+  const [unavailDate, setUnavailDate] = useState<string | null>(null)
   const [detailMeeting, setDetailMeeting] = useState<MeetingEvent | null>(null)
+  const [detailUnavail, setDetailUnavail] = useState<UnavailabilityBlock | null>(null)
 
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
@@ -99,13 +108,15 @@ export default function CalendarPage() {
   async function load() {
     if (!isAdmin && !profile) return // vent på profil for ikke-admin, ellers filtreres feil (alt) et øyeblikk
     setLoading(true)
-    const [calData, meetingData] = await Promise.all([
+    const [calData, meetingData, unavailData] = await Promise.all([
       getCalendarEvents(effectiveFilterId),
       getMeetingsForCalendar(effectiveFilterId),
+      getUnavailability(),
     ])
     setShootings(calData.shootings)
     setTasks(calData.tasks)
     setMeetings(meetingData)
+    setUnavailability(unavailData)
     setLoading(false)
   }
 
@@ -180,7 +191,7 @@ export default function CalendarPage() {
         sublabel: `${fmtTime(m.startsAt)}${m.endsAt ? `–${fmtTime(m.endsAt)}` : ''}`,
         href: null,
         color: C.meeting,
-        bgColor: 'rgba(212,80,140,0.14)',
+        bgColor: 'rgba(59,130,246,0.14)',
         confirmed: true,
         type: 'meeting',
         dashed: declined,
@@ -188,8 +199,33 @@ export default function CalendarPage() {
       })
     }
 
+    // Utilgjengelig-blokker — alltid alle, uansett person-filter
+    for (const u of unavailability) {
+      const isMine = u.profileId === profile?.id
+      const timeLabel = u.startTime
+        ? `${u.startTime.slice(0, 5)}${u.endTime ? `–${u.endTime.slice(0, 5)}` : ''}`
+        : null
+      const days = dateRange(u.date, u.endDate)
+      const baseLabel = isMine ? (u.note || 'Utilgjengelig') : `${u.profileName} utilgjengelig`
+
+      for (const d of days) {
+        add(d, {
+          id: `unavail-${u.id}-${d}`,
+          date: d,
+          label: d === days[0] ? baseLabel : '↔',
+          sublabel: d === days[0] ? timeLabel : null,
+          href: null,
+          color: C.unavail,
+          bgColor: 'rgba(224,85,85,0.14)',
+          confirmed: true,
+          type: 'unavailable',
+          unavail: u,
+        })
+      }
+    }
+
     return map
-  }, [shootings, tasks, meetings, effectiveFilterId])
+  }, [shootings, tasks, meetings, unavailability, effectiveFilterId, profile?.id])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
@@ -222,7 +258,8 @@ export default function CalendarPage() {
     { color: '#7C5CFC', bg: 'rgba(124,92,252,0.14)', label: 'Post-prod oppgave', dashed: false },
     { color: '#F0A500', bg: 'rgba(240,165,0,0.14)', label: 'Produksjonsoppgave', dashed: false },
     { color: '#4A9AC4', bg: 'rgba(74,154,196,0.14)', label: 'Pre-prod oppgave', dashed: false },
-    { color: C.meeting, bg: 'rgba(212,80,140,0.14)', label: 'Møte', dashed: false },
+    { color: C.meeting, bg: 'rgba(59,130,246,0.14)', label: 'Møte', dashed: false },
+    { color: C.unavail, bg: 'rgba(224,85,85,0.14)', label: 'Utilgjengelig', dashed: false },
   ]
 
   // Count stats
@@ -264,7 +301,7 @@ export default function CalendarPage() {
             )}
 
             <button
-              onClick={() => setShowBooking(true)}
+              onClick={() => setBookingDate(toLocalInputValue(new Date()).slice(0, 10))}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
                 padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
@@ -346,6 +383,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={i}
+                    onClick={() => { if (dateStr) setDayMenuDate(dateStr) }}
                     style={{
                       minHeight: 110,
                       padding: '6px 6px 8px',
@@ -353,6 +391,7 @@ export default function CalendarPage() {
                       borderBottom: i < totalCells - 7 ? `1px solid ${C.border}` : 'none',
                       background: isToday ? C.today : isWeekend && isCurrentMonth ? 'rgba(255,255,255,0.01)' : 'transparent',
                       position: 'relative',
+                      cursor: isCurrentMonth ? 'pointer' : 'default',
                     }}
                   >
                     {/* Date number */}
@@ -404,16 +443,30 @@ export default function CalendarPage() {
                             </span>
                           </div>
                         )
-                        return ev.type === 'meeting' ? (
-                          <button
-                            key={ev.id}
-                            onClick={() => setDetailMeeting(ev.meeting!)}
-                            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
-                          >
-                            {chip}
-                          </button>
-                        ) : (
-                          <Link key={ev.id} href={ev.href!} style={{ textDecoration: 'none' }}>
+                        if (ev.type === 'meeting') {
+                          return (
+                            <button
+                              key={ev.id}
+                              onClick={(e) => { e.stopPropagation(); setDetailMeeting(ev.meeting!) }}
+                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                            >
+                              {chip}
+                            </button>
+                          )
+                        }
+                        if (ev.type === 'unavailable') {
+                          return (
+                            <button
+                              key={ev.id}
+                              onClick={(e) => { e.stopPropagation(); setDetailUnavail(ev.unavail!) }}
+                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                            >
+                              {chip}
+                            </button>
+                          )
+                        }
+                        return (
+                          <Link key={ev.id} href={ev.href!} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none' }}>
                             {chip}
                           </Link>
                         )
@@ -434,11 +487,21 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {showBooking && (
+      {dayMenuDate && (
+        <DayActionModal
+          date={dayMenuDate}
+          onClose={() => setDayMenuDate(null)}
+          onPickMeeting={() => { setBookingDate(dayMenuDate); setDayMenuDate(null) }}
+          onPickUnavailable={() => { setUnavailDate(dayMenuDate); setDayMenuDate(null) }}
+        />
+      )}
+
+      {bookingDate && (
         <BookingModal
           colleagues={colleagues}
-          onClose={() => setShowBooking(false)}
-          onCreated={() => { setShowBooking(false); load() }}
+          initialDate={bookingDate}
+          onClose={() => setBookingDate(null)}
+          onCreated={() => { setBookingDate(null); load() }}
         />
       )}
 
@@ -450,17 +513,54 @@ export default function CalendarPage() {
           onChanged={() => { setDetailMeeting(null); load() }}
         />
       )}
+
+      {unavailDate && (
+        <UnavailabilityModal
+          initialDate={unavailDate}
+          onClose={() => setUnavailDate(null)}
+          onCreated={() => { setUnavailDate(null); load() }}
+        />
+      )}
+
+      {detailUnavail && (
+        <UnavailabilityDetailModal
+          block={detailUnavail}
+          currentUserId={profile?.id ?? null}
+          onClose={() => setDetailUnavail(null)}
+          onDeleted={() => { setDetailUnavail(null); load() }}
+        />
+      )}
     </div>
   )
 }
 
-function BookingModal({ colleagues, onClose, onCreated }: {
+function DayActionModal({ date, onClose, onPickMeeting, onPickUnavailable }: {
+  date: string
+  onClose: () => void
+  onPickMeeting: () => void
+  onPickUnavailable: () => void
+}) {
+  const label = new Date(`${date}T00:00`).toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' })
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, width: 'min(320px, calc(100vw - 32px))', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 600, color: C.text, textTransform: 'capitalize' }}>{label}</h2>
+        <button onClick={onPickMeeting} style={{ ...buttonPrimary(C.meeting), textAlign: 'left', padding: '10px 14px' }}>+ Nytt møte</button>
+        <button onClick={onPickUnavailable} style={{ ...buttonPrimary(C.unavail), textAlign: 'left', padding: '10px 14px' }}>Sett utilgjengelig</button>
+        <button onClick={onClose} style={{ ...buttonSecondary, marginTop: 4 }}>Avbryt</button>
+      </div>
+    </div>
+  )
+}
+
+function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
   colleagues: Colleague[]
+  initialDate: string
   onClose: () => void
   onCreated: () => void
 }) {
   const [title, setTitle] = useState('')
-  const [date, setDate] = useState(() => toLocalInputValue(new Date()).slice(0, 10))
+  const [date, setDate] = useState(initialDate)
   const [startTime, setStartTime] = useState('10:00')
   const [endTime, setEndTime] = useState('')
   const [link, setLink] = useState('')
@@ -658,6 +758,149 @@ function MeetingDetailModal({ meeting, currentUserId, onClose, onChanged }: {
             )}
             <button onClick={onClose} style={buttonSecondary}>Lukk</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UnavailabilityModal({ initialDate, onClose, onCreated }: {
+  initialDate: string
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [date, setDate] = useState(initialDate)
+  const [wholeDay, setWholeDay] = useState(false)
+  const [endDate, setEndDate] = useState(initialDate)
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSaving(true)
+    const result = await createUnavailability({
+      date,
+      endDate: wholeDay ? endDate : null,
+      startTime: wholeDay ? null : (startTime || null),
+      endTime: wholeDay ? null : (endTime || null),
+      note: note || null,
+    })
+    setSaving(false)
+    if (!result.ok) { setError(result.error ?? 'Kunne ikke lagre'); return }
+    onCreated()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 'min(380px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>Sett utilgjengelig</h2>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
+          Du trenger ikke si hva du skal — bare marker at du er opptatt.
+        </p>
+
+        <Field label={wholeDay ? 'Fra dato' : 'Dato'}>
+          <input
+            type="date"
+            value={date}
+            onChange={e => {
+              setDate(e.target.value)
+              if (e.target.value > endDate) setEndDate(e.target.value)
+            }}
+            style={inputStyle}
+          />
+        </Field>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} />
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>Hele dagen (evt. flere dager i strekk)</span>
+        </label>
+
+        {wholeDay ? (
+          <Field label="Til og med">
+            <input type="date" value={endDate} min={date} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+          </Field>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Start (valgfri)" style={{ flex: 1 }}>
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="Slutt (valgfri)" style={{ flex: 1 }}>
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
+            </Field>
+          </div>
+        )}
+
+        <Field label="Notat (valgfri)">
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="F.eks. tannlege" style={inputStyle} />
+        </Field>
+
+        {error && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>{error}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+          <button type="button" onClick={onClose} style={buttonSecondary}>Avbryt</button>
+          <button type="submit" disabled={saving} style={{ ...buttonPrimary(C.unavail), opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Lagrer...' : 'Lagre'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function UnavailabilityDetailModal({ block, currentUserId, onClose, onDeleted }: {
+  block: UnavailabilityBlock
+  currentUserId: string | null
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const isMine = currentUserId === block.profileId
+
+  async function handleDelete() {
+    if (!confirm('Fjerne denne utilgjengelig-markeringen?')) return
+    setBusy(true)
+    await deleteUnavailability(block.id)
+    setBusy(false)
+    onDeleted()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 'min(380px, calc(100vw - 32px))', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>
+            {isMine ? 'Utilgjengelig' : `${block.profileName} er utilgjengelig`}
+          </h2>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginTop: 2 }}>
+            {new Date(`${block.date}T00:00`).toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {block.endDate && block.endDate !== block.date
+              ? ` – ${new Date(`${block.endDate}T00:00`).toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' })}`
+              : ''}
+            {block.startTime ? ` · ${block.startTime.slice(0, 5)}${block.endTime ? `–${block.endTime.slice(0, 5)}` : ''}` : ''}
+          </p>
+        </div>
+
+        {block.note && (
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{block.note}</p>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          <div>
+            {isMine && (
+              <button onClick={handleDelete} disabled={busy} style={{ ...buttonSecondary, color: C.danger, borderColor: C.danger }}>
+                Fjern
+              </button>
+            )}
+          </div>
+          <button onClick={onClose} style={buttonSecondary}>Lukk</button>
         </div>
       </div>
     </div>

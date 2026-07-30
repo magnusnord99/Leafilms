@@ -31,10 +31,18 @@ export type SelectionImage = {
   storage_path: string | null
   sort_order: number
   selected: boolean
-  comment: string | null
+  comments: ImageComment[]
   selected_at: string | null
   album_id: string | null
   signedUrl?: string
+}
+
+export type ImageComment = {
+  id: string
+  image_id: string
+  text: string
+  author_name: string | null
+  created_at: string
 }
 
 export type AlbumForCustomer = {
@@ -52,6 +60,28 @@ export type AlbumForCustomer = {
 // ---------------------------------------------------------------------------
 function cookieKey(token: string) {
   return `sel_${token.slice(0, 16)}`
+}
+
+// ---------------------------------------------------------------------------
+// Delt: hent kommentarer for en gruppe bilder, gruppert på image_id
+// ---------------------------------------------------------------------------
+export async function getCommentsForImages(
+  service: ReturnType<typeof createServiceClient>,
+  imageIds: string[]
+): Promise<Record<string, ImageComment[]>> {
+  if (imageIds.length === 0) return {}
+
+  const { data } = await service
+    .from('image_comments')
+    .select('*')
+    .in('image_id', imageIds)
+    .order('created_at', { ascending: true })
+
+  const map: Record<string, ImageComment[]> = {}
+  for (const c of (data ?? []) as ImageComment[]) {
+    ;(map[c.image_id] ??= []).push(c)
+  }
+  return map
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +200,9 @@ export async function getAdminGallery(projectId: string): Promise<{
     .eq('gallery_id', gallery.id)
     .order('sort_order', { ascending: true })
 
-  const imgs = (images ?? []) as SelectionImage[]
+  const rawImgs = (images ?? []) as Omit<SelectionImage, 'comments'>[]
+  const commentsByImage = await getCommentsForImages(service, rawImgs.map(i => i.id))
+  const imgs = rawImgs.map(i => ({ ...i, comments: commentsByImage[i.id] ?? [] }))
 
   // Generer signerte URL-er for bilder med storage_path
   const signedUrls: Record<string, string> = {}
@@ -396,7 +428,7 @@ export async function getGalleryForCustomer(token: string): Promise<{
   albums: AlbumForCustomer[]
   legacyImages: (SelectionImage & { signedUrl: string })[]
   videos: GalleryVideo[]
-} | null> {
+} | 'not_ready' | null> {
   const cookieStore = await cookies()
   const galleryIdFromCookie = cookieStore.get(cookieKey(token))?.value
   if (!galleryIdFromCookie) return null
@@ -412,13 +444,28 @@ export async function getGalleryForCustomer(token: string): Promise<{
 
   if (error || !gallery) return null
 
+  // Intern review kan sperre kunde-tilgang midlertidig (se lib/actions/gallery-reviews.ts) —
+  // siste runde avgjør, ingen rad i det hele tatt betyr aldri sendt til review (ingen sperre)
+  const { data: latestReview } = await service
+    .from('gallery_reviews')
+    .select('status')
+    .eq('gallery_id', gallery.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (latestReview && latestReview.status !== 'approved') return 'not_ready'
+
   const { data: images } = await service
     .from('selection_images')
     .select('*')
     .eq('gallery_id', gallery.id)
+    .eq('hidden_from_client', false)
     .order('sort_order', { ascending: true })
 
-  const imgs = (images ?? []) as SelectionImage[]
+  const rawImgs = (images ?? []) as Omit<SelectionImage, 'comments'>[]
+  const commentsByImage = await getCommentsForImages(service, rawImgs.map(i => i.id))
+  const imgs = rawImgs.map(i => ({ ...i, comments: commentsByImage[i.id] ?? [] }))
   const paths = imgs.filter(i => i.storage_path).map(i => i.storage_path!)
   const signedUrlMap: Record<string, string> = {}
 
@@ -550,8 +597,12 @@ export async function toggleImageSelection(
 export async function addImageComment(
   token: string,
   imageId: string,
-  comment: string
-): Promise<void> {
+  text: string,
+  authorName?: string
+): Promise<ImageComment> {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error('Kommentaren kan ikke være tom')
+
   const cookieStore = await cookies()
   const galleryId = cookieStore.get(cookieKey(token))?.value
   if (!galleryId) throw new Error('Ikke autorisert')
@@ -566,10 +617,28 @@ export async function addImageComment(
 
   if (img?.gallery_id !== galleryId) throw new Error('Ikke autorisert')
 
-  await service
-    .from('selection_images')
-    .update({ comment: comment.trim() || null })
-    .eq('id', imageId)
+  const { data, error } = await service
+    .from('image_comments')
+    .insert({ image_id: imageId, text: trimmed, author_name: authorName?.trim() || null })
+    .select()
+    .single()
+
+  if (error || !data) throw new Error(error?.message ?? 'Kunne ikke legge til kommentar')
+  return data as ImageComment
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN: Slett kommentar
+// ---------------------------------------------------------------------------
+export async function deleteImageComment(commentId: string): Promise<void> {
+  const service = createServiceClient()
+
+  const { error } = await service
+    .from('image_comments')
+    .delete()
+    .eq('id', commentId)
+
+  if (error) throw new Error(error.message)
 }
 
 // ---------------------------------------------------------------------------

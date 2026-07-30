@@ -145,7 +145,7 @@ export default function ReviewClient({
                       : <div style={{ width: '100%', height: '100%', background: S.surface2 }} />
                     }
                     <div style={{ position: 'absolute', top: 3, right: 3, width: 12, height: 12, borderRadius: '50%', background: S.gold }} />
-                    {img.comment && (
+                    {img.comments.length > 0 && (
                       <div style={{ position: 'absolute', bottom: 3, left: 3, width: 10, height: 10, borderRadius: '50%', background: 'rgba(196,148,52,0.7)' }} />
                     )}
                   </div>
@@ -186,9 +186,15 @@ export default function ReviewClient({
                 ? <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
                 : <div style={{ width: 400, height: 300, background: S.surface2 }} />
               }
-              {img?.comment && (
-                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
-                  <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{img.comment}</p>
+              {img && img.comments.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {img.comments.map(c => (
+                    <div key={c.id} style={{ padding: '8px 12px', background: 'rgba(196,148,52,0.1)', border: '1px solid rgba(196,148,52,0.25)', borderRadius: 8 }}>
+                      <p style={{ fontFamily: 'sans-serif', fontSize: '0.8rem', color: S.text, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>
+                        {c.text}{c.author_name && <span style={{ color: S.text2 }}> — {c.author_name}</span>}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

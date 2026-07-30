@@ -1,4 +1,4 @@
--- 131_push_subscriptions.sql
+-- 134_push_subscriptions.sql
 -- Lagrer Web Push-abonnement per enhet, slik at /api/push/dispatch kan sende
 -- push-varsler til alle enheter en bruker har skrudd på, uavhengig av om appen
 -- er åpen i en fane. Se docs/superpowers/specs/2026-07-29-mobile-push-notifications-design.md.

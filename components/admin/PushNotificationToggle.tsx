@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { subscribeToPush, unsubscribeFromPush } from '@/lib/actions/push-subscriptions'
+import { subscribeToPush, unsubscribeFromPush, getPushSubscriptionEndpoints } from '@/lib/actions/push-subscriptions'
 import { C } from '@/lib/admin-theme'
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -39,7 +39,12 @@ export function PushNotificationToggle() {
 
       const registration = await navigator.serviceWorker.register('/sw.js')
       const existing = await registration.pushManager.getSubscription()
-      setEnabled(!!existing)
+      if (existing) {
+        const persistedEndpoints = await getPushSubscriptionEndpoints()
+        setEnabled(persistedEndpoints.includes(existing.endpoint))
+      } else {
+        setEnabled(false)
+      }
       setSupport('ready')
     }
     init().catch(() => setSupport('unsupported'))
@@ -89,6 +94,7 @@ export function PushNotificationToggle() {
         navigator.userAgent
       )
       if (!res.ok) {
+        await subscription.unsubscribe()
         setError('Kunne ikke lagre abonnement')
         return
       }

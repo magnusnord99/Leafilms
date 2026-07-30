@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import type { User } from '@supabase/supabase-js'
 import { isStaffRole, type StaffRole } from '@/lib/permissions'
+import { unsubscribeFromPush } from '@/lib/actions/push-subscriptions'
 
 interface Profile {
   id: string
@@ -115,6 +116,22 @@ export function useAuth() {
   }
 
   async function logout() {
+    // Fjern push-abonnementet for denne enheten før utlogging, slik at neste
+    // bruker på samme (delte) maskin ikke fortsetter å motta forrige brukers
+    // push-varsler. Feil her skal aldri blokkere selve utloggingen.
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration()
+        const subscription = await registration?.pushManager.getSubscription()
+        if (subscription) {
+          await unsubscribeFromPush(subscription.endpoint).catch(() => {})
+          await subscription.unsubscribe().catch(() => {})
+        }
+      }
+    } catch {
+      // Ignorer — utlogging skal alltid fortsette selv om push-opprydding feiler
+    }
+
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()

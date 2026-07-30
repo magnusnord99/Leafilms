@@ -10,12 +10,12 @@
 
 ## Global Constraints
 
-- Next migration number is `131` (last applied: `129_conversation_message_reactions.sql`; `130_image_comments.sql` already exists uncommitted in the working tree for an unrelated in-progress feature — do not touch it, just skip past it). File: `supabase/migrations/131_push_subscriptions.sql`.
+- Renumbered twice before merge: originally assigned `131`, then `134`, both times because a concurrent uncommitted feature (gallery review + unavailability, in Magnus's other session) independently claimed the same numbers (`130`-`134`) in the shared main working tree. Final number: `135`. Applied to the live database under this content already (Magnus ran it via Supabase Dashboard SQL Editor before the last rename) — the file rename here is repo-hygiene only, no re-run needed. File: `supabase/migrations/135_push_subscriptions.sql`.
 - No automated test framework exists in this repo (no jest/vitest, no `*.test.ts` files, no `test` script in `package.json`). Every task below is verified **manually** — this matches the existing project convention, not a shortcut.
 - Design tokens for anything in `/admin/*` come from `lib/admin-theme.ts` (`C.bg = '#181920'`, `C.accent = '#7C5CFC'`, etc.) — never the public cinematic palette (`#0C0B09` / `#C49434`), which belongs only to `/p/*` pages.
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined into the client bundle **at build time** by Next.js — setting it on Cloud Run after the fact requires a rebuild+redeploy, not just an env var update. This is the same class of mistake that caused the `ANTHROPIC_API_KEY` incident (see project memory `project_leafilms`) — flag this explicitly to Magnus in the final task.
 - `deploy.sh` only sets env vars on **first-ever** creation of the Cloud Run service. Since `leafilms-pitch` already exists, the new push-related env vars must be added via `gcloud run services update leafilms-pitch --update-env-vars=...` (or the Cloud Run console) — `deploy.sh` will not pick them up automatically.
-- Migrations in this repo run via `psql "$DATABASE_URL" -f supabase/migrations/131_push_subscriptions.sql` (see `scripts/migrate-single.sh`) or by pasting into the Supabase SQL Editor. `DATABASE_URL` must be the pooler connection string (`aws-1-eu-north-1.pooler.supabase.com`, user `postgres.<ref>`) — the direct connection string is IPv6-only and fails from this machine (see project memory `reference_supabase_pooler`).
+- Migrations in this repo run via `psql "$DATABASE_URL" -f supabase/migrations/135_push_subscriptions.sql` (see `scripts/migrate-single.sh`) or by pasting into the Supabase SQL Editor. `DATABASE_URL` must be the pooler connection string (`aws-1-eu-north-1.pooler.supabase.com`, user `postgres.<ref>`) — the direct connection string is IPv6-only and fails from this machine (see project memory `reference_supabase_pooler`).
 - Deviation from the design spec, made explicitly here: the spec says to place the on/off toggle "in the `NotificationBell` dropdown." `NotificationBell` (`components/admin/NotificationBell.tsx`) has **no dropdown today** — clicking it just navigates to `/admin/varsler`. Building a new dropdown just to host one button would be scope creep for this feature. Instead, the toggle is placed directly in the `/admin/varsler` page header (`VarslerClient.tsx`), which is the other place the spec itself says people already are "when thinking about notifications." Flag this to Magnus as a deliberate deviation, not an oversight.
 
 ---
@@ -23,7 +23,7 @@
 ### Task 1: `push_subscriptions` table + RLS
 
 **Files:**
-- Create: `supabase/migrations/131_push_subscriptions.sql`
+- Create: `supabase/migrations/135_push_subscriptions.sql`
 
 **Interfaces:**
 - Produces: table `push_subscriptions(id, user_id, endpoint, p256dh, auth, user_agent, created_at)`, unique on `endpoint`, RLS policy restricting all access to `auth.uid() = user_id`. Later tasks (3, 5) read/write this table by exact column name.
@@ -31,7 +31,7 @@
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- 131_push_subscriptions.sql
+-- 135_push_subscriptions.sql
 -- Lagrer Web Push-abonnement per enhet, slik at /api/push/dispatch kan sende
 -- push-varsler til alle enheter en bruker har skrudd på, uavhengig av om appen
 -- er åpen i en fane. Se docs/superpowers/specs/2026-07-29-mobile-push-notifications-design.md.
@@ -60,7 +60,7 @@ CREATE POLICY push_subscriptions_own_rows ON push_subscriptions
 
 - [ ] **Step 2: Apply the migration**
 
-Run: `psql "$DATABASE_URL" -f supabase/migrations/131_push_subscriptions.sql`
+Run: `psql "$DATABASE_URL" -f supabase/migrations/135_push_subscriptions.sql`
 Expected: `CREATE TABLE`, `CREATE INDEX` (x2), `ALTER TABLE`, `DROP POLICY`, `CREATE POLICY` — no errors.
 
 - [ ] **Step 3: Verify manually**
@@ -73,7 +73,7 @@ Expected: table has the 6 columns above; one policy `push_subscriptions_own_rows
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/131_push_subscriptions.sql
+git add supabase/migrations/135_push_subscriptions.sql
 git commit -m "feat: add push_subscriptions table for mobile push notifications"
 ```
 

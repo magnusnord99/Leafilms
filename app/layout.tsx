@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,19 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "Leafilms",
   description: "Leafilms — innholdsproduksjon",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Leafilms",
+  },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#181920",
 };
 
 export default function RootLayout({

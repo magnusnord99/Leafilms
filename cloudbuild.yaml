@@ -7,6 +7,8 @@ steps:
       - 'NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}'
       - '--build-arg'
       - 'NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_VAPID_PUBLIC_KEY=${_NEXT_PUBLIC_VAPID_PUBLIC_KEY}'
       - '-t'
       - 'gcr.io/$PROJECT_ID/leafilms-pitch:latest'
       - '.'
@@ -25,4 +27,5 @@ options:
 substitutions:
   _NEXT_PUBLIC_SUPABASE_URL: 'https://fmwcrgfxmlgfnsinnuyy.supabase.co'
   _NEXT_PUBLIC_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtd2NyZ2Z4bWxnZm5zaW5udXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MDAxMjAsImV4cCI6MjA3ODE3NjEyMH0.6Q7wEUtSfOnCJ4OHWA1VT0ma0ya7DjcZQxCqPWMCMnE'
+  _NEXT_PUBLIC_VAPID_PUBLIC_KEY: ''
 

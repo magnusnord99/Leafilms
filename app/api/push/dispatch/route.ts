@@ -3,17 +3,20 @@ import webpush from 'web-push'
 import { createServiceClient } from '@/lib/supabase-server'
 import { buildPushContent, type PushNotificationRow } from '@/lib/push-notification-content'
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-push-secret')
   if (!secret || secret !== process.env.PUSH_WEBHOOK_SECRET) {
     return Response.json({ error: 'Ikke autorisert' }, { status: 401 })
   }
+
+  const vapidSubject = process.env.VAPID_SUBJECT
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY
+  if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
+    console.error('push dispatch: VAPID-miljøvariabler mangler')
+    return Response.json({ error: 'Push er ikke konfigurert' }, { status: 503 })
+  }
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
 
   const payload = await req.json().catch(() => null)
   // Webhooken er konfigurert til kun å fyre på INSERT (se migrasjon/dashboard-oppsett),

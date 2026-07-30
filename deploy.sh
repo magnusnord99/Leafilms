@@ -36,17 +36,30 @@ env_str = sys.stdin.read()
 match = re.search(r\"'name': 'NEXT_PUBLIC_SUPABASE_ANON_KEY'.*?'value': '([^']+)'\", env_str)
 print(match.group(1) if match else '')
 " <<< "$ENV_OUTPUT")
-  
+
+  VAPID_PUBLIC_KEY=$(python3 -c "
+import sys
+import re
+env_str = sys.stdin.read()
+match = re.search(r\"'name': 'NEXT_PUBLIC_VAPID_PUBLIC_KEY'.*?'value': '([^']+)'\", env_str)
+print(match.group(1) if match else '')
+" <<< "$ENV_OUTPUT")
+
   if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
     echo "⚠️  Warning: Could not extract build env vars from service"
     echo "   Using hardcoded values from cloudbuild.yaml"
     SUPABASE_URL="https://fmwcrgfxmlgfnsinnuyy.supabase.co"
     SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtd2NyZ2Z4bWxnZm5zaW5udXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MDAxMjAsImV4cCI6MjA3ODE3NjEyMH0.6Q7wEUtSfOnCJ4OHWA1VT0ma0ya7DjcZQxCqPWMCMnE"
   fi
-  
+
+  if [ -z "$VAPID_PUBLIC_KEY" ]; then
+    echo "⚠️  Warning: Could not extract NEXT_PUBLIC_VAPID_PUBLIC_KEY from service"
+    echo "   Push-varsler vil ikke fungere i denne buildet før variabelen settes manuelt"
+  fi
+
   # Deploy using Cloud Build with substitutions
   gcloud builds submit --config=cloudbuild.yaml \
-    --substitutions=_NEXT_PUBLIC_SUPABASE_URL="$SUPABASE_URL",_NEXT_PUBLIC_SUPABASE_ANON_KEY="$SUPABASE_KEY" \
+    --substitutions=_NEXT_PUBLIC_SUPABASE_URL="$SUPABASE_URL",_NEXT_PUBLIC_SUPABASE_ANON_KEY="$SUPABASE_KEY",_NEXT_PUBLIC_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
     --region=europe-north1
   
   # Deploy the built image to Cloud Run

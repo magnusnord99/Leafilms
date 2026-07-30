@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "Leafilms — innholdsproduksjon",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Leafilms",
   },
   icons: {

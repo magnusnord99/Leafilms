@@ -9,7 +9,7 @@ import type { createClient } from '@/lib/supabase-server'
 
 export type StepperLockInfo = { locked: boolean; blockedByTitle: string | null }
 
-type StepperTaskLite = {
+export type StepperTaskLite = {
   id: string
   project_id: string
   pipeline_stage: string
@@ -18,29 +18,21 @@ type StepperTaskLite = {
   is_custom: boolean
   status: string
   deliverable_id: string | null
+  title?: string
 }
 
-export async function computeStepperLocks(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  tasks: StepperTaskLite[]
-): Promise<Map<string, StepperLockInfo>> {
-  const candidates = tasks.filter(t => t.pipeline_stage === 'post_prod' && !t.is_custom)
+/**
+ * Ren beregning av stepper-lås ut fra en allerede innhentet liste med
+ * søsken-oppgaver (samme prosjekt+sub_type, post_prod, is_custom=false).
+ * Ingen DB-kall — kalles fra computeStepperLocks under, og fra
+ * updateTaskStatus i lib/actions/pipeline.ts for å finne oppgaver som blir
+ * ulåst når en oppgave settes til 'done' (for "din tur nå"-varsling).
+ */
+export function computeLocksFromSiblings(
+  candidates: StepperTaskLite[],
+  siblings: StepperTaskLite[]
+): Map<string, StepperLockInfo> {
   const result = new Map<string, StepperLockInfo>()
-  if (candidates.length === 0) return result
-
-  const projectIds = Array.from(new Set(candidates.map(t => t.project_id)))
-
-  const { data: siblings, error } = await supabase
-    .from('tasks')
-    .select('project_id, sub_type, sort_order, status, title, deliverable_id')
-    .in('project_id', projectIds)
-    .eq('pipeline_stage', 'post_prod')
-    .eq('is_custom', false)
-
-  if (error || !siblings) {
-    console.error('computeStepperLocks error:', error)
-    return result
-  }
 
   for (const task of candidates) {
     // Samme leveranse-skoperingsregel som resetTaskAndSubsequent/rejectFeedbackAndReset
@@ -64,4 +56,29 @@ export async function computeStepperLocks(
   }
 
   return result
+}
+
+export async function computeStepperLocks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tasks: StepperTaskLite[]
+): Promise<Map<string, StepperLockInfo>> {
+  const candidates = tasks.filter(t => t.pipeline_stage === 'post_prod' && !t.is_custom)
+  const result = new Map<string, StepperLockInfo>()
+  if (candidates.length === 0) return result
+
+  const projectIds = Array.from(new Set(candidates.map(t => t.project_id)))
+
+  const { data: siblings, error } = await supabase
+    .from('tasks')
+    .select('id, project_id, pipeline_stage, sub_type, sort_order, status, title, deliverable_id, is_custom')
+    .in('project_id', projectIds)
+    .eq('pipeline_stage', 'post_prod')
+    .eq('is_custom', false)
+
+  if (error || !siblings) {
+    console.error('computeStepperLocks error:', error)
+    return result
+  }
+
+  return computeLocksFromSiblings(candidates, siblings)
 }

@@ -26,6 +26,7 @@ const PHRASE: Record<string, string> = {
   task_message_mention: 'nevnte deg i en oppgave',
   task_message_reaction: 'reagerte på meldingen din i en oppgave',
   task_assigned: 'tildelte deg en oppgave',
+  task_turn_ready: 'fullførte forrige steg — nå er det din tur',
   lead_assigned: 'satte deg som ansvarlig for en lead',
   resale_assigned: 'satte deg som ansvarlig for videresalg',
   selection_submitted: 'sendte inn bildevalg',
@@ -58,6 +59,8 @@ function pushUrlFor(n: PushNotificationRow, taskPipelineStage: string | null): s
     case 'task_assigned':
     case 'resale_assigned':
       return `/admin/projects/${n.project_id}`
+    case 'task_turn_ready':
+      return `/admin/postprod/${n.project_id}?task=${n.task_id}`
     case 'direct_message':
     case 'conversation_message_reaction':
       return '/admin/meldinger'

@@ -141,6 +141,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(n.project_id ? `/admin/projects/${n.project_id}/contact` : `/admin/leads/${n.lead_id}`)
     } else if (n.type === 'task_assigned') {
       router.push(`/admin/projects/${n.project_id}`)
+    } else if (n.type === 'task_turn_ready') {
+      router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}`)
     } else if (n.type === 'direct_message' || n.type === 'conversation_message_reaction') {
       router.push('/admin/meldinger')
     } else if (n.type === 'meeting_invite' || n.type === 'meeting_response') {
@@ -360,7 +362,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4508C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
                         </svg>
-                      ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' || n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded' ? (
+                      ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' || n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded' || n.type === 'task_turn_ready' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
                         </svg>
@@ -383,6 +385,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'project_message_mention' ? 'nevnte deg i prosjekt-chatten'
                             : n.type === 'task_message_mention' ? 'nevnte deg i en oppgave'
                             : n.type === 'task_assigned' ? 'tildelte deg en oppgave'
+                            : n.type === 'task_turn_ready' ? 'fullførte forrige steg — nå er det din tur'
                             : n.type === 'lead_assigned' ? 'satte deg som ansvarlig for en lead'
                             : n.type === 'resale_assigned' ? 'satte deg som ansvarlig for videresalg'
                             : n.type === 'selection_submitted' ? 'sendte inn bildevalg'

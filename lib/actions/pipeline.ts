@@ -7,7 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
-import { computeStepperLocks } from '@/lib/task-lock'
+import { computeStepperLocks, computeLocksFromSiblings, type StepperTaskLite } from '@/lib/task-lock'
 import { pickBestQuote } from '@/lib/quote-builder-utils'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
@@ -391,7 +391,7 @@ export async function updateTaskStatus(
     // Hent task-info før oppdatering
     const { data: task } = await supabase
       .from('tasks')
-      .select('project_id, pipeline_stage')
+      .select('project_id, pipeline_stage, sub_type, sort_order, is_custom, deliverable_id, title, status')
       .eq('id', taskId)
       .single()
 
@@ -403,6 +403,14 @@ export async function updateTaskStatus(
     if (error) {
       console.error('updateTaskStatus error:', error)
       return { ok: false, advanced: false, projectId: null, nextStage: null }
+    }
+
+    // Varsle assignees på oppgaver som blir ulåst i post-prod-stepperen av at
+    // denne settes til 'done' ("din tur nå"). Skal aldri blokkere hovedhandlingen.
+    if (status === 'done' && task && task.pipeline_stage === 'post_prod' && !task.is_custom && task.status !== 'done') {
+      notifyNewlyUnlockedPostProdTasks(supabase, taskId, task).catch(err =>
+        console.error('notifyNewlyUnlockedPostProdTasks error:', err)
+      )
     }
 
     // Auto-advance: når alle tasks i current stage er ferdige → flytt til neste stage
@@ -453,6 +461,57 @@ export async function updateTaskStatus(
   } catch (err) {
     console.error('updateTaskStatus unexpected error:', err)
     return { ok: false, advanced: false, projectId: null, nextStage: null }
+  }
+}
+
+/**
+ * Kalt fra updateTaskStatus når en post_prod-oppgave settes til 'done'. Finner
+ * oppgaver i samme stepper-sekvens som går fra låst til ulåst som følge av dette
+ * (samme diff-teknikk som computeStepperLocks, men før/etter i minnet i stedet for
+ * to DB-runder), og varsler assignees på dem om at det nå er deres tur.
+ */
+async function notifyNewlyUnlockedPostProdTasks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  completedTaskId: string,
+  completedTask: { project_id: string; status: string; title: string }
+): Promise<void> {
+  const { data: siblings, error } = await supabase
+    .from('tasks')
+    .select('id, project_id, pipeline_stage, sub_type, sort_order, status, title, deliverable_id, is_custom')
+    .eq('project_id', completedTask.project_id)
+    .eq('pipeline_stage', 'post_prod')
+    .eq('is_custom', false)
+
+  if (error || !siblings) return
+
+  const candidates: StepperTaskLite[] = siblings.filter(s => s.id !== completedTaskId)
+  if (candidates.length === 0) return
+
+  const afterLocks = computeLocksFromSiblings(candidates, siblings)
+  const siblingsBefore = siblings.map(s =>
+    s.id === completedTaskId ? { ...s, status: completedTask.status } : s
+  )
+  const beforeLocks = computeLocksFromSiblings(candidates, siblingsBefore)
+
+  const newlyUnlocked = candidates.filter(c => beforeLocks.get(c.id)?.locked && !afterLocks.get(c.id)?.locked)
+  if (newlyUnlocked.length === 0) return
+
+  const [{ data: project }, { data: assignees }] = await Promise.all([
+    supabase.from('projects').select('title').eq('id', completedTask.project_id).single(),
+    supabase.from('task_assignees').select('task_id, profile_id').in('task_id', newlyUnlocked.map(t => t.id)),
+  ])
+  if (!assignees?.length) return
+
+  for (const nextTask of newlyUnlocked) {
+    for (const recipient of assignees.filter(a => a.task_id === nextTask.id)) {
+      await notifyAssignment({
+        recipientId: recipient.profile_id,
+        type: 'task_turn_ready',
+        projectId: completedTask.project_id,
+        taskId: nextTask.id,
+        preview: project?.title ? `${nextTask.title} — ${project.title}` : (nextTask.title ?? ''),
+      })
+    }
   }
 }
 

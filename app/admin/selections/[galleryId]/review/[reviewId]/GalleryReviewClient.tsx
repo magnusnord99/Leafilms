@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveReviewMark, respondToGalleryReview } from '@/lib/actions/gallery-reviews'
 import type { AdminSelectionPageData } from '@/lib/actions/selection-albums'
@@ -42,6 +42,20 @@ export default function GalleryReviewClient({
   const [comment, setComment] = useState(review.comment ?? '')
   const [submitting, setSubmitting] = useState<'approved' | 'changes_requested' | null>(null)
   const [done, setDone] = useState<'approved' | 'changes_requested' | null>(review.status !== 'pending' ? review.status : null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  const lightboxImage = lightboxIndex !== null ? images[lightboxIndex] : null
+
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightboxIndex(null)
+      else if (e.key === 'ArrowRight') setLightboxIndex(i => (i === null ? i : Math.min(i + 1, images.length - 1)))
+      else if (e.key === 'ArrowLeft') setLightboxIndex(i => (i === null ? i : Math.max(i - 1, 0)))
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [lightboxIndex, images.length])
 
   function markFor(imageId: string) {
     return marks[imageId] ?? { keep: true, note: '' }
@@ -122,7 +136,10 @@ export default function GalleryReviewClient({
                 const mark = markFor(img.id)
                 return (
                   <div key={img.id} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}`, background: C.surface, opacity: mark.keep ? 1 : 0.45 }}>
-                    <div style={{ aspectRatio: '4/3', background: C.surface2 }}>
+                    <div
+                      onClick={() => setLightboxIndex(images.findIndex(i => i.id === img.id))}
+                      style={{ aspectRatio: '4/3', background: C.surface2, cursor: 'zoom-in' }}
+                    >
                       {img.signedUrl && <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />}
                     </div>
                     <div style={{ padding: '7px 8px', display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -154,6 +171,73 @@ export default function GalleryReviewClient({
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, textAlign: 'center', marginTop: 40 }}>Ingen bilder i galleriet ennå.</p>
         )}
       </div>
+
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxIndex(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <button
+            onClick={() => setLightboxIndex(null)}
+            style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', color: '#fff', fontSize: '1.6rem', cursor: 'pointer', lineHeight: 1 }}
+            aria-label="Lukk"
+          >
+            ×
+          </button>
+
+          {lightboxIndex! > 0 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? i : i - 1)) }}
+              style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6, color: '#fff', fontSize: '1.6rem', padding: '10px 14px', cursor: 'pointer' }}
+              aria-label="Forrige bilde"
+            >
+              ‹
+            </button>
+          )}
+          {lightboxIndex! < images.length - 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? i : i + 1)) }}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6, color: '#fff', fontSize: '1.6rem', padding: '10px 14px', cursor: 'pointer' }}
+              aria-label="Neste bilde"
+            >
+              ›
+            </button>
+          )}
+
+          <img
+            src={lightboxImage.signedUrl}
+            alt={lightboxImage.filename}
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '75vh', objectFit: 'contain', borderRadius: 4 }}
+          />
+
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center', width: '100%', maxWidth: 480 }}
+          >
+            <button
+              onClick={() => toggleKeep(lightboxImage.id)}
+              style={{
+                padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', flexShrink: 0,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+                background: markFor(lightboxImage.id).keep ? 'rgba(76,175,125,0.18)' : 'rgba(212,100,90,0.2)',
+                color: markFor(lightboxImage.id).keep ? '#4CAF7D' : '#D4645A',
+              }}
+            >
+              {markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med'}
+            </button>
+            <input
+              defaultValue={markFor(lightboxImage.id).note}
+              onBlur={e => saveNote(lightboxImage.id, e.target.value)}
+              placeholder="Notat (kun internt)..."
+              style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none' }}
+            />
+          </div>
+          <p style={{ marginTop: 10, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
+            {lightboxIndex! + 1} / {images.length} · Esc for å lukke · ← → for å bla
+          </p>
+        </div>
+      )}
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'center' }}>
         <textarea

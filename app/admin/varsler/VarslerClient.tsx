@@ -264,6 +264,44 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   const unreadCount = notifications.filter(n => !n.read).length
   const readCount = notifications.length - unreadCount
 
+  const [groupByProject, setGroupByProject] = useState(false)
+  useEffect(() => {
+    const stored = localStorage.getItem('varsler-group-by-project')
+    if (stored === '1') setGroupByProject(true)
+  }, [])
+  function toggleGroupByProject() {
+    setGroupByProject(prev => {
+      const next = !prev
+      localStorage.setItem('varsler-group-by-project', next ? '1' : '0')
+      return next
+    })
+  }
+
+  // Grupper varsler på prosjekt når groupByProject er på. Varsler uten
+  // prosjekt (leads, direktemeldinger o.l.) havner i egen "Annet"-gruppe.
+  // Grupper med uleste varsler vises først, deretter etter siste aktivitet.
+  const groupedNotifications = (() => {
+    if (!groupByProject) return null
+    const groups = new Map<string, { title: string; items: Notification[] }>()
+    for (const n of notifications) {
+      const key = n.project_id ?? '__other__'
+      const title = n.project_id ? (n.projects?.title || 'Ukjent prosjekt') : 'Annet'
+      if (!groups.has(key)) groups.set(key, { title, items: [] })
+      groups.get(key)!.items.push(n)
+    }
+    return Array.from(groups.values()).sort((a, b) => {
+      const aUnread = a.items.some(n => !n.read)
+      const bUnread = b.items.some(n => !n.read)
+      if (aUnread !== bUnread) return aUnread ? -1 : 1
+      return b.items[0].created_at.localeCompare(a.items[0].created_at)
+    })
+  })()
+
+  const displayList = groupedNotifications ? groupedNotifications.flatMap(g => g.items) : notifications
+  const groupHeaderBefore = groupedNotifications
+    ? new Map(groupedNotifications.map(g => [g.items[0].id, g] as const))
+    : null
+
   const iconBtnStyle: React.CSSProperties = {
     fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3,
     background: 'none', border: `1px solid transparent`, borderRadius: 5,
@@ -287,6 +325,18 @@ export default function VarslerClient({ notifications: initialNotifications }: {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <PushNotificationToggle />
             <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={toggleGroupByProject}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: groupByProject ? 600 : 400,
+                  color: groupByProject ? C.accent : C.text3,
+                  background: groupByProject ? C.accentBg : 'none',
+                  border: `1px solid ${groupByProject ? 'rgba(124,92,252,0.25)' : C.border}`,
+                  padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+                }}
+              >
+                Gruppér etter prosjekt
+              </button>
               {readCount > 0 && (
                 <button
                   onClick={handleDeleteRead}
@@ -316,16 +366,28 @@ export default function VarslerClient({ notifications: initialNotifications }: {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-            {notifications.map((n, i) => {
+            {displayList.map((n, i) => {
               const channel = channelFor(n)
               const canReply = channel !== null
               const canReact = channel !== null && channel !== 'direct' && !!n.message_id
               const isReplying = replyingId === n.id
+              const group = groupHeaderBefore?.get(n.id)
               return (
+                <div key={n.id}>
+                {group && (
+                  <div style={{
+                    padding: '10px 18px 6px', marginTop: i === 0 ? 0 : 4,
+                    borderTop: i === 0 ? 'none' : `1px solid ${C.border}`,
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                    letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3,
+                    background: C.surface2,
+                  }}>
+                    {group.title}
+                  </div>
+                )}
                 <div
-                  key={n.id}
                   style={{
-                    borderBottom: i < notifications.length - 1 ? `1px solid ${C.border}` : 'none',
+                    borderBottom: i < displayList.length - 1 ? `1px solid ${C.border}` : 'none',
                     background: n.read ? 'transparent' : 'rgba(124,92,252,0.04)',
                     borderLeft: n.read ? `3px solid transparent` : `3px solid ${C.accent}`,
                   }}
@@ -551,6 +613,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                       )}
                     </div>
                   )}
+                </div>
                 </div>
               )
             })}

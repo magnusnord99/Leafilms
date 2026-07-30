@@ -7,6 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Leafilms',
     description: 'Leafilms interne business-plattform',
     start_url: '/admin',
+    scope: '/',
     display: 'standalone',
     background_color: C.bg,
     theme_color: C.bg,

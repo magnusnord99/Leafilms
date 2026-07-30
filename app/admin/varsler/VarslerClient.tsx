@@ -398,6 +398,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'pitch_review_responded' ? 'svarte på review av pitchen'
                             : n.type === 'quote_review_requested' ? 'ber deg godkjenne tilbudet'
                             : n.type === 'quote_review_responded' ? 'svarte på review av tilbudet'
+                            : n.type === 'quote_assigned' ? 'tildelte deg et tilbud'
+                            : n.type === 'invoice_assigned' ? 'tildelte deg en faktura'
                             : 'i en oppgave'}
                         </span>
                       </div>

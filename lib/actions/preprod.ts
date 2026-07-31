@@ -123,41 +123,46 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
   try {
     const supabase = await createClient()
 
-    const { data: project, error: pErr } = await supabase
-      .from('projects')
-      .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
-      .eq('id', projectId)
-      .single()
+    // Ingen av disse fem avhenger av hverandre (kun projectId trengs) — kjør parallelt.
+    const [
+      { data: project, error: pErr },
+      { data: tasks },
+      { data: postProdTasks },
+      { data: profiles },
+      { data: quotes },
+    ] = await Promise.all([
+      supabase
+        .from('projects')
+        .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
+        .eq('id', projectId)
+        .single(),
+      supabase
+        .from('tasks')
+        .select('*, task_assignees(profile:profiles(id, name, email))')
+        .eq('project_id', projectId)
+        .eq('pipeline_stage', 'pre_prod')
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('tasks')
+        .select('id, title, sub_type, due_date')
+        .eq('project_id', projectId)
+        .eq('pipeline_stage', 'post_prod'),
+      supabase
+        .from('profiles')
+        .select('id, name, email, color')
+        .order('name', { ascending: true }),
+      // Hent utstyr fra gjeldende quote-versjon
+      supabase
+        .from('quotes')
+        .select('quote_data')
+        .eq('project_id', projectId)
+        .eq('is_current', true)
+        .not('quote_data', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1),
+    ])
 
     if (pErr || !project) return null
-
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('*, task_assignees(profile:profiles(id, name, email))')
-      .eq('project_id', projectId)
-      .eq('pipeline_stage', 'pre_prod')
-      .order('sort_order', { ascending: true })
-
-    const { data: postProdTasks } = await supabase
-      .from('tasks')
-      .select('id, title, sub_type, due_date')
-      .eq('project_id', projectId)
-      .eq('pipeline_stage', 'post_prod')
-
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, color')
-      .order('name', { ascending: true })
-
-    // Hent utstyr fra gjeldende quote-versjon
-    const { data: quotes } = await supabase
-      .from('quotes')
-      .select('quote_data')
-      .eq('project_id', projectId)
-      .eq('is_current', true)
-      .not('quote_data', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
 
     const quoteEquipment: { name: string }[] = []
     const quoteData = quotes?.[0]?.quote_data as { equipment?: { description?: string }[] } | undefined

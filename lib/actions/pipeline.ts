@@ -893,43 +893,46 @@ export async function getProjectHub(projectId: string): Promise<{
       project_lead: projectRow.project_lead ?? null,
     } as ProjectWithPipeline
 
-    // Hent tasks for current pipeline_stage (eller alle hvis stage mangler)
-    const tasks = project.pipeline_stage
-      ? await getTasksForProject(projectId, project.pipeline_stage)
-      : await getTasksForProject(projectId)
+    // Disse fire er uavhengige av hverandre (kun projectId trengs) — kjør parallelt
+    // i stedet for som fire sekvensielle round trips.
+    const [tasks, quoteResult, shareResult, sectionCountResult] = await Promise.all([
+      project.pipeline_stage
+        ? getTasksForProject(projectId, project.pipeline_stage)
+        : getTasksForProject(projectId),
+      // Hent tilbudet som best representerer prosjektet nå — et akseptert/signert
+      // tilbud vinner alltid over "gjeldende versjon" (is_current), se pickBestQuote.
+      // Uten dette kan et nyere, usignert tilleggstilbud for samme prosjekt vises som
+      // om DET var det kunden hadde akseptert (feedback 08a0235b).
+      supabase
+        .from('quotes')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false }),
+      // Hent pitch-token fra project_shares
+      supabase
+        .from('project_shares')
+        .select('token')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('sections')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId),
+    ])
 
-    // Hent tilbudet som best representerer prosjektet nå — et akseptert/signert
-    // tilbud vinner alltid over "gjeldende versjon" (is_current), se pickBestQuote.
-    // Uten dette kan et nyere, usignert tilleggstilbud for samme prosjekt vises som
-    // om DET var det kunden hadde akseptert (feedback 08a0235b).
-    const { data: quoteRows, error: quoteError } = await supabase
-      .from('quotes')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-
-    if (quoteError) {
-      console.error('getProjectHub quote error:', quoteError)
+    if (quoteResult.error) {
+      console.error('getProjectHub quote error:', quoteResult.error)
     }
-    const quoteRow = pickBestQuote((quoteRows ?? []) as Quote[])
+    const quoteRow = pickBestQuote((quoteResult.data ?? []) as Quote[])
 
-    // Hent pitch-token fra project_shares
-    const { data: shareRow, error: shareError } = await supabase
-      .from('project_shares')
-      .select('token')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (shareError) {
-      console.error('getProjectHub share error:', shareError)
+    if (shareResult.error) {
+      console.error('getProjectHub share error:', shareResult.error)
     }
+    const shareRow = shareResult.data
 
-    const { count: sectionCount } = await supabase
-      .from('sections')
-      .select('id', { count: 'exact', head: true })
-      .eq('project_id', projectId)
+    const sectionCount = sectionCountResult.count
 
     return {
       project,

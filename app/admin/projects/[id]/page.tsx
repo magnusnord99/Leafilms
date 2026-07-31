@@ -719,9 +719,10 @@ export default function ProjectHubPage() {
   async function fetchHub() {
     setLoading(true)
     setError(null)
-    const [data, allProfiles] = await Promise.all([
+    const [data, allProfiles, cs] = await Promise.all([
       getProjectHub(projectId),
       getAllProfiles(),
+      getContractStatus(projectId),
     ])
     if (!data) setError('Fant ikke prosjektet.')
     else {
@@ -744,7 +745,6 @@ export default function ProjectHubPage() {
       // Kontrakt-status brukes både av stepperen (tilbud_sendt/kontrakt-steg) og av
       // opptak-bekreftelsen — sistnevnte gjelder uansett pipeline_stage, siden prosjekter
       // kan flyttes forbi kontrakt-steget uten signatur (advanceFromKontraktUnsigned)
-      const cs = await getContractStatus(projectId)
       setContractSigned(cs.isSigned)
       if (data.project.pipeline_stage === 'tilbud_sendt' || data.project.pipeline_stage === 'kontrakt') {
         setStepperContractPublished(cs.isPublished)

@@ -99,10 +99,11 @@ export default async function PublicProjectView({ params }: Props) {
   // anon-nøkkelen skal ikke ha direkte RLS-tilgang til project_shares/contracts/quotes lenger.
   const supabase = createServiceClient()
 
-  // Finn prosjekt fra token
+  // Finn prosjekt fra token — henter view_count her også for å unngå en ekstra
+  // round trip senere når vi oppdaterer visningstelleren.
   const { data: share, error: shareError } = await supabase
     .from('project_shares')
-    .select('project_id')
+    .select('project_id, view_count')
     .eq('token', token.trim())
     .single()
 
@@ -123,12 +124,33 @@ export default async function PublicProjectView({ params }: Props) {
     notFound()
   }
 
-  // Hent prosjekt
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('id', share.project_id)
-    .single()
+  // Prosjekt, seksjoner, team-medlemmer og kontrakt trenger alle kun share.project_id
+  // (ikke hverandres data) — kjør parallelt i stedet for som fire sekvensielle round trips.
+  const [
+    { data: project, error: projectError },
+    { data: sections, error: sectionsError },
+    { data: teamMembersData },
+    { data: contractData },
+  ] = await Promise.all([
+    supabase.from('projects').select('*').eq('id', share.project_id).single(),
+    supabase
+      .from('sections')
+      .select('*')
+      .eq('project_id', share.project_id)
+      .eq('visible', true)
+      .order('order_index', { ascending: true }),
+    supabase.from('team_members').select('*').order('order_index'),
+    // Hent publisert kontrakt (gjeldende versjon — eldre, signerte kontrakter skal
+    // aldri vises igjen på pitchen etter at prosjektet har fått et nytt tilbud)
+    supabase
+      .from('contracts')
+      .select('contract_text, published_at, status, signed_at, signed_by, our_signature, pdf_url')
+      .eq('project_id', share.project_id)
+      .eq('is_current', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   if (projectError) {
     console.error('[PublicProjectView] Error fetching project:', projectError)
@@ -148,14 +170,6 @@ export default async function PublicProjectView({ params }: Props) {
     })
     notFound()
   }
-
-  // Hent synlige seksjoner
-  const { data: sections, error: sectionsError } = await supabase
-    .from('sections')
-    .select('*')
-    .eq('project_id', share.project_id)
-    .eq('visible', true)
-    .order('order_index', { ascending: true })
 
   if (sectionsError) {
     console.error('[PublicProjectView] Error fetching sections:', sectionsError)
@@ -245,12 +259,6 @@ export default async function PublicProjectView({ params }: Props) {
     }
   }
 
-  // Hent team members
-  const { data: teamMembersData } = await supabase
-    .from('team_members')
-    .select('*')
-    .order('order_index')
-
   const allTeamMembers = (teamMembersData || []) as TeamMember[]
 
   // Hent valgte team-medlemmer for team-seksjonen
@@ -329,33 +337,14 @@ export default async function PublicProjectView({ params }: Props) {
     selectedPreset = preset as CollagePreset | null
   }
 
-  // Oppdater view count
-  const { data: currentShare } = await supabase
+  // Oppdater view count (view_count ble hentet sammen med share-oppslaget over)
+  await supabase
     .from('project_shares')
-    .select('view_count')
+    .update({
+      view_count: (share.view_count || 0) + 1,
+      last_viewed_at: new Date().toISOString()
+    })
     .eq('token', token)
-    .single()
-
-  if (currentShare) {
-    await supabase
-      .from('project_shares')
-      .update({
-        view_count: (currentShare.view_count || 0) + 1,
-        last_viewed_at: new Date().toISOString()
-      })
-      .eq('token', token)
-  }
-
-  // Hent publisert kontrakt (gjeldende versjon — eldre, signerte kontrakter skal
-  // aldri vises igjen på pitchen etter at prosjektet har fått et nytt tilbud)
-  const { data: contractData } = await supabase
-    .from('contracts')
-    .select('contract_text, published_at, status, signed_at, signed_by, our_signature, pdf_url')
-    .eq('project_id', share.project_id)
-    .eq('is_current', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   const contractHiddenFromPitch = !!(project.pipeline_data as { contract_hidden_from_pitch?: boolean } | null)?.contract_hidden_from_pitch
   const requestInvoiceInfo = (project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false

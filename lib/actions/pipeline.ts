@@ -2422,31 +2422,38 @@ async function ensureVideoDeliverablesSeeded(
     )
   }
 
-  for (const deliverable of videoDeliverables) {
-    const { count } = await supabase
+  // Sjekk hvilke leveranser som allerede har per-leveranse-tasks i én batchet
+  // spørring, i stedet for en count-spørring per leveranse (var N round trips).
+  if (perDeliverableTemplates.length > 0 && videoDeliverables.length > 0) {
+    const { data: existingPerDeliverableTasks } = await supabase
       .from('tasks')
-      .select('id', { count: 'exact', head: true })
+      .select('deliverable_id')
       .eq('project_id', projectId)
-      .eq('deliverable_id', deliverable.id)
+      .in('deliverable_id', videoDeliverables.map(d => d.id))
 
-    if ((count ?? 0) === 0 && perDeliverableTemplates.length > 0) {
+    const deliverableIdsWithTasks = new Set((existingPerDeliverableTasks ?? []).map(t => t.deliverable_id))
+    const deliverablesNeedingSeed = videoDeliverables.filter(d => !deliverableIdsWithTasks.has(d.id))
+
+    if (deliverablesNeedingSeed.length > 0) {
       await supabase.from('tasks').insert(
-        perDeliverableTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
-          project_id: projectId,
-          pipeline_stage: 'post_prod',
-          title: t.title,
-          description: t.description,
-          status: 'todo' as const,
-          sort_order: t.sort_order,
-          sub_type: videoDbSubType,
-          deliverable_id: deliverable.id,
-          custom_lane_id: null,
-          is_parallel: false,
-          is_custom: false,
-          created_by: null,
-          due_date: null,
-          priority: null,
-        }))
+        deliverablesNeedingSeed.flatMap(deliverable =>
+          perDeliverableTemplates.map((t: { title: string; description: string | null; sort_order: number }) => ({
+            project_id: projectId,
+            pipeline_stage: 'post_prod',
+            title: t.title,
+            description: t.description,
+            status: 'todo' as const,
+            sort_order: t.sort_order,
+            sub_type: videoDbSubType,
+            deliverable_id: deliverable.id,
+            custom_lane_id: null,
+            is_parallel: false,
+            is_custom: false,
+            created_by: null,
+            due_date: null,
+            priority: null,
+          }))
+        )
       )
     }
   }

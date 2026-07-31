@@ -1375,8 +1375,8 @@ export default function PostProdDetailPage() {
                 </div>
               )}
 
-              {/* Valgte bilder for redigering */}
-              {selectionImages.length > 0 && (
+              {/* Valgte bilder for redigering — kun relevant for foto-oppgaver, ikke i videoblokka */}
+              {selectionImages.length > 0 && (isMixed ? selectedTask.sub_type !== 'video' : currentProject.project_type !== 'video') && (
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>

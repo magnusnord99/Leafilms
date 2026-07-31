@@ -509,6 +509,7 @@ const REVIEW_STATUS_MAP: Record<GalleryReview['status'], { label: string; color:
 }
 
 function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
+  const router = useRouter()
   const [history, setHistory] = useState<GalleryReview[] | null>(null)
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [picking, setPicking] = useState(false)
@@ -609,7 +610,11 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
           {history.map(r => {
             const s = REVIEW_STATUS_MAP[r.status]
             return (
-              <div key={r.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px' }}>
+              <div
+                key={r.id}
+                onClick={() => router.push(`/admin/selections/${galleryId}/review/${r.id}`)}
+                style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2 }}>
                   <span>{r.requester?.name ?? r.requester?.email} → {r.reviewer?.name ?? r.reviewer?.email}</span>
                   <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>

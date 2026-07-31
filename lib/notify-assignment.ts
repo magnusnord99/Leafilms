@@ -13,17 +13,28 @@ export async function notifyAssignment(opts: {
   galleryId?: string | null
   galleryReviewId?: string | null
   preview: string
+  /**
+   * Avsenders navn, hvis allerede kjent (unngår et profiles-oppslag).
+   * Nyttig når man kaller notifyAssignment flere ganger på rad (f.eks. i en
+   * loop over flere mottakere) — hent avsenderens profil én gang i kallstedet
+   * og send den inn her i stedet for at hvert kall gjør sitt eget oppslag.
+   */
+  senderName?: string
 }): Promise<void> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || user.id === opts.recipientId) return
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('name, email')
-      .eq('id', user.id)
-      .single()
+    let senderName = opts.senderName
+    if (senderName === undefined) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('id', user.id)
+        .single()
+      senderName = profile?.name ?? profile?.email ?? 'Ukjent'
+    }
 
     const service = createServiceClient()
     await service.from('notifications').insert({
@@ -35,7 +46,7 @@ export async function notifyAssignment(opts: {
       gallery_id: opts.galleryId ?? null,
       gallery_review_id: opts.galleryReviewId ?? null,
       message_preview: opts.preview.slice(0, 200),
-      sender_name: profile?.name ?? profile?.email ?? 'Ukjent',
+      sender_name: senderName || 'Ukjent',
     })
   } catch (err) {
     console.error('notifyAssignment error:', err)

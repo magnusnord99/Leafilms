@@ -496,11 +496,24 @@ async function notifyNewlyUnlockedPostProdTasks(
   const newlyUnlocked = candidates.filter(c => beforeLocks.get(c.id)?.locked && !afterLocks.get(c.id)?.locked)
   if (newlyUnlocked.length === 0) return
 
-  const [{ data: project }, { data: assignees }] = await Promise.all([
+  const [{ data: project }, { data: assignees }, { data: { user: sender } }] = await Promise.all([
     supabase.from('projects').select('title').eq('id', completedTask.project_id).single(),
     supabase.from('task_assignees').select('task_id, profile_id').in('task_id', newlyUnlocked.map(t => t.id)),
+    supabase.auth.getUser(),
   ])
   if (!assignees?.length) return
+
+  // Hent avsenderens profil én gang i stedet for at notifyAssignment gjør det
+  // på nytt for hver mottaker i loopen under.
+  let senderName: string | undefined
+  if (sender) {
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('name, email')
+      .eq('id', sender.id)
+      .single()
+    senderName = senderProfile?.name ?? senderProfile?.email ?? 'Ukjent'
+  }
 
   for (const nextTask of newlyUnlocked) {
     for (const recipient of assignees.filter(a => a.task_id === nextTask.id)) {
@@ -510,6 +523,7 @@ async function notifyNewlyUnlockedPostProdTasks(
         projectId: completedTask.project_id,
         taskId: nextTask.id,
         preview: project?.title ? `${nextTask.title} — ${project.title}` : (nextTask.title ?? ''),
+        senderName,
       })
     }
   }
@@ -1954,17 +1968,14 @@ export async function setQuoteAssignee(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    const { error } = await supabase
+    const { data: project, error } = await supabase
       .from('projects')
       .update({ quote_assignee_id: assigneeId, updated_at: new Date().toISOString() })
       .eq('id', projectId)
+      .select('title')
+      .single()
     if (error) return { ok: false, error: 'Kunne ikke oppdatere tilbud-ansvarlig' }
     if (assigneeId) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('title')
-        .eq('id', projectId)
-        .single()
       await notifyAssignment({
         recipientId: assigneeId,
         type: 'quote_assigned',
@@ -1987,17 +1998,14 @@ export async function setInvoiceAssignee(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    const { error } = await supabase
+    const { data: project, error } = await supabase
       .from('projects')
       .update({ invoice_assignee_id: assigneeId, updated_at: new Date().toISOString() })
       .eq('id', projectId)
+      .select('title')
+      .single()
     if (error) return { ok: false, error: 'Kunne ikke oppdatere faktura-ansvarlig' }
     if (assigneeId) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('title')
-        .eq('id', projectId)
-        .single()
       await notifyAssignment({
         recipientId: assigneeId,
         type: 'invoice_assigned',
@@ -2069,17 +2077,14 @@ export async function setResaleAssignee(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    const { error } = await supabase
+    const { data: project, error } = await supabase
       .from('projects')
       .update({ resale_assignee_id: assigneeId, updated_at: new Date().toISOString() })
       .eq('id', projectId)
+      .select('title')
+      .single()
     if (error) return { ok: false, error: 'Kunne ikke oppdatere videresalg-ansvarlig' }
     if (assigneeId) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('title')
-        .eq('id', projectId)
-        .single()
       await notifyAssignment({
         recipientId: assigneeId,
         type: 'resale_assigned',

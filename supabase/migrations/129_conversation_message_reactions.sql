@@ -38,6 +38,12 @@ CREATE POLICY "Users can insert own reactions"
     )
   );
 
+-- Må speile ALLE typer som allerede er lovlige etter 127 (+ review-typene fra 088
+-- som 127 ved en feil utelot). En DROP+ADD her som kun lister typene denne filen
+-- introduserer, sletter stille meeting/board/resale/review — og da feiler
+-- notify_meeting_invite / notify_board_comment-triggere hardt (ruller tilbake
+-- meeting_participants / board_comments-inserts). Se også 130_ for forward-fix
+-- dersom den ødelagte listen allerede er kjørt.
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
   CHECK (type IN (
@@ -46,7 +52,12 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
     'quote_mention', 'project_message_mention', 'task_message_mention',
     'quote_message', 'feedback_reply', 'contract_signed',
     'project_message_reaction', 'task_message_reaction', 'quote_message_reaction',
-    'direct_message', 'preprod_mention', 'preprod_message', 'preprod_message_reaction',
+    'resale_assigned', 'direct_message',
+    'meeting_invite', 'meeting_response',
+    'board_comment_mention', 'board_comment_reply',
+    'pitch_review_requested', 'pitch_review_responded',
+    'quote_review_requested', 'quote_review_responded',
+    'preprod_mention', 'preprod_message', 'preprod_message_reaction',
     'conversation_message_reaction'
   ));
 

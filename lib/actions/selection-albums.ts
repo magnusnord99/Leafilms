@@ -530,40 +530,41 @@ async function getGalleriesOverviewByTaskDone(done: boolean): Promise<GalleryOve
     }
   }
 
-  return Promise.all(
-    uniqueTasks.map(async (task) => {
-      const proj = task.projects as unknown as { id: string; title: string } | null
-      const gallery = galleryByProject[task.project_id] ?? null
+  // Tell album- og valgt-bilde-antall for alle gallerier i to batchede spørringer
+  // i stedet for to round trips per galleri (var 2N spørringer for N gallerier).
+  const galleryIds = [...new Set(Object.values(galleryByProject).map(g => g.id))]
+  const [{ data: albumRows }, { data: selectedImageRows }] = galleryIds.length > 0
+    ? await Promise.all([
+        supabase.from('selection_albums').select('gallery_id').in('gallery_id', galleryIds),
+        supabase.from('selection_images').select('gallery_id').eq('selected', true).in('gallery_id', galleryIds),
+      ])
+    : [{ data: [] as { gallery_id: string }[] }, { data: [] as { gallery_id: string }[] }]
 
-      let albumCount = 0
-      let totalSelected = 0
-      if (gallery) {
-        const { count: ac } = await supabase
-          .from('selection_albums')
-          .select('id', { count: 'exact', head: true })
-          .eq('gallery_id', gallery.id)
-        const { count: sc } = await supabase
-          .from('selection_images')
-          .select('id', { count: 'exact', head: true })
-          .eq('gallery_id', gallery.id)
-          .eq('selected', true)
-        albumCount = ac ?? 0
-        totalSelected = sc ?? 0
-      }
+  const albumCountByGallery: Record<string, number> = {}
+  for (const row of albumRows ?? []) {
+    albumCountByGallery[row.gallery_id] = (albumCountByGallery[row.gallery_id] ?? 0) + 1
+  }
+  const selectedCountByGallery: Record<string, number> = {}
+  for (const row of selectedImageRows ?? []) {
+    selectedCountByGallery[row.gallery_id] = (selectedCountByGallery[row.gallery_id] ?? 0) + 1
+  }
 
-      return {
-        projectId: task.project_id,
-        projectName: proj?.title ?? '—',
-        taskStatus: task.status,
-        galleryId: gallery?.id ?? null,
-        galleryStatus: gallery?.status ?? null,
-        albumCount,
-        totalSelected,
-        targetCount: gallery?.target_count ?? null,
-        submittedAt: gallery?.submitted_at ?? null,
-      }
-    })
-  )
+  return uniqueTasks.map((task) => {
+    const proj = task.projects as unknown as { id: string; title: string } | null
+    const gallery = galleryByProject[task.project_id] ?? null
+
+    return {
+      projectId: task.project_id,
+      projectName: proj?.title ?? '—',
+      taskStatus: task.status,
+      galleryId: gallery?.id ?? null,
+      galleryStatus: gallery?.status ?? null,
+      albumCount: gallery ? (albumCountByGallery[gallery.id] ?? 0) : 0,
+      totalSelected: gallery ? (selectedCountByGallery[gallery.id] ?? 0) : 0,
+      targetCount: gallery?.target_count ?? null,
+      submittedAt: gallery?.submitted_at ?? null,
+    }
+  })
 }
 
 // Aktiv seleksjonsfase: kunden har ikke sendt inn ennå.

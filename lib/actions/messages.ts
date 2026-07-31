@@ -111,12 +111,19 @@ export async function startConversation(otherProfileId: string): Promise<string 
         .eq('profile_id', otherProfileId)
         .in('conversation_id', myConversationIds)
 
-      for (const row of sharedRows ?? []) {
-        const { count } = await supabase
+      const sharedConversationIds = (sharedRows ?? []).map((r) => r.conversation_id)
+      if (sharedConversationIds.length > 0) {
+        const { data: participantRows } = await supabase
           .from('conversation_participants')
-          .select('id', { count: 'exact', head: true })
-          .eq('conversation_id', row.conversation_id)
-        if (count === 2) return row.conversation_id
+          .select('conversation_id')
+          .in('conversation_id', sharedConversationIds)
+
+        const participantCounts: Record<string, number> = {}
+        for (const row of participantRows ?? []) {
+          participantCounts[row.conversation_id] = (participantCounts[row.conversation_id] ?? 0) + 1
+        }
+        const existing = sharedConversationIds.find((id) => participantCounts[id] === 2)
+        if (existing) return existing
       }
     }
 

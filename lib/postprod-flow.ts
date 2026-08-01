@@ -81,3 +81,28 @@ export function reorderExistingIds(
 
   return [...rest.slice(0, insertAt), subjectId, ...rest.slice(insertAt)]
 }
+
+/**
+ * Velger aktiv video-leveranse-fane. Spec krever default til første leveranse
+ * når 2+ videoer finnes (samme mønster som PostProdBoard).
+ */
+export function resolveActiveVideoDeliverableId(
+  videoDeliverables: { id: string }[],
+  currentId: string | null
+): string | null {
+  if (videoDeliverables.length < 2) return null
+  if (currentId && videoDeliverables.some(d => d.id === currentId)) return currentId
+  return videoDeliverables[0].id
+}
+
+/**
+ * Oppgaver for en fjernet leveranse (orphan deliverable_id) blir liggende i DB
+ * for manuell rydding, men skal ikke blokkere auto-advance til neste stage.
+ */
+export function countsTowardStageAdvance(
+  task: { deliverable_id: string | null },
+  activeDeliverableIds: ReadonlySet<string>
+): boolean {
+  if (task.deliverable_id == null) return true
+  return activeDeliverableIds.has(task.deliverable_id)
+}

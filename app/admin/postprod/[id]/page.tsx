@@ -13,12 +13,14 @@ import {
   updateProjectDeliverablesSection,
   setProjectLead, getTaskMessageCounts,
   deleteTask,
+  ensurePostProdVideoDeliverablesSeeded,
 } from '@/lib/actions/pipeline'
 import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
+import { resolveActiveVideoDeliverableId } from '@/lib/postprod-flow'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -306,7 +308,7 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs] = await Promise.all([
+    const [allProjects, projectTasksInitial, userProfile, allProfiles, delivSection, selImgs] = await Promise.all([
       getPostProdProjects(),
       getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
@@ -322,6 +324,14 @@ export default function PostProdDetailPage() {
     const currentProj = allProj.find(p => p.id === projectId)
     setCurrentUser(userProfile)
 
+    const videoDelivs = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video')
+    // Stepper kaller ikke getPostProdBoard — migrer flat seed → delt/per-leveranse her.
+    let projectTasks = projectTasksInitial
+    if (videoDelivs.length >= 2 && currentProj?.project_type && currentProj.project_type !== 'photo') {
+      await ensurePostProdVideoDeliverablesSeeded(projectId)
+      projectTasks = await getTasksForProject(projectId, 'post_prod')
+    }
+
     if (projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
       if (result.error) {
@@ -336,8 +346,9 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
+      const defaultVideoId = resolveActiveVideoDeliverableId(videoDelivs, null)
+      if (defaultVideoId) setActiveVideoDeliverableId(defaultVideoId)
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', videoDelivs, defaultVideoId))
       setLoading(false)
       return
     }
@@ -346,8 +357,9 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
+    const defaultVideoId = resolveActiveVideoDeliverableId(videoDelivs, null)
+    if (defaultVideoId) setActiveVideoDeliverableId(defaultVideoId)
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', videoDelivs, defaultVideoId))
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
@@ -392,10 +404,19 @@ export default function PostProdDetailPage() {
   // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
   // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
   // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
-  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
+  function resolveDeepLinkIdx(
+    list: Task[],
+    isMixedProject: boolean,
+    videoDelivs: SignedDeliverableItem[],
+    fallbackDeliverableId: string | null
+  ): number {
     const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
-    if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
-    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    const resolvedDeliverableId = resolveActiveVideoDeliverableId(
+      videoDelivs,
+      deepTask?.deliverable_id ?? fallbackDeliverableId
+    )
+    if (resolvedDeliverableId) setActiveVideoDeliverableId(resolvedDeliverableId)
+    const videoDeliverableCount = videoDelivs.length
     if (isMixedProject && deepTask?.sub_type) {
       setActiveTab(deepTask.sub_type)
       return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)
@@ -405,6 +426,15 @@ export default function PostProdDetailPage() {
   }
 
   useEffect(() => { fetchAll() }, [projectId])
+
+  const videoDeliverableKey = videoDeliverables.map(d => d.id).join(',')
+  // Default til første video-fane (spec §7.2) — samme mønster som PostProdBoard.
+  useEffect(() => {
+    const next = resolveActiveVideoDeliverableId(videoDeliverables, activeVideoDeliverableId)
+    if (next !== activeVideoDeliverableId) setActiveVideoDeliverableId(next)
+    // videoDeliverables er avledet hver render; videoDeliverableKey er den stabile avhengigheten.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoDeliverableKey, activeVideoDeliverableId])
 
   useEffect(() => {
     if (!selectedTask) return

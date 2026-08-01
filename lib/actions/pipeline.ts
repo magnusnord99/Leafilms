@@ -6,7 +6,7 @@ import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
-import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
+import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, countsTowardStageAdvance, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks } from '@/lib/task-lock'
 import { pickBestQuote } from '@/lib/quote-builder-utils'
 
@@ -186,24 +186,34 @@ export async function seedTasksFromTemplates(
 
     const existingTitles = new Set((existingTasks ?? []).map((t: { title: string }) => t.title))
 
-    // For post_prod: hent project_type først
+    // For post_prod: hent project_type + deliverables. 2+ video-leveranser må
+    // seedes via ensureVideoDeliverablesSeeded (delt + per-leveranse), ikke den
+    // flate mal-loopen under — ellers mangler video 2+ helt til noen åpner brettet.
     let projectType: string | null = null
+    let videoDeliverables: DeliverableItem[] = []
     if (stage === 'post_prod') {
       const { data: proj } = await supabase
         .from('projects')
-        .select('project_type')
+        .select('project_type, deliverables')
         .eq('id', projectId)
         .single()
       projectType = proj?.project_type ?? null
 
       // Hvis project_type ikke er satt: seed ikke — UI vil spørre brukeren
       if (!projectType) return
-    }
 
-    // Mixed: seed to uavhengige flyter (video + foto)
-    if (stage === 'post_prod' && projectType === 'mixed') {
-      await seedMixedPostProdTasks(supabase, projectId)
-      return
+      videoDeliverables = ((proj?.deliverables ?? []) as DeliverableItem[]).filter(d => d.type === 'video')
+      const hasVideoTabs = videoDeliverables.length >= 2
+
+      if (projectType === 'mixed') {
+        await seedMixedPostProdTasks(supabase, projectId, hasVideoTabs ? videoDeliverables : null)
+        return
+      }
+
+      if (projectType === 'video' && hasVideoTabs) {
+        await ensureVideoDeliverablesSeeded(supabase, projectId, null, videoDeliverables)
+        return
+      }
     }
 
     // Bygg query for templates
@@ -268,10 +278,13 @@ export async function seedTasksFromTemplates(
 /**
  * Seeder to uavhengige post_prod-flyter for mixed-prosjekter:
  * én for video (sub_type='video') og én for foto (sub_type='photo').
+ * Når videoDeliverablesForTabs er satt (2+ videoer), seedes video-sporet via
+ * ensureVideoDeliverablesSeeded i stedet for én flat mal-kopi.
  */
 async function seedMixedPostProdTasks(
   supabase: SupabaseServerClient,
   projectId: string,
+  videoDeliverablesForTabs: DeliverableItem[] | null = null,
 ): Promise<void> {
   // Bygg et sett av "sub_type:title" for eksisterende oppgaver for å unngå duplikater
   const { data: existing } = await supabase
@@ -284,13 +297,19 @@ async function seedMixedPostProdTasks(
     (existing ?? []).map((t: { title: string; sub_type: string | null }) => `${t.sub_type}:${t.title}`)
   )
 
+  if (videoDeliverablesForTabs) {
+    await ensureVideoDeliverablesSeeded(supabase, projectId, 'video', videoDeliverablesForTabs)
+  }
+
   const [{ data: videoTemplates }, { data: photoTemplates }] = await Promise.all([
-    supabase
-      .from('task_templates')
-      .select('*')
-      .eq('pipeline_stage', 'post_prod')
-      .eq('project_type', 'video')
-      .order('sort_order', { ascending: true }),
+    videoDeliverablesForTabs
+      ? Promise.resolve({ data: [] as TaskTemplateRow[] | null })
+      : supabase
+          .from('task_templates')
+          .select('*')
+          .eq('pipeline_stage', 'post_prod')
+          .eq('project_type', 'video')
+          .order('sort_order', { ascending: true }),
     supabase
       .from('task_templates')
       .select('*')
@@ -423,21 +442,30 @@ export async function updateTaskStatus(
           .single()
 
         if (proj?.pipeline_stage === stage) {
-          const [{ count: total }, { count: done }] = await Promise.all([
-            supabase
-              .from('tasks')
-              .select('id', { count: 'exact', head: true })
-              .eq('project_id', task.project_id)
-              .eq('pipeline_stage', stage),
-            supabase
-              .from('tasks')
-              .select('id', { count: 'exact', head: true })
-              .eq('project_id', task.project_id)
-              .eq('pipeline_stage', stage)
-              .eq('status', 'done'),
-          ])
+          // For post_prod: oppgaver knyttet til en fjernet video-leveranse (orphan
+          // deliverable_id etter re-signering) skal ikke blokkere advance — de er
+          // usynlige i UI og kan ikke fullføres der. Spec beholder dem for manuell
+          // rydding, men pipeline må kunne gå videre uten dem.
+          const { data: stageTasks } = await supabase
+            .from('tasks')
+            .select('id, status, deliverable_id')
+            .eq('project_id', task.project_id)
+            .eq('pipeline_stage', stage)
 
-          if (total && done && total === done) {
+          let relevant = stageTasks ?? []
+          if (stage === 'post_prod' && relevant.length > 0) {
+            const { data: delivProj } = await supabase
+              .from('projects')
+              .select('deliverables')
+              .eq('id', task.project_id)
+              .single()
+            const activeIds = new Set(
+              ((delivProj?.deliverables ?? []) as DeliverableItem[]).map(d => d.id)
+            )
+            relevant = relevant.filter(t => countsTowardStageAdvance(t, activeIds))
+          }
+
+          if (relevant.length > 0 && relevant.every(t => t.status === 'done')) {
             await updatePipelineStage(task.project_id, nextStage as PipelineStage)
             revalidatePath('/admin/projects')
             revalidatePath('/admin/postprod')
@@ -2265,6 +2293,32 @@ async function materializeDefaultLane(
       priority: null,
     }))
   )
+}
+
+/**
+ * Offentlig wrapper: migrerer/seeder delt + per-leveranse video-steg når
+ * prosjektet har 2+ video-leveranser. Brukes av stepper-siden (som ellers
+ * aldri kaller getPostProdBoard) slik at flat-seedede prosjekter får faner.
+ */
+export async function ensurePostProdVideoDeliverablesSeeded(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('project_type, deliverables')
+      .eq('id', projectId)
+      .single()
+
+    if (!proj?.project_type || proj.project_type === 'photo') return
+
+    const videoDeliverables = ((proj.deliverables ?? []) as DeliverableItem[]).filter(d => d.type === 'video')
+    if (videoDeliverables.length < 2) return
+
+    const videoDbSubType = proj.project_type === 'mixed' ? 'video' as const : null
+    await ensureVideoDeliverablesSeeded(supabase, projectId, videoDbSubType, videoDeliverables)
+  } catch (err) {
+    console.error('ensurePostProdVideoDeliverablesSeeded unexpected error:', err)
+  }
 }
 
 /**

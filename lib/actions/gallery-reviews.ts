@@ -230,7 +230,17 @@ export async function respondToGalleryReview(reviewId: string, decision: 'approv
       await supabase.from('admin_tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', review.admin_task_id)
     }
 
-    if (decision === 'approved') {
+    const { data: gallery } = await supabase
+      .from('selection_galleries')
+      .select('project_id, gallery_type')
+      .eq('id', review.gallery_id)
+      .maybeSingle()
+
+    // Skjul-ved-godkjenning gjelder kun seleksjons-gallerier — der lar en godkjent
+    // review reviewer velge bort bilder fra det kunden får se. Leverings-gallerier
+    // har ingen slik fjern/legg-til-funksjon: alt det ble avgjort i seleksjonen,
+    // og "trenger endring"-merking der er ren tilbakemelding, ikke en eksklusjon.
+    if (decision === 'approved' && gallery?.gallery_type !== 'delivery') {
       const { data: excludedMarks } = await supabase
         .from('gallery_review_marks')
         .select('image_id')
@@ -246,12 +256,6 @@ export async function respondToGalleryReview(reviewId: string, decision: 'approv
         if (hideError) console.error('respondToGalleryReview hide error:', hideError)
       }
     }
-
-    const { data: gallery } = await supabase
-      .from('selection_galleries')
-      .select('project_id')
-      .eq('id', review.gallery_id)
-      .maybeSingle()
 
     const preview = decision === 'approved'
       ? 'Godkjente bildeutvalget'

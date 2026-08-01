@@ -21,6 +21,10 @@ export default function GalleryReviewClient({
 }) {
   const router = useRouter()
   const { review, gallery } = data
+  // Leverings-galleri (ferdigredigerte bilder) skal aldri kunne fjerne/legge til
+  // bilder her — alt det ble avgjort i seleksjonen. Reviewer skal kun vurdere
+  // redigeringen: kommentere og merke godkjent/trenger endring per bilde.
+  const isDelivery = gallery.gallery.gallery_type === 'delivery'
 
   const images: ReviewImage[] = useMemo(() => {
     const fromAlbums = gallery.albums.flatMap(a => a.images.map(img => ({
@@ -120,10 +124,22 @@ export default function GalleryReviewClient({
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 120 }}>
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '14px 20px' }}>
-        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text }}>Gjennomgå bildeutvalg</h1>
+        <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text }}>
+          {isDelivery ? 'Gjennomgå redigerte bilder' : 'Gjennomgå bildeutvalg'}
+        </h1>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginTop: 2 }}>
-          Skru av bilder som ikke skal med til kunden, og legg gjerne på et notat — f.eks. hvis du savner et alternativt bilde av noe.
-          {excludedCount > 0 && ` ${excludedCount} bilde${excludedCount === 1 ? '' : 'r'} skjules ved godkjenning.`}
+          {isDelivery ? (
+            <>
+              Vurder graden på redigeringen og legg på en kommentar der noe må endres. Ingen bilder
+              fjernes eller legges til her — det er allerede avgjort.
+              {excludedCount > 0 && ` ${excludedCount} bilde${excludedCount === 1 ? '' : 'r'} trenger endring.`}
+            </>
+          ) : (
+            <>
+              Skru av bilder som ikke skal med til kunden, og legg gjerne på et notat — f.eks. hvis du savner et alternativt bilde av noe.
+              {excludedCount > 0 && ` ${excludedCount} bilde${excludedCount === 1 ? '' : 'r'} skjules ved godkjenning.`}
+            </>
+          )}
         </p>
       </div>
 
@@ -152,12 +168,14 @@ export default function GalleryReviewClient({
                           color: mark.keep ? '#4CAF7D' : '#D4645A',
                         }}
                       >
-                        {mark.keep ? '✓ Behold i utvalg' : '✗ Tas ikke med'}
+                        {isDelivery
+                          ? (mark.keep ? '✓ Godkjent' : '✗ Trenger endring')
+                          : (mark.keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
                       </button>
                       <input
                         defaultValue={mark.note}
                         onBlur={e => saveNote(img.id, e.target.value)}
-                        placeholder="Notat (kun internt)..."
+                        placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
                         style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', outline: 'none' }}
                       />
                     </div>
@@ -224,12 +242,14 @@ export default function GalleryReviewClient({
                 color: markFor(lightboxImage.id).keep ? '#4CAF7D' : '#D4645A',
               }}
             >
-              {markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med'}
+              {isDelivery
+                ? (markFor(lightboxImage.id).keep ? '✓ Godkjent' : '✗ Trenger endring')
+                : (markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
             </button>
             <input
               defaultValue={markFor(lightboxImage.id).note}
               onBlur={e => saveNote(lightboxImage.id, e.target.value)}
-              placeholder="Notat (kun internt)..."
+              placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
               style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none' }}
             />
           </div>

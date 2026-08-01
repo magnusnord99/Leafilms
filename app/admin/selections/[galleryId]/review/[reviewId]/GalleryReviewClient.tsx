@@ -267,20 +267,29 @@ export default function GalleryReviewClient({
           rows={2}
           style={{ flex: 1, maxWidth: 480, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none', resize: 'none' }}
         />
-        <button
-          onClick={() => handleDecision('changes_requested')}
-          disabled={submitting !== null}
-          style={{ padding: '10px 16px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'none', color: '#D4645A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-        >
-          {submitting === 'changes_requested' ? '...' : 'Be om endringer'}
-        </button>
-        <button
-          onClick={() => handleDecision('approved')}
-          disabled={submitting !== null}
-          style={{ padding: '10px 18px', borderRadius: 7, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-        >
-          {submitting === 'approved' ? '...' : 'Godkjenn'}
-        </button>
+        {/* På leveringsreview styres hvilken knapp som vises av bildemerkingene —
+            enten alt er godkjent (kun "Godkjenn"), eller noe trenger endring
+            (kun "Be om endringer"). På seleksjonsreview betyr "trenger endring"
+            noe annet (ekskluder fra kunde) og skal ikke låse valget, så der vises
+            begge knappene som før. */}
+        {(!isDelivery || excludedCount > 0) && (
+          <button
+            onClick={() => handleDecision('changes_requested')}
+            disabled={submitting !== null}
+            style={{ padding: '10px 16px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'none', color: '#D4645A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            {submitting === 'changes_requested' ? '...' : 'Be om endringer'}
+          </button>
+        )}
+        {(!isDelivery || excludedCount === 0) && (
+          <button
+            onClick={() => handleDecision('approved')}
+            disabled={submitting !== null}
+            style={{ padding: '10px 18px', borderRadius: 7, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            {submitting === 'approved' ? '...' : 'Godkjenn'}
+          </button>
+        )}
       </div>
     </div>
   )

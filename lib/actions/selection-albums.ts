@@ -47,6 +47,7 @@ export type AdminSelectionPageData = {
     pin_code: string
     target_count: number | null
     status: 'open' | 'submitted' | 'purged'
+    gallery_type: 'selection' | 'delivery'
     submitted_at: string | null
     created_at: string
   }
@@ -104,6 +105,7 @@ export async function getSelectedImagesForProject(projectId: string): Promise<Se
     .from('selection_galleries')
     .select('id')
     .eq('project_id', projectId)
+    .eq('gallery_type', 'selection')
     .neq('status', 'purged')
     .limit(1)
     .maybeSingle()
@@ -519,6 +521,7 @@ async function getGalleriesOverviewByTaskDone(done: boolean): Promise<GalleryOve
     .from('selection_galleries')
     .select('id, project_id, status, target_count, submitted_at')
     .in('project_id', projectIds)
+    .eq('gallery_type', 'selection')
     .order('created_at', { ascending: false })
 
   // Foretrekk aktivt galleri (open/submitted) over purged

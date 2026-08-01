@@ -19,6 +19,7 @@ export type SelectionGallery = {
   pin_code: string
   target_count: number | null
   status: 'open' | 'submitted' | 'purged'
+  gallery_type: 'selection' | 'delivery'
   submitted_at: string | null
   purged_at: string | null
   created_at: string
@@ -89,7 +90,8 @@ export async function getCommentsForImages(
 // ---------------------------------------------------------------------------
 export async function createGallery(
   projectId?: string,
-  targetCount?: number
+  targetCount?: number,
+  galleryType: 'selection' | 'delivery' = 'selection'
 ): Promise<{ token: string; pinCode: string; galleryId: string }> {
   const supabase = await createClient()
 
@@ -104,6 +106,7 @@ export async function createGallery(
       pin_code: pinCode,
       target_count: targetCount ?? null,
       status: 'open',
+      gallery_type: galleryType,
     })
     .select('id')
     .single()
@@ -114,6 +117,31 @@ export async function createGallery(
   }
 
   return { token, pinCode, galleryId: data.id }
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN: Levering — internt galleri der en redigerer laster opp ferdigbehandlede
+// bilder for at en kollega skal kunne godkjenne før levering til kunde (skjer via
+// ekstern app; kunden ser aldri dette galleriet i Leafilms, så det har ingen
+// delt lenke i praksis selv om token/pin genereres som vanlig).
+// ---------------------------------------------------------------------------
+export async function getOrCreateDeliveryGallery(projectId: string): Promise<{ galleryId: string }> {
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('selection_galleries')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('gallery_type', 'delivery')
+    .neq('status', 'purged')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) return { galleryId: existing.id }
+
+  const { galleryId } = await createGallery(projectId, undefined, 'delivery')
+  return { galleryId }
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +193,7 @@ export async function getGalleryIdForProject(projectId: string): Promise<{ id: s
     .from('selection_galleries')
     .select('id, status')
     .eq('project_id', projectId)
+    .eq('gallery_type', 'selection')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -188,6 +217,7 @@ export async function getAdminGallery(projectId: string): Promise<{
     .from('selection_galleries')
     .select('*')
     .eq('project_id', projectId)
+    .eq('gallery_type', 'selection')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

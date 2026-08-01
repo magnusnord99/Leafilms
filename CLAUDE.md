@@ -31,6 +31,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `database-migrations/037_market_analysis.sql`
 - `database-migrations/039_pitch_feedback.sql`
 - `supabase/migrations/136_task_turn_ready_notification.sql` (widener notifications_type_check — koden feiler stille inntil den er kjørt, se lib/actions/pipeline.ts)
+- `supabase/migrations/137_delivery_galleries.sql` (legger til gallery_type-kolonne — "Send til kollega for godkjenning"-knappen på postprod-siden feiler inntil den er kjørt)
 
 Disse er skrevet men ikke kjort mot Supabase enna.
 

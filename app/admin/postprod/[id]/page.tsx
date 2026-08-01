@@ -18,7 +18,7 @@ import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
 import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
-import { deleteImageComment, getGalleryIdForProject } from '@/lib/actions/selections'
+import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'
 import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
@@ -208,6 +208,7 @@ export default function PostProdDetailPage() {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [reseeding, setReseeding] = useState(false)
+  const [openingDeliveryReview, setOpeningDeliveryReview] = useState(false)
   const [seedError, setSeedError] = useState<string | null>(null)
   // Generisk feilmelding for optimistiske oppdateringer som feiler på serveren
   // (statusendring m.m.) — se handleAdvance. Vises som en dismissbar boks nederst,
@@ -680,6 +681,12 @@ export default function PostProdDetailPage() {
     setReseeding(false)
   }
 
+  async function handleOpenDeliveryReview() {
+    setOpeningDeliveryReview(true)
+    const { galleryId } = await getOrCreateDeliveryGallery(projectId)
+    router.push(`/admin/selections/${galleryId}`)
+  }
+
   async function handleReseed() {
     if (!confirm('Nullstill alle oppgaver og generer på nytt? Fremdrift, notater og chat-meldinger går tapt.')) return
     setReseeding(true)
@@ -884,12 +891,22 @@ export default function PostProdDetailPage() {
                   </button>
                 )}
                 {currentProject.project_type === 'photo' && (
-                  <button
-                    onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}
-                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: '#4A9AC4', color: '#fff', border: 'none' }}
-                  >
-                    ↑ Lever bilder
-                  </button>
+                  <>
+                    <button
+                      onClick={handleOpenDeliveryReview}
+                      disabled={openingDeliveryReview}
+                      title="Last opp ferdigredigerte bilder og send til en kollega for godkjenning før levering"
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: openingDeliveryReview ? 'default' : 'pointer', background: 'transparent', color: C.text2, border: `1px solid ${C.border}`, opacity: openingDeliveryReview ? 0.5 : 1 }}
+                    >
+                      Send til kollega for godkjenning
+                    </button>
+                    <button
+                      onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: '#4A9AC4', color: '#fff', border: 'none' }}
+                    >
+                      ↑ Lever bilder
+                    </button>
+                  </>
                 )}
                 {currentProject.project_type === 'mixed' && (
                   <>
@@ -898,6 +915,14 @@ export default function PostProdDetailPage() {
                       style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', background: C.success, color: '#fff', border: 'none' }}
                     >
                       ↑ Lever film
+                    </button>
+                    <button
+                      onClick={handleOpenDeliveryReview}
+                      disabled={openingDeliveryReview}
+                      title="Last opp ferdigredigerte bilder og send til en kollega for godkjenning før levering"
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: openingDeliveryReview ? 'default' : 'pointer', background: 'transparent', color: C.text2, border: `1px solid ${C.border}`, opacity: openingDeliveryReview ? 0.5 : 1 }}
+                    >
+                      Send til kollega for godkjenning
                     </button>
                     <button
                       onClick={() => router.push(`/admin/transfers/new?projectId=${projectId}&type=photo`)}

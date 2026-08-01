@@ -204,17 +204,30 @@ export default function SelectionAdminClient({
             )}
           </div>
 
+          {gallery.gallery_type === 'delivery' && (
+            <div style={{ marginBottom: 16, padding: '8px 10px', borderRadius: 7, background: 'rgba(124,92,252,0.08)', border: '1px solid rgba(124,92,252,0.25)' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>
+                Internt leverings-galleri — kunden ser aldri denne lenken. Ferdigredigerte
+                bilder lastes opp her for kollega-godkjenning før levering (via ekstern app).
+              </p>
+            </div>
+          )}
+
           <GalleryReviewPanel galleryId={gallery.id} />
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={labelStyle}>Hoved-gallerilenke</div>
-            <GalleryLinkBox token={gallery.token} pinCode={gallery.pin_code} />
-          </div>
+          {gallery.gallery_type === 'selection' && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={labelStyle}>Hoved-gallerilenke</div>
+              <GalleryLinkBox token={gallery.token} pinCode={gallery.pin_code} />
+            </div>
+          )}
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={labelStyle}>Prosjekt</div>
-            <LinkProjectPanel galleryId={gallery.id} linkedProject={linkedProject} onRefresh={refresh} />
-          </div>
+          {gallery.gallery_type === 'selection' && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={labelStyle}>Prosjekt</div>
+              <LinkProjectPanel galleryId={gallery.id} linkedProject={linkedProject} onRefresh={refresh} />
+            </div>
+          )}
 
           <div style={labelStyle}>Handlinger</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -235,6 +248,7 @@ export default function SelectionAdminClient({
             linkedProjectId={linkedProject?.id ?? null}
             galleryId={gallery.id}
             galleryPinCode={gallery.pin_code}
+            galleryType={gallery.gallery_type}
             onRefresh={refresh}
             onNavigate={handleNavigate}
             children={activeAlbumChildren}
@@ -637,6 +651,7 @@ function AlbumDetailPanel({
   linkedProjectId,
   galleryId,
   galleryPinCode,
+  galleryType,
   onRefresh,
   onNavigate,
   children,
@@ -646,6 +661,7 @@ function AlbumDetailPanel({
   linkedProjectId: string | null
   galleryId: string
   galleryPinCode: string
+  galleryType: 'selection' | 'delivery'
   onRefresh: () => Promise<void>
   onNavigate: (albumId: string) => void
   children: AlbumWithImages[]
@@ -953,36 +969,39 @@ function AlbumDetailPanel({
             + Ny undermappe
           </button>
 
-          {/* Individuell delelenke */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: sharingOn ? 'rgba(100,160,220,0.06)' : C.surface2, border: `1px solid ${sharingOn ? 'rgba(100,160,220,0.3)' : C.border}` }}>
-            {sharingOn && albumUrl ? (
-              <>
-                <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', color: '#64A0DC', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{albumUrl}</span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>PIN: <strong style={{ color: C.text }}>{albumPin}</strong></span>
-                <button onClick={() => copy(albumUrl, setCopiedLink)} style={btnSm}>{copiedLink ? '✓' : 'Lenke'}</button>
-                <button onClick={() => copy(albumPin!, setCopiedPin)} style={btnSm}>{copiedPin ? '✓' : 'PIN'}</button>
-              </>
-            ) : (
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>Individuell lenke — av</span>
-            )}
-            {/* Felles PIN-toggle */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: sharingLoading ? 0.5 : 1 }}>
-              <input
-                type="checkbox"
-                checked={useGalleryPin}
-                onChange={e => handleToggleGalleryPin(e.target.checked)}
-                disabled={sharingLoading}
-                style={{ accentColor: '#64A0DC', width: 11, height: 11, cursor: 'pointer' }}
-              />
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, whiteSpace: 'nowrap' }}>Felles PIN</span>
-            </label>
-            <button
-              onClick={handleToggleSharing} disabled={sharingLoading}
-              style={{ width: 34, height: 18, borderRadius: 9, border: 'none', position: 'relative', background: sharingOn ? 'rgba(100,160,220,0.3)' : C.surface, cursor: 'pointer', flexShrink: 0 }}
-            >
-              <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', top: 3, left: sharingOn ? 19 : 3, background: sharingOn ? '#64A0DC' : C.text3, transition: 'left 0.15s' }} />
-            </button>
-          </div>
+          {/* Individuell delelenke — gir ingen mening for leverings-gallerier, siden
+              kunden aldri skal ha noen lenke inn dit (levering skjer via ekstern app) */}
+          {galleryType === 'selection' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: sharingOn ? 'rgba(100,160,220,0.06)' : C.surface2, border: `1px solid ${sharingOn ? 'rgba(100,160,220,0.3)' : C.border}` }}>
+              {sharingOn && albumUrl ? (
+                <>
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', color: '#64A0DC', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{albumUrl}</span>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>PIN: <strong style={{ color: C.text }}>{albumPin}</strong></span>
+                  <button onClick={() => copy(albumUrl, setCopiedLink)} style={btnSm}>{copiedLink ? '✓' : 'Lenke'}</button>
+                  <button onClick={() => copy(albumPin!, setCopiedPin)} style={btnSm}>{copiedPin ? '✓' : 'PIN'}</button>
+                </>
+              ) : (
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>Individuell lenke — av</span>
+              )}
+              {/* Felles PIN-toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: sharingLoading ? 0.5 : 1 }}>
+                <input
+                  type="checkbox"
+                  checked={useGalleryPin}
+                  onChange={e => handleToggleGalleryPin(e.target.checked)}
+                  disabled={sharingLoading}
+                  style={{ accentColor: '#64A0DC', width: 11, height: 11, cursor: 'pointer' }}
+                />
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, whiteSpace: 'nowrap' }}>Felles PIN</span>
+              </label>
+              <button
+                onClick={handleToggleSharing} disabled={sharingLoading}
+                style={{ width: 34, height: 18, borderRadius: 9, border: 'none', position: 'relative', background: sharingOn ? 'rgba(100,160,220,0.3)' : C.surface, cursor: 'pointer', flexShrink: 0 }}
+              >
+                <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', top: 3, left: sharingOn ? 19 : 3, background: sharingOn ? '#64A0DC' : C.text3, transition: 'left 0.15s' }} />
+              </button>
+            </div>
+          )}
 
           <button
             onClick={() => fileInputRef.current?.click()}

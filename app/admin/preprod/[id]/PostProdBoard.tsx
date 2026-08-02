@@ -126,6 +126,12 @@ export function PostProdBoard({
     return null
   }
 
+  // Må dekke videoShared/faner — ellers blir drop-på-kort i Delt/faner feiltolket
+  // som custom-lane med laneId=<cardUuid> (FK-feil, stille refetch).
+  function isBoardCardId(cardId: string): boolean {
+    return findContainerId(cardId) !== null
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over) return
@@ -138,7 +144,7 @@ export function PostProdBoard({
       if (!item) return
 
       const overId = over.id as string
-      const overIsCard = board.parallel.some(c => c.id === overId) || board.lanes.some(l => l.cards.some(c => c.id === overId))
+      const overIsCard = isBoardCardId(overId)
       const targetContainerId = overIsCard ? findContainerId(overId) : overId
       if (!targetContainerId) return
       const destination = laneIdToDestination(targetContainerId)
@@ -162,7 +168,7 @@ export function PostProdBoard({
     const overId = over.id as string
     if (activeId === overId) return
 
-    const overIsCard = board.parallel.some(c => c.id === overId) || board.lanes.some(l => l.cards.some(c => c.id === overId))
+    const overIsCard = isBoardCardId(overId)
 
     const targetContainerId = overIsCard ? findContainerId(overId) : overId
     if (!targetContainerId) return

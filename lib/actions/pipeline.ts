@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
+import { findFlatLaneTasksToReassign } from '@/lib/postprod-video-seed'
 import { computeStepperLocks } from '@/lib/task-lock'
 import { pickBestQuote } from '@/lib/quote-builder-utils'
 
@@ -2270,10 +2271,11 @@ async function materializeDefaultLane(
 /**
  * Seeder video-post-prod for prosjekter med 2+ video-leveranser. Idempotent —
  * trygt å kalle på hver getPostProdBoard-forespørsel:
- * 1. Kort som matcher en `per_deliverable`-mal og fortsatt har
- *    deliverable_id=NULL tilhørte den gamle flate lanen (1 video) — de
- *    reassignes til den FØRSTE leveransen. Kjøres dette igjen senere finnes
- *    ingen slike kort lenger, så UPDATE treffer 0 rader.
+ * 1. 1→2+-overgang: kort som matcher en `per_deliverable`-mal og fortsatt har
+ *    deliverable_id=NULL tilhørte den gamle flate lanen — de reassignes til den
+ *    FØRSTE leveransen, men KUN når ingen faner er scoped ennå. Etter at faner
+ *    finnes er deliverable_id=NULL en bevisst Delt-flytting (spec §3) og må
+ *    ikke skrives over ved reload.
  * 2. Delt-seksjonen (`shared`-maler) seedes kun hvis prosjektet aldri har
  *    hatt video-kort i det hele tatt.
  * 3. Hver leveranse uten egne kort ennå (helt ny, eller lagt til i en senere
@@ -2318,16 +2320,18 @@ async function ensureVideoDeliverablesSeeded(
   const { data: existingVideoTasks } = await videoTaskQuery
 
   const perDeliverableTitles = new Set(perDeliverableTemplates.map((t: { title: string }) => t.title))
-  const unassigned = (existingVideoTasks ?? []).filter(
-    (t: { title: string; deliverable_id: string | null }) =>
-      t.deliverable_id === null && perDeliverableTitles.has(t.title)
+  const videoDeliverableIds = new Set(videoDeliverables.map(d => d.id))
+  const toReassign = findFlatLaneTasksToReassign(
+    existingVideoTasks ?? [],
+    perDeliverableTitles,
+    videoDeliverableIds
   )
 
-  if (unassigned.length > 0) {
+  if (toReassign.length > 0) {
     const firstId = videoDeliverables[0].id
     await supabase.from('tasks')
       .update({ deliverable_id: firstId })
-      .in('id', unassigned.map((t: { id: string }) => t.id))
+      .in('id', toReassign)
   }
 
   if ((existingVideoTasks ?? []).length === 0 && sharedTemplates.length > 0) {

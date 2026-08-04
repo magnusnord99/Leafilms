@@ -13,6 +13,10 @@ export function crewMemberCost(m: CrewMember): number {
 // UI-et plutselig kladden som om DEN var det kunden har akseptert. Falt tilbake til
 // is_current, så nyeste, hvis ingenting er akseptert ennå. Samme prioritering som
 // er etablert i app/admin/okonomi og customers/[id]-sidene (se feedback 08a0235b).
+//
+// Bruk denne for DISPLAY (hub, økonomi, kundekort) — IKKE for tilbuds-editoren.
+// Editoren skal åpne is_current via pickQuoteForEditing, ellers lander man på
+// akseptert V1 etter "Lag ny versjon" og kan overskrive kundens avtalte tall.
 export function pickBestQuote<T extends { status: string; is_current: boolean; created_at: string }>(
   quotes: T[]
 ): T | null {
@@ -23,6 +27,23 @@ export function pickBestQuote<T extends { status: string; is_current: boolean; c
   const current = quotes.find(q => q.is_current)
   if (current) return current
   return [...quotes].sort(byRecency)[0]
+}
+
+// Tilbuds-editoren: åpne den gjeldende arbeidsversjonen (is_current). Aksepterte
+// rader er fortsatt synlige via versjonsfanene, men skal ikke være default-mål
+// for Lagre/PDF når en nyere kladd finnes.
+export function pickQuoteForEditing<T extends { status: string; is_current: boolean; created_at: string }>(
+  quotes: T[]
+): T | null {
+  if (quotes.length === 0) return null
+  const current = quotes.find(q => q.is_current)
+  if (current) return current
+  return pickBestQuote(quotes)
+}
+
+/** Akseptert/avslått tilbud er kundens svar — quote_data skal ikke muteres på plass. */
+export function isQuoteContentLocked(status: string | null | undefined): boolean {
+  return status === 'accepted' || status === 'rejected'
 }
 
 const ADDON_CATEGORIES: OptionalAddonCategory[] = ['startup', 'production', 'post', 'expenses']

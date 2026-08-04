@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote, EquipmentGroupWithItems } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import QuoteChat from '@/components/quote/QuoteChat'
-import { convertBuilderDataToQuoteData, pickBestQuote, addonTotalPrice } from '@/lib/quote-builder-utils'
+import { pickQuoteForEditing, isQuoteContentLocked, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
 
 type Props = {
@@ -68,10 +68,11 @@ export default function ProjectQuotePage({ params }: Props) {
       const members = (teamRes.data || []) as TeamMember[]
       const custs = (customersRes.data || []) as Customer[]
       const allQuotes = (quoteRes.data || []) as Quote[]
-      // Et akseptert/signert tilbud vinner alltid over "gjeldende versjon" —
-      // ellers åpnes plutselig et nyere, usignert tilleggstilbud som om DET var
-      // det kunden hadde akseptert (feedback 08a0235b).
-      const existingQuote = pickBestQuote(allQuotes)
+      // Editoren åpner is_current (arbeidsversjonen). pickBestQuote (akseptert
+      // vinner) er for display andre steder — her ville den landet på akseptert
+      // V1 etter "Lag ny versjon" og latt Lagre/PDF overskrive kundens avtalte
+      // tall mens status forble accepted.
+      const existingQuote = pickQuoteForEditing(allQuotes)
 
       setProject(proj)
       setQuotes(allQuotes)
@@ -178,7 +179,6 @@ export default function ProjectQuotePage({ params }: Props) {
     setSaving(true)
     setSaveMessage(null)
     try {
-      const converted = convertBuilderDataToQuoteData(data)
       const record = {
         project_id: projectId,
         sheet_url: '',
@@ -187,15 +187,17 @@ export default function ProjectQuotePage({ params }: Props) {
       }
 
       if (existingQuoteId) {
-        // Et allerede akseptert/avslått tilbud er kundens faktiske svar — å lagre en
-        // redigering (eller generere PDF på nytt, se handleGeneratePDF som alltid
-        // kaller handleSave først) skal ALDRI stille det tilbake til kladd under dem.
-        // Kun kladd/sendte tilbud settes til 'draft' igjen ved lagring (feedback 08a0235b).
         const currentStatus = quotes.find(q => q.id === existingQuoteId)?.status
-        const preserveStatus = currentStatus === 'accepted' || currentStatus === 'rejected'
-        const updatePayload = preserveStatus ? record : { ...record, status: 'draft' as const }
-        await supabase.from('quotes').update(updatePayload).eq('id', existingQuoteId)
-        setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data } : q))
+        // Akseptert/avslått quote_data er kundens avtalte svar — aldri overwrite
+        // på plass (d29ce51 bevarte status, men lot fortsatt innholdet muteres).
+        // Endringer krever "+ Nytt tilbud" / bytte til en kladd-versjon.
+        if (isQuoteContentLocked(currentStatus)) {
+          setSaveMessage('Aksepterte/avslåtte tilbud er låst — lag et nytt tilbud for å endre')
+          return
+        }
+        // Kladd/sendte tilbud settes tilbake til 'draft' ved lagring (feedback 08a0235b).
+        await supabase.from('quotes').update({ ...record, status: 'draft' as const }).eq('id', existingQuoteId)
+        setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data, status: 'draft' } : q))
       } else {
         // Første tilbud for prosjektet — blir automatisk gjeldende versjon
         const { data: newQuote } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true }).select('*').single()
@@ -303,17 +305,25 @@ export default function ProjectQuotePage({ params }: Props) {
   async function handleGeneratePDF(data: QuoteBuilderData) {
     setGeneratingPDF(true)
     try {
-      await handleSave(data)
-      const converted = convertBuilderDataToQuoteData(data)
+      const active = quotes.find(q => q.id === existingQuoteId)
+      const locked = isQuoteContentLocked(active?.status)
+      // Låste tilbud: generer PDF fra lagret quote_data — ikke persistér
+      // eventuelle UI-endringer tilbake i den aksepterte raden.
+      const pdfSource = locked
+        ? ((active?.quote_data as QuoteBuilderData | undefined) ?? data)
+        : data
+      if (!locked) {
+        await handleSave(data)
+      }
 
       const response = await fetch('/api/generate-quote-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          builderData: data,
+          builderData: pdfSource,
           projectId,
-          language: data.language,
-          mva: data.includeVat ? 'y' : 'n',
+          language: pdfSource.language,
+          mva: pdfSource.includeVat ? 'y' : 'n',
           saveToStorage: true,
         }),
       })

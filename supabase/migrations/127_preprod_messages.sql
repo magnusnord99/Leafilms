@@ -18,25 +18,20 @@ CREATE INDEX IF NOT EXISTS idx_preprod_messages_project ON preprod_messages(proj
 
 ALTER TABLE preprod_messages ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'preprod_messages' AND policyname = 'authed_read_preprod_messages'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authed_read_preprod_messages" ON preprod_messages FOR SELECT TO authenticated USING (true)';
-  END IF;
-END$$;
+-- Intern pre-prod-chat: kun staff. SELECT USING (true) ville latt enhver
+-- authenticated JWT (inkl. customer) lese alle prosjekters pre-prod-chat via PostgREST.
+DROP POLICY IF EXISTS "authed_read_preprod_messages" ON preprod_messages;
+DROP POLICY IF EXISTS "authed_insert_preprod_messages" ON preprod_messages;
+DROP POLICY IF EXISTS "staff_read_preprod_messages" ON preprod_messages;
+DROP POLICY IF EXISTS "staff_insert_preprod_messages" ON preprod_messages;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'preprod_messages' AND policyname = 'authed_insert_preprod_messages'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authed_insert_preprod_messages" ON preprod_messages FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id)';
-  END IF;
-END$$;
+CREATE POLICY "staff_read_preprod_messages"
+  ON preprod_messages FOR SELECT TO authenticated
+  USING (public.is_staff(auth.uid()));
+
+CREATE POLICY "staff_insert_preprod_messages"
+  ON preprod_messages FOR INSERT TO authenticated
+  WITH CHECK (public.is_staff(auth.uid()) AND auth.uid() = user_id);
 
 -- Reaksjoner (message_reactions.message_type) kan nå også være 'preprod'
 ALTER TABLE message_reactions DROP CONSTRAINT IF EXISTS message_reactions_message_type_check;

@@ -52,30 +52,48 @@ COMMENT ON TABLE post_prod_task_library IS 'Gjenbrukbart bibliotek av post-produ
 ALTER TABLE post_prod_lanes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE post_prod_task_library ENABLE ROW LEVEL SECURITY;
 
+-- Internt post-prod-brett: kun staff. USING (true) ville latt enhver
+-- authenticated JWT (inkl. customer) lese/slette lanes via PostgREST.
 DROP POLICY IF EXISTS "authenticated_read_post_prod_lanes"   ON post_prod_lanes;
 DROP POLICY IF EXISTS "authenticated_insert_post_prod_lanes" ON post_prod_lanes;
 DROP POLICY IF EXISTS "authenticated_update_post_prod_lanes" ON post_prod_lanes;
 DROP POLICY IF EXISTS "authenticated_delete_post_prod_lanes" ON post_prod_lanes;
+DROP POLICY IF EXISTS "staff_read_post_prod_lanes"   ON post_prod_lanes;
+DROP POLICY IF EXISTS "staff_insert_post_prod_lanes" ON post_prod_lanes;
+DROP POLICY IF EXISTS "staff_update_post_prod_lanes" ON post_prod_lanes;
+DROP POLICY IF EXISTS "staff_delete_post_prod_lanes" ON post_prod_lanes;
 
-CREATE POLICY "authenticated_read_post_prod_lanes"
-  ON post_prod_lanes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "authenticated_insert_post_prod_lanes"
-  ON post_prod_lanes FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "authenticated_update_post_prod_lanes"
-  ON post_prod_lanes FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_delete_post_prod_lanes"
-  ON post_prod_lanes FOR DELETE TO authenticated USING (true);
+CREATE POLICY "staff_read_post_prod_lanes"
+  ON post_prod_lanes FOR SELECT TO authenticated
+  USING (public.is_staff(auth.uid()));
+CREATE POLICY "staff_insert_post_prod_lanes"
+  ON post_prod_lanes FOR INSERT TO authenticated
+  WITH CHECK (public.is_staff(auth.uid()));
+CREATE POLICY "staff_update_post_prod_lanes"
+  ON post_prod_lanes FOR UPDATE TO authenticated
+  USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
+CREATE POLICY "staff_delete_post_prod_lanes"
+  ON post_prod_lanes FOR DELETE TO authenticated
+  USING (public.is_staff(auth.uid()));
 
 DROP POLICY IF EXISTS "authenticated_read_post_prod_task_library"   ON post_prod_task_library;
 DROP POLICY IF EXISTS "authenticated_insert_post_prod_task_library" ON post_prod_task_library;
 DROP POLICY IF EXISTS "authenticated_update_post_prod_task_library" ON post_prod_task_library;
 DROP POLICY IF EXISTS "authenticated_delete_post_prod_task_library" ON post_prod_task_library;
+DROP POLICY IF EXISTS "staff_read_post_prod_task_library"   ON post_prod_task_library;
+DROP POLICY IF EXISTS "staff_insert_post_prod_task_library" ON post_prod_task_library;
+DROP POLICY IF EXISTS "staff_update_post_prod_task_library" ON post_prod_task_library;
+DROP POLICY IF EXISTS "staff_delete_post_prod_task_library" ON post_prod_task_library;
 
-CREATE POLICY "authenticated_read_post_prod_task_library"
-  ON post_prod_task_library FOR SELECT TO authenticated USING (true);
-CREATE POLICY "authenticated_insert_post_prod_task_library"
-  ON post_prod_task_library FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "authenticated_update_post_prod_task_library"
-  ON post_prod_task_library FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "authenticated_delete_post_prod_task_library"
-  ON post_prod_task_library FOR DELETE TO authenticated USING (true);
+CREATE POLICY "staff_read_post_prod_task_library"
+  ON post_prod_task_library FOR SELECT TO authenticated
+  USING (public.is_staff(auth.uid()));
+CREATE POLICY "staff_insert_post_prod_task_library"
+  ON post_prod_task_library FOR INSERT TO authenticated
+  WITH CHECK (public.is_staff(auth.uid()));
+CREATE POLICY "staff_update_post_prod_task_library"
+  ON post_prod_task_library FOR UPDATE TO authenticated
+  USING (public.is_staff(auth.uid())) WITH CHECK (public.is_staff(auth.uid()));
+CREATE POLICY "staff_delete_post_prod_task_library"
+  ON post_prod_task_library FOR DELETE TO authenticated
+  USING (public.is_staff(auth.uid()));

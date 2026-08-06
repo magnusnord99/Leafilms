@@ -19,12 +19,17 @@ CREATE INDEX IF NOT EXISTS idx_customer_contacts_customer ON customer_contacts(c
 
 ALTER TABLE customer_contacts ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'customer_contacts' AND policyname = 'authenticated full access customer_contacts') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access customer_contacts" ON customer_contacts FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+-- Staff-only: tabellen inneholder kundekontakt-PII (e-post/telefon). Offentlig
+-- board-visning leser via service client i resolveSchedulePeople (stripper PII
+-- for ikke-staff). Ikke "authenticated full access" — customer JWT må ikke
+-- kunne enumerate/endre alle kontakter via PostgREST.
+DROP POLICY IF EXISTS "authenticated full access customer_contacts" ON customer_contacts;
+DROP POLICY IF EXISTS "staff_all_customer_contacts" ON customer_contacts;
+
+CREATE POLICY "staff_all_customer_contacts"
+  ON customer_contacts FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
 -- Backfill: gjør eksisterende ett-felt-kontakt på customers om til en primær rad,
 -- slik at ingen eksisterende kontaktdata går tapt. Idempotent (kjøres kun for kunder

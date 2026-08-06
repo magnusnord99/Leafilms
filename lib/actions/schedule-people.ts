@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { isStaffRole } from '@/lib/permissions'
 import type { CustomerContact, ResolvedSchedulePerson, SchedulePersonRef } from '@/lib/types'
 
 export type CustomerMatch = { id: string; name: string; company: string | null }
@@ -118,17 +119,28 @@ export async function updateTeamMemberContact(id: string, patch: {
 }
 
 /**
- * Slår opp visningsdata for en liste referanser. Bruker service-klienten når
- * kalleren er anonym (offentlig delt board, /b/[token]) siden RLS på
- * customer_contacts/team_members krever authenticated — samme mønster som
- * getSharedBoard bruker for å lese boards/board_cards anonymt.
+ * Slår opp visningsdata for en liste referanser.
+ * customer_contacts er staff-only via RLS — les alltid via service client
+ * (samme mønster som getSharedBoard), og eksponer e-post/telefon kun til staff.
+ * Anonyme og customer-JWTs får navn/rolle uten PII.
  */
 export async function resolveSchedulePeople(refs: SchedulePersonRef[]): Promise<ResolvedSchedulePerson[]> {
   if (refs.length === 0) return []
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const db = user ? supabase : createServiceClient()
+    let showContactPii = false
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      showContactPii = isStaffRole(profile?.role)
+    }
+    // Service client: staff-only RLS on customer_contacts would otherwise hide
+    // names on public boards (/b/[token]) and for any non-staff session.
+    const db = createServiceClient()
 
     const contactIds = refs.filter(r => r.type === 'customer_contact').map(r => r.id)
     const teamIds = refs.filter(r => r.type === 'team_member').map(r => r.id)
@@ -137,15 +149,12 @@ export async function resolveSchedulePeople(refs: SchedulePersonRef[]): Promise<
     if (contactIds.length > 0) {
       const { data } = await db.from('customer_contacts').select('id, name, role, email, phone').in('id', contactIds)
       for (const c of data ?? []) {
-        // Anonyme (uautentiserte) kallere skal aldri få kundekontakters e-post/telefon —
-        // customer_contacts er en authenticated-only RLS-tabell; vi bruker service-klienten
-        // her kun for å vise navn/rolle på offentlig delte boards.
         resolved.push({
           ref: { type: 'customer_contact', id: c.id },
           name: c.name,
           role: c.role,
-          email: user ? c.email : null,
-          phone: user ? c.phone : null,
+          email: showContactPii ? c.email : null,
+          phone: showContactPii ? c.phone : null,
         })
       }
     }

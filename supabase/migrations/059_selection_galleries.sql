@@ -52,28 +52,39 @@ CREATE INDEX IF NOT EXISTS idx_selection_images_gallery    ON selection_images(g
 -- ---------------------------------------------------------------------------
 -- 3. RLS
 -- ---------------------------------------------------------------------------
+-- Staff-only: gallerier lagrer token + pin_code (hemmeligheter for kundelenken).
+-- Offentlig PIN-flyt bruker service client i lib/actions/selections.ts —
+-- customer JWT må ikke kunne enumerate tokens/PINs eller slette bilder via PostgREST.
+-- Inline profiles-sjekk (samme roller som is_staff()) fordi denne migrasjonen
+-- kjører før 097 som introduserer public.is_staff().
 ALTER TABLE selection_galleries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE selection_images     ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'selection_galleries' AND policyname = 'authenticated full access galleries'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access galleries" ON selection_galleries FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access galleries" ON selection_galleries;
+DROP POLICY IF EXISTS "staff_all_selection_galleries" ON selection_galleries;
+CREATE POLICY "staff_all_selection_galleries"
+  ON selection_galleries FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'selection_images' AND policyname = 'authenticated full access images'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access images" ON selection_images FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access images" ON selection_images;
+DROP POLICY IF EXISTS "staff_all_selection_images" ON selection_images;
+CREATE POLICY "staff_all_selection_images"
+  ON selection_images FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
 -- ---------------------------------------------------------------------------
 -- 4. Storage bucket (privat)
@@ -88,15 +99,24 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'objects' AND policyname = 'authenticated manage selections storage'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated manage selections storage" ON storage.objects FOR ALL TO authenticated USING (bucket_id = ''selections'') WITH CHECK (bucket_id = ''selections'')';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated manage selections storage" ON storage.objects;
+DROP POLICY IF EXISTS "staff_manage_selections_storage" ON storage.objects;
+CREATE POLICY "staff_manage_selections_storage"
+  ON storage.objects FOR ALL TO authenticated
+  USING (
+    bucket_id = 'selections'
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    bucket_id = 'selections'
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- ---------------------------------------------------------------------------
 -- 5. Task-mal for post_prod (photo + mixed prosjekttyper)

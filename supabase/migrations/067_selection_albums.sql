@@ -46,22 +46,31 @@ CREATE INDEX IF NOT EXISTS idx_selection_album_picks_album
 ALTER TABLE selection_album_picks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE selection_albums      ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'selection_albums' AND policyname = 'authenticated full access albums'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access albums" ON selection_albums FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+-- Staff-only: album_token + album_pin_code er hemmeligheter for kundelenken.
+-- Offentlig album-PIN-flyt bruker service client i lib/actions/selection-picks.ts.
+-- Inline profiles-sjekk (samme roller som is_staff()) — 067 kjører før 097.
+DROP POLICY IF EXISTS "authenticated full access albums" ON selection_albums;
+DROP POLICY IF EXISTS "staff_all_selection_albums" ON selection_albums;
+CREATE POLICY "staff_all_selection_albums"
+  ON selection_albums FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'selection_album_picks' AND policyname = 'authenticated full access album picks'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access album picks" ON selection_album_picks FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access album picks" ON selection_album_picks;
+DROP POLICY IF EXISTS "staff_all_selection_album_picks" ON selection_album_picks;
+CREATE POLICY "staff_all_selection_album_picks"
+  ON selection_album_picks FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));

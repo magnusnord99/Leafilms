@@ -341,34 +341,57 @@ CREATE POLICY "authenticated_delete_project_collage_images"
 -- ============================================
 -- CUSTOMERS
 -- ============================================
+-- Staff-only: customers holds CRM PII (email, phone, address, org_nummer,
+-- invoice fields). Public accept-quote / contract-sign flows use
+-- createServiceClient() and must not rely on open authenticated policies.
+-- Inline profiles-sjekk (samme roller som is_staff()) fordi denne migrasjonen
+-- kjører før 097 som introduserer public.is_staff().
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if they exist
 DROP POLICY IF EXISTS "authenticated_read_customers" ON customers;
 DROP POLICY IF EXISTS "authenticated_insert_customers" ON customers;
 DROP POLICY IF EXISTS "authenticated_update_customers" ON customers;
 DROP POLICY IF EXISTS "authenticated_delete_customers" ON customers;
+DROP POLICY IF EXISTS "staff_read_customers" ON customers;
+DROP POLICY IF EXISTS "staff_insert_customers" ON customers;
+DROP POLICY IF EXISTS "staff_update_customers" ON customers;
+DROP POLICY IF EXISTS "staff_delete_customers" ON customers;
 
-CREATE POLICY "authenticated_read_customers"
+CREATE POLICY "staff_read_customers"
   ON customers FOR SELECT
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_insert_customers"
+CREATE POLICY "staff_insert_customers"
   ON customers FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_update_customers"
+CREATE POLICY "staff_update_customers"
   ON customers FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_delete_customers"
+CREATE POLICY "staff_delete_customers"
   ON customers FOR DELETE
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
 -- ============================================
 -- QUOTES

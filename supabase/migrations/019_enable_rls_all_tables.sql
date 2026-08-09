@@ -373,71 +373,117 @@ CREATE POLICY "authenticated_delete_customers"
 -- ============================================
 -- QUOTES
 -- ============================================
+-- Staff-only: quotes hold commercial pricing / quote_data. Public accept-quote
+-- and quote PDF flows use createServiceClient() after share-token checks and
+-- must not rely on open authenticated policies.
+-- Inline profiles-sjekk (samme roller som is_staff()) fordi denne migrasjonen
+-- kjører før 097 som introduserer public.is_staff().
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if they exist
 DROP POLICY IF EXISTS "authenticated_read_quotes" ON quotes;
 DROP POLICY IF EXISTS "authenticated_insert_quotes" ON quotes;
 DROP POLICY IF EXISTS "authenticated_update_quotes" ON quotes;
 DROP POLICY IF EXISTS "authenticated_delete_quotes" ON quotes;
+DROP POLICY IF EXISTS "staff_read_quotes" ON quotes;
+DROP POLICY IF EXISTS "staff_insert_quotes" ON quotes;
+DROP POLICY IF EXISTS "staff_update_quotes" ON quotes;
+DROP POLICY IF EXISTS "staff_delete_quotes" ON quotes;
 
-CREATE POLICY "authenticated_read_quotes"
+CREATE POLICY "staff_read_quotes"
   ON quotes FOR SELECT
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_insert_quotes"
+CREATE POLICY "staff_insert_quotes"
   ON quotes FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_update_quotes"
+CREATE POLICY "staff_update_quotes"
   ON quotes FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_delete_quotes"
+CREATE POLICY "staff_delete_quotes"
   ON quotes FOR DELETE
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
 -- ============================================
 -- CONTRACTS
 -- ============================================
+-- Staff-only: contracts hold signature PII (name, email, IP, signature image)
+-- and commercial terms. Public contract sign/download use createServiceClient()
+-- after share-token checks.
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if they exist
 DROP POLICY IF EXISTS "authenticated_read_contracts" ON contracts;
 DROP POLICY IF EXISTS "authenticated_insert_contracts" ON contracts;
 DROP POLICY IF EXISTS "authenticated_update_contracts" ON contracts;
 DROP POLICY IF EXISTS "authenticated_delete_contracts" ON contracts;
+DROP POLICY IF EXISTS "staff_read_contracts" ON contracts;
+DROP POLICY IF EXISTS "staff_insert_contracts" ON contracts;
+DROP POLICY IF EXISTS "staff_update_contracts" ON contracts;
+DROP POLICY IF EXISTS "staff_delete_contracts" ON contracts;
 
-CREATE POLICY "authenticated_read_contracts"
+CREATE POLICY "staff_read_contracts"
   ON contracts FOR SELECT
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_insert_contracts"
+CREATE POLICY "staff_insert_contracts"
   ON contracts FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_update_contracts"
+CREATE POLICY "staff_update_contracts"
   ON contracts FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
-CREATE POLICY "authenticated_delete_contracts"
+CREATE POLICY "staff_delete_contracts"
   ON contracts FOR DELETE
   TO authenticated
-  USING (true);
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+  ));
 
 -- ============================================
 -- PROJECTS
 -- ============================================
--- Enable RLS if not already enabled
+-- Staff-only authenticated CRUD. Public pitch pages authorize via
+-- project_shares.token + createServiceClient() (see 087_tighten_public_rls.sql).
+-- Anon published-project SELECT (022) is unchanged.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -449,32 +495,50 @@ BEGIN
   ELSE
     ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
     
-    -- Drop existing policies if they exist
     DROP POLICY IF EXISTS "authenticated_read_projects" ON projects;
     DROP POLICY IF EXISTS "authenticated_insert_projects" ON projects;
     DROP POLICY IF EXISTS "authenticated_update_projects" ON projects;
     DROP POLICY IF EXISTS "authenticated_delete_projects" ON projects;
+    DROP POLICY IF EXISTS "staff_read_projects" ON projects;
+    DROP POLICY IF EXISTS "staff_insert_projects" ON projects;
+    DROP POLICY IF EXISTS "staff_update_projects" ON projects;
+    DROP POLICY IF EXISTS "staff_delete_projects" ON projects;
     
-    CREATE POLICY "authenticated_read_projects"
+    CREATE POLICY "staff_read_projects"
       ON projects FOR SELECT
       TO authenticated
-      USING (true);
+      USING (EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+      ));
     
-    CREATE POLICY "authenticated_insert_projects"
+    CREATE POLICY "staff_insert_projects"
       ON projects FOR INSERT
       TO authenticated
-      WITH CHECK (true);
+      WITH CHECK (EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+      ));
     
-    CREATE POLICY "authenticated_update_projects"
+    CREATE POLICY "staff_update_projects"
       ON projects FOR UPDATE
       TO authenticated
-      USING (true)
-      WITH CHECK (true);
+      USING (EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+      ))
+      WITH CHECK (EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+      ));
     
-    CREATE POLICY "authenticated_delete_projects"
+    CREATE POLICY "staff_delete_projects"
       ON projects FOR DELETE
       TO authenticated
-      USING (true);
+      USING (EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+      ));
   END IF;
 END $$;
 

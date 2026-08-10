@@ -286,6 +286,10 @@ function NewProjectContent() {
             customer_id: customerId,
             language: formData.language,
             project_type: formData.project_type || null,
+            delivery_video: formData.delivery_video || null,
+            delivery_photo: formData.delivery_photo || null,
+            delivery_description: formData.delivery_description || null,
+            post_prod_days: formData.post_prod_days ? Number(formData.post_prod_days) : null,
             metadata,
             updated_at: new Date().toISOString(),
           })
@@ -318,6 +322,10 @@ function NewProjectContent() {
             pitch_reviewer_id: formData.pitch_reviewer_id,
             quote_review_enabled: formData.quote_review_enabled,
             quote_reviewer_id: formData.quote_reviewer_id,
+            delivery_video: formData.delivery_video || null,
+            delivery_photo: formData.delivery_photo || null,
+            delivery_description: formData.delivery_description || null,
+            post_prod_days: formData.post_prod_days ? Number(formData.post_prod_days) : null,
             metadata
           })
           .select()
@@ -332,63 +340,67 @@ function NewProjectContent() {
         await seedTasksFromTemplates(project.id, formData.pipeline_stage)
       }
 
-      const sections = [
-        { type: 'hero', order_index: 1, visible: true },
-        { type: 'concept', order_index: 2, visible: true },
-        { type: 'goal', order_index: 3, visible: true },
-        { type: 'deliverables', order_index: 4, visible: true },
-        { type: 'example_work', order_index: 8, visible: true },
-        { type: 'cases', order_index: 7, visible: true },
-        { type: 'team', order_index: 6, visible: true },
-        { type: 'moodboard', order_index: 9, visible: false },
-        { type: 'timeline', order_index: 5, visible: true },
-        { type: 'contact', order_index: 10, visible: true }
-      ]
+      if (formData.create_pitch) {
+        const sections = [
+          { type: 'hero', order_index: 1, visible: true },
+          { type: 'concept', order_index: 2, visible: true },
+          { type: 'goal', order_index: 3, visible: true },
+          { type: 'deliverables', order_index: 4, visible: true },
+          { type: 'example_work', order_index: 8, visible: true },
+          { type: 'cases', order_index: 7, visible: true },
+          { type: 'team', order_index: 6, visible: true },
+          { type: 'moodboard', order_index: 9, visible: false },
+          { type: 'timeline', order_index: 5, visible: true },
+          { type: 'contact', order_index: 10, visible: true }
+        ]
 
-      // Ikke dupliser seksjoner hvis prosjektet allerede har noen
-      const { count: existingSectionCount } = await supabase
-        .from('sections')
-        .select('id', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-
-      if ((existingSectionCount ?? 0) === 0) {
-        const { error: sectionsError } = await supabase
+        // Ikke dupliser seksjoner hvis prosjektet allerede har noen
+        const { count: existingSectionCount } = await supabase
           .from('sections')
-          .insert(sections.map(s => ({ project_id: project.id, ...s })))
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', project.id)
 
-        if (sectionsError) throw sectionsError
-      }
+        if ((existingSectionCount ?? 0) === 0) {
+          const { error: sectionsError } = await supabase
+            .from('sections')
+            .insert(sections.map(s => ({ project_id: project.id, ...s })))
 
-      setGeneratingStatus('Genererer innhold med AI...')
-
-      try {
-        const aiResponse = await fetch('/api/generate-project', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: project.id,
-            title: formData.title,
-            clientName,
-            language: formData.language,
-            contentType: formData.project_type,
-            projectType: formData.legacy_project_type,
-            mediums: formData.mediums,
-            targetAudience: formData.target_audience,
-            industry: formData.industry,
-            scope: formData.scope,
-            context: formData.context
-          })
-        })
-        if (!aiResponse.ok) {
-          const errorData = await aiResponse.json().catch(() => ({}))
-          console.error('AI generation failed:', errorData)
+          if (sectionsError) throw sectionsError
         }
-      } catch (aiError) {
-        console.error('AI generation error:', aiError)
-      }
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      router.push(`/admin/projects/${project.id}/edit?generated=true`)
+        setGeneratingStatus('Genererer innhold med AI...')
+
+        try {
+          const aiResponse = await fetch('/api/generate-project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: project.id,
+              title: formData.title,
+              clientName,
+              language: formData.language,
+              contentType: formData.project_type,
+              projectType: formData.legacy_project_type,
+              mediums: formData.mediums,
+              targetAudience: formData.target_audience,
+              industry: formData.industry,
+              scope: formData.scope,
+              context: formData.context
+            })
+          })
+          if (!aiResponse.ok) {
+            const errorData = await aiResponse.json().catch(() => ({}))
+            console.error('AI generation failed:', errorData)
+          }
+        } catch (aiError) {
+          console.error('AI generation error:', aiError)
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        router.push(`/admin/projects/${project.id}/edit?generated=true`)
+      } else {
+        router.push(`/admin/projects/${project.id}`)
+      }
       router.refresh()
     } catch (error) {
       console.error('Error creating project:', error)

@@ -429,11 +429,16 @@ export async function generateQuotePDF(
       doc.text(labels.vat(vatRate), colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
       doc.text(`${fmt(vatAmount, language)} NOK`, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
       y += 14
-
-      doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000000')
-      doc.text(labels.totalInclVat, colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
-      doc.text(`${fmt(totalInclVat, language)} NOK`, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
     }
+
+    // Sluttsummen ble tidligere kun tegnet inne i includeVat-blokken over, så et
+    // tilbud uten MVA fikk PDF som stoppet rett etter "Produksjonstotal (eks. MVA)"
+    // — sluttlinjen mangler helt. Skjermvisningen (QuoteBuilder TotalsPanel) tegner
+    // alltid denne linjen uansett MVA-valg, så PDF-en følger nå samme mønster
+    // (feedback 61d20ea6). totalInclVat === afterDiscount når includeVat er false.
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000000')
+    doc.text(labels.totalInclVat, colDescX, y, { width: colSumX - colDescX - 10, lineBreak: false })
+    doc.text(`${fmt(totalInclVat, language)} NOK`, colSumX, y, { width: colSumW, align: 'right', lineBreak: false })
 
     doc.end()
   })

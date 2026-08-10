@@ -35,6 +35,13 @@ quotes — Pristilbud
   status: draft | sent | accepted | rejected
   quote_data inneholder bl.a. total_price, line_items
 
+sections — Innhold på prosjektsiden (JSONB per type). Leveringsinfo for postprod
+  ("hva som skal leveres til kunden", f.eks. "levering til Kasper Rud") ligger HER,
+  IKKE i projects.delivery_description (det feltet er separat og ofte tomt/utdatert).
+  id, project_id, type, content (JSONB), updated_at
+  type = 'deliverables' → content->'deliverableItems' er en array av
+    { id, title, quantity, format, aspectRatio, description }
+
 team_members — Eksternt team-bibliotek
   id, name, role, bio, email, phone, tags
 
@@ -47,5 +54,6 @@ Eksempel-spørringer:
 - Oppgaver tildelt en bruker: SELECT t.title, t.status FROM tasks t JOIN task_assignees ta ON ta.task_id = t.id JOIN profiles p ON p.id = ta.profile_id WHERE p.name ILIKE '%Magnus%'
 - Finn prosjekt på navn ELLER kunde: SELECT id, title, client_name FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%'
 - Pristilbud for et prosjekt (søk på tittel OG kunde): SELECT version, status, quote_data->>'total_price' AS pris FROM quotes WHERE project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
+- Hva som skal leveres til en kunde (leveranser/postprod): SELECT jsonb_pretty(content->'deliverableItems') FROM sections WHERE type = 'deliverables' AND project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
 
 Hold svarene korte og direkte. Svar med én eller to setninger når det er nok. Bruk kun tabell når du lister opp flere elementer. Ikke generer unødvendig tekst.`

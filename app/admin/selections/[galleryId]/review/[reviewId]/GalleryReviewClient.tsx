@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveReviewMark, respondToGalleryReview } from '@/lib/actions/gallery-reviews'
 import type { AdminSelectionPageData } from '@/lib/actions/selection-albums'
@@ -47,14 +47,21 @@ export default function GalleryReviewClient({
   const [submitting, setSubmitting] = useState<'approved' | 'changes_requested' | null>(null)
   const [done, setDone] = useState<'approved' | 'changes_requested' | null>(review.status !== 'pending' ? review.status : null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const lightboxNoteRef = useRef<HTMLInputElement>(null)
 
   const lightboxImage = lightboxIndex !== null ? images[lightboxIndex] : null
 
   useEffect(() => {
     if (lightboxIndex === null) return
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setLightboxIndex(null)
-      else if (e.key === 'ArrowRight') setLightboxIndex(i => (i === null ? i : Math.min(i + 1, images.length - 1)))
+      if (e.key === 'Escape') { setLightboxIndex(null); return }
+      // Uten denne sjekken kapret piltastene navigasjonen selv når man satt og
+      // skrev i notat-feltet i fullskjerm — cursoren skulle flytte seg i teksten,
+      // ikke bytte bilde (feedback 89425513). Escape skal fortsatt lukke uansett fokus.
+      const target = e.target as HTMLElement | null
+      const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if (isTyping) return
+      if (e.key === 'ArrowRight') setLightboxIndex(i => (i === null ? i : Math.min(i + 1, images.length - 1)))
       else if (e.key === 'ArrowLeft') setLightboxIndex(i => (i === null ? i : Math.max(i - 1, 0)))
     }
     window.addEventListener('keydown', onKeyDown)
@@ -175,6 +182,7 @@ export default function GalleryReviewClient({
                       <input
                         defaultValue={mark.note}
                         onBlur={e => saveNote(img.id, e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                         placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
                         style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', outline: 'none' }}
                       />
@@ -247,11 +255,21 @@ export default function GalleryReviewClient({
                 : (markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
             </button>
             <input
+              ref={lightboxNoteRef}
+              key={lightboxImage.id}
               defaultValue={markFor(lightboxImage.id).note}
               onBlur={e => saveNote(lightboxImage.id, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
               placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
               style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none' }}
             />
+            <button
+              onClick={() => lightboxNoteRef.current?.blur()}
+              title="Lagre notat (Enter)"
+              style={{ flexShrink: 0, padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Lagre
+            </button>
           </div>
           <p style={{ marginTop: 10, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
             {lightboxIndex! + 1} / {images.length} · Esc for å lukke · ← → for å bla

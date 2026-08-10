@@ -45,6 +45,25 @@ export default function SelectionAdminClient({
   const [copiedFilelist, setCopiedFilelist] = useState(false)
   const [purging, setPurging] = useState(false)
   const [reopening, setReopening] = useState(false)
+  // Bilder uten album (f.eks. lastet opp før noe album ble opprettet) var usynlige
+  // her tidligere — inkl. eventuelle kundekommentarer på dem (feedback b00bcddb).
+  const [ungroupedLightboxIndex, setUngroupedLightboxIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (ungroupedLightboxIndex === null) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') setUngroupedLightboxIndex(p => p !== null ? Math.min(p + 1, data.ungroupedImages.length - 1) : null)
+      if (e.key === 'ArrowLeft') setUngroupedLightboxIndex(p => p !== null ? Math.max(p - 1, 0) : null)
+      if (e.key === 'Escape') setUngroupedLightboxIndex(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ungroupedLightboxIndex, data.ungroupedImages.length])
+
+  async function handleDeleteUngroupedComment(commentId: string) {
+    await deleteImageComment(commentId)
+    await refresh()
+  }
 
   async function refresh() {
     const fresh = await getAdminGalleryPage(galleryId)
@@ -99,7 +118,7 @@ export default function SelectionAdminClient({
     background: 'none', color: '#C05050', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', cursor: 'pointer',
   }
 
-  const { gallery, albums, totalSelected, totalImages } = data
+  const { gallery, albums, totalSelected, totalImages, ungroupedImages } = data
   const isOver = gallery.target_count != null && totalSelected > gallery.target_count
   const statusMap: Record<string, { label: string; color: string; bg: string }> = {
     open:      { label: 'Åpen', color: '#4CAF7D', bg: 'rgba(76,175,125,0.1)' },
@@ -308,9 +327,103 @@ export default function SelectionAdminClient({
                 {totalImages} bilder lastet opp — opprett album for å organisere dem
               </p>
             )}
+
+            {/* Bilder uten album (f.eks. lastet opp før noe album fantes) — samme
+                bilder som ellers ville vært helt usynlige i admin-visningen,
+                inkludert eventuelle kundekommentarer på dem. */}
+            {ungroupedImages.length > 0 && (
+              <div style={{ marginTop: 32 }}>
+                <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3, marginBottom: 10 }}>
+                  Uten album ({ungroupedImages.length})
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+                  {ungroupedImages.map((img, idx) => (
+                    <div
+                      key={img.id}
+                      onClick={() => setUngroupedLightboxIndex(idx)}
+                      style={{ borderRadius: 7, overflow: 'hidden', border: '2px solid transparent', background: C.surface2, position: 'relative', cursor: 'pointer' }}
+                    >
+                      <div style={{ position: 'relative', aspectRatio: '4/3' }}>
+                        {img.signedUrl
+                          ? <img src={img.signedUrl} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: '0.55rem', color: C.text3, padding: 4, textAlign: 'center' }}>{img.filename}</span>
+                            </div>
+                        }
+                        {img.selected && (
+                          <div style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="8" height="8" viewBox="0 0 10 10"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </div>
+                        )}
+                        {img.comments.length > 0 && (
+                          <div style={{ position: 'absolute', top: 4, left: 4, width: 7, height: 7, borderRadius: '50%', background: '#C49434' }} />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Lightbox for bilder uten album */}
+      {ungroupedLightboxIndex !== null && (() => {
+        const img = ungroupedImages[ungroupedLightboxIndex]
+        if (!img) return null
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(10,9,8,0.97)', display: 'flex', flexDirection: 'column', zIndex: 200 }}
+            onClick={() => setUngroupedLightboxIndex(null)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {img.selected && (
+                  <span style={{ padding: '2px 8px', borderRadius: 10, background: C.accentBg, color: C.accent, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600 }}>Valgt av kunde</span>
+                )}
+                {img.comments.length > 0 && (
+                  <span style={{ padding: '2px 8px', borderRadius: 10, background: 'rgba(196,148,52,0.1)', color: '#C49434', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem' }}>
+                    {img.comments.length === 1 ? 'Kommentar' : `${img.comments.length} kommentarer`}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#5A5448' }}>{ungroupedLightboxIndex + 1} / {ungroupedImages.length}</span>
+                <button onClick={() => setUngroupedLightboxIndex(null)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.08)', color: '#E8E0D0', fontSize: '1rem', cursor: 'pointer' }}>×</button>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 0, padding: '0 60px' }} onClick={e => e.stopPropagation()}>
+              {img.signedUrl && (
+                <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
+              )}
+              {ungroupedLightboxIndex > 0 && (
+                <button onClick={() => setUngroupedLightboxIndex(p => p !== null ? p - 1 : null)} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.08)', color: '#E8E0D0', fontSize: '1.4rem', cursor: 'pointer' }}>‹</button>
+              )}
+              {ungroupedLightboxIndex < ungroupedImages.length - 1 && (
+                <button onClick={() => setUngroupedLightboxIndex(p => p !== null ? p + 1 : null)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.08)', color: '#E8E0D0', fontSize: '1.4rem', cursor: 'pointer' }}>›</button>
+              )}
+            </div>
+
+            <div style={{ padding: '10px 16px', flexShrink: 0, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#5A5448', margin: 0 }}>{img.filename}</p>
+              {img.comments.map(c => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#C49434', fontStyle: 'italic', margin: 0 }}>
+                    &ldquo;{c.text}&rdquo;{c.author_name && <span style={{ color: '#8A8070', fontStyle: 'normal' }}> — {c.author_name}</span>}
+                  </p>
+                  <button
+                    onClick={() => handleDeleteUngroupedComment(c.id)}
+                    title="Slett kommentar"
+                    style={{ background: 'none', border: 'none', color: '#5A5448', cursor: 'pointer', fontSize: '0.72rem', padding: 0 }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -166,7 +166,7 @@ async function buildContractContext(projectId: string) {
     antallCrew: savedFields?.antallCrewOverride ?? autoVars.antall_crew,
   }
 
-  return { template, autoVars, formDefaults, contract, lang }
+  return { template, autoVars, formDefaults, contract, lang, quoteId: quote?.id ?? null }
 }
 
 // ---------------------------------------------------------------------------
@@ -268,8 +268,10 @@ export async function getProjectContractData(projectId: string): Promise<{
   ourSignature: OurSignature | null
   mySignatureImage: string | null
   myName: string
+  currentQuoteId: string | null
+  contractQuoteId: string | null
 }> {
-  const { autoVars, formDefaults, contract } = await buildContractContext(projectId)
+  const { autoVars, formDefaults, contract, quoteId } = await buildContractContext(projectId)
 
   const signature =
     contract?.status === 'signed' && contract.signature_data
@@ -306,6 +308,8 @@ export async function getProjectContractData(projectId: string): Promise<{
     ourSignature: (contract?.our_signature ?? null) as OurSignature | null,
     mySignatureImage,
     myName,
+    currentQuoteId: quoteId,
+    contractQuoteId: (contract as { quote_id?: string | null } | null)?.quote_id ?? null,
   }
 }
 
@@ -313,8 +317,8 @@ export async function getProjectContractData(projectId: string): Promise<{
 // Generer kontraktteksten fra mal + auto-variabler + skjemaverdier.
 // Ren beregning — lagrer ingenting (det gjør publishContract).
 // ---------------------------------------------------------------------------
-export async function generateContractText(projectId: string, formFields: ContractFormFields): Promise<string> {
-  const { template, autoVars, lang } = await buildContractContext(projectId)
+export async function generateContractText(projectId: string, formFields: ContractFormFields): Promise<{ text: string; quoteId: string | null }> {
+  const { template, autoVars, lang, quoteId } = await buildContractContext(projectId)
 
   const vars: Record<string, string> = {
     ...autoVars,
@@ -332,7 +336,7 @@ export async function generateContractText(projectId: string, formFields: Contra
     reise_dekkes_av: reiseDekkesAvLabel(formFields.reiseDekkesAv ?? 'oppdragsgiver', lang),
   }
 
-  return fillTemplate(template, vars)
+  return { text: fillTemplate(template, vars), quoteId }
 }
 
 // ---------------------------------------------------------------------------

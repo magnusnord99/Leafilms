@@ -577,8 +577,8 @@ function TaskChecklist({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <AssigneePicker task={task} profiles={profiles} onToggle={onAssigneeToggle} />
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: isDone ? C.success : task.status === 'in_progress' ? '#F0A500' : C.text3 }}>
-                {isDone ? 'Ferdig' : task.status === 'in_progress' ? 'Pågår' : 'Todo'}
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: isDone ? C.success : task.status === 'waiting_review' ? '#F0A500' : task.status === 'in_progress' ? '#F0A500' : C.text3 }}>
+                {isDone ? 'Ferdig' : task.status === 'waiting_review' ? 'Venter review' : task.status === 'in_progress' ? 'Pågår' : 'Todo'}
               </span>
             </div>
             <TaskChatToggle
@@ -672,6 +672,11 @@ export default function ProjectHubPage() {
   // brukes til å oppdage om noen har endret felt (org.nummer m.fl.) uten å regenerere teksten
   // før publisering (feedback 2702e25d: feltet ble lagret, men PDF-en fikk aldri den nye teksten).
   const [lastGeneratedFormFields, setLastGeneratedFormFields] = useState<ContractFormFields | null>(null)
+  // Quote-id kontraktteksten sist ble generert/publisert fra, vs. den som faktisk er
+  // gjeldende nå — hvis de spriker (f.eks. tilbud v1 → v2 etter at kontrakten ble
+  // generert) er totalpris i teksten utdatert (feedback 85e9d13c).
+  const [lastGeneratedQuoteId, setLastGeneratedQuoteId] = useState<string | null>(null)
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null)
 
   const [contractOurSignature, setContractOurSignature] = useState<OurSignature | null>(null)
   const [mySignatureImage, setMySignatureImage] = useState<string | null>(null)
@@ -976,6 +981,8 @@ export default function ProjectHubPage() {
     // data.formDefaults kommer fra samme lagrede rad som data.contractText (begge satt sammen
     // i publishContract), så de er garantert i sync akkurat nå ved innlasting.
     setLastGeneratedFormFields(toContractFormFields(loadedForm))
+    setLastGeneratedQuoteId(data.contractQuoteId)
+    setCurrentQuoteId(data.currentQuoteId)
     setContractFormOpen(!data.hasContractText)
     setContractOurSignature(data.ourSignature)
     setMySignatureImage(data.mySignatureImage)
@@ -1054,9 +1061,10 @@ export default function ProjectHubPage() {
     setGeneratingContract(true)
     try {
       const formFields = toContractFormFields(contractForm)
-      const text = await generateContractText(projectId, formFields)
+      const { text, quoteId } = await generateContractText(projectId, formFields)
       setContractText(text)
       setLastGeneratedFormFields(formFields)
+      setLastGeneratedQuoteId(quoteId)
       setContractSaved(false)
       setContractFormOpen(false)
     } finally {
@@ -1073,15 +1081,26 @@ export default function ProjectHubPage() {
     const fieldsChangedSinceGenerate =
       lastGeneratedFormFields !== null &&
       JSON.stringify(formFields) !== JSON.stringify(lastGeneratedFormFields)
-    if (fieldsChangedSinceGenerate) {
+    // Tilbudet kan ha fått en ny versjon (v1 → v2) etter at kontraktteksten sist ble
+    // generert, uten at noen trykket "Regenerer kontrakt" — da inneholder teksten
+    // fortsatt den gamle summen, selv om formFields for øvrig er uendret (feedback 85e9d13c).
+    const quoteChangedSinceGenerate =
+      lastGeneratedQuoteId !== null &&
+      currentQuoteId !== null &&
+      lastGeneratedQuoteId !== currentQuoteId
+    if (fieldsChangedSinceGenerate || quoteChangedSinceGenerate) {
+      const reason = quoteChangedSinceGenerate
+        ? 'Tilbudet har fått en ny versjon siden kontraktteksten sist ble generert — totalprisen i teksten er derfor utdatert.'
+        : 'Feltene (org.nummer, produksjonsperiode, e.l.) er endret siden kontraktteksten sist ble generert — den publiserte teksten vil derfor ikke ta med de nye verdiene.'
       const proceed = confirm(
-        'Feltene (org.nummer, produksjonsperiode, e.l.) er endret siden kontraktteksten sist ble generert — den publiserte teksten vil derfor ikke ta med de nye verdiene.\n\nTrykk Avbryt, gå til "Rediger felt" og trykk "Regenerer kontrakt" først. Eller trykk OK for å publisere gjeldende tekst som den er.'
+        `${reason}\n\nTrykk Avbryt, gå til "Rediger felt" og trykk "Regenerer kontrakt" først. Eller trykk OK for å publisere gjeldende tekst som den er.`
       )
       if (!proceed) return
     }
     setPublishingContract(true)
     await publishContract(projectId, contractText, formFields, newSignature)
     setLastGeneratedFormFields(formFields)
+    setLastGeneratedQuoteId(currentQuoteId)
     setContractHasText(true)
     setContractIsPublished(true)
     setStepperContractPublished(true)

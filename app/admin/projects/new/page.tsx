@@ -193,6 +193,43 @@ function NewProjectContent() {
         ...(contextParam ? { context: contextParam } : {}),
       }))
     }
+
+    // Gjenbruk av eksisterende prosjekt (se handleSubmit sin existingProjectId-gren):
+    // hent prosjektets eksisterende felter slik at et resubmit ikke nuller ut
+    // leveringsinfo/type/språk som allerede er lagret på prosjektet.
+    const projectId = searchParams.get('project_id')
+    if (projectId) {
+      supabase
+        .from('projects')
+        .select('language, project_type, metadata, delivery_video, delivery_photo, delivery_description, post_prod_days')
+        .eq('id', projectId)
+        .single()
+        .then(({ data, error }) => {
+          if (error || !data) return
+          const metadata = (data.metadata ?? {}) as {
+            project_type?: string
+            mediums?: string[]
+            target_audience?: string
+            industry?: string
+            scope?: string
+            context?: string
+          }
+          setFormData(prev => ({
+            ...prev,
+            language: (data.language as 'no' | 'en' | undefined) ?? prev.language,
+            project_type: (data.project_type as 'video' | 'photo' | 'mixed' | '' | undefined) ?? prev.project_type,
+            legacy_project_type: metadata.project_type ?? prev.legacy_project_type,
+            mediums: metadata.mediums ?? prev.mediums,
+            target_audience: metadata.target_audience ?? prev.target_audience,
+            industry: metadata.industry ?? prev.industry,
+            scope: metadata.scope ?? prev.scope,
+            delivery_video: data.delivery_video ?? '',
+            delivery_photo: data.delivery_photo ?? '',
+            delivery_description: data.delivery_description ?? '',
+            post_prod_days: data.post_prod_days != null ? String(data.post_prod_days) : '',
+          }))
+        })
+    }
   }, [searchParams])
 
   useEffect(() => {
@@ -286,10 +323,14 @@ function NewProjectContent() {
             customer_id: customerId,
             language: formData.language,
             project_type: formData.project_type || null,
-            delivery_video: formData.delivery_video || null,
-            delivery_photo: formData.delivery_photo || null,
-            delivery_description: formData.delivery_description || null,
-            post_prod_days: formData.post_prod_days ? Number(formData.post_prod_days) : null,
+            // Skriv kun leveringsfelt når skjemaet faktisk har en verdi — unngår å nulle ut
+            // eksisterende leveringsinfo på prosjektet hvis prefill-fetchen over ikke har
+            // rukket å fylle formData enda (eller feiler). Se updateProjectDeliveryInfo i
+            // lib/actions/pipeline.ts for samme mønster.
+            ...(formData.delivery_video ? { delivery_video: formData.delivery_video } : {}),
+            ...(formData.delivery_photo ? { delivery_photo: formData.delivery_photo } : {}),
+            ...(formData.delivery_description ? { delivery_description: formData.delivery_description } : {}),
+            ...(formData.post_prod_days ? { post_prod_days: Number(formData.post_prod_days) } : {}),
             metadata,
             updated_at: new Date().toISOString(),
           })
@@ -522,7 +563,7 @@ function NewProjectContent() {
               </div>
 
               <div>
-                {fieldLabel('Innholdstype', true)}
+                {fieldLabel('Innholdstype', formData.create_pitch)}
                 <div style={{ display: 'flex', gap: 8 }}>
                   {INNHOLDSTYPE_OPTIONS.map((opt) =>
                     <button
@@ -549,7 +590,7 @@ function NewProjectContent() {
               </div>
 
               <div>
-                {fieldLabel('Språk', true)}
+                {fieldLabel('Språk', formData.create_pitch)}
                 <div className="flex gap-2">
                   {(['no', 'en'] as const).map((lang) =>
                     chipBtn(

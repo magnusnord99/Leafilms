@@ -288,7 +288,7 @@ function TilbudStepper({
 
   const step1Href = step1Done
     ? `/admin/projects/${projectId}/edit`
-    : `/admin/projects/new?project_id=${projectId}&customer_id=${customerId ?? ''}&title=${encodeURIComponent(projectTitle)}&context=${encodeURIComponent(notesValue.trim())}`
+    : `/admin/projects/new?project_id=${encodeURIComponent(projectId)}&customer_id=${customerId ?? ''}&title=${encodeURIComponent(projectTitle)}&context=${encodeURIComponent(notesValue.trim())}`
   const step1BtnLabel = step1Done ? 'Rediger →' : 'Opprett med AI →'
 
   // Pek til første ufullstendige av de to
@@ -1792,7 +1792,7 @@ export default function ProjectHubPage() {
                   Opprett en pitch med AI. Kundeinformasjon hentes automatisk fra prosjektet.
                   {notesValue.trim() && ' E-posttråden du har limt inn vil bli brukt som kontekst.'}
                 </p>
-                <Link href={`/admin/projects/new?project_id=${projectId}&customer_id=${project.customer_id ?? ''}&title=${encodeURIComponent(project.title)}&context=${encodeURIComponent(notesValue.trim())}`}>
+                <Link href={`/admin/projects/new?project_id=${encodeURIComponent(projectId)}&customer_id=${project.customer_id ?? ''}&title=${encodeURIComponent(project.title)}&context=${encodeURIComponent(notesValue.trim())}`}>
                   <button style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
                     padding: '8px 18px', borderRadius: 7, cursor: 'pointer',

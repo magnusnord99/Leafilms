@@ -170,6 +170,11 @@ function NewProjectContent() {
     pitch_reviewer_id: null as string | null,
     quote_review_enabled: false,
     quote_reviewer_id: null as string | null,
+    create_pitch: !!searchParams.get('project_id'),
+    delivery_video: '',
+    delivery_photo: '',
+    delivery_description: '',
+    post_prod_days: '',
   })
 
   const isNewCustomer = customerInput.trim().length > 0 && !selectedCustomerId
@@ -187,6 +192,43 @@ function NewProjectContent() {
         ...(titleParam ? { title: titleParam } : {}),
         ...(contextParam ? { context: contextParam } : {}),
       }))
+    }
+
+    // Gjenbruk av eksisterende prosjekt (se handleSubmit sin existingProjectId-gren):
+    // hent prosjektets eksisterende felter slik at et resubmit ikke nuller ut
+    // leveringsinfo/type/språk som allerede er lagret på prosjektet.
+    const projectId = searchParams.get('project_id')
+    if (projectId) {
+      supabase
+        .from('projects')
+        .select('language, project_type, metadata, delivery_video, delivery_photo, delivery_description, post_prod_days')
+        .eq('id', projectId)
+        .single()
+        .then(({ data, error }) => {
+          if (error || !data) return
+          const metadata = (data.metadata ?? {}) as {
+            project_type?: string
+            mediums?: string[]
+            target_audience?: string
+            industry?: string
+            scope?: string
+            context?: string
+          }
+          setFormData(prev => ({
+            ...prev,
+            language: (data.language as 'no' | 'en' | undefined) ?? prev.language,
+            project_type: (data.project_type as 'video' | 'photo' | 'mixed' | '' | undefined) ?? prev.project_type,
+            legacy_project_type: metadata.project_type ?? prev.legacy_project_type,
+            mediums: metadata.mediums ?? prev.mediums,
+            target_audience: metadata.target_audience ?? prev.target_audience,
+            industry: metadata.industry ?? prev.industry,
+            scope: metadata.scope ?? prev.scope,
+            delivery_video: data.delivery_video ?? '',
+            delivery_photo: data.delivery_photo ?? '',
+            delivery_description: data.delivery_description ?? '',
+            post_prod_days: data.post_prod_days != null ? String(data.post_prod_days) : '',
+          }))
+        })
     }
   }, [searchParams])
 
@@ -281,6 +323,14 @@ function NewProjectContent() {
             customer_id: customerId,
             language: formData.language,
             project_type: formData.project_type || null,
+            // Skriv kun leveringsfelt når skjemaet faktisk har en verdi — unngår å nulle ut
+            // eksisterende leveringsinfo på prosjektet hvis prefill-fetchen over ikke har
+            // rukket å fylle formData enda (eller feiler). Se updateProjectDeliveryInfo i
+            // lib/actions/pipeline.ts for samme mønster.
+            ...(formData.delivery_video ? { delivery_video: formData.delivery_video } : {}),
+            ...(formData.delivery_photo ? { delivery_photo: formData.delivery_photo } : {}),
+            ...(formData.delivery_description ? { delivery_description: formData.delivery_description } : {}),
+            ...(formData.post_prod_days ? { post_prod_days: Number(formData.post_prod_days) } : {}),
             metadata,
             updated_at: new Date().toISOString(),
           })
@@ -313,6 +363,10 @@ function NewProjectContent() {
             pitch_reviewer_id: formData.pitch_reviewer_id,
             quote_review_enabled: formData.quote_review_enabled,
             quote_reviewer_id: formData.quote_reviewer_id,
+            delivery_video: formData.delivery_video || null,
+            delivery_photo: formData.delivery_photo || null,
+            delivery_description: formData.delivery_description || null,
+            post_prod_days: formData.post_prod_days ? Number(formData.post_prod_days) : null,
             metadata
           })
           .select()
@@ -327,63 +381,67 @@ function NewProjectContent() {
         await seedTasksFromTemplates(project.id, formData.pipeline_stage)
       }
 
-      const sections = [
-        { type: 'hero', order_index: 1, visible: true },
-        { type: 'concept', order_index: 2, visible: true },
-        { type: 'goal', order_index: 3, visible: true },
-        { type: 'deliverables', order_index: 4, visible: true },
-        { type: 'example_work', order_index: 8, visible: true },
-        { type: 'cases', order_index: 7, visible: true },
-        { type: 'team', order_index: 6, visible: true },
-        { type: 'moodboard', order_index: 9, visible: false },
-        { type: 'timeline', order_index: 5, visible: true },
-        { type: 'contact', order_index: 10, visible: true }
-      ]
+      if (formData.create_pitch) {
+        const sections = [
+          { type: 'hero', order_index: 1, visible: true },
+          { type: 'concept', order_index: 2, visible: true },
+          { type: 'goal', order_index: 3, visible: true },
+          { type: 'deliverables', order_index: 4, visible: true },
+          { type: 'example_work', order_index: 8, visible: true },
+          { type: 'cases', order_index: 7, visible: true },
+          { type: 'team', order_index: 6, visible: true },
+          { type: 'moodboard', order_index: 9, visible: false },
+          { type: 'timeline', order_index: 5, visible: true },
+          { type: 'contact', order_index: 10, visible: true }
+        ]
 
-      // Ikke dupliser seksjoner hvis prosjektet allerede har noen
-      const { count: existingSectionCount } = await supabase
-        .from('sections')
-        .select('id', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-
-      if ((existingSectionCount ?? 0) === 0) {
-        const { error: sectionsError } = await supabase
+        // Ikke dupliser seksjoner hvis prosjektet allerede har noen
+        const { count: existingSectionCount } = await supabase
           .from('sections')
-          .insert(sections.map(s => ({ project_id: project.id, ...s })))
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', project.id)
 
-        if (sectionsError) throw sectionsError
-      }
+        if ((existingSectionCount ?? 0) === 0) {
+          const { error: sectionsError } = await supabase
+            .from('sections')
+            .insert(sections.map(s => ({ project_id: project.id, ...s })))
 
-      setGeneratingStatus('Genererer innhold med AI...')
-
-      try {
-        const aiResponse = await fetch('/api/generate-project', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: project.id,
-            title: formData.title,
-            clientName,
-            language: formData.language,
-            contentType: formData.project_type,
-            projectType: formData.legacy_project_type,
-            mediums: formData.mediums,
-            targetAudience: formData.target_audience,
-            industry: formData.industry,
-            scope: formData.scope,
-            context: formData.context
-          })
-        })
-        if (!aiResponse.ok) {
-          const errorData = await aiResponse.json().catch(() => ({}))
-          console.error('AI generation failed:', errorData)
+          if (sectionsError) throw sectionsError
         }
-      } catch (aiError) {
-        console.error('AI generation error:', aiError)
-      }
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      router.push(`/admin/projects/${project.id}/edit?generated=true`)
+        setGeneratingStatus('Genererer innhold med AI...')
+
+        try {
+          const aiResponse = await fetch('/api/generate-project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: project.id,
+              title: formData.title,
+              clientName,
+              language: formData.language,
+              contentType: formData.project_type,
+              projectType: formData.legacy_project_type,
+              mediums: formData.mediums,
+              targetAudience: formData.target_audience,
+              industry: formData.industry,
+              scope: formData.scope,
+              context: formData.context
+            })
+          })
+          if (!aiResponse.ok) {
+            const errorData = await aiResponse.json().catch(() => ({}))
+            console.error('AI generation failed:', errorData)
+          }
+        } catch (aiError) {
+          console.error('AI generation error:', aiError)
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        router.push(`/admin/projects/${project.id}/edit?generated=true`)
+      } else {
+        router.push(`/admin/projects/${project.id}`)
+      }
       router.refresh()
     } catch (error) {
       console.error('Error creating project:', error)
@@ -394,7 +452,9 @@ function NewProjectContent() {
     }
   }
 
-  const isFormValid = formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
+  const isFormValid = formData.create_pitch
+    ? formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
+    : formData.title && (!!selectedCustomerId || customerInput.trim().length > 0)
 
   return (
     <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
@@ -475,6 +535,18 @@ function NewProjectContent() {
               </div>
 
               <div>
+                {fieldLabel('Pitch')}
+                {chipBtn(
+                  formData.create_pitch,
+                  () => setFormData({ ...formData, create_pitch: !formData.create_pitch }),
+                  'Lag pitch nå'
+                )}
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
+                  Av: oppretter kun prosjektet. På: AI genererer pitch-innhold basert på feltene under.
+                </p>
+              </div>
+
+              <div>
                 {fieldLabel('Pipeline-steg')}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {PIPELINE_STAGES.map((stage) =>
@@ -491,7 +563,7 @@ function NewProjectContent() {
               </div>
 
               <div>
-                {fieldLabel('Innholdstype', true)}
+                {fieldLabel('Innholdstype', formData.create_pitch)}
                 <div style={{ display: 'flex', gap: 8 }}>
                   {INNHOLDSTYPE_OPTIONS.map((opt) =>
                     <button
@@ -518,7 +590,7 @@ function NewProjectContent() {
               </div>
 
               <div>
-                {fieldLabel('Språk', true)}
+                {fieldLabel('Språk', formData.create_pitch)}
                 <div className="flex gap-2">
                   {(['no', 'en'] as const).map((lang) =>
                     chipBtn(
@@ -628,9 +700,73 @@ function NewProjectContent() {
                   </div>
                 )}
               </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={{ width: 12, height: 1, background: C.border }} />
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.58rem',
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: C.text3,
+                  }}>
+                    Leveringsinfo (valgfritt)
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      {fieldLabel('Video')}
+                      <input
+                        type="text"
+                        value={formData.delivery_video}
+                        onChange={(e) => setFormData({ ...formData, delivery_video: e.target.value })}
+                        placeholder="F.eks. 2 kampanjefilmer á 90 sek"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      {fieldLabel('Foto')}
+                      <input
+                        type="text"
+                        value={formData.delivery_photo}
+                        onChange={(e) => setFormData({ ...formData, delivery_photo: e.target.value })}
+                        placeholder="F.eks. 30 produktbilder"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      {fieldLabel('Leveringsbeskrivelse')}
+                      <input
+                        type="text"
+                        value={formData.delivery_description}
+                        onChange={(e) => setFormData({ ...formData, delivery_description: e.target.value })}
+                        placeholder="Kort oppsummering av leveransen"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      {fieldLabel('Etterarbeidsdager')}
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.post_prod_days}
+                        onChange={(e) => setFormData({ ...formData, post_prod_days: e.target.value })}
+                        placeholder="F.eks. 5"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
+          {formData.create_pitch && (
+          <>
           {/* Section: Prosjektdetaljer */}
           <div>
             {sectionDivider('Prosjektdetaljer')}
@@ -798,6 +934,8 @@ function NewProjectContent() {
               </div>
             </div>
           </div>
+          </>
+          )}
 
           {/* Submit */}
           <div className="flex flex-col gap-4">
@@ -845,7 +983,9 @@ function NewProjectContent() {
                   transition: 'background 0.15s',
                 }}
               >
-                {loading ? (generatingStatus || 'Oppretter prosjekt...') : 'Opprett Prosjekt med AI'}
+                {loading
+                  ? (formData.create_pitch ? (generatingStatus || 'Oppretter prosjekt...') : 'Oppretter...')
+                  : (formData.create_pitch ? 'Opprett Prosjekt med AI' : 'Opprett prosjekt')}
               </button>
               <button
                 type="button"

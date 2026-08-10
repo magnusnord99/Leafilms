@@ -30,7 +30,8 @@ export default function NewImage() {
     kommersiell: ['produkt', 'merkevare', 'reklame'],
     abstrakt: ['kunst', 'mønster', 'farge'],
     bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
-    bryllup: ['seremoni', 'fest', 'portrett', 'detaljer']
+    bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
+    industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

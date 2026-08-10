@@ -39,7 +39,8 @@ export function ImagePickerModal({
     { value: 'kommersiell', label: 'Kommersiell' },
     { value: 'abstrakt', label: 'Abstrakt' },
     { value: 'bts', label: 'Behind The Scenes' },
-    { value: 'bryllup', label: 'Bryllup' }
+    { value: 'bryllup', label: 'Bryllup' },
+    { value: 'industri', label: 'Industri/Corporate' }
   ]
 
   // Rediger navn/tags direkte her — uten dette må man forlate pitchen og inn i det separate

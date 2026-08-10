@@ -20,7 +20,9 @@ const categories = {
   event: ['konsert', 'konferanse', 'festival', 'sport'],
   kommersiell: ['produkt', 'merkevare', 'reklame'],
   abstrakt: ['kunst', 'mønster', 'farge'],
-  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon']
+  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
+  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
+  industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
 }
 
 export async function POST(req: NextRequest) {
@@ -64,6 +66,8 @@ Kategorier:
 - kommersiell (produkt, merkevare, reklame)
 - abstrakt (kunst, mønster, farge)
 - bts (opptak, rigging, team, utstyr, lokasjon) - Behind The Scenes: bilder fra filmproduksjon, kamerautstyr, filmcrew i arbeid, kamera-rigg, lysoppsett, produksjonslokasjon, folk som jobber med film/foto
+- bryllup (seremoni, fest, portrett, detaljer)
+- industri (kontor, produksjon, team, produkt, fasade) - industri/corporate: bedriftsmiljø, kontorlokaler, produksjonshaller, ansatte i arbeid, produktbilder for bedrifter, bygningsfasader
 
 VIKTIG: Hvis bildet viser filmproduksjon, kamerafolk, utstyr som kameraer/lys/stativer, filmcrew i arbeid, eller scener fra et filmopptak - velg kategorien "bts" (Behind The Scenes).
 

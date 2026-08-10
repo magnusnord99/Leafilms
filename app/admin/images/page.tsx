@@ -17,6 +17,7 @@ const categories = [
   { value: 'abstrakt',     label: 'Abstrakt' },
   { value: 'bts',          label: 'BTS' },
   { value: 'bryllup',      label: 'Bryllup' },
+  { value: 'industri',     label: 'Industri/Corporate' },
 ]
 
 function getImageUrl(image: Image) {

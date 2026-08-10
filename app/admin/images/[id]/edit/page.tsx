@@ -19,7 +19,8 @@ const categories = {
   kommersiell: ['produkt', 'merkevare', 'reklame'],
   abstrakt: ['kunst', 'mønster', 'farge'],
   bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
-  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer']
+  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
+  industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
 }
 
 export default function EditImagePage({ params }: Props) {

@@ -73,7 +73,7 @@ export type CustomerContact = {
 
 export type DeliverableItem = {
   id: string
-  type: 'video' | 'photo'
+  type: 'video' | 'photo' | 'annet'
   name: string
 }
 

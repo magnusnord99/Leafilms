@@ -688,6 +688,7 @@ function DeliverablesSection({
               >
                 <option value="video">Video</option>
                 <option value="photo">Foto</option>
+                <option value="annet">Annet</option>
               </select>
               <input
                 style={{ ...inputBase, flex: 1 }}

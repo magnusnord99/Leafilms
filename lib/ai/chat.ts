@@ -23,6 +23,9 @@ export async function runChat(
     input_schema: r.inputSchema as Anthropic.Tool['input_schema'],
   }))
 
+  const today = new Date().toISOString().slice(0, 10)
+  const system = `Dagens dato er ${today}. Når noen spør om en periode uten å oppgi år (f.eks. "i september", "denne måneden", "neste uke"), regn det ut fra dagens dato — ikke gjett eller sjekk flere år.\n\n${SCHEMA_CONTEXT}`
+
   const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
     role: m.role,
     content: m.content,
@@ -33,7 +36,7 @@ export async function runChat(
     const response = await client.messages.create({
       model: 'claude-opus-4-8',
       max_tokens: 2048,
-      system: SCHEMA_CONTEXT,
+      system,
       messages: apiMessages,
       tools,
     })

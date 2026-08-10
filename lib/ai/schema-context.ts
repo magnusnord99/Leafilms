@@ -8,9 +8,22 @@ Tilgjengelige tabeller:
 
 projects — Prosjekter
   id, title, client_name, customer_id, pipeline_stage, project_type,
-  delivery_description, post_prod_days, meeting_notes, created_at
+  delivery_description, post_prod_days, meeting_notes, created_at,
+  shoot_start, shoot_end, shoot_confirmed
   pipeline_stage: lead | møte | tilbud_sendt | kontrakt | pre_prod | produksjon | post_prod | levering | fakturert | videresalg
   project_type: video | photo | mixed
+  shoot_start/shoot_end (DATE) er opptaksdatoene ("innspilling"/"opptak") — IKKE created_at
+    og IKKE pipeline_stage. Spør noen om opptak i en periode, filtrer på shoot_start/shoot_end,
+    ikke på created_at eller pipeline_stage = 'produksjon' (prosjekter kan ha opptak booket
+    lenge før de når produksjonsstadiet i pipelinen).
+  Et opptak er BEKREFTET når shoot_confirmed = true ELLER prosjektet har en kontrakt med
+    status = 'signed' i contracts-tabellen (pipeline_stage alene er IKKE pålitelig — prosjekter
+    kan flyttes forbi 'kontrakt'-steget uten signatur). For "ubekreftede opptak" må du derfor
+    sjekke BEGGE: shoot_confirmed = false OG ingen signert kontrakt.
+
+contracts — Kontrakter
+  id, project_id, status, signed_at, is_current
+  status: pending | sent | signed | cancelled
 
 customers — Kunder
   id, name, company, email, phone, notes
@@ -55,5 +68,7 @@ Eksempel-spørringer:
 - Finn prosjekt på navn ELLER kunde: SELECT id, title, client_name FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%'
 - Pristilbud for et prosjekt (søk på tittel OG kunde): SELECT version, status, quote_data->>'total_price' AS pris FROM quotes WHERE project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
 - Hva som skal leveres til en kunde (leveranser/postprod): SELECT jsonb_pretty(content->'deliverableItems') FROM sections WHERE type = 'deliverables' AND project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
+- Opptak i en gitt måned med bekreftelsesstatus: SELECT p.title, p.client_name, p.shoot_start, p.shoot_end, (p.shoot_confirmed OR EXISTS (SELECT 1 FROM contracts c WHERE c.project_id = p.id AND c.status = 'signed')) AS confirmed FROM projects p WHERE p.shoot_start >= '2026-09-01' AND p.shoot_start < '2026-10-01'
+- Ubekreftede opptak i en gitt måned: SELECT p.title, p.client_name, p.shoot_start FROM projects p WHERE p.shoot_start >= '2026-09-01' AND p.shoot_start < '2026-10-01' AND p.shoot_confirmed = false AND NOT EXISTS (SELECT 1 FROM contracts c WHERE c.project_id = p.id AND c.status = 'signed')
 
 Hold svarene korte og direkte. Svar med én eller to setninger når det er nok. Bruk kun tabell når du lister opp flere elementer. Ikke generer unødvendig tekst.`

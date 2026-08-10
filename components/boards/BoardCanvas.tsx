@@ -89,6 +89,7 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   const rf = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<CardNode>(cardsToNodes(initial.cards, initial.childMeta))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(edgesToFlow(initial.edges))
+  const selectedCount = nodes.reduce((n, node) => n + (node.selected ? 1 : 0), 0)
   const [pendingType, setPendingType] = useState<BoardCardType | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [threadsByCard, setThreadsByCard] = useState<BoardCommentsByCard>(initial.comments ?? {})
@@ -333,6 +334,15 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
   // ---- Kopier/lim inn (Cmd/Ctrl+C/V) ----
   const clipboardRef = useRef<{ cards: BoardCard[]; edges: PastedEdgeInput[] } | null>(null)
   const pasteOffsetRef = useRef(0)
+
+  // Shift-dra/Cmd-klikk multi-select + Delete-tasten sletter allerede flere kort på
+  // en gang (onNodesDelete kalles med hele arrayet) — dette er bare en synlig knapp
+  // for samme handling, siden det ikke fantes noen UI-inngang for det (feedback c2986e49).
+  const handleDeleteSelected = useCallback(() => {
+    const selected = (rf.getNodes() as CardNode[]).filter(n => n.selected)
+    if (selected.length === 0) return
+    rf.deleteElements({ nodes: selected })
+  }, [rf])
 
   const handleCopy = useCallback(() => {
     const selected = (rf.getNodes() as CardNode[]).filter(n => n.selected)
@@ -1068,6 +1078,23 @@ function Canvas({ boardId, initial, readOnly = false, palette = ADMIN_BOARD_PALE
                   </span>
                 )}
               </div>
+            </Panel>
+          )}
+          {!readOnly && selectedCount > 1 && (
+            <Panel position="top-center" style={{ marginTop: 14 }}>
+              <button
+                onClick={handleDeleteSelected}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.78rem', fontWeight: 600, color: '#f0b0b0', cursor: 'pointer',
+                  background: '#3a1d1d', border: '1px solid #E05555', borderRadius: 8, padding: '7px 12px',
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M2 2l8 8M10 2L2 10" />
+                </svg>
+                Slett valgte ({selectedCount})
+              </button>
             </Panel>
           )}
           <Controls showInteractive={false} />

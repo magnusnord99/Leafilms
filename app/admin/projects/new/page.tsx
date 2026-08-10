@@ -170,6 +170,11 @@ function NewProjectContent() {
     pitch_reviewer_id: null as string | null,
     quote_review_enabled: false,
     quote_reviewer_id: null as string | null,
+    create_pitch: !!searchParams.get('project_id'),
+    delivery_video: '',
+    delivery_photo: '',
+    delivery_description: '',
+    post_prod_days: '',
   })
 
   const isNewCustomer = customerInput.trim().length > 0 && !selectedCustomerId
@@ -394,7 +399,9 @@ function NewProjectContent() {
     }
   }
 
-  const isFormValid = formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
+  const isFormValid = formData.create_pitch
+    ? formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
+    : formData.title && (!!selectedCustomerId || customerInput.trim().length > 0)
 
   return (
     <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>
@@ -472,6 +479,18 @@ function NewProjectContent() {
                   placeholder="Nike Produktlansering 2025"
                   style={inputStyle}
                 />
+              </div>
+
+              <div>
+                {fieldLabel('Pitch')}
+                {chipBtn(
+                  formData.create_pitch,
+                  () => setFormData({ ...formData, create_pitch: !formData.create_pitch }),
+                  'Lag pitch nå'
+                )}
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6, letterSpacing: '0.06em' }}>
+                  Av: oppretter kun prosjektet. På: AI genererer pitch-innhold basert på feltene under.
+                </p>
               </div>
 
               <div>
@@ -628,9 +647,73 @@ function NewProjectContent() {
                   </div>
                 )}
               </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={{ width: 12, height: 1, background: C.border }} />
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.58rem',
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: C.text3,
+                  }}>
+                    Leveringsinfo (valgfritt)
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      {fieldLabel('Video')}
+                      <input
+                        type="text"
+                        value={formData.delivery_video}
+                        onChange={(e) => setFormData({ ...formData, delivery_video: e.target.value })}
+                        placeholder="F.eks. 2 kampanjefilmer á 90 sek"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      {fieldLabel('Foto')}
+                      <input
+                        type="text"
+                        value={formData.delivery_photo}
+                        onChange={(e) => setFormData({ ...formData, delivery_photo: e.target.value })}
+                        placeholder="F.eks. 30 produktbilder"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      {fieldLabel('Leveringsbeskrivelse')}
+                      <input
+                        type="text"
+                        value={formData.delivery_description}
+                        onChange={(e) => setFormData({ ...formData, delivery_description: e.target.value })}
+                        placeholder="Kort oppsummering av leveransen"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      {fieldLabel('Etterarbeidsdager')}
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.post_prod_days}
+                        onChange={(e) => setFormData({ ...formData, post_prod_days: e.target.value })}
+                        placeholder="F.eks. 5"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
+          {formData.create_pitch && (
+          <>
           {/* Section: Prosjektdetaljer */}
           <div>
             {sectionDivider('Prosjektdetaljer')}
@@ -798,6 +881,8 @@ function NewProjectContent() {
               </div>
             </div>
           </div>
+          </>
+          )}
 
           {/* Submit */}
           <div className="flex flex-col gap-4">
@@ -845,7 +930,9 @@ function NewProjectContent() {
                   transition: 'background 0.15s',
                 }}
               >
-                {loading ? (generatingStatus || 'Oppretter prosjekt...') : 'Opprett Prosjekt med AI'}
+                {loading
+                  ? (formData.create_pitch ? (generatingStatus || 'Oppretter prosjekt...') : 'Oppretter...')
+                  : (formData.create_pitch ? 'Opprett Prosjekt med AI' : 'Opprett prosjekt')}
               </button>
               <button
                 type="button"

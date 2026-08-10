@@ -20,7 +20,7 @@ interface DeliverableCardProps {
 }
 
 /** Avgjør om leveransen er video eller bilde basert på tittel og format */
-function getDeliverableType(title: string, format: string): 'video' | 'image' {
+export function getDeliverableType(title: string, format: string): 'video' | 'image' {
   const t = (title || '').toLowerCase()
   const f = (format || '').toLowerCase()
   const videoKeywords = ['film', 'video', 'cutdown', 'reklame', 'spot', 'klipp', 'redigering', 'teaser', 'reel']
@@ -109,12 +109,15 @@ export function DeliverableCard({
             {/* Tittel: line-clamp-2 kun i visningsmodde for kompakt kortlayout */}
             <Text
               variant="small"
-              className={`text-dark mb-1 font-semibold uppercase ${editMode ? '' : 'line-clamp-2'} break-words ${editableClass}`}
+              className={`text-dark mb-1 font-semibold uppercase whitespace-pre-line ${editMode ? '' : 'line-clamp-2'} break-words ${editableClass}`}
               contentEditable={editMode && !!onChange}
               suppressContentEditableWarning
               onBlur={(e) => {
                 if (editMode && onChange) {
-                  onChange('title', e.currentTarget.textContent || '')
+                  // innerText (ikke textContent) bevarer linjeskift som faktisk vises i
+                  // kontenteditable-feltet som \n, slik at et bevisst linjeskift i
+                  // tittelen ikke går tapt ved lagring (feedback 4fcd83a0).
+                  onChange('title', e.currentTarget.innerText || '')
                 }
               }}
               onClick={(e) => editMode && e.stopPropagation()}

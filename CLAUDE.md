@@ -32,6 +32,9 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `database-migrations/039_pitch_feedback.sql`
 - `supabase/migrations/136_task_turn_ready_notification.sql` (widener notifications_type_check — koden feiler stille inntil den er kjørt, se lib/actions/pipeline.ts)
 - `supabase/migrations/137_delivery_galleries.sql` (legger til gallery_type-kolonne — "Send til kollega for godkjenning"-knappen på postprod-siden feiler inntil den er kjørt)
+- `supabase/migrations/138_notification_urgency.sql` (legger til urgent-kolonne på notifications + de 5 meldingstabellene, og oppdaterer varsel-triggerne til å kopiere den — "Haster"-knappen i chattene har ingen effekt før denne er kjørt)
+- `supabase/migrations/139_task_waiting_review.sql` (utvider tasks_status_check med 'waiting_review' + legger til gallery_reviews.task_id — postprod-steget (Selektering/Redigering) settes ikke til "venter på review" ved kollega-review før denne er kjørt)
+- `supabase/migrations/140_admin_tasks_project_link.sql` (legger til project_id på admin_tasks — "Gjennomgå bildeutvalg"-oppgaven i /admin/internal viser ingen lenke til prosjektet før denne er kjørt)
 
 Disse er skrevet men ikke kjort mot Supabase enna.
 

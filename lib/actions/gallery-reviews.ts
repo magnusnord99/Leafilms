@@ -28,7 +28,7 @@ export async function getGalleryReviewHistory(galleryId: string): Promise<Galler
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('gallery_reviews')
-      .select('id, gallery_id, status, requested_by, reviewer_id, comment, requested_at, responded_at, created_at, admin_task_id')
+      .select('id, gallery_id, status, requested_by, reviewer_id, comment, requested_at, responded_at, created_at, admin_task_id, task_id')
       .eq('gallery_id', galleryId)
       .order('created_at', { ascending: false })
 
@@ -56,7 +56,7 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
 
     const { data: gallery, error: galleryError } = await supabase
       .from('selection_galleries')
-      .select('id, project_id')
+      .select('id, project_id, gallery_type')
       .eq('id', galleryId)
       .single()
 
@@ -70,6 +70,31 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
         .eq('id', gallery.project_id)
         .maybeSingle()
       projectTitle = project?.title ?? null
+    }
+
+    // Marker postprod-steget "venter på review" mens kollegaen ser gjennom bildene,
+    // slik at det er synlig i stepperen at prosjektet ikke faktisk står stille.
+    // Matcher kun eksakt tittel (samme begrensning som SELEKSJON_TITLE i postprod-siden
+    // — dekker ikke mixed-prosjekters "Selektering bilder"/"Redigering bilder").
+    let waitingReviewTaskId: string | null = null
+    if (gallery.project_id) {
+      const stepTitle = gallery.gallery_type === 'delivery' ? 'Redigering' : 'Selektering'
+      const { data: step } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('project_id', gallery.project_id)
+        .eq('pipeline_stage', 'post_prod')
+        .eq('title', stepTitle)
+        .in('status', ['todo', 'in_progress'])
+        .maybeSingle()
+
+      if (step) {
+        const { error: stepError } = await supabase
+          .from('tasks')
+          .update({ status: 'waiting_review', updated_at: new Date().toISOString() })
+          .eq('id', step.id)
+        if (!stepError) waitingReviewTaskId = step.id
+      }
     }
 
     // Legger seg som en oppgave hos reviewer (admin_tasks — ikke prosjekt-tasks,
@@ -90,6 +115,7 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
         due_date: dueDate || null,
         sort_order: (maxOrder && maxOrder.length > 0 ? maxOrder[0].sort_order : 0) + 1,
         created_by: user.id,
+        project_id: gallery.project_id ?? null,
       })
       .select('id')
       .single()
@@ -104,6 +130,7 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
         requested_by: user.id,
         reviewer_id: reviewerId,
         admin_task_id: task?.id ?? null,
+        task_id: waitingReviewTaskId,
       })
       .select('id')
       .single()
@@ -126,6 +153,7 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
 
     revalidatePath(`/admin/selections/${galleryId}`)
     revalidatePath('/admin/internal')
+    if (gallery.project_id) revalidatePath(`/admin/postprod/${gallery.project_id}`)
     return { ok: true }
   } catch (err) {
     console.error('requestGalleryReview unexpected error:', err)
@@ -142,7 +170,7 @@ export async function getGalleryForInternalReview(reviewId: string): Promise<{
     const supabase = await createClient()
     const { data: reviewRow, error } = await supabase
       .from('gallery_reviews')
-      .select('id, gallery_id, status, requested_by, reviewer_id, comment, requested_at, responded_at, created_at, admin_task_id')
+      .select('id, gallery_id, status, requested_by, reviewer_id, comment, requested_at, responded_at, created_at, admin_task_id, task_id')
       .eq('id', reviewId)
       .maybeSingle()
 
@@ -198,7 +226,7 @@ export async function respondToGalleryReview(reviewId: string, decision: 'approv
 
     const { data: review, error: fetchError } = await supabase
       .from('gallery_reviews')
-      .select('id, gallery_id, requested_by, reviewer_id, admin_task_id')
+      .select('id, gallery_id, requested_by, reviewer_id, admin_task_id, task_id')
       .eq('id', reviewId)
       .single()
 
@@ -228,6 +256,12 @@ export async function respondToGalleryReview(reviewId: string, decision: 'approv
 
     if (review.admin_task_id) {
       await supabase.from('admin_tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', review.admin_task_id)
+    }
+
+    // Tilbakestill postprod-steget uansett utfall (godkjent/endringer ønsket) —
+    // avsender markerer selv steget ferdig når de er klare, dette bare låser opp igjen.
+    if (review.task_id) {
+      await supabase.from('tasks').update({ status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', review.task_id)
     }
 
     const { data: gallery } = await supabase
@@ -273,6 +307,7 @@ export async function respondToGalleryReview(reviewId: string, decision: 'approv
     revalidatePath(`/admin/selections/${review.gallery_id}`)
     revalidatePath(`/admin/selections/${review.gallery_id}/review/${reviewId}`)
     revalidatePath('/admin/internal')
+    if (gallery?.project_id) revalidatePath(`/admin/postprod/${gallery.project_id}`)
     return { ok: true }
   } catch (err) {
     console.error('respondToGalleryReview unexpected error:', err)

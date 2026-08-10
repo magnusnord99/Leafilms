@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
@@ -28,6 +29,7 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   todo: C.text3,
   in_progress: '#F0A500',
   done: '#4CAF7D',
+  waiting_review: '#F0A500',
 }
 
 function Avatar({ id, name, color, size = 24 }: { id: string; name: string | null; color?: string | null; size?: number }) {
@@ -124,6 +126,21 @@ function AssigneePicker({
   )
 }
 
+function ProjectLink({ project }: { project: AdminTask['project'] }) {
+  if (!project) return null
+  return (
+    <Link
+      href={`/admin/projects/${project.id}`}
+      onClick={e => e.stopPropagation()}
+      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+      onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = C.accent }}
+      onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = C.text3 }}
+    >
+      ↗ {project.title}
+    </Link>
+  )
+}
+
 function TaskRow({
   task, profiles, onStatusChange, onAssign, onDelete,
 }: {
@@ -156,8 +173,11 @@ function TaskRow({
         )}
       </button>
 
-      <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: task.status === 'done' ? C.text3 : C.text, textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>
-        {task.title}
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: task.status === 'done' ? C.text3 : C.text, textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>
+          {task.title}
+        </span>
+        <ProjectLink project={task.project} />
       </span>
 
       <AssigneePicker task={task} profiles={profiles} onAssign={onAssign} />
@@ -208,8 +228,11 @@ function DraggableCard({
   return (
     <div ref={isDragOverlay ? undefined : setNodeRef} style={style} {...(isDragOverlay ? {} : { ...attributes, ...listeners })}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-        <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.35 }}>
-          {task.title}
+        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.35 }}>
+            {task.title}
+          </span>
+          {!isDragOverlay && <ProjectLink project={task.project} />}
         </span>
         {!isDragOverlay && (
           <button

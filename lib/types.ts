@@ -138,6 +138,7 @@ export type QuoteMessage = {
   user_id: string
   message: string
   mentions: string[]
+  urgent: boolean
   created_at: string
   user: { id: string; name: string | null; email: string } | null
 }
@@ -148,6 +149,7 @@ export type PreprodMessage = {
   user_id: string
   message: string
   mentions: string[]
+  urgent: boolean
   created_at: string
   user: { id: string; name: string | null; email: string } | null
 }
@@ -183,6 +185,7 @@ export type GalleryReview = {
   responded_at: string | null
   created_at: string
   admin_task_id: string | null
+  task_id: string | null
   requester: { id: string; name: string | null; email: string } | null
   reviewer: { id: string; name: string | null; email: string } | null
 }
@@ -358,6 +361,17 @@ export type SectionContent = {
   client?: string
   sectionLabel?: string
   sectionHeading?: string
+  // about_us: bildeId-referanser til bildekolonnen (ikke via det delte section_images-galleriet,
+  // som her allerede brukes til kundelogoene)
+  contentImageIds?: string[]
+  // about_us: fire videoblokker nederst, valgt fra det eksisterende case study-biblioteket
+  // (samme kilde som "Tidligere arbeid") — kun id-referanser, selve dataene ligger på CaseStudy
+  videoCaseIds?: string[]
+  // about_us: liten ingresstekst vist rett over videoblokkene
+  videoSectionText?: string
+  // about_us: "Hvorfor Leafilms"-tekst rett under introteksten
+  whyLeafilmsTitle?: string
+  whyLeafilmsText?: string
   presetId?: number | string | null
   selectedTeamIds?: string[]
   selectedCaseIds?: string[]
@@ -377,6 +391,53 @@ export type SectionContent = {
   teamMemberRoles?: Record<string, string>
   teamMemberRolesEn?: Record<string, string>
   teamMemberCardTranslations?: Record<string, { role?: string; bio?: string }>
+  // client_understanding / why_us: liste av kort (overskrift + tekst)
+  cardItems?: { id: string; heading: string; text: string }[]
+  // use_cases: enkel tag-liste — visningen forfines senere
+  tagItems?: { id: string; label: string }[]
+  // next_steps: nummerert liste over neste steg i prosessen
+  stepItems?: { id: string; label: string }[]
+  // creative_brief: konsept/visuell stil er kort-grupper, mål er en tag-liste
+  goalsTitle?: string
+  goalsItems?: { id: string; label: string; description?: string }[]
+  conceptTitle?: string
+  conceptItems?: { id: string; heading: string; text: string }[]
+  styleTitle?: string
+  moodboardText?: string
+  // styleItems: samme kort som over, men kan i tillegg ha referansebilder (fargepalett,
+  // lyssetting ...), fargesverk (fargepalett) og/eller lenker til eksempler (musikk og lyd)
+  styleItems?: {
+    id: string
+    heading: string
+    text: string
+    imageIds?: string[]
+    links?: { id: string; label: string; url: string }[]
+    colors?: { id: string; hex: string }[]
+  }[]
+  // creative_brief: synopsis-tekst brutt i fire avsnitt med ett bilde mellom hvert
+  // (avsnitt 1 → bilde 1 → avsnitt 2 → bilde 2 → avsnitt 3 → bilde 3 → avsnitt 4)
+  synopsisTitle?: string
+  synopsisParagraphs?: string[]
+  synopsisImages?: (string | null)[]
+  // creative_brief: avsluttende tekstblokk om hvorfor teamet har tenkt som de har om filmen
+  rationaleTitle?: string
+  rationaleText?: string
+  // website_mockup: mock-nettside fylt med kundens egne bilder (bilder refereres
+  // via imageId, ikke via det delte section_images-galleriet — se WebsiteMockupSection)
+  heroCards?: { id: string; tag: string; heading: string; text: string; imageId: string | null; mediaType?: 'image' | 'video'; videoId?: string | null }[]
+  newsListTitle?: string
+  newsItems?: { id: string; tag: string; date: string; heading: string }[]
+  featuredImageId?: string | null
+  headerVideoId?: string | null
+  activeMediaTypes?: ('website' | 'phone' | 'presentation')[]
+  // website_mockup: hvilke leveranser (fra Leveranser-seksjonen) som er brukt i hver av de
+  // tre visningene — en flat liste, ikke koblet til et spesifikt kort/slide
+  websiteDeliverableIds?: string[]
+  phoneDeliverableIds?: string[]
+  presentationDeliverableIds?: string[]
+  // phoneItems/presentationItems: se MediaFrameItem i components/sections/MediaFrameRow.tsx
+  phoneItems?: { id: string; mediaType: 'image' | 'video'; imageId: string | null; videoId: string | null; caption: string; accountName?: string }[]
+  presentationItems?: { id: string; mediaType: 'image' | 'video' | 'chart'; imageId: string | null; videoId: string | null; caption: string; bullets?: string[]; slideType?: 'cover' | 'content' }[]
   [key: string]: unknown
 }
 
@@ -396,7 +457,7 @@ export type ScheduleItem = {
 export type Section = {
   id: string
   project_id: string
-  type: 'hero' | 'goal' | 'concept' | 'cases' | 'moodboard' | 'timeline' | 'deliverables' | 'contact' | 'team' | 'example_work' | 'quote' | 'full_image' | 'production_schedule'
+  type: 'hero' | 'goal' | 'concept' | 'cases' | 'moodboard' | 'timeline' | 'deliverables' | 'deliverables_v2' | 'contact' | 'team' | 'example_work' | 'quote' | 'full_image' | 'production_schedule' | 'about_us' | 'client_understanding' | 'why_us' | 'use_cases' | 'website_mockup' | 'behind_the_scenes' | 'creative_brief' | 'board' | 'next_steps'
   content: SectionContent
   visible: boolean
   order_index: number
@@ -579,6 +640,7 @@ export type ProjectMessage = {
   user_name: string | null
   content: string
   mentions: string[]
+  urgent: boolean
   created_at: string
 }
 
@@ -627,7 +689,7 @@ export type Task = {
   color: string | null
   icon: string | null
   due_date: string | null
-  status: 'todo' | 'in_progress' | 'done'
+  status: 'todo' | 'in_progress' | 'done' | 'waiting_review'
   priority: 'low' | 'medium' | 'high' | null
   sort_order: number
   is_custom: boolean
@@ -655,6 +717,7 @@ export type AdminTask = {
   created_by: string | null
   created_at: string
   updated_at: string
+  project: { id: string; title: string } | null
 }
 
 // Delt kilde for oppgavestatus-tekst — var tidligere "Todo"/"Å gjøre"/"Ikke startet"
@@ -663,13 +726,18 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   todo: 'Ikke startet',
   in_progress: 'Pågår',
   done: 'Ferdig',
+  waiting_review: 'Venter på review',
 }
 
 // Rekkefølgen et klikk på status-chippen sykler gjennom.
+// 'waiting_review' settes/tilbakestilles automatisk av gallery-reviews-flowen og er
+// ikke del av den normale sykelen — men en manuell klikk-vei ut av den finnes som
+// sikkerhetsventil om en runde blir hengende.
 export const TASK_STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
   todo: 'in_progress',
   in_progress: 'done',
   done: 'todo',
+  waiting_review: 'in_progress',
 }
 
 // Dagens plan (/admin/tasks) — personlig, sorterbar arbeidsliste for dagen.
@@ -698,6 +766,7 @@ export type TaskMessage = {
   user_id: string
   message: string
   mentions: string[]
+  urgent: boolean
   created_at: string
   user?: { id: string; name: string | null; email: string } | null
 }

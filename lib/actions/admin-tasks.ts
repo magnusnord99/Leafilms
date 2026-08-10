@@ -16,10 +16,12 @@ type AdminTaskRow = {
   created_at: string
   updated_at: string
   assignee: { id: string; name: string | null; email: string; color: string | null } | { id: string; name: string | null; email: string; color: string | null }[] | null
+  project: { id: string; title: string } | { id: string; title: string }[] | null
 }
 
 function mapRow(row: AdminTaskRow): AdminTask {
   const assignee = Array.isArray(row.assignee) ? row.assignee[0] ?? null : row.assignee
+  const project = Array.isArray(row.project) ? row.project[0] ?? null : row.project
   return {
     id: row.id,
     title: row.title,
@@ -31,6 +33,7 @@ function mapRow(row: AdminTaskRow): AdminTask {
     created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    project,
   }
 }
 
@@ -40,7 +43,7 @@ export async function getAdminTasks(): Promise<AdminTask[]> {
 
     const { data, error } = await supabase
       .from('admin_tasks')
-      .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color)')
+      .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color), project:projects(id, title)')
       .order('sort_order', { ascending: true })
 
     if (error) {
@@ -81,7 +84,7 @@ export async function createAdminTask(title: string): Promise<AdminTask | null> 
         sort_order: nextSortOrder,
         created_by: user?.id ?? null,
       })
-      .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color)')
+      .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color), project:projects(id, title)')
       .single()
 
     if (error) {

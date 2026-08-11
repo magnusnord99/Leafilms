@@ -35,6 +35,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/138_notification_urgency.sql` (legger til urgent-kolonne på notifications + de 5 meldingstabellene, og oppdaterer varsel-triggerne til å kopiere den — "Haster"-knappen i chattene har ingen effekt før denne er kjørt)
 - `supabase/migrations/139_task_waiting_review.sql` (utvider tasks_status_check med 'waiting_review' + legger til gallery_reviews.task_id — postprod-steget (Selektering/Redigering) settes ikke til "venter på review" ved kollega-review før denne er kjørt)
 - `supabase/migrations/140_admin_tasks_project_link.sql` (legger til project_id på admin_tasks — "Gjennomgå bildeutvalg"-oppgaven i /admin/internal viser ingen lenke til prosjektet før denne er kjørt)
+- `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 
 Disse er skrevet men ikke kjort mot Supabase enna.
 

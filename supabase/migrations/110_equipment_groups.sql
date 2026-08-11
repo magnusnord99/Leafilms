@@ -20,54 +20,64 @@ CREATE INDEX IF NOT EXISTS idx_equipment_group_items_group_id ON equipment_group
 ALTER TABLE equipment_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE equipment_group_items ENABLE ROW LEVEL SECURITY;
 
+-- Staff only — open authenticated CRUD previously allowed any customer JWT
+-- to read/mutate quote equipment packages via PostgREST.
 DROP POLICY IF EXISTS "authenticated_read_equipment_groups" ON equipment_groups;
 DROP POLICY IF EXISTS "authenticated_insert_equipment_groups" ON equipment_groups;
 DROP POLICY IF EXISTS "authenticated_update_equipment_groups" ON equipment_groups;
 DROP POLICY IF EXISTS "authenticated_delete_equipment_groups" ON equipment_groups;
+DROP POLICY IF EXISTS "staff_read_equipment_groups" ON equipment_groups;
+DROP POLICY IF EXISTS "staff_insert_equipment_groups" ON equipment_groups;
+DROP POLICY IF EXISTS "staff_update_equipment_groups" ON equipment_groups;
+DROP POLICY IF EXISTS "staff_delete_equipment_groups" ON equipment_groups;
 
-CREATE POLICY "authenticated_read_equipment_groups"
+CREATE POLICY "staff_read_equipment_groups"
   ON equipment_groups FOR SELECT
   TO authenticated
-  USING (true);
+  USING (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_insert_equipment_groups"
+CREATE POLICY "staff_insert_equipment_groups"
   ON equipment_groups FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_update_equipment_groups"
+CREATE POLICY "staff_update_equipment_groups"
   ON equipment_groups FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_delete_equipment_groups"
+CREATE POLICY "staff_delete_equipment_groups"
   ON equipment_groups FOR DELETE
   TO authenticated
-  USING (true);
+  USING (public.is_staff(auth.uid()));
 
 DROP POLICY IF EXISTS "authenticated_read_equipment_group_items" ON equipment_group_items;
 DROP POLICY IF EXISTS "authenticated_insert_equipment_group_items" ON equipment_group_items;
 DROP POLICY IF EXISTS "authenticated_update_equipment_group_items" ON equipment_group_items;
 DROP POLICY IF EXISTS "authenticated_delete_equipment_group_items" ON equipment_group_items;
+DROP POLICY IF EXISTS "staff_read_equipment_group_items" ON equipment_group_items;
+DROP POLICY IF EXISTS "staff_insert_equipment_group_items" ON equipment_group_items;
+DROP POLICY IF EXISTS "staff_update_equipment_group_items" ON equipment_group_items;
+DROP POLICY IF EXISTS "staff_delete_equipment_group_items" ON equipment_group_items;
 
-CREATE POLICY "authenticated_read_equipment_group_items"
+CREATE POLICY "staff_read_equipment_group_items"
   ON equipment_group_items FOR SELECT
   TO authenticated
-  USING (true);
+  USING (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_insert_equipment_group_items"
+CREATE POLICY "staff_insert_equipment_group_items"
   ON equipment_group_items FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_update_equipment_group_items"
+CREATE POLICY "staff_update_equipment_group_items"
   ON equipment_group_items FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
-CREATE POLICY "authenticated_delete_equipment_group_items"
+CREATE POLICY "staff_delete_equipment_group_items"
   ON equipment_group_items FOR DELETE
   TO authenticated
-  USING (true);
+  USING (public.is_staff(auth.uid()));

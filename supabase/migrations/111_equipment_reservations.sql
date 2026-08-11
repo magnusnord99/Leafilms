@@ -22,12 +22,15 @@ CREATE INDEX IF NOT EXISTS idx_equipment_reservations_project ON equipment_reser
 
 ALTER TABLE equipment_reservations ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'equipment_reservations' AND policyname = 'authenticated full access equipment_reservations') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access equipment_reservations" ON equipment_reservations FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+-- Staff only — open authenticated FOR ALL previously allowed any customer JWT
+-- to wipe or reassign every equipment reservation via PostgREST.
+DROP POLICY IF EXISTS "authenticated full access equipment_reservations" ON equipment_reservations;
+DROP POLICY IF EXISTS "staff_all_equipment_reservations" ON equipment_reservations;
+
+CREATE POLICY "staff_all_equipment_reservations"
+  ON equipment_reservations FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
 -- Migrer eksisterende reservasjoner (single-column-modellen) over til tabellen.
 INSERT INTO equipment_reservations (unit_id, project_id, assignee_id)

@@ -29,18 +29,23 @@ CREATE INDEX IF NOT EXISTS idx_equipment_units_project ON equipment_units(checke
 CREATE INDEX IF NOT EXISTS idx_equipment_units_catalog ON equipment_units(catalog_id);
 
 -- ---------------------------------------------------------------------------
--- RLS: staff (authenticated) har full tilgang, samme mønster som boards
--- (098_boards.sql). Ingen offentlige policies.
+-- RLS: staff only (is_staff). Ingen offentlige policies.
+-- Tidligere "authenticated full access … USING (true)" lot customer-JWTs
+-- CRUD hele inventaret via PostgREST — se 136_harden_equipment_rls.sql.
 -- ---------------------------------------------------------------------------
 ALTER TABLE equipment_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE equipment_units ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'equipment_rooms' AND policyname = 'authenticated full access equipment_rooms') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access equipment_rooms" ON equipment_rooms FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'equipment_units' AND policyname = 'authenticated full access equipment_units') THEN
-    EXECUTE 'CREATE POLICY "authenticated full access equipment_units" ON equipment_units FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access equipment_rooms" ON equipment_rooms;
+DROP POLICY IF EXISTS "staff_all_equipment_rooms" ON equipment_rooms;
+CREATE POLICY "staff_all_equipment_rooms"
+  ON equipment_rooms FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
+
+DROP POLICY IF EXISTS "authenticated full access equipment_units" ON equipment_units;
+DROP POLICY IF EXISTS "staff_all_equipment_units" ON equipment_units;
+CREATE POLICY "staff_all_equipment_units"
+  ON equipment_units FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));

@@ -266,6 +266,7 @@ export function PublicProjectClient({
             section={heroSection}
             project={project}
             editMode={false}
+            language={lang}
             sectionImages={sectionImages}
             sectionImageData={sectionImageData}
             sectionVideos={sectionVideos}
@@ -489,6 +490,7 @@ export function PublicProjectClient({
                     <ExampleWorkSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       collageImages={collageImages}
                       selectedPreset={selectedPreset}
                       sectionImageData={sectionImageData}
@@ -506,6 +508,7 @@ export function PublicProjectClient({
                     <ProductionScheduleSection
                       section={section}
                       editMode={false}
+                      language={lang}
                       updateSectionContent={noop}
                     />
                   )}

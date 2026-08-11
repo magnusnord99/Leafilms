@@ -19,6 +19,7 @@ const POSITION_ORDER: CollagePosition[] = ['pos1', 'pos2', 'pos3', 'pos4', 'pos5
 type ExampleWorkSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   collageImages: CollageImages
   selectedPreset: CollagePreset | null
   sectionImageData: Record<string, SectionImage[]>
@@ -33,6 +34,7 @@ type ExampleWorkSectionProps = {
 export function ExampleWorkSection({
   section,
   editMode,
+  language = 'no',
   collageImages,
   selectedPreset,
   sectionImageData,
@@ -201,7 +203,7 @@ export function ExampleWorkSection({
               if (editMode) updateSectionContent(section.id, 'title', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.title || 'Eksempelarbeid'}
+            {section.content.title || (language === 'en' ? 'Example work' : 'Eksempelarbeid')}
           </span>
         </div>
         <p
@@ -220,7 +222,7 @@ export function ExampleWorkSection({
             if (editMode) updateSectionContent(section.id, 'description', e.currentTarget.textContent || '')
           }}
         >
-          {section.content.description || 'Bilder vi har tatt for tidligere kunder'}
+          {section.content.description || (language === 'en' ? 'Photos we have taken for previous clients' : 'Bilder vi har tatt for tidligere kunder')}
         </p>
       </div>
 

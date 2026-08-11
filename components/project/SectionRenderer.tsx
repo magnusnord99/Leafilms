@@ -335,6 +335,7 @@ export function SectionRenderer({
           <ExampleWorkSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             collageImages={collageImages}
             selectedPreset={selectedPreset}
             sectionImageData={sectionImageData}
@@ -352,6 +353,7 @@ export function SectionRenderer({
           <ProductionScheduleSection
             section={section}
             editMode={editMode}
+            language={project?.language ?? 'no'}
             updateSectionContent={updateSectionContent}
           />
         )}

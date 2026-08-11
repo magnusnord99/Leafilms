@@ -11,19 +11,21 @@ function getOpenAIClient() {
 
 // Text fields to translate per section type
 const TRANSLATABLE_FIELDS: Record<string, string[]> = {
-  hero: ['text', 'subtitle', 'sectionLabel'],
+  // Feltnavnene under matcher det HeroSection.tsx faktisk lagrer (content.client/
+  // content.description) — 'client' er kundens navn og skal ikke auto-oversettes.
+  hero: ['description'],
   goal: ['text', 'subtitle', 'sectionLabel'],
   concept: ['text', 'subtitle', 'sectionLabel'],
-  timeline: ['sectionLabel'], // items handled separately
+  timeline: ['sectionLabel', 'sectionHeading'], // items handled separately
   deliverables: ['text', 'sectionLabel'], // items handled separately
   contact: ['text', 'sectionLabel'],
   team: ['text', 'sectionLabel'],
-  moodboard: ['text', 'sectionLabel'],
-  example_work: ['text', 'sectionLabel'],
-  cases: ['text', 'title', 'subtitle', 'sectionLabel'],
+  moodboard: ['description'],
+  example_work: ['title', 'description'],
+  cases: ['title', 'description'],
   quote: ['text', 'sectionLabel'],
   full_image: ['text', 'caption', 'sectionLabel'],
-  production_schedule: ['text', 'title', 'subtitle', 'partnerSubtitle', 'sectionLabel'],
+  production_schedule: ['title', 'subtitle', 'partnerTitle', 'partnerSubtitle'],
 }
 
 async function translateText(text: string, targetLanguage: 'no' | 'en', openai: OpenAI): Promise<string> {

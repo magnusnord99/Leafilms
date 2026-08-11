@@ -175,6 +175,7 @@ const COLUMNS = ['WHAT', 'LOCATION', 'DATE', 'CHANNELS', 'LIVE ON', 'PROD. DAYS'
 type ProductionScheduleSectionProps = {
   section: Section
   editMode: boolean
+  language?: 'no' | 'en'
   updateSectionContent: (sectionId: string, key: string, value: unknown) => void
 }
 
@@ -468,6 +469,7 @@ function TableBlock({
 export function ProductionScheduleSection({
   section,
   editMode,
+  language = 'no',
   updateSectionContent,
 }: ProductionScheduleSectionProps) {
   const items: ScheduleItem[] = section.content.scheduleItems ?? DEFAULT_SCHEDULE_ITEMS
@@ -532,7 +534,7 @@ export function ProductionScheduleSection({
               textTransform: 'uppercase',
               fontWeight: 500,
             }}>
-              PRODUKSJONSPLAN
+              {language === 'en' ? 'PRODUCTION SCHEDULE' : 'PRODUKSJONSPLAN'}
             </span>
           </div>
           <h2 style={{
@@ -544,7 +546,7 @@ export function ProductionScheduleSection({
             lineHeight: 1.2,
             maxWidth: '42ch',
           }}>
-            Oversikt over produksjonsdager og innholdsleveranser
+            {language === 'en' ? 'Overview of production days and content deliverables' : 'Oversikt over produksjonsdager og innholdsleveranser'}
           </h2>
         </div>
 

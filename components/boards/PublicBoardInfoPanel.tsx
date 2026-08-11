@@ -63,24 +63,44 @@ function TextSection({ label, text }: { label: string; text: string }) {
   )
 }
 
-function buildSections(data: SharedBoardData): { key: string; node: React.ReactNode }[] {
+const PANEL_STRINGS = {
+  no: {
+    aboutProject: 'Om prosjektet',
+    delivery: 'Leveranse',
+    shoot: 'Opptak',
+    contacts: 'Kontaktpersoner',
+    customer: 'Kunde',
+    projectInfoAndContact: 'Prosjektinfo & kontakt',
+  },
+  en: {
+    aboutProject: 'About the project',
+    delivery: 'Delivery',
+    shoot: 'Shoot',
+    contacts: 'Contacts',
+    customer: 'Customer',
+    projectInfoAndContact: 'Project info & contact',
+  },
+} as const
+
+function buildSections(data: SharedBoardData, language: 'no' | 'en'): { key: string; node: React.ReactNode }[] {
+  const t = PANEL_STRINGS[language]
   const sections: { key: string; node: React.ReactNode }[] = []
 
   if (data.projectSummary) {
-    sections.push({ key: 'summary', node: <TextSection label="Om prosjektet" text={data.projectSummary} /> })
+    sections.push({ key: 'summary', node: <TextSection label={t.aboutProject} text={data.projectSummary} /> })
   }
   if (data.deliveryDescription) {
-    sections.push({ key: 'delivery', node: <TextSection label="Leveranse" text={data.deliveryDescription} /> })
+    sections.push({ key: 'delivery', node: <TextSection label={t.delivery} text={data.deliveryDescription} /> })
   }
   if (data.shootStart) {
-    sections.push({ key: 'shoot', node: <TextSection label="Opptak" text={formatShootDates(data.shootStart, data.shootEnd)} /> })
+    sections.push({ key: 'shoot', node: <TextSection label={t.shoot} text={formatShootDates(data.shootStart, data.shootEnd)} /> })
   }
   if (data.leadProfile || data.customerContact) {
     sections.push({
       key: 'contacts',
       node: (
         <>
-          <SectionLabel>Kontaktpersoner</SectionLabel>
+          <SectionLabel>{t.contacts}</SectionLabel>
           {data.leadProfile && (
             <ContactRow
               label="Leafilms"
@@ -93,7 +113,7 @@ function buildSections(data: SharedBoardData): { key: string; node: React.ReactN
           )}
           {data.customerContact && (
             <ContactRow
-              label="Kunde"
+              label={t.customer}
               id={data.customerContact.id}
               name={data.customerContact.name}
               sub={data.customerContact.role}
@@ -121,9 +141,10 @@ function SectionList({ sections }: { sections: { key: string; node: React.ReactN
   )
 }
 
-export default function PublicBoardInfoPanel({ data }: { data: SharedBoardData }) {
+export default function PublicBoardInfoPanel({ data, language = 'no' }: { data: SharedBoardData; language?: 'no' | 'en' }) {
   const [expanded, setExpanded] = useState(false)
-  const sections = buildSections(data)
+  const t = PANEL_STRINGS[language]
+  const sections = buildSections(data, language)
   if (sections.length === 0) return null
 
   return (
@@ -160,7 +181,7 @@ export default function PublicBoardInfoPanel({ data }: { data: SharedBoardData }
             letterSpacing: '0.05em', textTransform: 'uppercase', color: S.text,
           }}
         >
-          Prosjektinfo &amp; kontakt
+          {t.projectInfoAndContact}
           <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: expanded ? 'rotate(180deg)' : 'none' }}>⌄</span>
         </button>
         {expanded && (

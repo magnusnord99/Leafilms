@@ -49,7 +49,7 @@ export default function SharedBoardClient({ token, data }: { token: string; data
             onOpenSchedule={cardId => router.push(`/b/${token}/schedule/${cardId}`)}
           />
         </div>
-        <PublicBoardInfoPanel data={data} />
+        <PublicBoardInfoPanel data={data} language={data.language ?? 'no'} />
       </div>
     </div>
   )

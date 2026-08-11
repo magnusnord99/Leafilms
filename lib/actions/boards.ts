@@ -30,6 +30,9 @@ export type BoardData = {
   // Fraværende (undefined) for delt/offentlig board-visning (getSharedBoard) —
   // kommentarer er internt-only (se 2026-07-22-board-comments-design.md).
   comments?: BoardCommentsByCard
+  // Kun satt av getSharedBoard (kundevendt visning) — admin-siden er alltid norsk,
+  // så getBoardData lar dette stå tomt og PublicBoardInfoPanel faller tilbake til 'no'.
+  language?: 'no' | 'en'
 }
 
 export type CardPositionPatch = {
@@ -1038,7 +1041,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
       service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
       service.from('board_edges').select('*').eq('board_id', target.id),
-      service.from('projects').select('title, board_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', root.project_id).single(),
+      service.from('projects').select('title, board_summary, delivery_description, shoot_start, shoot_end, language, customers(name, company)').eq('id', root.project_id).single(),
       target.lead_profile_id
         ? service.from('profiles').select('id, name, email, color, phone').eq('id', target.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -1052,6 +1055,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       delivery_description?: string | null
       shoot_start?: string | null
       shoot_end?: string | null
+      language?: string | null
     } | null
 
     // Brødsmuler begrenset til det delte treet (stopp ved root)
@@ -1097,6 +1101,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       deliveryDescription: proj?.delivery_description?.trim() || null,
       shootStart: proj?.shoot_start ?? null,
       shootEnd: proj?.shoot_end ?? null,
+      language: proj?.language === 'en' ? 'en' : 'no',
       rootBoardId: root.id,
     }
   } catch (err) {

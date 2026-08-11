@@ -222,7 +222,7 @@ export function TimelineSection({
               updateSectionContent(section.id, 'sectionHeading', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.sectionHeading || 'Fra idé til ferdig produksjon'}
+            {section.content.sectionHeading || (language === 'en' ? 'From idea to finished production' : 'Fra idé til ferdig produksjon')}
           </h2>
         </div>
         <div className="flex gap-4 px-8 md:px-16 overflow-x-auto pb-4">
@@ -305,7 +305,7 @@ export function TimelineSection({
               if (editMode) updateSectionContent(section.id, 'sectionHeading', e.currentTarget.textContent || '')
             }}
           >
-            {section.content.sectionHeading || 'Fra idé til ferdig produksjon'}
+            {section.content.sectionHeading || (language === 'en' ? 'From idea to finished production' : 'Fra idé til ferdig produksjon')}
           </h2>
         </div>
 

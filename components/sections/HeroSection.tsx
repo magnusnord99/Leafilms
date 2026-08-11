@@ -10,6 +10,7 @@ type HeroSectionProps = {
   section: Section
   project: Project
   editMode: boolean
+  language?: 'no' | 'en'
   sectionImages: Record<string, Image[]>
   sectionImageData: Record<string, SectionImage[]>
   sectionVideos?: Record<string, VideoLibrary[]>
@@ -30,6 +31,7 @@ export function HeroSection({
   section,
   project,
   editMode,
+  language = 'no',
   sectionImages,
   sectionImageData,
   sectionVideos = {},
@@ -317,7 +319,7 @@ export function HeroSection({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {section.content.description || 'Innholdsproduksjon'}
+          {section.content.description || (language === 'en' ? 'Content production' : 'Innholdsproduksjon')}
         </p>
       </div>
 

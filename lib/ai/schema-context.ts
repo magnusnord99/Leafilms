@@ -56,12 +56,16 @@ quotes — Pristilbud
   status: draft | sent | accepted | rejected
   quote_data inneholder bl.a. total_price, line_items
 
-sections — Innhold på prosjektsiden (JSONB per type). Leveringsinfo for postprod
-  ("hva som skal leveres til kunden", f.eks. "levering til Kasper Rud") ligger HER,
-  IKKE i projects.delivery_description (det feltet er separat og ofte tomt/utdatert).
+sections — Innhold på prosjektsiden (JSONB per type). Den kundevendte, strukturerte
+  leveranselisten som styrer post-produksjonspipelinen ligger HER, ikke i
+  projects.delivery_description.
   id, project_id, type, content (JSONB), updated_at
   type = 'deliverables' → content->'deliverableItems' er en array av
     { id, title, quantity, format, aspectRatio, description }
+
+projects.delivery_description / delivery_video / delivery_photo — tre uavhengige
+  fritekstfelt satt av admin (ikke samme som sections.deliverableItems over). Kan hver
+  for seg være tomme — sjekk alle tre før du konkluderer med at leveringsinfo mangler.
 
 team_members — Eksternt team-bibliotek
   id, name, role, bio, email, phone, tags

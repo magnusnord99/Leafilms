@@ -32,10 +32,10 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `database-migrations/039_pitch_feedback.sql`
 - `supabase/migrations/136_task_turn_ready_notification.sql` (widener notifications_type_check — koden feiler stille inntil den er kjørt, se lib/actions/pipeline.ts)
 - `supabase/migrations/137_delivery_galleries.sql` (legger til gallery_type-kolonne — "Send til kollega for godkjenning"-knappen på postprod-siden feiler inntil den er kjørt)
-- `supabase/migrations/138_notification_urgency.sql` (legger til urgent-kolonne på notifications + de 5 meldingstabellene, og oppdaterer varsel-triggerne til å kopiere den — "Haster"-knappen i chattene har ingen effekt før denne er kjørt)
-- `supabase/migrations/139_task_waiting_review.sql` (utvider tasks_status_check med 'waiting_review' + legger til gallery_reviews.task_id — postprod-steget (Selektering/Redigering) settes ikke til "venter på review" ved kollega-review før denne er kjørt)
+- ⚠️ `supabase/migrations/138_notification_urgency.sql` og `139_task_waiting_review.sql` — **filene mangler fra disk** (funnet under database-revisjon 2026-08-12, verken committet, stashet eller på annen måte gjenfinnbare via git). Koden forutsetter fortsatt at de er kjørt: `notifications.urgent`-kolonnen ("Haster"-knappen i chattene), `tasks.status = 'waiting_review'` (postprod-steg satt til "venter på review" ved kollega-review, se lib/actions/gallery-reviews.ts) og `gallery_reviews.task_id`. Disse tre tingene vil feile/være no-op inntil migrasjonene er skrevet på nytt og kjørt. Skriv dem på nytt (samme mønster som andre migrasjoner i denne mappen) før de kjøres — ikke anta at nummer 138/139 er reservert til noe annet.
 - `supabase/migrations/140_admin_tasks_project_link.sql` (legger til project_id på admin_tasks — "Gjennomgå bildeutvalg"-oppgaven i /admin/internal viser ingen lenke til prosjektet før denne er kjørt)
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
+- `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 
 Disse er skrevet men ikke kjort mot Supabase enna.
 

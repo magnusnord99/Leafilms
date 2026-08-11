@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
 import { getBoardComments, type BoardCommentsByCard } from '@/lib/actions/boardComments'
+import { combinedDeliveryText } from '@/lib/delivery-format'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
@@ -123,7 +124,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }, comments] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
-      supabase.from('projects').select('id, title, customer_id, board_summary, delivery_description, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
+      supabase.from('projects').select('id, title, customer_id, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
       board.lead_profile_id
         ? supabase.from('profiles').select('id, name, email, color, phone').eq('id', board.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -139,6 +140,8 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       customer_id?: string | null
       board_summary?: string | null
       delivery_description?: string | null
+      delivery_video?: string | null
+      delivery_photo?: string | null
       shoot_start?: string | null
       shoot_end?: string | null
     } | null
@@ -156,7 +159,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
       projectSummary: proj?.board_summary?.trim() || null,
-      deliveryDescription: proj?.delivery_description?.trim() || null,
+      deliveryDescription: proj ? combinedDeliveryText(proj) : null,
       shootStart: proj?.shoot_start ?? null,
       shootEnd: proj?.shoot_end ?? null,
       comments,
@@ -1041,7 +1044,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
       service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
       service.from('board_edges').select('*').eq('board_id', target.id),
-      service.from('projects').select('title, board_summary, delivery_description, shoot_start, shoot_end, language, customers(name, company)').eq('id', root.project_id).single(),
+      service.from('projects').select('title, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, language, customers(name, company)').eq('id', root.project_id).single(),
       target.lead_profile_id
         ? service.from('profiles').select('id, name, email, color, phone').eq('id', target.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -1053,6 +1056,8 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
     const proj = project as unknown as {
       board_summary?: string | null
       delivery_description?: string | null
+      delivery_video?: string | null
+      delivery_photo?: string | null
       shoot_start?: string | null
       shoot_end?: string | null
       language?: string | null
@@ -1098,7 +1103,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
       projectSummary: proj?.board_summary?.trim() || null,
-      deliveryDescription: proj?.delivery_description?.trim() || null,
+      deliveryDescription: proj ? combinedDeliveryText(proj, proj.language === 'en' ? 'en' : 'no') : null,
       shootStart: proj?.shoot_start ?? null,
       shootEnd: proj?.shoot_end ?? null,
       language: proj?.language === 'en' ? 'en' : 'no',

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase-server'
 import type { QuoteBuilderData, ContractFormFields, OurSignature } from '@/lib/types'
 import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { combinedDeliveryText } from '@/lib/delivery-format'
 
 // ---------------------------------------------------------------------------
 // Intern hjelpefunksjon: erstatt {{variabel}}-plassholdere
@@ -113,7 +114,13 @@ async function buildContractContext(projectId: string) {
   }
 
   const customer = (project as unknown as { customers?: { name: string | null; company: string | null; org_nummer: string | null } | null }).customers ?? null
-  const proj = project as unknown as { shoot_start?: string | null; shoot_end?: string | null; delivery_description?: string | null }
+  const proj = project as unknown as {
+    shoot_start?: string | null
+    shoot_end?: string | null
+    delivery_description?: string | null
+    delivery_video?: string | null
+    delivery_photo?: string | null
+  }
 
   let totalprisStr = '___'
   let antallCrewStr = '___'
@@ -144,7 +151,7 @@ async function buildContractContext(projectId: string) {
     kunde_kontakt: customer?.name || '',
     oppstart_dato: oppstartDato,
     opptak_datoer: opptakDatoer,
-    leveranse: proj.delivery_description || '___',
+    leveranse: combinedDeliveryText(proj, lang) || '___',
     totalpris: totalprisStr,
     antall_crew: antallCrewStr,
   }

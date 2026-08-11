@@ -15,7 +15,7 @@ import {
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  getAdminTasks, createAdminTask, updateAdminTaskStatus, updateAdminTaskAssignee, deleteAdminTask, getAdminProfiles,
+  getAdminTasks, createAdminTask, updateAdminTaskStatus, updateAdminTaskAssignee, updateAdminTaskDueDate, deleteAdminTask, getAdminProfiles,
 } from '@/lib/actions/admin-tasks'
 import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type AdminTask, type TaskStatus } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -30,6 +30,60 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   in_progress: '#F0A500',
   done: '#4CAF7D',
   waiting_review: '#F0A500',
+}
+
+function formatDueDate(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return `Forfalt ${Math.abs(diffDays)}d siden`
+  if (diffDays === 0) return 'I dag'
+  if (diffDays === 1) return 'I morgen'
+  return d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+}
+
+function isOverdue(dateStr: string | null): boolean {
+  if (!dateStr) return false
+  return new Date(dateStr) < new Date(new Date().toDateString())
+}
+
+function DueDateBadge({ task, onChange }: { task: AdminTask; onChange: (dueDate: string | null) => void }) {
+  const [editing, setEditing] = useState(false)
+  const overdue = isOverdue(task.due_date) && task.status !== 'done'
+
+  if (editing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        defaultValue={task.due_date ?? ''}
+        onClick={e => e.stopPropagation()}
+        onBlur={e => { setEditing(false); onChange(e.target.value || null) }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        style={{
+          fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text,
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 5,
+          padding: '2px 4px', colorScheme: 'dark', flexShrink: 0,
+        }}
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setEditing(true) }}
+      title={task.due_date ? 'Endre frist' : 'Sett frist'}
+      style={{
+        fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', fontWeight: overdue ? 600 : 500,
+        color: overdue ? C.danger : C.text3,
+        background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0,
+        opacity: task.due_date ? 1 : 0.55,
+      }}
+    >
+      {task.due_date ? formatDueDate(task.due_date) : '+ frist'}
+    </button>
+  )
 }
 
 function Avatar({ id, name, color, size = 24 }: { id: string; name: string | null; color?: string | null; size?: number }) {
@@ -142,12 +196,13 @@ function ProjectLink({ project }: { project: AdminTask['project'] }) {
 }
 
 function TaskRow({
-  task, profiles, onStatusChange, onAssign, onDelete,
+  task, profiles, onStatusChange, onAssign, onDueDateChange, onDelete,
 }: {
   task: AdminTask
   profiles: Profile[]
   onStatusChange: () => void
   onAssign: (profileId: string | null) => void
+  onDueDateChange: (dueDate: string | null) => void
   onDelete: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -180,6 +235,8 @@ function TaskRow({
         <ProjectLink project={task.project} />
       </span>
 
+      <DueDateBadge task={task} onChange={onDueDateChange} />
+
       <AssigneePicker task={task} profiles={profiles} onAssign={onAssign} />
 
       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.04em', color: STATUS_COLOR[task.status], flexShrink: 0 }}>
@@ -203,11 +260,12 @@ function TaskRow({
 }
 
 function DraggableCard({
-  task, profiles, onAssign, onDelete, onStatusChange, isDragOverlay = false,
+  task, profiles, onAssign, onDueDateChange, onDelete, onStatusChange, isDragOverlay = false,
 }: {
   task: AdminTask
   profiles: Profile[]
   onAssign: (profileId: string | null) => void
+  onDueDateChange: (dueDate: string | null) => void
   onDelete: () => void
   onStatusChange: () => void
   isDragOverlay?: boolean
@@ -260,19 +318,25 @@ function DraggableCard({
             → {TASK_STATUS_LABELS[TASK_STATUS_CYCLE[task.status]]}
           </button>
         ) : <span />}
-        {!isDragOverlay && <AssigneePicker task={task} profiles={profiles} onAssign={onAssign} />}
+        {!isDragOverlay && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <DueDateBadge task={task} onChange={onDueDateChange} />
+            <AssigneePicker task={task} profiles={profiles} onAssign={onAssign} />
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 function DroppableColumn({
-  status, tasks, profiles, onAssign, onDelete, onStatusChange,
+  status, tasks, profiles, onAssign, onDueDateChange, onDelete, onStatusChange,
 }: {
   status: TaskStatus
   tasks: AdminTask[]
   profiles: Profile[]
   onAssign: (taskId: string, profileId: string | null) => void
+  onDueDateChange: (taskId: string, dueDate: string | null) => void
   onDelete: (taskId: string) => void
   onStatusChange: (task: AdminTask) => void
 }) {
@@ -302,6 +366,7 @@ function DroppableColumn({
             task={task}
             profiles={profiles}
             onAssign={profileId => onAssign(task.id, profileId)}
+            onDueDateChange={dueDate => onDueDateChange(task.id, dueDate)}
             onDelete={() => onDelete(task.id)}
             onStatusChange={() => onStatusChange(task)}
           />
@@ -316,9 +381,11 @@ function DroppableColumn({
   )
 }
 
-function AddTaskInput({ value, onChange, onSubmit, disabled }: {
+function AddTaskInput({ value, onChange, dueDate, onDueDateChange, onSubmit, disabled }: {
   value: string
   onChange: (value: string) => void
+  dueDate: string
+  onDueDateChange: (value: string) => void
   onSubmit: () => void
   disabled: boolean
 }) {
@@ -336,6 +403,17 @@ function AddTaskInput({ value, onChange, onSubmit, disabled }: {
         }}
         onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
         onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+      />
+      <input
+        type="date"
+        value={dueDate}
+        onChange={e => onDueDateChange(e.target.value)}
+        title="Frist"
+        style={{
+          fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+          color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
+          borderRadius: 6, padding: '7px 10px', outline: 'none', colorScheme: 'dark',
+        }}
       />
       <button
         onClick={onSubmit}
@@ -361,6 +439,7 @@ export default function InternalTasksPage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'board'>('list')
   const [newTitle, setNewTitle] = useState('')
+  const [newDueDate, setNewDueDate] = useState('')
   const [creating, setCreating] = useState(false)
   const [activeTask, setActiveTask] = useState<AdminTask | null>(null)
 
@@ -378,10 +457,11 @@ export default function InternalTasksPage() {
     const title = newTitle.trim()
     if (!title || creating) return
     setCreating(true)
-    const created = await createAdminTask(title)
+    const created = await createAdminTask(title, newDueDate || null)
     if (created) {
       setTasks(prev => [...prev, created])
       setNewTitle('')
+      setNewDueDate('')
     }
     setCreating(false)
   }
@@ -401,6 +481,11 @@ export default function InternalTasksPage() {
       setTasks(prevTasks)
       alert(result.error ?? 'Kunne ikke tildele oppgaven')
     }
+  }
+
+  async function handleDueDateChange(taskId: string, dueDate: string | null) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: dueDate } : t))
+    await updateAdminTaskDueDate(taskId, dueDate)
   }
 
   async function handleDelete(taskId: string) {
@@ -466,11 +551,12 @@ export default function InternalTasksPage() {
               profiles={profiles}
               onStatusChange={() => handleStatusChange(task)}
               onAssign={profileId => handleAssign(task.id, profileId)}
+              onDueDateChange={dueDate => handleDueDateChange(task.id, dueDate)}
               onDelete={() => handleDelete(task.id)}
             />
           ))}
           <div style={{ marginTop: 4 }}>
-            <AddTaskInput value={newTitle} onChange={setNewTitle} onSubmit={handleAddTask} disabled={creating} />
+            <AddTaskInput value={newTitle} onChange={setNewTitle} dueDate={newDueDate} onDueDateChange={setNewDueDate} onSubmit={handleAddTask} disabled={creating} />
           </div>
         </div>
       ) : (
@@ -483,6 +569,7 @@ export default function InternalTasksPage() {
                 tasks={tasks.filter(t => t.status === status)}
                 profiles={profiles}
                 onAssign={handleAssign}
+                onDueDateChange={handleDueDateChange}
                 onDelete={handleDelete}
                 onStatusChange={handleStatusChange}
               />
@@ -490,7 +577,7 @@ export default function InternalTasksPage() {
           </div>
           <DragOverlay>
             {activeTask && (
-              <DraggableCard task={activeTask} profiles={profiles} onAssign={() => {}} onDelete={() => {}} onStatusChange={() => {}} isDragOverlay />
+              <DraggableCard task={activeTask} profiles={profiles} onAssign={() => {}} onDueDateChange={() => {}} onDelete={() => {}} onStatusChange={() => {}} isDragOverlay />
             )}
           </DragOverlay>
         </DndContext>
@@ -498,7 +585,7 @@ export default function InternalTasksPage() {
 
       {view === 'board' && !loading && (
         <div style={{ marginTop: 24, maxWidth: 400 }}>
-          <AddTaskInput value={newTitle} onChange={setNewTitle} onSubmit={handleAddTask} disabled={creating} />
+          <AddTaskInput value={newTitle} onChange={setNewTitle} dueDate={newDueDate} onDueDateChange={setNewDueDate} onSubmit={handleAddTask} disabled={creating} />
         </div>
       )}
     </div>

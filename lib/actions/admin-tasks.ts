@@ -58,7 +58,7 @@ export async function getAdminTasks(): Promise<AdminTask[]> {
   }
 }
 
-export async function createAdminTask(title: string): Promise<AdminTask | null> {
+export async function createAdminTask(title: string, dueDate?: string | null): Promise<AdminTask | null> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -83,6 +83,7 @@ export async function createAdminTask(title: string): Promise<AdminTask | null> 
         status: 'todo' as const,
         sort_order: nextSortOrder,
         created_by: user?.id ?? null,
+        due_date: dueDate ?? null,
       })
       .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color), project:projects(id, title)')
       .single()
@@ -98,6 +99,20 @@ export async function createAdminTask(title: string): Promise<AdminTask | null> 
   } catch (err) {
     console.error('createAdminTask unexpected error:', err)
     return null
+  }
+}
+
+export async function updateAdminTaskDueDate(id: string, dueDate: string | null): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('admin_tasks')
+      .update({ due_date: dueDate, updated_at: new Date().toISOString() })
+      .eq('id', id)
+
+    revalidatePath('/admin/internal')
+  } catch (err) {
+    console.error('updateAdminTaskDueDate error:', err)
   }
 }
 

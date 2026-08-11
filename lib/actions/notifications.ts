@@ -158,10 +158,14 @@ export async function replyToNotification(
       if (error) { console.error('replyToNotification task:', error); return { ok: false, error: 'Kunne ikke sende' } }
     } else if (n.type === 'quote_message' || n.type === 'quote_mention' || n.type === 'quote_message_reaction') {
       if (!n.project_id) return { ok: false, error: 'Varselet mangler prosjekt' }
+      // Nyeste opprettet er ikke nødvendigvis gjeldende versjon — en admin kan ha satt
+      // en eldre versjon som is_current igjen, og svaret skal følge samtaletråden
+      // til den kunden faktisk ser (feedback 85e9d13c dekket samme klasse bug for kontrakt).
       const { data: quote } = await supabase
         .from('quotes')
         .select('id')
         .eq('project_id', n.project_id)
+        .eq('is_current', true)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

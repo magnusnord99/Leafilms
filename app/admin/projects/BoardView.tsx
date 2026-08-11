@@ -26,6 +26,7 @@ import { C } from '@/lib/admin-theme'
 import { STAGE_ACCENT, getStageHref } from '@/lib/pipeline-ui'
 import { groupByProjectRoot, pickRepresentativeVersion } from '@/lib/project-grouping'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { combinedDeliveryText } from '@/lib/delivery-format'
 import { useAuth } from '@/hooks/useAuth'
 import { buildPipelineColumnPlan, isStageAllowed, isStaffRole, type StaffRole } from '@/lib/permissions'
 import { ProjectsViewToggle, type ProjectsView } from '@/components/admin/ProjectsViewToggle'
@@ -940,11 +941,11 @@ function DraggableCard({
       )}
 
       {/* Footer — leveranse + assignees */}
-      {!isDragOverlay && (project.delivery_description || stage === 'tilbud_sendt' || stage === 'fakturert' || stage === 'videresalg' || allAssignees.length > 0) && (
+      {!isDragOverlay && (combinedDeliveryText(project) || stage === 'tilbud_sendt' || stage === 'fakturert' || stage === 'videresalg' || allAssignees.length > 0) && (
         <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {project.delivery_description && (
+          {combinedDeliveryText(project) && (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              📦 {project.delivery_description}
+              📦 {combinedDeliveryText(project)}
             </p>
           )}
           {stage === 'tilbud_sendt' && (

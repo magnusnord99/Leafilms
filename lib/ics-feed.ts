@@ -61,6 +61,7 @@ function vevent(opts: {
   dtend: string // YYYYMMDD, eksklusiv (dagen etter siste dag)
   summary: string
   description?: string
+  url?: string
   status: 'CONFIRMED' | 'TENTATIVE'
   stamp: string
 }): string {
@@ -74,12 +75,16 @@ function vevent(opts: {
     `STATUS:${opts.status}`,
   ]
   if (opts.description) lines.push(`DESCRIPTION:${escapeText(opts.description)}`)
+  // URL-property er klikkbar i Apple/Google Calendar, men ikke alle klienter viser den
+  // fremtredende — lenken legges derfor også inn i DESCRIPTION (samme mønster som ClickUp).
+  if (opts.url) lines.push(`URL:${opts.url}`)
   lines.push('END:VEVENT')
   return lines.map(foldLine).join('\r\n')
 }
 
 export async function buildCalendarFeed(): Promise<string> {
   const supabase = createServiceClient()
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
 
   const [{ data: projects }, { data: signedContracts }, { data: deliveryTasks }] = await Promise.all([
     supabase
@@ -110,6 +115,7 @@ export async function buildCalendarFeed(): Promise<string> {
     const confirmed = p.shoot_confirmed || signedProjectIds.has(p.id)
     // Forsvar mot datafeil (sett feil vei i admin) — shoot_end skal aldri være før shoot_start.
     const shootEnd = p.shoot_end && p.shoot_end >= p.shoot_start ? p.shoot_end : p.shoot_start
+    const projectUrl = `${siteUrl}/admin/projects/${p.id}`
 
     events.push(
       vevent({
@@ -117,6 +123,8 @@ export async function buildCalendarFeed(): Promise<string> {
         dtstart: dateOnly(p.shoot_start),
         dtend: addDays(shootEnd, 1),
         summary: `${confirmed ? '🎬' : '🎬 (ikke bekreftet)'} ${label}`,
+        description: `Se prosjektet i Leafilms: ${projectUrl}`,
+        url: projectUrl,
         status: confirmed ? 'CONFIRMED' : 'TENTATIVE',
         stamp,
       })
@@ -136,6 +144,8 @@ export async function buildCalendarFeed(): Promise<string> {
           dtstart: dateOnly(firmDueDate),
           dtend: addDays(firmDueDate, 1),
           summary: `📦 Levering: ${label}`,
+          description: `Se prosjektet i Leafilms: ${projectUrl}`,
+          url: projectUrl,
           status: 'CONFIRMED',
           stamp,
         })
@@ -147,7 +157,8 @@ export async function buildCalendarFeed(): Promise<string> {
           dtstart: estimatedDate,
           dtend: addDays(`${estimatedDate.slice(0, 4)}-${estimatedDate.slice(4, 6)}-${estimatedDate.slice(6, 8)}`, 1),
           summary: `📦 Levering (estimat): ${label}`,
-          description: 'Beregnet fra opptaksslutt + antall etterarbeidsdager — ikke en fast avtalt dato.',
+          description: `Beregnet fra opptaksslutt + antall etterarbeidsdager — ikke en fast avtalt dato.\n\nSe prosjektet i Leafilms: ${projectUrl}`,
+          url: projectUrl,
           status: 'TENTATIVE',
           stamp,
         })

@@ -383,7 +383,7 @@ export async function setProjectType(
  */
 export async function updateTaskStatus(
   taskId: string,
-  status: 'todo' | 'in_progress' | 'done'
+  status: Task['status']
 ): Promise<{ ok: boolean; advanced: boolean; projectId: string | null; nextStage: PipelineStage | null }> {
   try {
     const supabase = await createClient()

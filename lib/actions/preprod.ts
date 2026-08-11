@@ -376,7 +376,7 @@ export async function syncPostCrewToTask(
 
 export async function updatePreprodTaskStatus(
   taskId: string,
-  status: 'todo' | 'in_progress' | 'done'
+  status: Task['status']
 ): Promise<void> {
   try {
     const supabase = await createClient()

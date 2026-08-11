@@ -21,9 +21,10 @@ const WARNING = '#F0A500'
 const STATUS_CYCLE = TASK_STATUS_CYCLE
 
 const STATUS_STYLE: Record<Task['status'], { label: string; color: string }> = {
-  todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3 },
-  in_progress: { label: TASK_STATUS_LABELS.in_progress, color: WARNING },
-  done:        { label: TASK_STATUS_LABELS.done,        color: SUCCESS },
+  todo:           { label: TASK_STATUS_LABELS.todo,           color: C.text3 },
+  in_progress:    { label: TASK_STATUS_LABELS.in_progress,    color: WARNING },
+  done:           { label: TASK_STATUS_LABELS.done,           color: SUCCESS },
+  waiting_review: { label: TASK_STATUS_LABELS.waiting_review, color: WARNING },
 }
 
 function Initials({ p, active }: { p: Profile; active: boolean }) {

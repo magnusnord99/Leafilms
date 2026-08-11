@@ -85,9 +85,10 @@ export function TaskList({
   const STATUS_CYCLE = TASK_STATUS_CYCLE
 
   const STATUS_STYLE: Record<Task['status'], { label: string; color: string }> = {
-    todo:        { label: TASK_STATUS_LABELS.todo,        color: C.text3   },
-    in_progress: { label: TASK_STATUS_LABELS.in_progress, color: C.warning  },
-    done:        { label: TASK_STATUS_LABELS.done,        color: C.success  },
+    todo:           { label: TASK_STATUS_LABELS.todo,           color: C.text3   },
+    in_progress:    { label: TASK_STATUS_LABELS.in_progress,    color: C.warning  },
+    done:           { label: TASK_STATUS_LABELS.done,           color: C.success  },
+    waiting_review: { label: TASK_STATUS_LABELS.waiting_review, color: C.warning  },
   }
 
   return (

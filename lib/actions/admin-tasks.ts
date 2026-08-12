@@ -102,6 +102,32 @@ export async function createAdminTask(title: string, dueDate?: string | null): P
   }
 }
 
+// NB: joiner ikke inn project her — project_id-kolonnen på admin_tasks (migrasjon 140)
+// er ikke kjørt mot Supabase ennå.
+export async function getMyInternalTasks(): Promise<AdminTask[]> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase
+      .from('admin_tasks')
+      .select('*, assignee:profiles!admin_tasks_assignee_id_fkey(id, name, email, color)')
+      .eq('assignee_id', user.id)
+      .order('sort_order', { ascending: true })
+
+    if (error) {
+      console.error('getMyInternalTasks error:', error)
+      return []
+    }
+
+    return (data ?? []).map((row) => mapRow({ ...(row as AdminTaskRow), project: null }))
+  } catch (err) {
+    console.error('getMyInternalTasks unexpected error:', err)
+    return []
+  }
+}
+
 export async function updateAdminTaskDueDate(id: string, dueDate: string | null): Promise<void> {
   try {
     const supabase = await createClient()

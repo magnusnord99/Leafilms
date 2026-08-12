@@ -7,10 +7,11 @@ import {
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { getMyTasks, updateTaskStatus } from '@/lib/actions/pipeline'
+import { getMyInternalTasks, updateAdminTaskStatus } from '@/lib/actions/admin-tasks'
 import {
   getDailyPlanItems, addTaskToPlan, addCustomPlanItem, toggleCustomPlanItem, removePlanItem, reorderPlanItems,
 } from '@/lib/actions/daily-plan'
-import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, type Task, type DailyPlanItem } from '@/lib/types'
+import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, type Task, type AdminTask, type DailyPlanItem } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
@@ -37,6 +38,45 @@ type TaskWithProject = Task & {
 }
 
 type Filter = 'all' | 'active' | 'done'
+
+// Felles visningsform for "Mine oppgaver" — prosjektoppgaver (fra pipeline/post-prod) og
+// interne admin-oppgaver (fra /admin/internal) slått sammen til én liste.
+type MyItem = {
+  id: string
+  title: string
+  status: 'todo' | 'in_progress' | 'done' | 'waiting_review'
+  due_date: string | null
+  priority: 'low' | 'medium' | 'high' | null
+  sort_order: number
+  locked: boolean
+  blockedByTitle: string | null
+  project: TaskWithProject['project']
+  source: 'project' | 'internal'
+}
+
+function toMyItem(task: TaskWithProject): MyItem {
+  return {
+    id: task.id, title: task.title, status: task.status, due_date: task.due_date,
+    priority: task.priority, sort_order: task.sort_order, locked: !!task.locked,
+    blockedByTitle: task.blockedByTitle ?? null, project: task.project, source: 'project',
+  }
+}
+
+function internalToMyItem(task: AdminTask): MyItem {
+  return {
+    id: task.id, title: task.title, status: task.status, due_date: task.due_date,
+    priority: null, sort_order: task.sort_order, locked: false,
+    blockedByTitle: null, project: null, source: 'internal',
+  }
+}
+
+function myItemHref(item: MyItem): string {
+  if (item.source === 'internal') return '/admin/internal'
+  if (!item.project) return '/admin/projects'
+  if (item.project.pipeline_stage === 'post_prod') return `/admin/postprod/${item.project.id}?task=${item.id}`
+  if (item.project.pipeline_stage === 'pre_prod') return `/admin/preprod/${item.project.id}?task=${item.id}`
+  return `/admin/projects/${item.project.id}?task=${item.id}`
+}
 
 const PIPELINE_STAGE_LABELS: Record<string, string> = PIPELINE_STAGE_LABELS_SHORT
 
@@ -80,30 +120,24 @@ function isOverdue(dateStr: string | null): boolean {
   return new Date(dateStr) < new Date(new Date().toDateString())
 }
 
-function TaskRow({ task, onStatusChange, onSettled }: {
-  task: TaskWithProject
-  onStatusChange: (id: string, status: 'todo' | 'in_progress' | 'done') => void
-  onSettled: () => void
+function TaskRow({ item, onToggle }: {
+  item: MyItem
+  onToggle: (item: MyItem) => Promise<void>
 }) {
   const [toggling, setToggling] = useState(false)
-  const isDone = task.status === 'done'
-  const locked = !!task.locked
-  const overdue = isOverdue(task.due_date) && !isDone
-  const dateLabel = formatDate(task.due_date)
-  const status = STATUS_CONFIG[task.status]
-  const priority = task.priority ? PRIORITY_CONFIG[task.priority] : null
-  const stageLabel = task.project ? (PIPELINE_STAGE_LABELS[task.project.pipeline_stage] ?? task.project.pipeline_stage) : null
+  const isDone = item.status === 'done'
+  const locked = item.locked
+  const overdue = isOverdue(item.due_date) && !isDone
+  const dateLabel = formatDate(item.due_date)
+  const status = STATUS_CONFIG[item.status]
+  const priority = item.priority ? PRIORITY_CONFIG[item.priority] : null
+  const stageLabel = item.project ? (PIPELINE_STAGE_LABELS[item.project.pipeline_stage] ?? item.project.pipeline_stage) : null
 
   async function handleToggleDone() {
     if (locked) return
     setToggling(true)
-    const next = isDone ? 'todo' : 'done'
-    onStatusChange(task.id, next)
-    await updateTaskStatus(task.id, next)
+    await onToggle(item)
     setToggling(false)
-    // Andre post-prod-steg i samme rekkefølge kan ha gått fra låst til åpent (eller omvendt) —
-    // hent alt på nytt slik at deres `locked`/`blockedByTitle` alltid er ferske, ikke bare denne.
-    onSettled()
   }
 
   return (
@@ -124,7 +158,7 @@ function TaskRow({ task, onStatusChange, onSettled }: {
       <button
         onClick={handleToggleDone}
         disabled={toggling || locked}
-        title={locked ? `Venter på «${task.blockedByTitle ?? 'forrige steg'}»` : undefined}
+        title={locked ? `Venter på «${item.blockedByTitle ?? 'forrige steg'}»` : undefined}
         aria-label={isDone ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
         style={{
           flexShrink: 0,
@@ -160,8 +194,19 @@ function TaskRow({ task, onStatusChange, onSettled }: {
             textDecoration: isDone ? 'line-through' : 'none',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {task.title}
+            {item.title}
           </span>
+          {item.source === 'internal' && (
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
+              color: C.accent, background: C.accentBg,
+              border: '1px solid rgba(124,92,252,0.3)',
+              padding: '1px 6px', borderRadius: 4, flexShrink: 0,
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>
+              Internt
+            </span>
+          )}
           {locked && (
             <span style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
@@ -186,8 +231,8 @@ function TaskRow({ task, onStatusChange, onSettled }: {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {task.project && (
-            <Link href={taskHref(task)} style={{ textDecoration: 'none' }}>
+          {item.project && (
+            <Link href={myItemHref(item)} style={{ textDecoration: 'none' }}>
               <span style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent,
                 cursor: 'pointer',
@@ -195,8 +240,20 @@ function TaskRow({ task, onStatusChange, onSettled }: {
                 onMouseEnter={e => (e.currentTarget as HTMLSpanElement).style.textDecoration = 'underline'}
                 onMouseLeave={e => (e.currentTarget as HTMLSpanElement).style.textDecoration = 'none'}
               >
-                {task.project.title}
-                {task.project.customer?.name && ` · ${task.project.customer.name}`}
+                {item.project.title}
+                {item.project.customer?.name && ` · ${item.project.customer.name}`}
+              </span>
+            </Link>
+          )}
+          {item.source === 'internal' && (
+            <Link href={myItemHref(item)} style={{ textDecoration: 'none' }}>
+              <span style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.accent, cursor: 'pointer',
+              }}
+                onMouseEnter={e => (e.currentTarget as HTMLSpanElement).style.textDecoration = 'underline'}
+                onMouseLeave={e => (e.currentTarget as HTMLSpanElement).style.textDecoration = 'none'}
+              >
+                Interne oppgaver ↗
               </span>
             </Link>
           )}
@@ -205,9 +262,9 @@ function TaskRow({ task, onStatusChange, onSettled }: {
               {stageLabel}
             </span>
           )}
-          {locked && task.blockedByTitle && (
+          {locked && item.blockedByTitle && (
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, fontStyle: 'italic' }}>
-              Venter på «{task.blockedByTitle}»
+              Venter på «{item.blockedByTitle}»
             </span>
           )}
         </div>
@@ -586,12 +643,14 @@ function DailyPlanPanel({ myTasks, onTaskStatusChange, onTaskStatusSettled }: {
 
 export default function MyTasksPage() {
   const [tasks, setTasks] = useState<TaskWithProject[]>([])
+  const [internalTasks, setInternalTasks] = useState<AdminTask[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('active')
 
   useEffect(() => {
-    getMyTasks().then(data => {
-      setTasks(data as TaskWithProject[])
+    Promise.all([getMyTasks(), getMyInternalTasks()]).then(([t, it]) => {
+      setTasks(t as TaskWithProject[])
+      setInternalTasks(it)
       setLoading(false)
     })
   }, [])
@@ -605,12 +664,30 @@ export default function MyTasksPage() {
     setTasks(fresh as TaskWithProject[])
   }
 
-  const totalCount = tasks.length
-  const activeCount = tasks.filter(t => t.status !== 'done' && !t.locked).length
-  const doneCount = tasks.filter(t => t.status === 'done').length
-  const overdueCount = tasks.filter(t => isOverdue(t.due_date) && t.status !== 'done').length
+  // Interne oppgaver har ingen låsing/rekkefølge på tvers av andre oppgaver, så et enkelt
+  // optimistisk lokalt oppdatering er nok — ingen grunn til å hente prosjektoppgavene på nytt.
+  async function handleToggle(item: MyItem) {
+    const next = item.status === 'done' ? 'todo' : 'done'
+    if (item.source === 'internal') {
+      setInternalTasks(prev => prev.map(t => t.id === item.id ? { ...t, status: next } : t))
+      await updateAdminTaskStatus(item.id, next)
+      return
+    }
+    handleStatusChange(item.id, next)
+    await updateTaskStatus(item.id, next)
+    // Andre post-prod-steg i samme rekkefølge kan ha gått fra låst til åpent (eller omvendt) —
+    // hent alt på nytt slik at deres `locked`/`blockedByTitle` alltid er ferske, ikke bare denne.
+    await refreshTasks()
+  }
 
-  const filtered = tasks.filter(t => {
+  const items: MyItem[] = [...tasks.map(toMyItem), ...internalTasks.map(internalToMyItem)]
+
+  const totalCount = items.length
+  const activeCount = items.filter(t => t.status !== 'done' && !t.locked).length
+  const doneCount = items.filter(t => t.status === 'done').length
+  const overdueCount = items.filter(t => isOverdue(t.due_date) && t.status !== 'done').length
+
+  const filtered = items.filter(t => {
     if (filter === 'active') return t.status !== 'done' && !t.locked
     if (filter === 'done') return t.status === 'done'
     return true
@@ -664,7 +741,7 @@ export default function MyTasksPage() {
             Mine oppgaver
           </h1>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>
-            Oppgaver tildelt deg på tvers av alle prosjekter
+            Oppgaver tildelt deg på tvers av alle prosjekter og interne oppgaver
           </p>
         </div>
 
@@ -731,15 +808,15 @@ export default function MyTasksPage() {
             </p>
             {filter === 'active' && (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>
-                Oppgaver tildelt deg i Pipeline eller Post-prod vises her
+                Oppgaver tildelt deg i Pipeline, Post-prod eller Interne oppgaver vises her
               </p>
             )}
           </div>
         ) : (
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-            {filtered.map((task, i) => (
-              <div key={task.id} style={{ borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                <TaskRow task={task} onStatusChange={handleStatusChange} onSettled={refreshTasks} />
+            {filtered.map((item, i) => (
+              <div key={item.id} style={{ borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                <TaskRow item={item} onToggle={handleToggle} />
               </div>
             ))}
           </div>

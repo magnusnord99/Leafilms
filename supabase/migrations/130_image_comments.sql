@@ -14,14 +14,15 @@ CREATE TABLE IF NOT EXISTS image_comments (
 
 CREATE INDEX IF NOT EXISTS idx_image_comments_image ON image_comments(image_id, created_at);
 
+-- RLS: staff only (is_staff). Kundekommentarer går via createServiceClient()
+-- (lib/actions/selections.ts / selection-picks.ts) — åpen authenticated FOR ALL
+-- lot customer-JWTs CRUD alle kommentarer på tvers av gallerier via PostgREST.
+-- Se 143_harden_gallery_reviews_rls.sql.
 ALTER TABLE image_comments ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'image_comments' AND policyname = 'authenticated full access image_comments'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access image_comments" ON image_comments FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access image_comments" ON image_comments;
+DROP POLICY IF EXISTS "staff_all_image_comments" ON image_comments;
+CREATE POLICY "staff_all_image_comments"
+  ON image_comments FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));

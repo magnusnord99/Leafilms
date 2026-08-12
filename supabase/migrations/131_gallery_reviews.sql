@@ -19,17 +19,19 @@ CREATE TABLE IF NOT EXISTS gallery_reviews (
 
 CREATE INDEX IF NOT EXISTS idx_gallery_reviews_gallery ON gallery_reviews(gallery_id, created_at DESC);
 
+-- RLS: staff only (is_staff). Intern review-status gate'er kunde-tilgang
+-- (getGalleryForCustomer / getAlbumForCustomer via service client). Åpen
+-- authenticated FOR ALL lot customer-JWTs slette/oppdatere pending reviews
+-- og dermed låse opp galleriet før intern godkjenning — se
+-- 143_harden_gallery_reviews_rls.sql.
 ALTER TABLE gallery_reviews ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'gallery_reviews' AND policyname = 'authenticated full access gallery_reviews'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access gallery_reviews" ON gallery_reviews FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access gallery_reviews" ON gallery_reviews;
+DROP POLICY IF EXISTS "staff_all_gallery_reviews" ON gallery_reviews;
+CREATE POLICY "staff_all_gallery_reviews"
+  ON gallery_reviews FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
 -- Reviewers valg per bilde for én bestemt runde. 'note' er strengt internt — vises
 -- aldri til kunden (i motsetning til image_comments, som kundens galleri-visning leser).
@@ -44,17 +46,16 @@ CREATE TABLE IF NOT EXISTS gallery_review_marks (
 
 CREATE INDEX IF NOT EXISTS idx_gallery_review_marks_review ON gallery_review_marks(review_id);
 
+-- Intern notater (note) skal aldri være synlige for kunden. Staff-only RLS;
+-- admin UI bruker createClient() (lib/actions/gallery-reviews.ts).
 ALTER TABLE gallery_review_marks ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'gallery_review_marks' AND policyname = 'authenticated full access gallery_review_marks'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authenticated full access gallery_review_marks" ON gallery_review_marks FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authenticated full access gallery_review_marks" ON gallery_review_marks;
+DROP POLICY IF EXISTS "staff_all_gallery_review_marks" ON gallery_review_marks;
+CREATE POLICY "staff_all_gallery_review_marks"
+  ON gallery_review_marks FOR ALL TO authenticated
+  USING (public.is_staff(auth.uid()))
+  WITH CHECK (public.is_staff(auth.uid()));
 
 -- Myk skjuling — bildet blir stående i galleriet (admin ser det, tydelig merket),
 -- men filtreres bort fra alt kunden kan se. Reversibelt, i motsetning til faktisk

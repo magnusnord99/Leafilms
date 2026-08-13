@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase-server'
+import { toIcsUtcDateTime } from '@/lib/ics-datetime'
 
 // Genererer en iCalendar-feed (RFC 5545) med opptak, leveringsdatoer og interne møter,
 // ment for abonnement fra f.eks. iPhone-kalenderen ("Legg til abonnert kalender"). Leses av
@@ -70,10 +71,6 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10).replace(/-/g, '')
-}
-
-function dateTimeUtc(iso: string): string {
-  return iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
 }
 
 function vevent(opts: {
@@ -156,7 +153,7 @@ export async function buildCalendarFeed(): Promise<string> {
     ((deliveryTasks ?? []) as DeliveryTaskRow[]).map((t) => [t.project_id, t.due_date])
   )
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  const stamp = toIcsUtcDateTime(new Date().toISOString()) ?? '19700101T000000Z'
   const events: string[] = []
 
   for (const p of (projects ?? []) as unknown as ProjectRow[]) {
@@ -233,7 +230,15 @@ export async function buildCalendarFeed(): Promise<string> {
     })
 
     const startsAt = m.starts_at
-    const endsAt = m.ends_at && m.ends_at > startsAt ? m.ends_at : new Date(new Date(startsAt).getTime() + 30 * 60 * 1000).toISOString()
+    const startMs = new Date(startsAt).getTime()
+    if (Number.isNaN(startMs)) continue
+
+    const endCandidate = m.ends_at && new Date(m.ends_at).getTime() > startMs
+      ? m.ends_at
+      : new Date(startMs + 30 * 60 * 1000).toISOString()
+    const dtstart = toIcsUtcDateTime(startsAt)
+    const dtend = toIcsUtcDateTime(endCandidate)
+    if (!dtstart || !dtend) continue
 
     const descriptionParts = [`Organisator: ${organizerName}`]
     if (participantNames.length > 0) descriptionParts.push(`Deltakere: ${participantNames.join(', ')}`)
@@ -243,8 +248,8 @@ export async function buildCalendarFeed(): Promise<string> {
     events.push(
       veventDateTime({
         uid: `meeting-${m.id}@leafilms-pitch`,
-        dtstart: dateTimeUtc(startsAt),
-        dtend: dateTimeUtc(endsAt),
+        dtstart,
+        dtend,
         summary: `🗓️ ${m.title}`,
         description: descriptionParts.join('\n\n'),
         status: acceptedCount === participants.length ? 'CONFIRMED' : 'TENTATIVE',

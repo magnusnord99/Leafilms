@@ -746,6 +746,19 @@ export default function PostProdDetailPage() {
   const isSelectedDone = selectedTask?.status === 'done'
   const isSelectedLocked = selectedTask && !isSelectedDone && !isSelectedActive
 
+  // Referansemateriale fra tidligere steg (lenker + notater) — vises i venstre
+  // kolonne ved siden av det aktive steget, slik at man slipper å hoppe
+  // tilbake til f.eks. Logging/Grovklipp for å finne igjen linker og kommentarer.
+  const priorStages = selectedTask
+    ? displayTasks.slice(0, selectedIdx).map(t => {
+        const fields = TASK_LINK_FIELDS[t.title] ?? []
+        const data = (t.task_data as Record<string, string> | null) ?? {}
+        const links = fields.filter(f => data[f.key]).map(f => ({ label: f.label, value: data[f.key] }))
+        const note = (t.notes ?? '').trim()
+        return { stageTitle: t.title, links, note }
+      }).filter(s => s.links.length > 0 || s.note.length > 0)
+    : []
+
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 48px)', overflow: 'hidden', background: C.bg }}>
 
@@ -1327,7 +1340,58 @@ export default function PostProdDetailPage() {
         ) : selectedTask ? (
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-            {/* Left: task details + notes + action */}
+            {/* Left: reference materials (links + notes) from earlier steps */}
+            {priorStages.length > 0 && (
+              <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: 'auto', padding: '28px 20px' }}>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
+                  Fra tidligere steg
+                </label>
+                {priorStages.map((stage, i) => (
+                  <div key={stage.stageTitle} style={{ marginBottom: i < priorStages.length - 1 ? 20 : 0 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+                      {stage.stageTitle}
+                    </p>
+                    {stage.links.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: stage.note ? 8 : 0 }}>
+                        {stage.links.map((l, li) => (
+                          <a
+                            key={li}
+                            href={l.value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={l.label}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                              color: C.accent, textDecoration: 'none',
+                              padding: '7px 10px', borderRadius: 6,
+                              background: C.accentBg, border: `1px solid rgba(124,92,252,0.3)`,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                              <path d="M5 3H3a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1V7M7 2h3v3M10 2L5.5 6.5" stroke={C.accent} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.label}</span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {stage.note && (
+                      <p style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, lineHeight: 1.5,
+                        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7,
+                        padding: '8px 10px', whiteSpace: 'pre-wrap', margin: 0,
+                      }}>
+                        {stage.note}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Right: task details + notes + action */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', minWidth: 0, maxWidth: 760, margin: '0 auto', width: '100%' }}>
 
               {/* Status badge */}
@@ -1486,20 +1550,11 @@ export default function PostProdDetailPage() {
                 </div>
               )}
 
-              {/* Task links */}
+              {/* Task links (kun stegets egne redigerbare lenker — lenker fra tidligere
+                  steg vises i referansepanelet til venstre, se priorStages) */}
               {(() => {
                 const linkFields = TASK_LINK_FIELDS[selectedTask.title] ?? []
-                // Lenker fra tidligere steg i pipelinen (f.eks. filemail-linken fra
-                // Logging) — vises videre gjennom hele flyten som read-only referanser,
-                // slik at den som klipper ikke må hoppe tilbake til et tidligere steg.
-                const priorLinks = displayTasks.slice(0, selectedIdx).flatMap(t => {
-                  const fields = TASK_LINK_FIELDS[t.title] ?? []
-                  const data = (t.task_data as Record<string, string> | null) ?? {}
-                  return fields
-                    .filter(f => data[f.key])
-                    .map(f => ({ stageTitle: t.title, label: f.label, value: data[f.key] }))
-                })
-                if (linkFields.length === 0 && priorLinks.length === 0) return null
+                if (linkFields.length === 0) return null
                 const currentData = taskData[selectedTask.id] ?? {}
                 return (
                   <div style={{ marginBottom: 24 }}>
@@ -1511,30 +1566,6 @@ export default function PostProdDetailPage() {
                         {taskDataSaving ? 'Lagrer...' : taskDataSaved ? 'Lagret ✓' : ''}
                       </span>
                     </div>
-                    {priorLinks.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: linkFields.length > 0 ? 14 : 0 }}>
-                        {priorLinks.map((pl, i) => (
-                          <a
-                            key={`${pl.stageTitle}-${i}`}
-                            href={pl.value}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={pl.label}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                              color: C.text2, textDecoration: 'none',
-                              padding: '6px 10px', borderRadius: 6,
-                              background: C.surface, border: `1px solid ${C.border}`,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            <span style={{ color: C.text3, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{pl.stageTitle}</span>
-                            {pl.label} ↗
-                          </a>
-                        ))}
-                      </div>
-                    )}
                     {linkFields.map(field => {
                       const val = currentData[field.key] ?? ''
                       return (

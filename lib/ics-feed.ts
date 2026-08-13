@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase-server'
 
-// Genererer en iCalendar-feed (RFC 5545) med opptak og leveringsdatoer, ment for
-// abonnement fra f.eks. iPhone-kalenderen ("Legg til abonnert kalender"). Leses av
+// Genererer en iCalendar-feed (RFC 5545) med opptak, leveringsdatoer og interne møter,
+// ment for abonnement fra f.eks. iPhone-kalenderen ("Legg til abonnert kalender"). Leses av
 // app/api/calendar-feed/[token]/route.ts — ingen innlogging, kun et delt hemmelig
 // token i URL-en (samme mønster som andre token-baserte offentlige sider, f.eks. /p/[token]).
 
@@ -19,6 +19,23 @@ type ProjectRow = {
 type DeliveryTaskRow = {
   project_id: string
   due_date: string
+}
+
+type ProfileRef = { name: string | null; email: string } | { name: string | null; email: string }[] | null
+
+type MeetingRow = {
+  id: string
+  title: string
+  starts_at: string
+  ends_at: string | null
+  meeting_link: string | null
+  notes: string | null
+  organizer: ProfileRef
+  meeting_participants: { status: 'pending' | 'accepted' | 'declined'; profiles: ProfileRef }[]
+}
+
+function firstOf<T>(v: T | T[] | null): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : v
 }
 
 function escapeText(s: string): string {
@@ -55,6 +72,10 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10).replace(/-/g, '')
 }
 
+function dateTimeUtc(iso: string): string {
+  return iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+}
+
 function vevent(opts: {
   uid: string
   dtstart: string // YYYYMMDD
@@ -82,11 +103,34 @@ function vevent(opts: {
   return lines.map(foldLine).join('\r\n')
 }
 
+function veventDateTime(opts: {
+  uid: string
+  dtstart: string // YYYYMMDDTHHMMSSZ
+  dtend: string // YYYYMMDDTHHMMSSZ
+  summary: string
+  description?: string
+  status: 'CONFIRMED' | 'TENTATIVE'
+  stamp: string
+}): string {
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:${opts.uid}`,
+    `DTSTAMP:${opts.stamp}`,
+    `DTSTART:${opts.dtstart}`,
+    `DTEND:${opts.dtend}`,
+    `SUMMARY:${escapeText(opts.summary)}`,
+    `STATUS:${opts.status}`,
+  ]
+  if (opts.description) lines.push(`DESCRIPTION:${escapeText(opts.description)}`)
+  lines.push('END:VEVENT')
+  return lines.map(foldLine).join('\r\n')
+}
+
 export async function buildCalendarFeed(): Promise<string> {
   const supabase = createServiceClient()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
 
-  const [{ data: projects }, { data: signedContracts }, { data: deliveryTasks }] = await Promise.all([
+  const [{ data: projects }, { data: signedContracts }, { data: deliveryTasks }, { data: meetings }] = await Promise.all([
     supabase
       .from('projects')
       .select('id, title, pipeline_stage, shoot_start, shoot_end, shoot_confirmed, post_prod_days, customers(name)')
@@ -98,6 +142,13 @@ export async function buildCalendarFeed(): Promise<string> {
       .eq('pipeline_stage', 'levering')
       .eq('title', 'Lever ferdig materiale')
       .not('due_date', 'is', null),
+    supabase
+      .from('meetings')
+      .select(`
+        id, title, starts_at, ends_at, meeting_link, notes,
+        organizer:profiles!meetings_organizer_id_fkey ( name, email ),
+        meeting_participants ( status, profiles ( name, email ) )
+      `),
   ])
 
   const signedProjectIds = new Set((signedContracts ?? []).map((c) => c.project_id as string))
@@ -164,6 +215,42 @@ export async function buildCalendarFeed(): Promise<string> {
         })
       )
     }
+  }
+
+  // Interne møter: tas kun med når minst én deltaker har akseptert invitten
+  // (meeting_participants.status = 'accepted') — upubliserte/uavklarte møter skal ikke synes her.
+  for (const m of (meetings ?? []) as unknown as MeetingRow[]) {
+    const participants = m.meeting_participants ?? []
+    const acceptedCount = participants.filter((p) => p.status === 'accepted').length
+    if (acceptedCount === 0) continue
+
+    const organizer = firstOf(m.organizer)
+    const organizerName = organizer?.name ?? organizer?.email ?? 'Ukjent'
+    const participantNames = participants.map((p) => {
+      const profile = firstOf(p.profiles)
+      const name = profile?.name ?? profile?.email ?? 'Ukjent'
+      return `${name} (${p.status === 'accepted' ? 'akseptert' : p.status === 'declined' ? 'avslått' : 'venter'})`
+    })
+
+    const startsAt = m.starts_at
+    const endsAt = m.ends_at && m.ends_at > startsAt ? m.ends_at : new Date(new Date(startsAt).getTime() + 30 * 60 * 1000).toISOString()
+
+    const descriptionParts = [`Organisator: ${organizerName}`]
+    if (participantNames.length > 0) descriptionParts.push(`Deltakere: ${participantNames.join(', ')}`)
+    if (m.meeting_link) descriptionParts.push(`Lenke: ${m.meeting_link}`)
+    if (m.notes) descriptionParts.push(m.notes)
+
+    events.push(
+      veventDateTime({
+        uid: `meeting-${m.id}@leafilms-pitch`,
+        dtstart: dateTimeUtc(startsAt),
+        dtend: dateTimeUtc(endsAt),
+        summary: `🗓️ ${m.title}`,
+        description: descriptionParts.join('\n\n'),
+        status: acceptedCount === participants.length ? 'CONFIRMED' : 'TENTATIVE',
+        stamp,
+      })
+    )
   }
 
   // NB: events er allerede foldede, flerlinjers blokker (se vevent()) — de skal IKKE

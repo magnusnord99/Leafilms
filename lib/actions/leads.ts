@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase-server'
 import { notifyAssignment } from '@/lib/notify-assignment'
 import { revalidatePath } from 'next/cache'
+import Anthropic from '@anthropic-ai/sdk'
 
 function slugify(str: string): string {
   return str
@@ -60,7 +61,7 @@ export async function createLead(data: {
         email: data.email.trim() || null,
         phone: data.phone.trim() || null,
         source: data.source || null,
-        notes: data.notes.trim() || null,
+        notes: stripHtml(data.notes) ? data.notes.trim() : null,
         status: 'new',
         converted_to_project_id: project.id,
         created_by: user?.id ?? null,
@@ -128,6 +129,56 @@ export async function createLead(data: {
   } catch (err) {
     console.error('createLead unexpected:', err)
     return null
+  }
+}
+
+// Notater lagres som HTML (rik tekst) — strippes til ren tekst før den sendes til Claude.
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// Kortfattet AI-sammendrag av interne notater på en lead som ennå ikke er opprettet
+// (ingen lead-id å persistere mot) — kun til hjelp for den som fyller ut skjemaet.
+export async function analyzeLeadNotes(
+  notes: string,
+  leadName: string
+): Promise<{ sammendrag: string } | { error: string }> {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) return { error: 'AI-analyse er ikke konfigurert.' }
+    const plainNotes = stripHtml(notes)
+    if (!plainNotes) return { error: 'Ingen notater å analysere.' }
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      system: 'Du er en assistent for et norsk film- og fotoproduksjonsselskap. Du oppsummerer interne notater om en salgs-lead til et kort, lettlest sammendrag. Svar KUN med et JSON-objekt — ingen markdown-fences, ingen tekst før eller etter.',
+      messages: [{
+        role: 'user',
+        content: `Lead: "${leadName || 'Ukjent'}"\n\nInterne notater:\n${plainNotes}\n\nSkriv et sammenhengende sammendrag på 2-4 setninger (vanlig løpende tekst, ikke punktliste) som dekker det viktigste: hvem leaden er, hva de er interessert i, og eventuelle konkrete detaljer (budsjett, tidslinje, kontaktperson) hvis nevnt.\n\nSvar med nøyaktig dette JSON-objektet:\n{"sammendrag": "..."}`
+      }]
+    })
+
+    const raw = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
+    if (!raw) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    let parsed: { sammendrag?: string } = {}
+    try {
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+    } catch {
+      parsed = {}
+    }
+
+    const sammendrag = (parsed.sammendrag ?? raw).trim()
+    if (!sammendrag) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
+    return { sammendrag }
+  } catch (err) {
+    console.error('analyzeLeadNotes error:', err)
+    if (err instanceof Anthropic.APIError && err.status === 400 && /credit balance/i.test(err.message)) {
+      return { error: 'AI-tjenesten har ikke nok kreditt. Kontakt en administrator.' }
+    }
+    return { error: 'Kunne ikke analysere akkurat nå. Prøv igjen senere.' }
   }
 }
 
@@ -209,6 +260,42 @@ export async function updateLeadStatus(leadId: string, status: LeadStatus): Prom
     revalidatePath('/admin/leads')
   } catch (err) {
     console.error('updateLeadStatus unexpected:', err)
+  }
+}
+
+export async function updateLead(leadId: string, data: {
+  name: string
+  company: string
+  email: string
+  phone: string
+  website: string
+  source: string
+  reason: string
+  sales_points: string[]
+}): Promise<boolean> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        name: data.name.trim(),
+        company: data.company.trim() || null,
+        email: data.email.trim() || null,
+        phone: data.phone.trim() || null,
+        website: data.website.trim() || null,
+        source: data.source || null,
+        reason: data.reason.trim() || null,
+        sales_points: data.sales_points.filter(s => s.trim()),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', leadId)
+    if (error) { console.error('updateLead:', error); return false }
+    revalidatePath('/admin/leads')
+    revalidatePath(`/admin/leads/${leadId}`)
+    return true
+  } catch (err) {
+    console.error('updateLead unexpected:', err)
+    return false
   }
 }
 

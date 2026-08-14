@@ -413,3 +413,29 @@ video::-webkit-media-controls {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1.2); }
 }
+
+/* ═══════════════════════════════════════════════════
+   RICH NOTES EDITOR (TipTap) — interne notater
+   ═══════════════════════════════════════════════════ */
+
+.rich-notes-editor .ProseMirror {
+  font-family: var(--font-dm-sans);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #EEEEF2;
+}
+
+.rich-notes-editor .ProseMirror p { margin: 0 0 8px; }
+.rich-notes-editor .ProseMirror p:last-child { margin-bottom: 0; }
+.rich-notes-editor .ProseMirror h2 { font-size: 1.05em; font-weight: 700; margin: 10px 0 6px; }
+.rich-notes-editor .ProseMirror h3 { font-size: 0.95em; font-weight: 700; margin: 8px 0 4px; }
+.rich-notes-editor .ProseMirror ul { margin: 0 0 8px; padding-left: 20px; }
+.rich-notes-editor .ProseMirror li { margin-bottom: 2px; }
+
+.rich-notes-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #8484A0;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

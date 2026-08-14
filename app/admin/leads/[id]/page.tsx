@@ -3,8 +3,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getLeadById, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
+import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
+import RichNotesEditor from '@/components/admin/RichNotesEditor'
+
+// Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
+// som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
+function notesToHtml(raw: string): string {
+  if (!raw) return ''
+  if (/<[a-z][\s\S]*>/i.test(raw)) return raw
+  return raw.split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('')
+}
 
 const C = {
   bg:       '#181920',
@@ -38,6 +47,45 @@ const SOURCE_LABELS: Record<string, string> = {
   telefon:         'Telefon',
 }
 
+const SOURCE_OPTIONS = [
+  { value: '',                label: 'Velg kilde...' },
+  { value: 'market_analysis', label: 'Markedsanalyse' },
+  { value: 'instagram',       label: 'Instagram' },
+  { value: 'linkedin',        label: 'LinkedIn' },
+  { value: 'nettside',        label: 'Nettside' },
+  { value: 'referanse',       label: 'Referanse' },
+  { value: 'telefon',         label: 'Telefon' },
+  { value: 'annet',           label: 'Annet' },
+]
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+      {children}
+    </label>
+  )
+}
+
+const editInputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box',
+  fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
+  color: C.text, background: C.surface2,
+  border: `1px solid ${C.border}`, borderRadius: 8,
+  padding: '9px 12px', outline: 'none',
+  transition: 'border-color 0.15s',
+}
+
+type EditForm = {
+  name: string
+  company: string
+  email: string
+  phone: string
+  website: string
+  source: string
+  reason: string
+  salesPoints: string[]
+}
+
 export default function LeadDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -53,10 +101,17 @@ export default function LeadDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '', company: '', email: '', phone: '', website: '', source: '', reason: '', salesPoints: [''],
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
   useEffect(() => {
     getLeadById(leadId).then(data => {
       setLead(data)
-      setNotes(data?.notes ?? '')
+      setNotes(notesToHtml(data?.notes ?? ''))
       setLoading(false)
     })
   }, [leadId])
@@ -78,6 +133,77 @@ export default function LeadDetailPage() {
       setNotesSaved(true)
       setTimeout(() => setNotesSaved(false), 2000)
     }, 800)
+  }
+
+  function startEdit() {
+    if (!lead) return
+    setEditForm({
+      name: lead.name,
+      company: lead.company ?? '',
+      email: lead.email ?? '',
+      phone: lead.phone ?? '',
+      website: lead.website ?? '',
+      source: lead.source ?? '',
+      reason: lead.reason ?? '',
+      salesPoints: (lead.sales_points ?? []).length > 0 ? lead.sales_points : [''],
+    })
+    setEditError(null)
+    setEditing(true)
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+    setEditError(null)
+  }
+
+  function updateEditSalesPoint(i: number, val: string) {
+    setEditForm(prev => ({ ...prev, salesPoints: prev.salesPoints.map((p, idx) => idx === i ? val : p) }))
+  }
+
+  function addEditSalesPoint() {
+    setEditForm(prev => ({ ...prev, salesPoints: [...prev.salesPoints, ''] }))
+  }
+
+  function removeEditSalesPoint(i: number) {
+    setEditForm(prev => ({ ...prev, salesPoints: prev.salesPoints.filter((_, idx) => idx !== i) }))
+  }
+
+  async function handleSaveEdit() {
+    if (!lead) return
+    if (!editForm.name.trim() && !editForm.company.trim()) {
+      setEditError('Fyll inn navn eller bedrift')
+      return
+    }
+    setSavingEdit(true)
+    setEditError(null)
+    const finalName = editForm.name.trim() || editForm.company.trim()
+    const ok = await updateLead(leadId, {
+      name: finalName,
+      company: editForm.company,
+      email: editForm.email,
+      phone: editForm.phone,
+      website: editForm.website,
+      source: editForm.source,
+      reason: editForm.reason,
+      sales_points: editForm.salesPoints,
+    })
+    if (ok) {
+      setLead(prev => prev ? {
+        ...prev,
+        name: finalName,
+        company: editForm.company.trim() || null,
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        website: editForm.website.trim() || null,
+        source: editForm.source || null,
+        reason: editForm.reason.trim() || null,
+        sales_points: editForm.salesPoints.filter(s => s.trim()),
+      } : prev)
+      setEditing(false)
+    } else {
+      setEditError('Noe gikk galt. Prøv igjen.')
+    }
+    setSavingEdit(false)
   }
 
   async function handleDelete() {
@@ -133,34 +259,78 @@ export default function LeadDetailPage() {
         {/* Header */}
         <div style={{ marginBottom: 32, paddingBottom: 28, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 12 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-                  {lead.name}
-                </h1>
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: status.color, background: `${status.color}18`,
-                  border: `1px solid ${status.color}30`,
-                  padding: '3px 9px', borderRadius: 5,
-                }}>
-                  {status.label}
-                </span>
+            {editing ? (
+              <div style={{ flex: 1, maxWidth: 480 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <Label>Navn</Label>
+                    <input
+                      value={editForm.name}
+                      onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
+                  <div>
+                    <Label>Bedrift</Label>
+                    <input
+                      value={editForm.company}
+                      onChange={e => setEditForm(prev => ({ ...prev, company: e.target.value }))}
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
+                </div>
+                <div style={{ maxWidth: 220 }}>
+                  <Label>Kilde</Label>
+                  <select
+                    value={editForm.source}
+                    onChange={e => setEditForm(prev => ({ ...prev, source: e.target.value }))}
+                    style={{ ...editInputStyle, cursor: 'pointer' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  >
+                    {SOURCE_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {editError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger, marginTop: 10 }}>{editError}</p>
+                )}
               </div>
-              {lead.company && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', color: C.text2, marginBottom: 2 }}>
-                  {lead.company}
-                </p>
-              )}
-              {lead.source && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-                  Kilde: {SOURCE_LABELS[lead.source] ?? lead.source}
-                </p>
-              )}
-            </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
+                    {lead.name}
+                  </h1>
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    color: status.color, background: `${status.color}18`,
+                    border: `1px solid ${status.color}30`,
+                    padding: '3px 9px', borderRadius: 5,
+                  }}>
+                    {status.label}
+                  </span>
+                </div>
+                {lead.company && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', color: C.text2, marginBottom: 2 }}>
+                    {lead.company}
+                  </p>
+                )}
+                {lead.source && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                    Kilde: {SOURCE_LABELS[lead.source] ?? lead.source}
+                  </p>
+                )}
+              </div>
+            )}
 
-            {/* Status buttons + delete */}
+            {/* Status buttons + rediger/slett */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).map(([val, conf]) => (
@@ -180,22 +350,62 @@ export default function LeadDetailPage() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                onBlur={() => setConfirmDelete(false)}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                  padding: '5px 11px', borderRadius: 5, cursor: deleting ? 'not-allowed' : 'pointer',
-                  background: confirmDelete ? `${C.danger}18` : 'transparent',
-                  color: confirmDelete ? C.danger : C.text3,
-                  border: `1px solid ${confirmDelete ? `${C.danger}40` : C.border}`,
-                  transition: 'all 0.12s',
-                  opacity: deleting ? 0.6 : 1,
-                }}
-              >
-                {deleting ? 'Sletter...' : confirmDelete ? 'Bekreft sletting' : 'Slett lead'}
-              </button>
+              {editing ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={cancelEdit}
+                    disabled={savingEdit}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
+                      background: 'transparent', color: C.text3, border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={savingEdit}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
+                      padding: '5px 12px', borderRadius: 5, cursor: savingEdit ? 'default' : 'pointer',
+                      background: C.accent, color: '#fff', border: 'none',
+                      opacity: savingEdit ? 0.6 : 1,
+                    }}
+                  >
+                    {savingEdit ? 'Lagrer...' : 'Lagre'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={startEdit}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
+                      background: 'transparent', color: C.text2, border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    Rediger
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    onBlur={() => setConfirmDelete(false)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      padding: '5px 11px', borderRadius: 5, cursor: deleting ? 'not-allowed' : 'pointer',
+                      background: confirmDelete ? `${C.danger}18` : 'transparent',
+                      color: confirmDelete ? C.danger : C.text3,
+                      border: `1px solid ${confirmDelete ? `${C.danger}40` : C.border}`,
+                      transition: 'all 0.12s',
+                      opacity: deleting ? 0.6 : 1,
+                    }}
+                  >
+                    {deleting ? 'Sletter...' : confirmDelete ? 'Bekreft sletting' : 'Slett lead'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -211,6 +421,43 @@ export default function LeadDetailPage() {
                 Kontakt
               </p>
 
+              {editing ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <Label>Telefon</Label>
+                    <input
+                      type="tel"
+                      value={editForm.phone}
+                      onChange={e => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
+                  <div>
+                    <Label>E-post</Label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
+                  <div>
+                    <Label>Nettside</Label>
+                    <input
+                      value={editForm.website}
+                      onChange={e => setEditForm(prev => ({ ...prev, website: e.target.value }))}
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
               {lead.phone && (
                 <a href={`tel:${lead.phone}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
@@ -273,17 +520,31 @@ export default function LeadDetailPage() {
               {!lead.phone && !lead.email && !lead.website && (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>Ingen kontaktinfo registrert</p>
               )}
+                </>
+              )}
             </div>
 
             {/* Hvorfor passer dette */}
-            {lead.reason && (
+            {(editing || lead.reason) && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 12 }}>
                   Hvorfor passer dette for oss
                 </p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2, lineHeight: 1.65 }}>
-                  {lead.reason}
-                </p>
+                {editing ? (
+                  <textarea
+                    value={editForm.reason}
+                    onChange={e => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Beskriv kort hvorfor denne leaden er interessant for Leafilms..."
+                    rows={3}
+                    style={{ ...editInputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  />
+                ) : (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2, lineHeight: 1.65 }}>
+                    {lead.reason}
+                  </p>
+                )}
               </div>
             )}
 
@@ -297,22 +558,10 @@ export default function LeadDetailPage() {
                   {notesSaving ? 'Lagrer...' : notesSaved ? 'Lagret ✓' : ''}
                 </span>
               </div>
-              <textarea
+              <RichNotesEditor
                 value={notes}
-                onChange={e => handleNotesChange(e.target.value)}
+                onChange={handleNotesChange}
                 placeholder="Legg til notater om denne leaden..."
-                rows={5}
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
-                  color: C.text, background: C.surface2,
-                  border: `1px solid ${C.border}`, borderRadius: 8,
-                  padding: '10px 12px', resize: 'vertical',
-                  outline: 'none', lineHeight: 1.6,
-                  transition: 'border-color 0.15s',
-                }}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border }}
               />
             </div>
           </div>
@@ -331,25 +580,67 @@ export default function LeadDetailPage() {
             )}
 
             {/* Salgspunkter */}
-            {(lead.sales_points ?? []).length > 0 && (
+            {(editing || (lead.sales_points ?? []).length > 0) && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
                   Salgspunkter
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(lead.sales_points ?? []).map((point, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: 5, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                          <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                {editing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {editForm.salesPoints.map((point, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                          background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                            <path d="M1 4L3 6.5L7 1.5" stroke={C.accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <input
+                          value={point}
+                          onChange={e => updateEditSalesPoint(i, e.target.value)}
+                          placeholder={`Salgspunkt ${i + 1}`}
+                          style={{ ...editInputStyle, flex: 1 }}
+                          onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                          onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                        />
+                        {editForm.salesPoints.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEditSalesPoint(i)}
+                            style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', padding: '0 4px', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.5 }}>
-                        {point}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addEditSalesPoint}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.accent, background: C.accentBg, border: '1px dashed rgba(124,92,252,0.3)', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', alignSelf: 'flex-start', marginTop: 3 }}
+                    >
+                      + Legg til salgspunkt
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(lead.sales_points ?? []).map((point, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                            <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.5 }}>
+                          {point}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

@@ -6,7 +6,16 @@ import Link from 'next/link'
 import { getProjectHub } from '@/lib/actions/pipeline'
 import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
+import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { ProjectMessage } from '@/lib/types'
+
+// Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
+// som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
+function notesToHtml(raw: string): string {
+  if (!raw) return ''
+  if (/<[a-z][\s\S]*>/i.test(raw)) return raw
+  return raw.split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('')
+}
 
 const C = {
   bg:       '#181920',
@@ -72,7 +81,7 @@ export default function ProjectContactPage() {
       setProjectTitle(hub?.project.title ?? null)
       setCustomer(hub?.project.customer ?? null)
       setLead(leadData)
-      setNotes(leadData?.notes ?? '')
+      setNotes(notesToHtml(leadData?.notes ?? ''))
       setLoading(false)
     })
     fetchMessages()
@@ -305,22 +314,10 @@ export default function ProjectContactPage() {
                     {notesSaving ? 'Lagrer...' : notesSaved ? 'Lagret ✓' : ''}
                   </span>
                 </div>
-                <textarea
+                <RichNotesEditor
                   value={notes}
-                  onChange={e => handleNotesChange(e.target.value)}
+                  onChange={handleNotesChange}
                   placeholder="Legg til notater..."
-                  rows={4}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
-                    color: C.text, background: C.surface2,
-                    border: `1px solid ${C.border}`, borderRadius: 8,
-                    padding: '10px 12px', resize: 'vertical',
-                    outline: 'none', lineHeight: 1.6,
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                  onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
               </div>
             )}

@@ -3,8 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createLead } from '@/lib/actions/leads'
+import { createLead, analyzeLeadNotes } from '@/lib/actions/leads'
 import { getAllProfiles } from '@/lib/actions/pipeline'
+import RichNotesEditor from '@/components/admin/RichNotesEditor'
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 const C = {
   bg:       '#181920',
@@ -63,6 +68,9 @@ export default function NewLeadPage() {
   const [salesPoints, setSalesPoints] = useState<string[]>(['', '', ''])
   const [coldEmail, setColdEmail] = useState('')
   const [notes, setNotes] = useState('')
+  const [notesSummary, setNotesSummary] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [quoteAssigneeId, setQuoteAssigneeId] = useState('')
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
 
@@ -80,6 +88,19 @@ export default function NewLeadPage() {
 
   function removeSalesPoint(i: number) {
     setSalesPoints(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function handleAnalyzeNotes() {
+    if (!stripHtml(notes)) return
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    const result = await analyzeLeadNotes(notes, name.trim() || company.trim())
+    if ('error' in result) {
+      setAnalyzeError(result.error)
+    } else {
+      setNotesSummary(result.sammendrag)
+    }
+    setAnalyzing(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -301,15 +322,43 @@ export default function NewLeadPage() {
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 18 }}>
                 Interne notater
               </p>
-              <textarea
+              <RichNotesEditor
                 value={notes}
-                onChange={e => setNotes(e.target.value)}
+                onChange={setNotes}
                 placeholder="Interne notater om leaden..."
-                rows={3}
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border }}
               />
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={handleAnalyzeNotes}
+                  disabled={analyzing || !stripHtml(notes)}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                    padding: '6px 16px', borderRadius: 6, cursor: stripHtml(notes) ? 'pointer' : 'not-allowed',
+                    background: stripHtml(notes) ? C.accent : C.surface2,
+                    color: stripHtml(notes) ? '#fff' : C.text3, border: 'none',
+                    opacity: analyzing ? 0.7 : 1, transition: 'background 0.15s',
+                  }}
+                >
+                  {analyzing ? 'Analyserer...' : notesSummary ? 'Analyser på nytt' : 'Analyser med AI'}
+                </button>
+                {analyzing && (
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>Claude leser notater...</span>
+                )}
+                {!analyzing && analyzeError && (
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.danger }}>{analyzeError}</span>
+                )}
+              </div>
+              {notesSummary && (
+                <div style={{ marginTop: 14, padding: '12px 14px', background: C.surface2, borderRadius: 7, border: `1px solid ${C.border}` }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.accent }}>
+                    AI-oppsummering
+                  </span>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, marginTop: 8, lineHeight: 1.6 }}>
+                    {notesSummary}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Error */}

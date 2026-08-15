@@ -32,9 +32,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    // Trigger'en public.handle_new_user() setter alltid role='admin' på nye profiler —
-    // vi overskriver den under med den valgte rollen. Ugyldig/manglende rolle faller
-    // tilbake til 'sales' i stedet for å stille en ny bruker med full admin-tilgang.
+    // Trigger'en public.handle_new_user() setter role='customer' på nye profiler
+    // (fail-closed, se migrasjon 143). Vi overskriver den under med den valgte
+    // staff-rollen. Ugyldig/manglende rolle faller tilbake til 'sales' i stedet
+    // for å gi en ny bruker full admin-tilgang.
     const resolvedRole = isStaffRole(role) ? role : 'sales'
 
     // Invite user via Supabase Auth
@@ -96,8 +97,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Oppdater profilen med navn (hvis oppgitt) og den valgte rollen — trigger'en setter
-    // alltid 'admin' som standard, så rollen må alltid overskrives eksplisitt her.
+    // Oppdater profilen med navn (hvis oppgitt) og den valgte staff-rollen —
+    // trigger'en setter 'customer' som standard, så rollen må overskrives her.
     if (inviteData.user) {
       await adminClient
         .from('profiles')

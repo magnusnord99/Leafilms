@@ -1,13 +1,16 @@
 import { NextRequest } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    // Staff-only — uten denne sjekken kan en innlogget kunde sende e-post
+    // som Leafilms til en vilkårlig mottaker.
+    const staff = await getAuthenticatedStaffUser()
+    if (!staff.ok) {
       return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
     }
+    const { user } = staff
 
     const { projectId, emailType, to, subject, body, meetingLink } = await req.json()
 

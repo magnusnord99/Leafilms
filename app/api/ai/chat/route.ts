@@ -1,16 +1,14 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { runChat, type ChatMessage } from '@/lib/ai/chat'
 
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  // Staff-only — runChat bruker service-rollen; en customer-JWT må ikke
+  // kunne dumpe CRM via query_database.
+  const staff = await getAuthenticatedStaffUser()
+  if (!staff.ok) {
     return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
   }
 

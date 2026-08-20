@@ -24,6 +24,8 @@ export type Notification = {
   projects: { title: string } | null
   tasks: { title: string; pipeline_stage: PipelineStage | null } | null
   leads: { name: string; company: string | null } | null
+  /** Kun satt for type 'meeting_invite' — brukerens faktiske svar-status i meeting_participants, hentet i getNotifications() */
+  meeting_response_status?: 'pending' | 'accepted' | 'declined'
 }
 
 // Meldingskanalen et varsel hører til ('project' | 'task' | 'quote' | 'direct')
@@ -44,7 +46,26 @@ export async function getNotifications(): Promise<Notification[]> {
       .limit(50)
 
     if (error) return []
-    return (data ?? []) as Notification[]
+    const notifications = (data ?? []) as Notification[]
+
+    const meetingIds = [...new Set(
+      notifications.filter(n => n.type === 'meeting_invite' && n.meeting_id).map(n => n.meeting_id as string)
+    )]
+    if (meetingIds.length > 0) {
+      const { data: participants } = await supabase
+        .from('meeting_participants')
+        .select('meeting_id, status')
+        .in('meeting_id', meetingIds)
+        .eq('profile_id', user.id)
+      const statusByMeetingId = new Map((participants ?? []).map(p => [p.meeting_id, p.status]))
+      for (const n of notifications) {
+        if (n.type === 'meeting_invite' && n.meeting_id) {
+          n.meeting_response_status = statusByMeetingId.get(n.meeting_id) ?? 'pending'
+        }
+      }
+    }
+
+    return notifications
   } catch {
     return []
   }

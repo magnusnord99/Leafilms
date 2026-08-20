@@ -66,8 +66,18 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   const [replyError, setReplyError] = useState<string | null>(null)
   // Reaksjoner sendt fra denne siden i denne økten (varsel-id → emoji), for umiddelbar feedback
   const [reacted, setReacted] = useState<Record<string, string>>({})
-  // Møteinvitasjoner besvart i denne økten (varsel-id → status), for umiddelbar feedback
-  const [meetingResponses, setMeetingResponses] = useState<Record<string, 'accepted' | 'declined'>>({})
+  // Møteinvitasjoner besvart (varsel-id → status) — initialisert fra lagret svar i DB
+  // (meeting_response_status) slik at Godta/Avslå ikke dukker opp igjen etter reload,
+  // og oppdatert direkte ved klikk for umiddelbar feedback
+  const [meetingResponses, setMeetingResponses] = useState<Record<string, 'accepted' | 'declined'>>(() => {
+    const initial: Record<string, 'accepted' | 'declined'> = {}
+    for (const n of initialNotifications) {
+      if (n.type === 'meeting_invite' && (n.meeting_response_status === 'accepted' || n.meeting_response_status === 'declined')) {
+        initial[n.id] = n.meeting_response_status
+      }
+    }
+    return initial
+  })
   const [respondingId, setRespondingId] = useState<string | null>(null)
   const replyRef = useRef<HTMLTextAreaElement>(null)
 

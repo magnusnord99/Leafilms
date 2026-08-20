@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { SectionContent } from '@/lib/types'
 
@@ -69,6 +70,14 @@ const mediumLabels: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
+    // Staff-only internt verktøy — uten denne sjekken kan hvem som helst
+    // overskrive pitch-innholdet på et vilkårlig prosjekt via service-rollen.
+    // Sales oppretter pitcher, så alle staff-roller er tillatt.
+    const staff = await getAuthenticatedStaffUser()
+    if (!staff.ok) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const {
       projectId,
       title,

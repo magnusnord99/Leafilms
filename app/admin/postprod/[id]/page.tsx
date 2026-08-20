@@ -602,6 +602,14 @@ export default function PostProdDetailPage() {
     setTasks(prev => [...prev, task])
   }
 
+  function handleCustomTaskAssigneesChange(taskId: string, assignees: Task['assignees']) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, assignees } : t))
+  }
+
+  function handleCustomTaskDueDateChange(taskId: string, dueDate: string | null) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: dueDate } : t))
+  }
+
   function handleCustomTaskDeleted(taskId: string) {
     setTasks(prev => prev.filter(t => t.id !== taskId))
   }
@@ -1284,6 +1292,8 @@ export default function PostProdDetailPage() {
                 pipelineStage="post_prod"
                 onTaskCreated={handleCustomTaskCreated}
                 onTaskDeleted={handleCustomTaskDeleted}
+                onAssigneesChange={handleCustomTaskAssigneesChange}
+                onDueDateChange={handleCustomTaskDueDateChange}
                 emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
               />
             </div>

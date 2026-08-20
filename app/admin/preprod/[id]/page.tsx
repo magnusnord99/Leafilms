@@ -1011,6 +1011,14 @@ export default function PreprodDetailPage() {
     setTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
+  function handleTaskAssigneesChange(taskId: string, assignees: Task['assignees']) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, assignees } : t))
+  }
+
+  function handleTaskDueDateChange(taskId: string, dueDate: string | null) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: dueDate } : t))
+  }
+
   // hasPostOverride sendes eksplisitt fra onAssignedChange (PostProdBoard) i
   // stedet for å leses fra postProdHasAssignee-state via closure, siden
   // funksjonen da kan kalles i samme tick som state-oppdateringen skjer uten
@@ -1216,6 +1224,8 @@ export default function PreprodDetailPage() {
                 pipelineStage="pre_prod"
                 onTaskCreated={handleTaskCreated}
                 onTaskDeleted={handleTaskDeleted}
+                onAssigneesChange={handleTaskAssigneesChange}
+                onDueDateChange={handleTaskDueDateChange}
               />
             </div>
 

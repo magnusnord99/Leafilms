@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { toggleTaskAssignee, createTask, deleteTask } from '@/lib/actions/pipeline'
+import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task, type PipelineStage } from '@/lib/types'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { getAvatarColor } from '@/lib/avatar-colors'
@@ -37,7 +38,7 @@ function Avatar({ id, name, color, size = 26 }: { id: string; name: string | nul
 
 export function TaskList({
   tasks, profiles, onStatusChange, currentUserId, messageCounts, deepLinkTaskId,
-  projectId, pipelineStage, onTaskCreated, onTaskDeleted, emptyLabel,
+  projectId, pipelineStage, onTaskCreated, onTaskDeleted, onAssigneesChange, onDueDateChange, emptyLabel,
 }: {
   tasks: Task[]
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
@@ -49,6 +50,8 @@ export function TaskList({
   pipelineStage: PipelineStage
   onTaskCreated: (task: Task) => void
   onTaskDeleted: (taskId: string) => void
+  onAssigneesChange: (taskId: string, assignees: Task['assignees']) => void
+  onDueDateChange: (taskId: string, dueDate: string | null) => void
   emptyLabel?: string
 }) {
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null)
@@ -59,8 +62,22 @@ export function TaskList({
 
   async function handleAssigneeToggle(taskId: string, profileId: string) {
     setToggling(profileId)
-    await toggleTaskAssignee(taskId, profileId)
+    const added = await toggleTaskAssignee(taskId, profileId)
+    const task = tasks.find(t => t.id === taskId)
+    const profile = profiles.find(p => p.id === profileId)
+    if (task && profile) {
+      const newAssignees = added
+        ? [...task.assignees, { id: profile.id, name: profile.name, email: profile.email }]
+        : task.assignees.filter(a => a.id !== profileId)
+      onAssigneesChange(taskId, newAssignees)
+    }
     setToggling(null)
+  }
+
+  async function handleDueDateChange(taskId: string, value: string) {
+    const dueDate = value || null
+    onDueDateChange(taskId, dueDate)
+    await updateTaskDueDate(taskId, dueDate)
   }
 
   async function handleAddTask() {
@@ -153,6 +170,21 @@ export function TaskList({
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.04em', color: s.color, flexShrink: 0 }}>
                   {s.label}
                 </span>
+
+                {/* Frist */}
+                <input
+                  type="date"
+                  value={task.due_date ?? ''}
+                  onChange={e => handleDueDateChange(task.id, e.target.value)}
+                  title="Frist"
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                    color: task.due_date ? C.text2 : C.text3, background: C.surface,
+                    border: `1px solid ${C.border}`, borderRadius: 6,
+                    padding: '3px 6px', outline: 'none', flexShrink: 0,
+                    colorScheme: 'dark',
+                  }}
+                />
 
                 <TaskChatToggle
                   taskId={task.id}

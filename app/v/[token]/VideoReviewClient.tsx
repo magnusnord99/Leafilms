@@ -124,6 +124,8 @@ export default function VideoReviewClient({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [muted, setMuted] = useState(false)
+  const [scrubbing, setScrubbing] = useState(false)
+  const wasPlayingRef = useRef(false)
 
   const [comments, setComments] = useState<VideoComment[]>(initialComments)
   const [showCommentForm, setShowCommentForm] = useState(false)
@@ -180,13 +182,41 @@ export default function VideoReviewClient({
     setMuted(vid.muted)
   }
 
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    const vid = videoRef.current
+  function ratioFromPointer(clientX: number): number {
     const bar = progressBarRef.current
-    if (!vid || !bar || !duration) return
+    if (!bar) return 0
     const rect = bar.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    vid.currentTime = ratio * duration
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+  }
+
+  function seekToRatio(ratio: number) {
+    const vid = videoRef.current
+    if (!vid || !duration) return
+    const time = ratio * duration
+    vid.currentTime = time
+    setCurrentTime(time)
+  }
+
+  function handleProgressPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const vid = videoRef.current
+    if (!vid || !duration) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    wasPlayingRef.current = playing
+    vid.pause()
+    setScrubbing(true)
+    seekToRatio(ratioFromPointer(e.clientX))
+  }
+
+  function handleProgressPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!scrubbing) return
+    seekToRatio(ratioFromPointer(e.clientX))
+  }
+
+  function handleProgressPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!scrubbing) return
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    setScrubbing(false)
+    if (wasPlayingRef.current) videoRef.current?.play()
   }
 
   function jumpToComment(secs: number | null) {
@@ -515,17 +545,28 @@ export default function VideoReviewClient({
           padding: '10px 16px 12px',
           flexShrink: 0,
         }}>
-          {/* Progress bar */}
+          {/* Progress bar — ytre wrapper gir en større, usynlig dra-/treffsone
+              rundt den tynne synlige linjen, uten å endre det visuelle uttrykket */}
+          <div
+            onPointerDown={handleProgressPointerDown}
+            onPointerMove={handleProgressPointerMove}
+            onPointerUp={handleProgressPointerUp}
+            onPointerCancel={handleProgressPointerUp}
+            style={{
+              padding: '8px 0',
+              margin: '-8px 0 2px',
+              cursor: 'pointer',
+              touchAction: 'none',
+            }}
+          >
           <div
             ref={progressBarRef}
-            onClick={handleProgressClick}
             style={{
               position: 'relative',
               height: 4,
               background: S.surface2,
               borderRadius: 2,
-              cursor: 'pointer',
-              marginBottom: 10,
+              pointerEvents: 'none',
             }}
           >
             {/* Fill */}
@@ -566,7 +607,7 @@ export default function VideoReviewClient({
               position: 'absolute',
               top: '50%',
               left: `${progressRatio * 100}%`,
-              transform: 'translate(-50%, -50%)',
+              transform: `translate(-50%, -50%) scale(${scrubbing ? 1.3 : 1})`,
               width: 13,
               height: 13,
               borderRadius: '50%',
@@ -574,7 +615,9 @@ export default function VideoReviewClient({
               border: `2px solid ${S.gold}`,
               pointerEvents: 'none',
               zIndex: 2,
+              transition: 'transform 0.1s',
             }} />
+          </div>
           </div>
 
           {/* Controls row */}

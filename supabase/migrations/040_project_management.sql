@@ -139,26 +139,53 @@ DROP POLICY IF EXISTS "authenticated_insert_tasks" ON tasks;
 DROP POLICY IF EXISTS "authenticated_update_tasks" ON tasks;
 DROP POLICY IF EXISTS "authenticated_delete_tasks" ON tasks;
 
+-- Staff-only: customer JWTs must not read or mutate the production pipeline
+-- via PostgREST. 040 runs before is_staff() (097), so the role check is inline.
 CREATE POLICY "authenticated_read_tasks"
   ON tasks FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_insert_tasks"
   ON tasks FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_update_tasks"
   ON tasks FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_delete_tasks"
   ON tasks FOR DELETE
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- task_templates
 ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
@@ -171,23 +198,48 @@ DROP POLICY IF EXISTS "authenticated_delete_task_templates" ON task_templates;
 CREATE POLICY "authenticated_read_task_templates"
   ON task_templates FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_insert_task_templates"
   ON task_templates FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_update_task_templates"
   ON task_templates FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_delete_task_templates"
   ON task_templates FOR DELETE
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- leads
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;

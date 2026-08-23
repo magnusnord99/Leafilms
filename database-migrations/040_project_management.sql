@@ -197,26 +197,54 @@ DROP POLICY IF EXISTS "authenticated_insert_leads" ON leads;
 DROP POLICY IF EXISTS "authenticated_update_leads" ON leads;
 DROP POLICY IF EXISTS "authenticated_delete_leads" ON leads;
 
+-- Staff-only: customer JWTs must not read or wipe the CRM / outbound
+-- email archive via PostgREST. 040 runs before is_staff() (097), so
+-- the role check is inline.
 CREATE POLICY "authenticated_read_leads"
   ON leads FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_insert_leads"
   ON leads FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_update_leads"
   ON leads FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_delete_leads"
   ON leads FOR DELETE
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- email_log
 ALTER TABLE email_log ENABLE ROW LEVEL SECURITY;
@@ -229,23 +257,48 @@ DROP POLICY IF EXISTS "authenticated_delete_email_log" ON email_log;
 CREATE POLICY "authenticated_read_email_log"
   ON email_log FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_insert_email_log"
   ON email_log FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_update_email_log"
   ON email_log FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_delete_email_log"
   ON email_log FOR DELETE
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- ============================================
 -- 7. SEED: STANDARD TASK_TEMPLATES

@@ -25,6 +25,12 @@ export const SELECTION_STRINGS = {
     videoLabel: 'Video',
     commentCount: (n: number) => `${n} kommentar${n !== 1 ? 'er' : ''}`,
     imageCount: (n: number) => `${n} bilder`,
+    mediaCount: (images: number, videoCount: number) => {
+      const videoPart = `${videoCount} video${videoCount !== 1 ? 'er' : ''}`
+      if (images === 0 && videoCount > 0) return videoPart
+      if (videoCount === 0) return `${images} bilder`
+      return `${images} bilder · ${videoPart}`
+    },
     selectedBadge: (n: number) => `${n} valgt`,
     submittedTitle: '✓ Utvalget er sendt inn',
     submittedBody: (n: number) => `Vi har mottatt dine ${n} valgte bilder og tar kontakt.`,
@@ -85,6 +91,12 @@ export const SELECTION_STRINGS = {
     videoLabel: 'Video',
     commentCount: (n: number) => `${n} comment${n !== 1 ? 's' : ''}`,
     imageCount: (n: number) => `${n} photos`,
+    mediaCount: (images: number, videoCount: number) => {
+      const videoPart = `${videoCount} video${videoCount !== 1 ? 's' : ''}`
+      if (images === 0 && videoCount > 0) return videoPart
+      if (videoCount === 0) return `${images} photos`
+      return `${images} photos · ${videoPart}`
+    },
     selectedBadge: (n: number) => `${n} selected`,
     submittedTitle: '✓ Selection submitted',
     submittedBody: (n: number) => `We have received your ${n} selected photos and will be in touch.`,

@@ -3,13 +3,23 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
-import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+import { getQuoteAmountExclVat, getQuoteCategoryAmounts, QuoteCategoryAmounts } from '@/lib/quote-builder-utils'
 import { QuoteBuilderData, PipelineStage, PIPELINE_STAGES, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
 const green = '#4CAF7D'
 const amber = '#F0A429'
 const blue  = '#4A9EFF'
+
+type CategoryKey = 'startup' | 'production' | 'equipment' | 'post' | 'expenses'
+
+const CATEGORY_CHIPS: { key: CategoryKey; label: string }[] = [
+  { key: 'startup',    label: 'Oppstart' },
+  { key: 'production', label: 'Opptak' },
+  { key: 'equipment',  label: 'Utstyr' },
+  { key: 'post',       label: 'Post-produksjon' },
+  { key: 'expenses',   label: 'Produksjonsutgifter' },
+]
 
 type QuoteRow = {
   id: string
@@ -36,6 +46,7 @@ type ProjectWithAmount = {
   customerName: string | null
   stage: PipelineStage | null
   amount: number | null
+  categoryAmounts: QuoteCategoryAmounts | null
 }
 
 const POTENTIAL_STAGES: PipelineStage[] = ['lead', 'møte', 'tilbud_sendt', 'kontrakt']
@@ -70,6 +81,15 @@ function getAmount(quote: QuoteRow | null): number | null {
   // Kundens avkryssede tillegg fra pitch-siden telles med, slik at beløpet her
   // matcher det kunden faktisk ser og signerer på.
   return getQuoteAmountExclVat(quote.quote_data, quote.selected_addon_ids ?? [])
+}
+
+// Returnerer beløpet som skal vises for et prosjekt gitt aktivt filter.
+// Ingen filter (size===0): full beløp som i dag.
+// Med filter: sum av valgte kategorier fra categoryAmounts, eller null hvis ikke tilgjengelig.
+function getDisplayAmount(p: ProjectWithAmount, activeCategories: Set<CategoryKey>): number | null {
+  if (activeCategories.size === 0) return p.amount
+  if (!p.categoryAmounts) return null
+  return Array.from(activeCategories).reduce((sum, cat) => sum + (p.categoryAmounts![cat] ?? 0), 0)
 }
 
 function formatNok(amount: number): string {
@@ -145,11 +165,13 @@ function CashflowSection({
   projects,
   color,
   total,
+  activeCategories,
 }: {
   title: string
   projects: ProjectWithAmount[]
   color: string
   total: number
+  activeCategories: Set<CategoryKey>
 }) {
   return (
     <div style={{
@@ -207,36 +229,39 @@ function CashflowSection({
             </tr>
           </thead>
           <tbody>
-            {projects.map((p, idx) => (
-              <tr
-                key={p.id}
-                style={{
-                  borderBottom: idx < projects.length - 1 ? `1px solid ${C.border}` : 'none',
-                }}
-              >
-                <td style={{ padding: '12px 20px' }}>
-                  <Link
-                    href={`/admin/projects/${p.id}`}
-                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, textDecoration: 'none' }}
-                  >
-                    {p.title}
-                  </Link>
-                </td>
-                <td style={{ padding: '12px 20px' }}>
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
-                    {p.customerName ?? '—'}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 20px' }}>
-                  <StageBadge stage={p.stage} />
-                </td>
-                <td style={{ padding: '12px 20px', textAlign: 'right' }}>
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: p.amount !== null ? C.text : C.text3 }}>
-                    {p.amount !== null ? formatNok(p.amount) : '—'}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {projects.map((p, idx) => {
+              const displayAmount = getDisplayAmount(p, activeCategories)
+              return (
+                <tr
+                  key={p.id}
+                  style={{
+                    borderBottom: idx < projects.length - 1 ? `1px solid ${C.border}` : 'none',
+                  }}
+                >
+                  <td style={{ padding: '12px 20px' }}>
+                    <Link
+                      href={`/admin/projects/${p.id}`}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, textDecoration: 'none' }}
+                    >
+                      {p.title}
+                    </Link>
+                  </td>
+                  <td style={{ padding: '12px 20px' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                      {p.customerName ?? '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 20px' }}>
+                    <StageBadge stage={p.stage} />
+                  </td>
+                  <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: displayAmount !== null ? C.text : C.text3 }}>
+                      {displayAmount !== null ? formatNok(displayAmount) : '—'}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         </div>
@@ -250,6 +275,7 @@ export default function OkonomiPage() {
   const [potential, setPotential] = useState<ProjectWithAmount[]>([])
   const [upcoming, setUpcoming] = useState<ProjectWithAmount[]>([])
   const [earned, setEarned] = useState<ProjectWithAmount[]>([])
+  const [activeCategories, setActiveCategories] = useState<Set<CategoryKey>>(new Set())
 
   async function fetchData() {
     const supabase = createClient()
@@ -291,6 +317,9 @@ export default function OkonomiPage() {
             customerName: p.customers?.name ?? null,
             stage: p.pipeline_stage,
             amount: getAmount(quote),
+            categoryAmounts: quote?.quote_data
+              ? getQuoteCategoryAmounts(quote.quote_data, quote.selected_addon_ids ?? [])
+              : null,
           }
         })
     }
@@ -310,16 +339,28 @@ export default function OkonomiPage() {
       // Kun kladder laget ETTER det signerte tilbudet telles som tilleggstilbud — en eldre,
       // forlatt kladd fra FØR signeringen (f.eks. en tidligere versjon som ble forkastet) er
       // ikke noe nytt kunden har bedt om i tillegg, bare historikk.
-      const pendingAmount = quotes
-        .filter(q => q.quote_data && q.id !== primary.id && q.status !== 'accepted' && new Date(q.created_at).getTime() > primaryCreatedAt)
-        .reduce((sum, q) => sum + (getAmount(q) ?? 0), 0)
+      const pendingQuotes = quotes.filter(
+        q => q.quote_data && q.id !== primary.id && q.status !== 'accepted' && new Date(q.created_at).getTime() > primaryCreatedAt
+      )
+      const pendingAmount = pendingQuotes.reduce((sum, q) => sum + (getAmount(q) ?? 0), 0)
       if (pendingAmount > 0) {
+        // Summer kategori-beløp på tvers av alle ventende tilleggstilbud for filter-visning
+        const pendingCategoryAmounts: QuoteCategoryAmounts = { startup: 0, production: 0, equipment: 0, post: 0, expenses: 0 }
+        for (const q of pendingQuotes) {
+          if (!q.quote_data) continue
+          const cats = getQuoteCategoryAmounts(q.quote_data, q.selected_addon_ids ?? [])
+          if (!cats) continue
+          for (const key of Object.keys(pendingCategoryAmounts) as CategoryKey[]) {
+            pendingCategoryAmounts[key] += cats[key]
+          }
+        }
         pendingAddonRows.push({
           id: `${p.id}-addon`,
           title: `${p.title} (tilleggstilbud)`,
           customerName: p.customers?.name ?? null,
           stage: p.pipeline_stage,
           amount: pendingAmount,
+          categoryAmounts: pendingCategoryAmounts,
         })
       }
     }
@@ -332,8 +373,17 @@ export default function OkonomiPage() {
 
   useEffect(() => { fetchData() }, [])
 
+  function toggleCategory(key: CategoryKey) {
+    setActiveCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   const sumOf = (rows: ProjectWithAmount[]) =>
-    rows.reduce((acc, p) => acc + (p.amount ?? 0), 0)
+    rows.reduce((acc, p) => acc + (getDisplayAmount(p, activeCategories) ?? 0), 0)
 
   const potentialTotal = sumOf(potential)
   const upcomingTotal  = sumOf(upcoming)
@@ -354,13 +404,63 @@ export default function OkonomiPage() {
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.25rem', fontWeight: 600, color: C.text, margin: 0 }}>
             Økonomi
           </h1>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, margin: '4px 0 0' }}>
             Cashflow-oversikt basert på prosjektstadium
           </p>
+        </div>
+
+        {/* Kategori-filter */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, letterSpacing: '0.04em', textTransform: 'uppercase', marginRight: 4 }}>
+            Filtrer poster
+          </span>
+          {CATEGORY_CHIPS.map(({ key, label }) => {
+            const active = activeCategories.has(key)
+            return (
+              <button
+                key={key}
+                onClick={() => toggleCategory(key)}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.72rem',
+                  fontWeight: active ? 600 : 400,
+                  color: active ? C.text : C.text3,
+                  background: active ? C.surface2 : 'transparent',
+                  border: `1px solid ${active ? C.text2 : C.border}`,
+                  borderRadius: 20,
+                  padding: '4px 12px',
+                  cursor: 'pointer',
+                  letterSpacing: '0.02em',
+                  outline: 'none',
+                  transition: 'color 0.12s, background 0.12s, border-color 0.12s',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+          {activeCategories.size > 0 && (
+            <button
+              onClick={() => setActiveCategories(new Set())}
+              style={{
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.68rem',
+                color: C.text3,
+                background: 'transparent',
+                border: 'none',
+                padding: '4px 6px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                outline: 'none',
+              }}
+            >
+              Nullstill
+            </button>
+          )}
         </div>
 
         {/* Summary cards */}
@@ -372,9 +472,9 @@ export default function OkonomiPage() {
 
         {/* Sections */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <CashflowSection title="Potensiell inntekt" projects={potential} color={amber} total={potentialTotal} />
-          <CashflowSection title="Kommende betalinger" projects={upcoming} color={blue} total={upcomingTotal} />
-          <CashflowSection title="Inntjeninger" projects={earned} color={green} total={earnedTotal} />
+          <CashflowSection title="Potensiell inntekt" projects={potential} color={amber} total={potentialTotal} activeCategories={activeCategories} />
+          <CashflowSection title="Kommende betalinger" projects={upcoming} color={blue} total={upcomingTotal} activeCategories={activeCategories} />
+          <CashflowSection title="Inntjeninger" projects={earned} color={green} total={earnedTotal} activeCategories={activeCategories} />
         </div>
 
       </div>

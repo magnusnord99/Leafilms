@@ -149,16 +149,24 @@ export async function getAlbumForCustomer(
   }))
 
   const albumVideos = await getAlbumVideos(albumId)
-  const { data: videoCommentCounts } = albumVideos.length > 0
-    ? await service.from('video_comments').select('review_id').in('review_id', albumVideos.map(v => v.id))
-    : { data: [] as { review_id: string }[] }
+  const [{ data: videoCommentCounts }, { data: videoSignedUrlData }] = albumVideos.length > 0
+    ? await Promise.all([
+        service.from('video_comments').select('review_id').in('review_id', albumVideos.map(v => v.id)),
+        service.storage.from('videos').createSignedUrls(albumVideos.map(v => v.storage_path), SIGNED_URL_EXPIRY),
+      ])
+    : [{ data: [] as { review_id: string }[] }, { data: [] as { signedUrl: string; path: string }[] }]
   const videoCountMap: Record<string, number> = {}
   for (const c of videoCommentCounts ?? []) videoCountMap[c.review_id] = (videoCountMap[c.review_id] ?? 0) + 1
+  const videoSignedUrlMap: Record<string, string> = {}
+  for (const item of videoSignedUrlData ?? []) {
+    if (item.signedUrl && item.path) videoSignedUrlMap[item.path] = item.signedUrl
+  }
   const videos: GalleryVideo[] = albumVideos.map(v => ({
     id: v.id,
     title: v.title,
     status: v.status,
     comment_count: videoCountMap[v.id] ?? 0,
+    signedUrl: videoSignedUrlMap[v.storage_path] ?? '',
   }))
 
   return {

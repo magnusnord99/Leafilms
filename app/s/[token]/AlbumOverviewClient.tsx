@@ -136,22 +136,26 @@ export default function AlbumOverviewClient({
   )
 }
 
-function countAlbumTree(albumId: string, allAlbums: AlbumForCustomer[]): { total: number; selected: number; cover: string | null } {
+function countAlbumTree(albumId: string, allAlbums: AlbumForCustomer[]): { total: number; selected: number; cover: string | null; videoCount: number; videoCover: string | null } {
   const album = allAlbums.find(a => a.id === albumId)
-  if (!album) return { total: 0, selected: 0, cover: null }
+  if (!album) return { total: 0, selected: 0, cover: null, videoCount: 0, videoCover: null }
 
   let total = album.images.length
   let selected = album.selectedCount
   let cover = album.images[0]?.signedUrl ?? null
+  let videoCount = album.videos.length
+  let videoCover = album.videos[0]?.signedUrl || null
 
   for (const child of allAlbums.filter(a => a.parent_album_id === albumId)) {
     const sub = countAlbumTree(child.id, allAlbums)
     total += sub.total
     selected += sub.selected
+    videoCount += sub.videoCount
     if (!cover && sub.cover) cover = sub.cover
+    if (!videoCover && sub.videoCover) videoCover = sub.videoCover
   }
 
-  return { total, selected, cover }
+  return { total, selected, cover, videoCount, videoCover }
 }
 
 function VideoCard({ video, t, onClick }: { video: GalleryVideo; t: SelectionStrings; onClick: () => void }) {
@@ -203,7 +207,7 @@ function VideoCard({ video, t, onClick }: { video: GalleryVideo; t: SelectionStr
 }
 
 function AlbumCard({ album, allAlbums, t, onClick }: { album: AlbumForCustomer; allAlbums: AlbumForCustomer[]; t: SelectionStrings; onClick: () => void }) {
-  const { total, selected, cover } = countAlbumTree(album.id, allAlbums)
+  const { total, selected, cover, videoCount, videoCover } = countAlbumTree(album.id, allAlbums)
 
   return (
     <div
@@ -217,8 +221,25 @@ function AlbumCard({ album, allAlbums, t, onClick }: { album: AlbumForCustomer; 
             alt={album.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
+        ) : videoCover ? (
+          <video
+            src={`${videoCover}#t=0.1`}
+            preload="metadata"
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#1A1916' }} />
+        )}
+        {videoCover && (
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: 34, height: 34, borderRadius: '50%', background: 'rgba(12,11,9,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="#E8E0D0"><path d="M4 2l10 6-10 6V2z" /></svg>
+          </div>
         )}
         {selected > 0 && (
           <div style={{
@@ -236,7 +257,7 @@ function AlbumCard({ album, allAlbums, t, onClick }: { album: AlbumForCustomer; 
           {album.name}
         </div>
         <div style={{ fontFamily: 'sans-serif', fontSize: '0.68rem', color: '#8A8070', marginTop: 2 }}>
-          {t.imageCount(total)}
+          {t.mediaCount(total, videoCount)}
         </div>
       </div>
     </div>

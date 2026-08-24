@@ -114,6 +114,19 @@ export type QuoteTotals = {
   afterDiscount: number
   vatAmount: number
   finalInclVat: number
+  /**
+   * After-discount beløp (eks. mva) fordelt på de 5 filtrerbare postene.
+   * Invariant: startup + production + equipment + post + expenses === afterDiscount (innenfor flyttallsavrunding).
+   * For rå QuoteBuilderData er alle 5 poster separate. For konvertert akseptert-form er utstyr
+   * slått sammen i production (equipment === 0) — dette er forventet og akseptert.
+   */
+  categoryTotals: {
+    startup: number
+    production: number  // mannskap opptak — IKKE utstyr
+    equipment: number   // utstyr (alltid 0 for konvertert form)
+    post: number
+    expenses: number
+  }
 }
 
 // quotes.quote_data kan være to ulike former: rå QuoteBuilderData (har `crew`), eller den
@@ -176,11 +189,25 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
     },
     { startup: 0, production: 0, post: 0, expenses: 0 } as Record<OptionalAddonCategory, number>
   )
-  const addonDiscountableTotal = includedAddons.reduce((sum, a) => {
-    if (a.discountable === false) return sum
-    const amounts = getAddonAmounts(a)
-    return sum + ADDON_CATEGORIES.filter((c) => c !== 'expenses').reduce((s, c) => s + (amounts[c] ?? 0), 0)
-  }, 0)
+  // Per-kategori-splitt av tilleggsbeløp: discountable vs. non-discountable.
+  // Brukes til å beregne per-post after-discount beløp (categoryTotals) og erstatter
+  // det tidligere enkelt-aggregerte addonDiscountableTotal.
+  const addonDiscountableByCategory = includedAddons.reduce(
+    (acc, a) => {
+      if (a.discountable === false) return acc
+      const amounts = getAddonAmounts(a)
+      for (const cat of ['startup', 'production', 'post'] as const) {
+        acc[cat] += amounts[cat] ?? 0
+      }
+      return acc
+    },
+    { startup: 0, production: 0, post: 0 }
+  )
+  // addonDiscountableTotal er summen av alle rabatterbare tillegg-poster på tvers av kategorier
+  const addonDiscountableTotal =
+    addonDiscountableByCategory.startup +
+    addonDiscountableByCategory.production +
+    addonDiscountableByCategory.post
 
   const subtotal =
     crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal +
@@ -189,11 +216,29 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
   // Én rabatt, kun på opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre
   // kostnader — pluss rabatterbare tillegg-poster i disse kategoriene
   const discountBase = crewTotal + postProductionTotal + addonDiscountableTotal
-  const discountAmount = discountBase * (data.discountFactor ?? 0)
+  const discountFactor = data.discountFactor ?? 0
+  const discountAmount = discountBase * discountFactor
 
   const afterDiscount = subtotal - discountAmount
   const vatAmount = data.includeVat ? afterDiscount * (data.vatRate / 100) : 0
   const finalInclVat = afterDiscount + vatAmount
+
+  // Per-post after-discount beløp — brukes av Økonomi-filtrering.
+  // Invariant: startup + production + equipment + post + expenses === afterDiscount
+  // (bevist matematisk: se kommentar over getQuoteCategoryAmounts)
+  const categoryTotals = {
+    startup:
+      (startupTotal + addonDiscountableByCategory.startup) * (1 - discountFactor) +
+      (addonTotalsByCategory.startup - addonDiscountableByCategory.startup),
+    production:
+      (shootCrewTotal + addonDiscountableByCategory.production) * (1 - discountFactor) +
+      (addonTotalsByCategory.production - addonDiscountableByCategory.production),
+    equipment: equipmentTotal,
+    post:
+      (postProductionTotal + addonDiscountableByCategory.post) * (1 - discountFactor) +
+      (addonTotalsByCategory.post - addonDiscountableByCategory.post),
+    expenses: otherCostsTotal + licensingTotal + addonTotalsByCategory.expenses,
+  }
 
   return {
     startupTotal,
@@ -213,6 +258,86 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
     afterDiscount,
     vatAmount,
     finalInclVat,
+    categoryTotals,
+  }
+}
+
+/**
+ * De 5 filtrerbare postene brukt av Økonomi-siden.
+ * For aksepterte tilbud (konvertert form) er equipment alltid 0 — utstyr er ugjenvinnelig
+ * slått sammen i production-posten ved akseptering (se convertBuilderDataToQuoteData).
+ * Magnus er informert om og har akseptert dette.
+ */
+export type QuoteCategoryAmounts = {
+  startup: number
+  production: number  // mannskap opptak — IKKE utstyr
+  equipment: number   // utstyr (alltid 0 for konvertert form)
+  post: number
+  expenses: number
+}
+
+/**
+ * Robust beregning av per-kategori beløp (eks. mva, after-discount) uavhengig av
+ * hvilken av de to formene quote_data har.
+ *
+ * Invariant for rå form: startup + production + equipment + post + expenses === getQuoteAmountExclVat(data)
+ * For konvertert form gjelder tilsvarende (equipment === 0, production inkluderer utstyr).
+ */
+export function getQuoteCategoryAmounts(
+  data: unknown,
+  selectedAddonIds?: string[]
+): QuoteCategoryAmounts | null {
+  if (!data) return null
+
+  if (isBuilderData(data)) {
+    try {
+      return calculateQuoteTotals(data, selectedAddonIds).categoryTotals
+    } catch {
+      return null
+    }
+  }
+
+  // Konvertert form: match lineItems på kjente labels (begge språk, ingen language-felt lagres her)
+  const quoteData = data as { lineItems?: unknown; finalPriceExclVat?: unknown }
+  if (!Array.isArray(quoteData.lineItems)) return null
+
+  const STARTUP_LABELS = new Set(['Oppstart/planlegging', 'Startup/Planning'])
+  const PRODUCTION_LABELS = new Set(['Opptak', 'Production'])
+  const POST_LABELS = new Set(['Post-produksjon', 'Post-Production'])
+  const EXPENSES_LABELS = new Set(['Produksjonsutgifter', 'Production Expenses'])
+
+  const raw = { startup: 0, production: 0, post: 0, expenses: 0 }
+
+  for (const item of quoteData.lineItems) {
+    const li = item as { description?: string; amount?: number }
+    const desc = li.description ?? ''
+    const amount = typeof li.amount === 'number' ? li.amount : 0
+    if (STARTUP_LABELS.has(desc)) raw.startup = amount
+    else if (PRODUCTION_LABELS.has(desc)) raw.production = amount
+    else if (POST_LABELS.has(desc)) raw.post = amount
+    else if (EXPENSES_LABELS.has(desc)) raw.expenses = amount
+  }
+
+  // lineItems-beløpene er pre-discount subtotaler (jf. convertBuilderDataToQuoteData). For å
+  // opprettholde invarianten (sum === finalPriceExclVat) og vise faktisk inntjening per
+  // kategori, skalerer vi de tre rabatterbare postene (startup/production/post) proporsjonalt.
+  // "Produksjonsutgifter" (expenses) rabatteres ALDRI — den beholdes uendret (raw.expenses er
+  // allerede korrekt etter-rabatt-verdi). Skaleringsfaktoren beregnes kun over de tre
+  // rabatterbare postene mot (finalPrice - raw.expenses) slik at invarianten holder eksakt.
+  // Uten rabatt er scale===1 og beløpene er uendret.
+  const finalPrice = typeof quoteData.finalPriceExclVat === 'number' ? quoteData.finalPriceExclVat : null
+  if (finalPrice === null) return null
+
+  const nonExpensesRaw = raw.startup + raw.production + raw.post
+  const nonExpensesTarget = finalPrice - raw.expenses
+  const scale = nonExpensesRaw > 0 ? nonExpensesTarget / nonExpensesRaw : 1
+
+  return {
+    startup: raw.startup * scale,
+    production: raw.production * scale,
+    equipment: 0,
+    post: raw.post * scale,
+    expenses: raw.expenses,
   }
 }
 

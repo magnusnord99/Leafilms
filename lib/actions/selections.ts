@@ -451,6 +451,7 @@ export type GalleryVideo = {
   title: string
   status: 'open' | 'submitted'
   comment_count: number
+  signedUrl: string
 }
 
 export async function getGalleryForCustomer(token: string): Promise<{
@@ -560,7 +561,7 @@ async function fetchGalleryVideos(
 ): Promise<GalleryVideo[]> {
   let query = service
     .from('video_reviews')
-    .select('id, title, status')
+    .select('id, title, status, storage_path')
     .eq('gallery_id', galleryId)
     .order('created_at', { ascending: true })
   query = albumId ? query.eq('album_id', albumId) : query.is('album_id', null)
@@ -568,14 +569,24 @@ async function fetchGalleryVideos(
 
   if (!vids || vids.length === 0) return []
 
-  const { data: commentCounts } = await service
-    .from('video_comments')
-    .select('review_id')
-    .in('review_id', vids.map(v => v.id))
+  const [{ data: commentCounts }, { data: signedUrlData }] = await Promise.all([
+    service
+      .from('video_comments')
+      .select('review_id')
+      .in('review_id', vids.map(v => v.id)),
+    service.storage
+      .from('videos')
+      .createSignedUrls(vids.map(v => v.storage_path), SIGNED_URL_EXPIRY),
+  ])
 
   const countMap: Record<string, number> = {}
   for (const c of commentCounts ?? []) {
     countMap[c.review_id] = (countMap[c.review_id] ?? 0) + 1
+  }
+
+  const signedUrlMap: Record<string, string> = {}
+  for (const item of signedUrlData ?? []) {
+    if (item.signedUrl && item.path) signedUrlMap[item.path] = item.signedUrl
   }
 
   return vids.map(v => ({
@@ -583,6 +594,7 @@ async function fetchGalleryVideos(
     title: v.title,
     status: v.status as 'open' | 'submitted',
     comment_count: countMap[v.id] ?? 0,
+    signedUrl: signedUrlMap[v.storage_path] ?? '',
   }))
 }
 

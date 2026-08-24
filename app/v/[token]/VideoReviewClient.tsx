@@ -118,13 +118,16 @@ export default function VideoReviewClient({
 }) {
   const t = VR_STRINGS[language]
   const videoRef = useRef<HTMLVideoElement>(null)
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
   const progressBarRef = useRef<HTMLDivElement>(null)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [muted, setMuted] = useState(false)
   const [scrubbing, setScrubbing] = useState(false)
+  const [previewRatio, setPreviewRatio] = useState<number | null>(null)
   const wasPlayingRef = useRef(false)
 
   const [comments, setComments] = useState<VideoComment[]>(initialComments)
@@ -171,9 +174,60 @@ export default function VideoReviewClient({
   function togglePlay() {
     const vid = videoRef.current
     if (!vid) return
-    if (playing) vid.pause()
-    else vid.play()
+    if (vid.paused) vid.play()
+    else vid.pause()
   }
+
+  // Mellomrom spiller/pauser videoen, med mindre fokus er i et tekstfelt eller på en knapp
+  // (der mellomrom har sin egen native oppførsel — skriv tegn / trykk knapp).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.code !== 'Space') return
+      if (showCommentForm || showSubmitConfirm) return
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || (e.target as HTMLElement | null)?.isContentEditable) return
+      e.preventDefault()
+      togglePlay()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showCommentForm, showSubmitConfirm])
+
+  function drawPreviewFrame(vid: HTMLVideoElement, canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d')
+    if (!ctx || !vid.videoWidth || !vid.videoHeight) return
+    canvas.width = 160
+    canvas.height = Math.round(160 * (vid.videoHeight / vid.videoWidth))
+    ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+  }
+
+  // Scrub-forhåndsvisning (dra): tegn hovedvideoens gjeldende bilde til et lite
+  // canvas hver gang søket har landet, siden den allerede er sømt dit.
+  useEffect(() => {
+    const vid = videoRef.current
+    const canvas = previewCanvasRef.current
+    if (!vid || !canvas) return
+    function onSeeked() {
+      if (!scrubbing || !vid || !canvas) return
+      drawPreviewFrame(vid, canvas)
+    }
+    vid.addEventListener('seeked', onSeeked)
+    return () => vid.removeEventListener('seeked', onSeeked)
+  }, [scrubbing])
+
+  // Hover-forhåndsvisning: en skjult andrevideo søker uavhengig av hovedvideoen,
+  // slik at man kan se et thumbnail langs tidslinjen uten å forstyrre avspillingen.
+  useEffect(() => {
+    const vid = previewVideoRef.current
+    const canvas = previewCanvasRef.current
+    if (!vid || !canvas) return
+    function onSeeked() {
+      if (scrubbing || !vid || !canvas) return
+      drawPreviewFrame(vid, canvas)
+    }
+    vid.addEventListener('seeked', onSeeked)
+    return () => vid.removeEventListener('seeked', onSeeked)
+  }, [scrubbing])
 
   function toggleMute() {
     const vid = videoRef.current
@@ -197,6 +251,12 @@ export default function VideoReviewClient({
     setCurrentTime(time)
   }
 
+  function seekPreviewToRatio(ratio: number) {
+    const vid = previewVideoRef.current
+    if (!vid || !duration) return
+    vid.currentTime = ratio * duration
+  }
+
   function handleProgressPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const vid = videoRef.current
     if (!vid || !duration) return
@@ -204,18 +264,32 @@ export default function VideoReviewClient({
     wasPlayingRef.current = playing
     vid.pause()
     setScrubbing(true)
-    seekToRatio(ratioFromPointer(e.clientX))
+    const ratio = ratioFromPointer(e.clientX)
+    setPreviewRatio(ratio)
+    seekToRatio(ratio)
   }
 
   function handleProgressPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!scrubbing) return
-    seekToRatio(ratioFromPointer(e.clientX))
+    const ratio = ratioFromPointer(e.clientX)
+    if (scrubbing) {
+      setPreviewRatio(ratio)
+      seekToRatio(ratio)
+    } else if (e.pointerType === 'mouse' && duration > 0) {
+      // Ren hover (ingen drag) — forhåndsvis via skjult andrevideo, ikke hovedvideoen
+      setPreviewRatio(ratio)
+      seekPreviewToRatio(ratio)
+    }
+  }
+
+  function handleProgressPointerLeave() {
+    if (!scrubbing) setPreviewRatio(null)
   }
 
   function handleProgressPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (!scrubbing) return
     e.currentTarget.releasePointerCapture(e.pointerId)
     setScrubbing(false)
+    setPreviewRatio(null)
     if (wasPlayingRef.current) videoRef.current?.play()
   }
 
@@ -387,6 +461,15 @@ export default function VideoReviewClient({
               src={signedUrl}
               style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }}
             />
+            {/* Skjult andrevideo brukt kun til å søke frem hover-thumbnails uten å forstyrre avspillingen */}
+            <video
+              ref={previewVideoRef}
+              src={signedUrl}
+              muted
+              playsInline
+              preload="metadata"
+              style={{ position: 'fixed', top: -9999, left: -9999, width: 160, height: 90, opacity: 0, pointerEvents: 'none' }}
+            />
           </div>
 
           {/* Sidebar */}
@@ -552,13 +635,58 @@ export default function VideoReviewClient({
             onPointerMove={handleProgressPointerMove}
             onPointerUp={handleProgressPointerUp}
             onPointerCancel={handleProgressPointerUp}
+            onPointerLeave={handleProgressPointerLeave}
             style={{
+              position: 'relative',
               padding: '8px 0',
               margin: '-8px 0 2px',
               cursor: 'pointer',
               touchAction: 'none',
             }}
           >
+          {/* Scrub-/hover-thumbnail */}
+          {previewRatio !== null && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: `${previewRatio * 100}%`,
+                transform: 'translateX(-50%)',
+                marginBottom: 10,
+                pointerEvents: 'none',
+                zIndex: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <canvas
+                ref={previewCanvasRef}
+                style={{
+                  display: 'block',
+                  width: 140,
+                  height: 'auto',
+                  borderRadius: 6,
+                  border: `1px solid ${S.border}`,
+                  background: '#000',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                }}
+              />
+              <span style={{
+                padding: '2px 7px',
+                borderRadius: 4,
+                background: S.surface,
+                border: `1px solid ${S.border}`,
+                color: S.text,
+                fontSize: '0.68rem',
+                fontVariantNumeric: 'tabular-nums',
+                fontWeight: 600,
+              }}>
+                {formatTs(previewRatio * duration)}
+              </span>
+            </div>
+          )}
           <div
             ref={progressBarRef}
             style={{

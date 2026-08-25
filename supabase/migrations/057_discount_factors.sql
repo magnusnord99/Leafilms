@@ -33,22 +33,33 @@ END$$;
 
 ALTER TABLE discount_factors ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'discount_factors' AND policyname = 'Authenticated can read discount_factors'
-  ) THEN
-    EXECUTE 'CREATE POLICY "Authenticated can read discount_factors" ON discount_factors FOR SELECT TO authenticated USING (true)';
-  END IF;
-END$$;
+-- Staff-only: customer JWTs must not rewrite volume discounts used in
+-- quote totals. 057 runs before is_staff() (097), so the role check is inline.
+DROP POLICY IF EXISTS "Authenticated can read discount_factors" ON discount_factors;
+DROP POLICY IF EXISTS "Authenticated can modify discount_factors" ON discount_factors;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'discount_factors' AND policyname = 'Authenticated can modify discount_factors'
-  ) THEN
-    EXECUTE 'CREATE POLICY "Authenticated can modify discount_factors" ON discount_factors FOR ALL TO authenticated USING (true)';
-  END IF;
-END$$;
+CREATE POLICY "Authenticated can read discount_factors"
+  ON discount_factors FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
+
+CREATE POLICY "Authenticated can modify discount_factors"
+  ON discount_factors FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );

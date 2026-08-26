@@ -13,10 +13,29 @@ CREATE INDEX IF NOT EXISTS idx_project_messages_project_id ON project_messages(p
 
 ALTER TABLE project_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated users can read messages" ON project_messages;
+DROP POLICY IF EXISTS "Users can insert own messages" ON project_messages;
+
+-- Staff-only: customer JWTs must not dump or inject internal project chat via
+-- PostgREST. 036 runs before is_staff() (097), so the role check is inline.
+-- Insert still requires auth.uid() = user_id so staff cannot spoof another sender.
 CREATE POLICY "Authenticated users can read messages"
   ON project_messages FOR SELECT
-  USING (auth.role() = 'authenticated');
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "Users can insert own messages"
   ON project_messages FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );

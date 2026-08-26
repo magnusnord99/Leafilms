@@ -24,35 +24,52 @@ CREATE INDEX IF NOT EXISTS idx_reviews_project_subject ON reviews(project_id, su
 
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'reviews' AND policyname = 'authed_read_reviews'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authed_read_reviews" ON reviews FOR SELECT TO authenticated USING (true)';
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "authed_read_reviews" ON reviews;
+DROP POLICY IF EXISTS "authed_insert_reviews" ON reviews;
+DROP POLICY IF EXISTS "authed_update_reviews" ON reviews;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'reviews' AND policyname = 'authed_insert_reviews'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authed_insert_reviews" ON reviews FOR INSERT TO authenticated WITH CHECK (auth.uid() = requested_by)';
-  END IF;
-END$$;
+-- Staff-only: customer JWTs must not read colleague-review comments or insert
+-- a forged approved review that getLatestReview (created_at DESC) would treat
+-- as the publish gate. 088 runs before is_staff() (097), so the role check is
+-- inline. Insert/update still bind to requested_by / reviewer_id.
+CREATE POLICY "authed_read_reviews"
+  ON reviews FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'reviews' AND policyname = 'authed_update_reviews'
-  ) THEN
-    EXECUTE 'CREATE POLICY "authed_update_reviews" ON reviews FOR UPDATE TO authenticated USING (auth.uid() = reviewer_id) WITH CHECK (auth.uid() = reviewer_id)';
-  END IF;
-END$$;
+CREATE POLICY "authed_insert_reviews"
+  ON reviews FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = requested_by
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
+
+CREATE POLICY "authed_update_reviews"
+  ON reviews FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = reviewer_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    auth.uid() = reviewer_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- Utvid notifications type-constraint med de 4 nye review-typene
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;

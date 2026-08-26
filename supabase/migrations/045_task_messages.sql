@@ -25,22 +25,56 @@ DROP POLICY IF EXISTS "authenticated_insert_task_messages" ON task_messages;
 DROP POLICY IF EXISTS "authenticated_update_task_messages" ON task_messages;
 DROP POLICY IF EXISTS "authenticated_delete_task_messages" ON task_messages;
 
+-- Staff-only: customer JWTs must not dump or inject post-prod task chat via
+-- PostgREST. 045 runs before is_staff() (097), so the role check is inline.
+-- Write policies still require auth.uid() = user_id so staff cannot spoof,
+-- edit, or delete another sender's messages.
 CREATE POLICY "authenticated_read_task_messages"
   ON task_messages FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_insert_task_messages"
   ON task_messages FOR INSERT
   TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_update_task_messages"
   ON task_messages FOR UPDATE
   TO authenticated
-  USING (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "authenticated_delete_task_messages"
   ON task_messages FOR DELETE
   TO authenticated
-  USING (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );

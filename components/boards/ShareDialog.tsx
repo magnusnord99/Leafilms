@@ -16,7 +16,7 @@ export default function ShareDialog({ boardId, initialToken, onClose }: {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 420, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, fontFamily: 'var(--font-dm-sans)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px, calc(100vw - 32px))', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, fontFamily: 'var(--font-dm-sans)' }}>
         <h3 style={{ color: C.text, fontSize: '1rem', fontWeight: 700, marginBottom: 6 }}>Del board</h3>
         <p style={{ color: C.text2, fontSize: '0.78rem', marginBottom: 16 }}>
           Alle med lenken kan se boardet og underboards — men ikke redigere.

@@ -180,7 +180,7 @@ export default function TaskChatPanel({
       <div
         style={{
           position: 'fixed', top: 48, right: 0, zIndex: 95,
-          height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column',
+          height: 'calc(100dvh - 48px)', display: 'flex', flexDirection: 'column',
           background: C.bg, borderLeft: `1px solid ${C.border}`,
           boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
           transform: open ? 'translateX(0)' : 'translateX(100%)',
@@ -261,7 +261,7 @@ export default function TaskChatPanel({
             placeholder="Skriv en melding... Bruk @navn for å tagge"
             disabled={sending}
             style={{
-              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
               background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
               padding: '9px 12px', outline: 'none', resize: 'none', lineHeight: 1.5, width: '100%',
             }}

@@ -164,7 +164,8 @@ function ScheduleCardPageContent({ initial, readOnly, backHref }: { initial: Sch
         )}
 
         {items.length > 0 && (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
             <thead>
               <tr>
                 {(readOnly ? ['Tid', 'Programpunkt', 'Lokasjon', 'Folk'] : ['Tid', 'Programpunkt', 'Lokasjon', 'Folk', '']).map((h, i) => (
@@ -269,6 +270,7 @@ function ScheduleCardPageContent({ initial, readOnly, backHref }: { initial: Sch
               })}
             </tbody>
           </table>
+          </div>
         )}
 
         {!readOnly && (

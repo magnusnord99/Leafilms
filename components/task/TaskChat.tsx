@@ -204,7 +204,7 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
           rows={2}
           placeholder="Skriv en melding... (Enter for å sende)"
           style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
             color: C.text, background: C.surface,
             border: `1px solid ${C.border}`, borderRadius: 8,
             padding: '9px 12px', resize: 'none', outline: 'none', lineHeight: 1.5,

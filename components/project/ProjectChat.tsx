@@ -384,7 +384,7 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
             style={{
               flex: 1,
               fontFamily: 'var(--font-dm-sans)',
-              fontSize: '0.78rem',
+              fontSize: '1rem',
               color: C.text,
               background: C.surface,
               border: `1px solid ${C.border}`,

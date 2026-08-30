@@ -606,7 +606,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                           }}
                           placeholder={`Svar ${n.sender_name} …`}
                           rows={2}
-                          style={{ flex: 1, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', fontSize: '0.78rem', fontFamily: 'var(--font-dm-sans)', resize: 'vertical', outline: 'none' }}
+                          style={{ flex: 1, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', fontSize: '1rem', fontFamily: 'var(--font-dm-sans)', resize: 'vertical', outline: 'none' }}
                         />
                         <button
                           onClick={() => handleSendReply(n)}

@@ -22,6 +22,9 @@ export async function getProjectsForPipeline(): Promise<ProjectWithPipeline[]> {
   try {
     const supabase = await createClient()
 
+    // Skjuler prosjekter som nettopp ble fullført (videresalg) fra selve tavlen i en
+    // periode (resale_visible_at) — de er fortsatt synlige via "Fullført"-filteret på
+    // listevisningen, som spør projects direkte uten dette filteret. Se advanceToVideresalg.
     const { data, error } = await supabase
       .from('projects')
       .select(`
@@ -33,6 +36,7 @@ export async function getProjectsForPipeline(): Promise<ProjectWithPipeline[]> {
         )
       `)
       .neq('status', 'lost')
+      .or(`pipeline_stage.neq.videresalg,resale_visible_at.is.null,resale_visible_at.lte.${new Date().toISOString()}`)
       .order('updated_at', { ascending: false })
 
     if (error) {
@@ -78,6 +82,39 @@ export async function updatePipelineStage(
     revalidatePath('/admin/projects')
   } catch (err) {
     console.error('updatePipelineStage unexpected error:', err)
+  }
+}
+
+// Antall dager et fullført prosjekt er skjult fra pipeline-tavlen før det dukker
+// opp igjen som "Videresalg" (feedback b92936d5).
+const RESALE_HIDE_DAYS = 21
+
+/**
+ * Flytter prosjektet til 'videresalg', men holder det skjult fra pipeline-tavlen
+ * (BoardView) i RESALE_HIDE_DAYS dager — prosjektet er fortsatt synlig hele tiden
+ * via "Fullført"-filteret på listevisningen. Se getProjectsForPipeline for filteret
+ * som bruker resale_visible_at, og migrasjon 144_resale_visible_at.sql.
+ */
+export async function advanceToVideresalg(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const resaleVisibleAt = new Date(Date.now() + RESALE_HIDE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ pipeline_stage: 'videresalg', resale_visible_at: resaleVisibleAt, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+
+    if (error) {
+      console.error('advanceToVideresalg error:', error)
+      return
+    }
+
+    await seedTasksFromTemplates(projectId, 'videresalg', supabase)
+
+    revalidatePath('/admin/projects')
+  } catch (err) {
+    console.error('advanceToVideresalg unexpected error:', err)
   }
 }
 

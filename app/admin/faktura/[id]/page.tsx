@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, setInvoiceAssignee, updatePipelineStage } from '@/lib/actions/pipeline'
+import { getProjectHub, setInvoiceAssignee, advanceToVideresalg } from '@/lib/actions/pipeline'
 import { getPreprodDetail } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
 
@@ -96,8 +96,8 @@ export default function FakturaPage() {
       const { updatePreprodTaskStatus } = await import('@/lib/actions/preprod')
       await updatePreprodTaskStatus(task.id, 'done')
     }
-    // Auto-advance til videresalg
-    await updatePipelineStage(projectId, 'videresalg')
+    // Auto-advance til videresalg — skjult fra pipeline-tavlen i 3 uker (feedback b92936d5)
+    await advanceToVideresalg(projectId)
     setMarking(false)
   }
 

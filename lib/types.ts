@@ -327,6 +327,17 @@ export type Contract = {
   updated_at: string
 }
 
+export type ProjectDocument = {
+  id: string
+  project_id: string
+  uploaded_by: string | null
+  file_name: string
+  file_path: string
+  file_type: string | null
+  file_size: number | null
+  created_at: string
+}
+
 export type ContractFormFields = {
   orgNummerOverride?: string
   produksjonsPeriode?: string

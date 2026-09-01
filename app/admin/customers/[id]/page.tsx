@@ -5,13 +5,20 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { C } from '@/lib/admin-theme'
-import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData } from '@/lib/types'
+import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData, ProjectDocument } from '@/lib/types'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
 
 type QuoteWithAmount = Quote & { quote_data: QuoteBuilderData | null; selected_addon_ids: string[] | null }
-type ProjectWithDetails = Project & { quotes: QuoteWithAmount[]; contracts: Contract[] }
+type ProjectWithDetails = Project & { quotes: QuoteWithAmount[]; contracts: Contract[]; documents: ProjectDocument[] }
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const statusLabel: Record<string, string> = {
   published: 'Publisert',
@@ -152,7 +159,7 @@ export default function CustomerDetailPage() {
 
     const projectIds = (projectsData || []).map((p) => p.id)
 
-    const [quotesResult, contractsResult] = await Promise.all([
+    const [quotesResult, contractsResult, documentsResult] = await Promise.all([
       projectIds.length > 0
         ? supabase
             .from('quotes')
@@ -164,6 +171,13 @@ export default function CustomerDetailPage() {
         ? supabase
             .from('contracts')
             .select('id, project_id, status, signed_at, pdf_url, created_at, updated_at')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null },
+      projectIds.length > 0
+        ? supabase
+            .from('project_documents')
+            .select('id, project_id, uploaded_by, file_name, file_path, file_type, file_size, created_at')
             .in('project_id', projectIds)
             .order('created_at', { ascending: false })
         : { data: [], error: null },
@@ -183,14 +197,66 @@ export default function CustomerDetailPage() {
       contractsByProject.set(c.project_id, list)
     })
 
+    const documentsByProject = new Map<string, ProjectDocument[]>()
+    ;(documentsResult.data || []).forEach((d) => {
+      const list = documentsByProject.get(d.project_id) ?? []
+      list.push(d as ProjectDocument)
+      documentsByProject.set(d.project_id, list)
+    })
+
     setProjects(
       (projectsData || []).map((project) => ({
         ...project,
         quotes: quotesByProject.get(project.id) ?? [],
         contracts: contractsByProject.get(project.id) ?? [],
+        documents: documentsByProject.get(project.id) ?? [],
       }))
     )
     setLoading(false)
+  }
+
+  async function handleUploadDocument(projectId: string, file: File) {
+    const supabase = createClient()
+    const path = `project-documents/${projectId}/${Date.now()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
+    if (uploadError) {
+      alert('Kunne ikke laste opp filen: ' + uploadError.message)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: inserted, error: insertError } = await supabase
+      .from('project_documents')
+      .insert({
+        project_id: projectId,
+        uploaded_by: user?.id ?? null,
+        file_name: file.name,
+        file_path: path,
+        file_type: file.type || null,
+        file_size: file.size,
+      })
+      .select()
+      .single()
+    if (insertError || !inserted) {
+      alert('Filen ble lastet opp, men kunne ikke lagres i prosjektet. Prøv igjen.')
+      return
+    }
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, documents: [inserted as ProjectDocument, ...p.documents] } : p
+    ))
+  }
+
+  async function handleDeleteDocument(projectId: string, doc: ProjectDocument) {
+    if (!confirm(`Slette "${doc.file_name}"?`)) return
+    const supabase = createClient()
+    await supabase.storage.from('assets').remove([doc.file_path])
+    const { error } = await supabase.from('project_documents').delete().eq('id', doc.id)
+    if (error) {
+      alert('Kunne ikke slette dokumentet. Prøv igjen.')
+      return
+    }
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, documents: p.documents.filter(d => d.id !== doc.id) } : p
+    ))
   }
 
   async function handleDeleteProject(project: ProjectWithDetails) {
@@ -641,6 +707,68 @@ export default function CustomerDetailPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Documents */}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.text3 }}>
+                      Dokumenter
+                    </p>
+                    <label
+                      htmlFor={`doc-upload-${project.id}`}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.accent, textDecoration: 'underline', cursor: 'pointer' }}
+                    >
+                      + Last opp
+                    </label>
+                    <input
+                      id={`doc-upload-${project.id}`}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleUploadDocument(project.id, file)
+                        e.target.value = ''
+                      }}
+                    />
+                  </div>
+                  {project.documents.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {project.documents.map((doc) => {
+                        const supabase = createClient()
+                        const docUrl = supabase.storage.from('assets').getPublicUrl(doc.file_path).data.publicUrl
+                        return (
+                          <div
+                            key={doc.id}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                          >
+                            <a
+                              href={docUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text, textDecoration: 'underline', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                              {doc.file_name}
+                            </a>
+                            {doc.file_size != null && (
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>
+                                {formatFileSize(doc.file_size)}
+                              </span>
+                            )}
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>
+                              {new Date(doc.created_at).toLocaleDateString('nb-NO')}
+                            </span>
+                            <button
+                              onClick={() => handleDeleteDocument(project.id, doc)}
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500, padding: '4px 10px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                            >
+                              Slett
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

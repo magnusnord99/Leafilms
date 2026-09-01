@@ -37,6 +37,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/140_admin_tasks_project_link.sql` (legger til project_id på admin_tasks — "Gjennomgå bildeutvalg"-oppgaven i /admin/internal viser ingen lenke til prosjektet før denne er kjørt)
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
+- `supabase/migrations/143_project_documents.sql` (oppretter project_documents-tabellen — "Last opp"-knappen for dokumenter på kundens prosjektvisning feiler stille inntil den er kjørt, se feedback 230366b1)
 
 Disse er skrevet men ikke kjort mot Supabase enna.
 

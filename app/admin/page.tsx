@@ -5,6 +5,17 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
 import { Badge } from '@/components/ui'
 import { Project, Customer, MarketAnalysis, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
+import { getCalendarEvents } from '@/lib/actions/calendar'
+
+const WEEKDAY_LABELS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn']
+const MONTH_LABELS = [
+  'Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Desember',
+]
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const C = {
   bg:       '#181920',
@@ -74,6 +85,7 @@ export default function AdminDashboard() {
   const [latestAnalysis, setLatestAnalysis] = useState<MarketAnalysis | null>(null)
   const [pipelineCounts, setPipelineCounts] = useState<Record<string, number>>({})
   const [emailFollowUpCount, setEmailFollowUpCount] = useState(0)
+  const [calendarDates, setCalendarDates] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchData()
@@ -84,13 +96,25 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult] = await Promise.all([
+      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult, calendarResult] = await Promise.all([
         supabase.from('projects').select('*', { count: 'exact', head: true }),
         supabase.from('projects').select('id, title, status, pipeline_stage, client_name, updated_at, parent_project_id, version_number').order('updated_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id, name, company, email, phone, customer_number').order('name', { ascending: true }),
         supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead'),
         supabase.from('email_log').select('project_id, sent_at').order('sent_at', { ascending: true }),
+        getCalendarEvents(),
       ])
+
+      const eventDates = new Set<string>()
+      for (const s of calendarResult.shootings) {
+        const start = new Date(`${s.shootStart}T00:00:00`)
+        const end = s.shootEnd ? new Date(`${s.shootEnd}T00:00:00`) : start
+        for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          eventDates.add(dateKey(d))
+        }
+      }
+      for (const t of calendarResult.tasks) eventDates.add(t.dueDate)
+      setCalendarDates(eventDates)
 
       setTotalProjects(totalResult.count ?? 0)
 
@@ -256,6 +280,73 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* Kalender */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Kalender
+            </h2>
+            <Btn href="/admin/calendar" variant="ghost">Åpne kalender →</Btn>
+          </div>
+          {(() => {
+            const now = new Date()
+            const year = now.getFullYear()
+            const month = now.getMonth()
+            const daysInMonth = new Date(year, month + 1, 0).getDate()
+            const startWeekday = (new Date(year, month, 1).getDay() + 6) % 7
+            const todayKey = dateKey(now)
+            const cells: (number | null)[] = [
+              ...Array(startWeekday).fill(null),
+              ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+            ]
+            return (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px', maxWidth: 340 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, color: C.text2, marginBottom: 10 }}>
+                  {MONTH_LABELS[month]} {year}
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                  {WEEKDAY_LABELS.map(w => (
+                    <div key={w} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, textAlign: 'center', paddingBottom: 4 }}>
+                      {w[0]}
+                    </div>
+                  ))}
+                  {cells.map((day, i) => {
+                    if (day === null) return <div key={`empty-${i}`} />
+                    const key = dateKey(new Date(year, month, day))
+                    const hasEvent = calendarDates.has(key)
+                    const isToday = key === todayKey
+                    return (
+                      <div
+                        key={key}
+                        title={hasEvent ? 'Opptak eller frist denne dagen' : undefined}
+                        style={{
+                          aspectRatio: '1',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 6,
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.68rem',
+                          color: isToday ? '#fff' : C.text2,
+                          background: isToday ? C.accent : 'transparent',
+                          fontWeight: isToday ? 600 : 400,
+                        }}
+                      >
+                        {day}
+                        <span style={{
+                          width: 4, height: 4, borderRadius: '50%', marginTop: 1,
+                          background: hasEvent ? (isToday ? '#fff' : C.accent) : 'transparent',
+                        }} />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
 
         {/* Recent projects */}
         <div style={{ marginBottom: 40 }}>

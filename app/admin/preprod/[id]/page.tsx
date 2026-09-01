@@ -999,6 +999,7 @@ export default function PreprodDetailPage() {
   }, [leadDropdownOpen])
 
   async function handleSetLead(profileId: string | null) {
+    if (readOnly) return
     const prev = projectLead
     const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
@@ -1153,6 +1154,7 @@ export default function PreprodDetailPage() {
           <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
             <button
               onClick={() => setLeadDropdownOpen(v => !v)}
+              disabled={readOnly}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -1191,6 +1193,7 @@ export default function PreprodDetailPage() {
                 {projectLead && (
                   <button
                     onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                    disabled={readOnly}
                     style={{
                       width: '100%', textAlign: 'left',
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -1206,6 +1209,7 @@ export default function PreprodDetailPage() {
                   <button
                     key={p.id}
                     onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                    disabled={readOnly}
                     style={{
                       width: '100%', textAlign: 'left',
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',

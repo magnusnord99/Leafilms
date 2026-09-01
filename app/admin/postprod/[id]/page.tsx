@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  getPostProdProjects, getTasksForProject, updateTaskStatus,
+  getPostProdProjects, getPostProdProject, getTasksForProject, updateTaskStatus,
   reseedPostProdTasks, setProjectType,
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
@@ -23,6 +23,9 @@ import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedD
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
 
 const C = {
   bg:       '#181920',
@@ -197,6 +200,8 @@ export default function PostProdDetailPage() {
   const projectId = params.id as string
 
   const [projects, setProjects] = useState<PostProdProject[]>([])
+  const [viewedProject, setViewedProject] = useState<PostProdProject | null>(null)
+  const [unlocked, setUnlocked] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -280,6 +285,7 @@ export default function PostProdDetailPage() {
   }, [leadDropdownOpen])
 
   async function handleSetLead(profileId: string | null) {
+    if (readOnly) return
     const prev = projectLead
     const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
@@ -295,8 +301,9 @@ export default function PostProdDetailPage() {
   const customTasks = tasks.filter(t => t.is_custom)
 
   // For mixed-prosjekter: vis kun tasks for aktiv tab
-  const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
-  const videoDeliverables = ((projects.find(p => p.id === projectId)?.deliverables ?? []) as SignedDeliverableItem[])
+  const viewedOrListedProject = projects.find(p => p.id === projectId) ?? viewedProject
+  const isMixed = viewedOrListedProject?.project_type === 'mixed'
+  const videoDeliverables = ((viewedOrListedProject?.deliverables ?? []) as SignedDeliverableItem[])
     .filter(d => d.type === 'video')
   const hasVideoTabs = videoDeliverables.length >= 2 && (!isMixed || activeTab === 'video')
   const displayTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
@@ -306,6 +313,7 @@ export default function PostProdDetailPage() {
   const selectedTask = displayTasks[selectedIdx] ?? null
 
   async function handleDeleteSelectionComment(imageId: string, commentId: string) {
+    if (readOnly) return
     await deleteImageComment(commentId)
     setSelectionImages(prev => prev.map(img =>
       img.id === imageId ? { ...img, comments: img.comments.filter(c => c.id !== commentId) } : img
@@ -316,8 +324,9 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs, gallerySumm] = await Promise.all([
+    const [allProjects, viewedProj, projectTasks, userProfile, allProfiles, delivSection, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
+      getPostProdProject(projectId),
       getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
@@ -325,13 +334,14 @@ export default function PostProdDetailPage() {
       getSelectedImagesForProject(projectId),
       getGalleryIdForProject(projectId),
     ])
+    setViewedProject(viewedProj)
     setSelectionImages(selImgs)
     setGallerySummary(gallerySumm)
     setDeliverableItems(delivSection?.items ?? [])
     setProfiles(allProfiles)
 
     const allProj = allProjects as PostProdProject[]
-    const currentProj = allProj.find(p => p.id === projectId)
+    const currentProj = allProj.find(p => p.id === projectId) ?? viewedProj
     setCurrentUser(userProfile)
 
     if (projectTasks.length === 0 && currentProj?.project_type) {
@@ -380,6 +390,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleDueDateChange(taskId: string, value: string) {
+    if (readOnly) return
     setDueDates(prev => ({ ...prev, [taskId]: value }))
     await updateTaskDueDate(taskId, value || null)
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: value || null } : t))
@@ -445,6 +456,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleLinkChange(taskId: string, key: string, value: string) {
+    if (readOnly) return
     const newData = { ...(pendingTaskDataRef.current[taskId] ?? {}), [key]: value }
     pendingTaskDataRef.current[taskId] = newData
     setTaskData(prev => ({ ...prev, [taskId]: newData }))
@@ -460,6 +472,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleNotesChange(taskId: string, value: string) {
+    if (readOnly) return
     setNotes(prev => ({ ...prev, [taskId]: value }))
     setNotesSaving(true)
     setNotesSaved(false)
@@ -473,6 +486,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleAdvance(taskId: string, to: 'in_progress' | 'done') {
+    if (readOnly) return
     setTogglingId(taskId)
     setActionError(null)
     const prevTask = tasks.find(t => t.id === taskId)
@@ -511,6 +525,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleReject() {
+    if (readOnly) return
     if (!rejectionNote.trim()) {
       setRejectionNoteError(true)
       return
@@ -544,6 +559,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleGoBack(taskId: string) {
+    if (readOnly) return
     if (!selectedTask) return
     setTogglingId(taskId)
     setActionError(null)
@@ -578,6 +594,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleToggleAssignee(taskId: string, profileId: string) {
+    if (readOnly) return
     const profile = profiles.find(p => p.id === profileId)
     if (!profile) return
     const task = tasks.find(t => t.id === taskId)
@@ -594,6 +611,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleCustomTaskStatusChange(taskId: string, status: Task['status']) {
+    if (readOnly) return
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
     updatePreprodTaskStatus(taskId, status)
   }
@@ -615,6 +633,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleDeleteStepperTask(taskId: string) {
+    if (readOnly) return
     const result = await deleteTask(taskId)
     if (!result.ok) return
     const newTasks = tasks.filter(t => t.id !== taskId)
@@ -668,6 +687,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleSelectType(type: ProjectType) {
+    if (readOnly) return
     setReseeding(true)
     setSeedError(null)
     await setProjectType(projectId, type)
@@ -690,12 +710,14 @@ export default function PostProdDetailPage() {
   }
 
   async function handleOpenDeliveryReview() {
+    if (readOnly) return
     setOpeningDeliveryReview(true)
     const { galleryId } = await getOrCreateDeliveryGallery(projectId)
     router.push(`/admin/selections/${galleryId}`)
   }
 
   async function handleReseed() {
+    if (readOnly) return
     if (!confirm('Nullstill alle oppgaver og generer på nytt? Fremdrift, notater og chat-meldinger går tapt.')) return
     setReseeding(true)
     setSeedError(null)
@@ -725,13 +747,13 @@ export default function PostProdDetailPage() {
     )
   }
 
-  const currentProject = projects.find(p => p.id === projectId)
+  const currentProject = viewedOrListedProject
   if (!currentProject) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet er ikke lenger i post-produksjon
+            Fant ikke prosjektet
           </p>
           <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
             ← Tilbake
@@ -740,6 +762,25 @@ export default function PostProdDetailPage() {
       </div>
     )
   }
+
+  const access = getStageAccess('post_prod', currentProject.pipeline_stage)
+
+  if (access === 'not_yet_reached') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet har ikke nådd post-produksjon ennå
+          </p>
+          <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+            ← Tilbake
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const readOnly = access === 'past' && !unlocked
 
   const typeConf = currentProject.project_type ? TYPE_CONFIG[currentProject.project_type] : null
   // Progress viser alltid total (begge flyter) i progress-bar i headeren
@@ -839,6 +880,13 @@ export default function PostProdDetailPage() {
                 )
               })()}
             </div>
+            {access === 'past' && (
+              <PastStageBanner
+                currentStageLabel={STAGE_LABEL[currentProject.pipeline_stage]}
+                unlocked={unlocked}
+                onUnlock={() => setUnlocked(true)}
+              />
+            )}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
@@ -1336,6 +1384,7 @@ export default function PostProdDetailPage() {
                 onAssigneesChange={handleCustomTaskAssigneesChange}
                 onDueDateChange={handleCustomTaskDueDateChange}
                 emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
+                readOnly={readOnly}
               />
             </div>
           )}
@@ -1818,6 +1867,7 @@ export default function PostProdDetailPage() {
                 <textarea
                   value={notes[selectedTask.id] ?? ''}
                   onChange={e => handleNotesChange(selectedTask.id, e.target.value)}
+                  disabled={readOnly}
                   placeholder="Skriv notater for denne oppgaven..."
                   rows={5}
                   style={{
@@ -1842,7 +1892,7 @@ export default function PostProdDetailPage() {
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button
                         onClick={() => handleAdvance(selectedTask.id, 'done')}
-                        disabled={togglingId === selectedTask.id}
+                        disabled={readOnly || togglingId === selectedTask.id}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -1857,6 +1907,7 @@ export default function PostProdDetailPage() {
                       </button>
                       <button
                         onClick={() => { setShowRejectionForm(true); setRejectionNote(''); setRejectionNoteError(false) }}
+                        disabled={readOnly}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: 'pointer',
@@ -1880,6 +1931,7 @@ export default function PostProdDetailPage() {
                         autoFocus
                         value={rejectionNote}
                         onChange={e => { setRejectionNote(e.target.value); setRejectionNoteError(false) }}
+                        disabled={readOnly}
                         placeholder="Hva var ikke godkjent? Beskriv hva som må rettes..."
                         rows={4}
                         style={{
@@ -1903,7 +1955,7 @@ export default function PostProdDetailPage() {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={() => { setShowRejectionForm(false); setRejectionNote(''); setRejectionNoteError(false) }}
-                          disabled={rejecting}
+                          disabled={readOnly || rejecting}
                           style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
                             padding: '8px 16px', borderRadius: 7, cursor: 'pointer',
@@ -1914,7 +1966,7 @@ export default function PostProdDetailPage() {
                         </button>
                         <button
                           onClick={handleReject}
-                          disabled={rejecting}
+                          disabled={readOnly || rejecting}
                           style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
                             padding: '8px 18px', borderRadius: 7, cursor: rejecting ? 'default' : 'pointer',
@@ -1937,7 +1989,7 @@ export default function PostProdDetailPage() {
                     {selectedTask.status === 'todo' && (
                       <button
                         onClick={() => handleAdvance(selectedTask.id, 'in_progress')}
-                        disabled={togglingId === selectedTask.id}
+                        disabled={readOnly || togglingId === selectedTask.id}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -1959,7 +2011,7 @@ export default function PostProdDetailPage() {
                       if (!confirm('Marker Selektering som fullført uten at kunden har sendt inn? Bruk kun dette hvis dere har blitt enige utenom systemet.')) return
                       handleAdvance(selectedTask.id, 'done')
                     }}
-                    disabled={togglingId === selectedTask.id}
+                    disabled={readOnly || togglingId === selectedTask.id}
                     style={{
                       marginTop: 10, background: 'none', border: 'none', padding: 0,
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3,
@@ -1975,7 +2027,7 @@ export default function PostProdDetailPage() {
                   {selectedTask.status === 'todo' && (
                     <button
                       onClick={() => handleAdvance(selectedTask.id, 'in_progress')}
-                      disabled={togglingId === selectedTask.id}
+                      disabled={readOnly || togglingId === selectedTask.id}
                       style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                         padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -1989,7 +2041,7 @@ export default function PostProdDetailPage() {
                   {(selectedTask.status === 'in_progress' || selectedTask.status === 'todo') && (
                     <button
                       onClick={() => handleAdvance(selectedTask.id, 'done')}
-                      disabled={togglingId === selectedTask.id}
+                      disabled={readOnly || togglingId === selectedTask.id}
                       style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                         padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -2009,7 +2061,7 @@ export default function PostProdDetailPage() {
               {isSelectedDone && (
                 <button
                   onClick={() => handleGoBack(selectedTask.id)}
-                  disabled={togglingId === selectedTask.id}
+                  disabled={readOnly || togglingId === selectedTask.id}
                   style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
                     padding: '8px 16px', borderRadius: 7, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',

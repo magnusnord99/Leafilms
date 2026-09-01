@@ -1178,8 +1178,15 @@ export default function ProjectHubPage() {
     }
   }
 
+  const contractLoadedForProjectRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeTab === 'kontrakt') loadContract()
+    // Laster kun én gang per prosjekt ved første besøk på fanen — ikke ved hvert
+    // fanebytte tilbake, ellers overskrives ulagrede endringer i kontraktskjemaet
+    // med serverdata igjen (feedback 52167531).
+    if (activeTab === 'kontrakt' && contractLoadedForProjectRef.current !== projectId) {
+      contractLoadedForProjectRef.current = projectId
+      loadContract()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, projectId])
 

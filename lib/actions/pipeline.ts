@@ -789,6 +789,48 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 }
 
 /**
+ * Henter ETT prosjekt uten filter på pipeline_stage — i motsetning til
+ * getPostProdProjects() (som kun viser AKTIVE post-prod-prosjekter for
+ * oversikten) brukes denne av [id]-siden for å kunne vise et prosjekt som
+ * har gått forbi post-prod skrivebeskyttet, se
+ * docs/superpowers/specs/2026-09-01-pipeline-stage-history-lock-design.md.
+ */
+export async function getPostProdProject(id: string): Promise<(ProjectWithPipeline & { task_count: number; done_count: number }) | null> {
+  try {
+    const supabase = await createClient()
+
+    const { data: row, error } = await supabase
+      .from('projects')
+      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
+      .eq('id', id)
+      .single()
+
+    if (error || !row) return null
+
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select('status')
+      .eq('project_id', id)
+      .eq('pipeline_stage', 'post_prod')
+
+    const task_count = tasks?.length ?? 0
+    const done_count = tasks?.filter(t => t.status === 'done').length ?? 0
+
+    return {
+      ...(row as ProjectRow),
+      customer: (row as ProjectRow).customers ?? null,
+      customers: undefined,
+      project_lead: (row as { project_lead?: ProjectWithPipeline['project_lead'] }).project_lead ?? null,
+      task_count,
+      done_count,
+    } as ProjectWithPipeline & { task_count: number; done_count: number }
+  } catch (err) {
+    console.error('getPostProdProject error:', err)
+    return null
+  }
+}
+
+/**
  * Oppretter en ny task. sort_order settes til max(sort_order) + 1
  * for samme project + stage.
  */

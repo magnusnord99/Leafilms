@@ -118,11 +118,6 @@ export function EditProjectTopBar({
       label: 'Pristilbud',
       href: `/admin/projects/${project.id}/quote`,
     },
-    onDuplicateVersion && {
-      label: duplicating ? 'Oppretter...' : 'Ny versjon',
-      action: () => { onDuplicateVersion(); setMenuOpen(false) },
-      disabled: duplicating,
-    },
     editMode && onAddFullImageSection && {
       label: '+ Bildeseksjon',
       action: () => { onAddFullImageSection(); setMenuOpen(false) },
@@ -301,6 +296,15 @@ export function EditProjectTopBar({
               </div>
             )}
           </div>
+        )}
+
+        {/* Ny versjon — flyttet ut av "Mer"-menyen, den var lett å overse der
+            (feedback c7ebd472: brukere fant den ikke og redigerte gjeldende pitch direkte). */}
+        {onDuplicateVersion && (
+          <Button onClick={onDuplicateVersion} disabled={duplicating} variant="secondary" size="sm">
+            <span className="hidden sm:inline">{duplicating ? 'Oppretter...' : 'Ny versjon'}</span>
+            <span className="sm:hidden">{duplicating ? '...' : 'V+'}</span>
+          </Button>
         )}
 
         {/* Primary actions — always visible */}

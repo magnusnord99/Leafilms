@@ -39,6 +39,7 @@ function Avatar({ id, name, color, size = 26 }: { id: string; name: string | nul
 export function TaskList({
   tasks, profiles, onStatusChange, currentUserId, messageCounts, deepLinkTaskId,
   projectId, pipelineStage, onTaskCreated, onTaskDeleted, onAssigneesChange, onDueDateChange, emptyLabel,
+  readOnly = false,
 }: {
   tasks: Task[]
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
@@ -53,6 +54,7 @@ export function TaskList({
   onAssigneesChange: (taskId: string, assignees: Task['assignees']) => void
   onDueDateChange: (taskId: string, dueDate: string | null) => void
   emptyLabel?: string
+  readOnly?: boolean
 }) {
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
@@ -61,6 +63,7 @@ export function TaskList({
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function handleAssigneeToggle(taskId: string, profileId: string) {
+    if (readOnly) return
     setToggling(profileId)
     const added = await toggleTaskAssignee(taskId, profileId)
     const task = tasks.find(t => t.id === taskId)
@@ -81,6 +84,7 @@ export function TaskList({
   }
 
   async function handleAddTask() {
+    if (readOnly) return
     const title = newTitle.trim()
     if (!title || creating) return
     setCreating(true)
@@ -93,6 +97,7 @@ export function TaskList({
   }
 
   async function handleDeleteTask(taskId: string) {
+    if (readOnly) return
     setDeletingId(taskId)
     const result = await deleteTask(taskId)
     if (result.ok) onTaskDeleted(taskId)
@@ -126,6 +131,7 @@ export function TaskList({
                 {/* Status toggle */}
                 <button
                   onClick={() => onStatusChange(task.id, STATUS_CYCLE[task.status])}
+                  disabled={readOnly}
                   style={{
                     flexShrink: 0, width: 20, height: 20, borderRadius: 5, cursor: 'pointer', padding: 0,
                     background: task.status === 'done' ? 'rgba(76,175,125,0.18)' : task.status === 'in_progress' ? 'rgba(240,165,0,0.12)' : 'transparent',
@@ -155,6 +161,7 @@ export function TaskList({
                   ))}
                   <button
                     onClick={() => setPickerOpenId(isOpen ? null : task.id)}
+                    disabled={readOnly}
                     style={{
                       width: 24, height: 24, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', padding: 0,
                       background: isOpen ? C.accentBg : 'transparent',
@@ -176,6 +183,7 @@ export function TaskList({
                   type="date"
                   value={task.due_date ?? ''}
                   onChange={e => handleDueDateChange(task.id, e.target.value)}
+                  disabled={readOnly}
                   title="Frist"
                   style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
@@ -198,7 +206,7 @@ export function TaskList({
                 {task.is_custom && (
                   <button
                     onClick={() => handleDeleteTask(task.id)}
-                    disabled={deletingId === task.id}
+                    disabled={readOnly || deletingId === task.id}
                     title="Slett oppgave"
                     style={{
                       background: 'none', border: 'none', cursor: deletingId === task.id ? 'wait' : 'pointer',
@@ -225,7 +233,7 @@ export function TaskList({
                       <button
                         key={p.id}
                         onClick={() => handleAssigneeToggle(task.id, p.id)}
-                        disabled={busy}
+                        disabled={readOnly || busy}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
                           padding: '4px 10px', borderRadius: 20, cursor: busy ? 'wait' : 'pointer',
@@ -255,6 +263,7 @@ export function TaskList({
           onChange={e => setNewTitle(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAddTask()}
           placeholder="Legg til oppgave..."
+          disabled={readOnly}
           style={{
             flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
             color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
@@ -265,7 +274,7 @@ export function TaskList({
         />
         <button
           onClick={handleAddTask}
-          disabled={!newTitle.trim() || creating}
+          disabled={readOnly || !newTitle.trim() || creating}
           style={{
             fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
             padding: '7px 12px', borderRadius: 6, cursor: newTitle.trim() ? 'pointer' : 'not-allowed',

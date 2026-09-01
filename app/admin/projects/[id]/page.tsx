@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, updatePostProdDelivery, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
 import { updateReviewSettings } from '@/lib/actions/reviews'
 import ReviewPanel from '@/components/project/ReviewPanel'
-import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo } from '@/lib/actions/contracts'
+import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo, getAcceptedQuoteSummary, type AcceptedQuoteSummary } from '@/lib/actions/contracts'
 import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
@@ -654,6 +654,7 @@ export default function ProjectHubPage() {
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
   const [contractPdfUrl, setContractPdfUrl] = useState<string | null>(null)
   const [contractHistory, setContractHistory] = useState<Awaited<ReturnType<typeof getContractHistory>>>([])
+  const [acceptedQuoteSummary, setAcceptedQuoteSummary] = useState<AcceptedQuoteSummary>(null)
   const [loadingContract, setLoadingContract] = useState(false)
   const [publishingContract, setPublishingContract] = useState(false)
   const [downloadingContractPdf, setDownloadingContractPdf] = useState(false)
@@ -972,6 +973,7 @@ export default function ProjectHubPage() {
     const [data] = await Promise.all([
       getProjectContractData(projectId),
       getContractHistory(projectId).then(setContractHistory),
+      getAcceptedQuoteSummary(projectId).then(setAcceptedQuoteSummary),
     ])
     setContractText(data.contractText)
     setContractIsPublished(data.isPublished)
@@ -2036,6 +2038,67 @@ export default function ProjectHubPage() {
                     + Nytt tilbud og kontrakt
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Akseptert tilbud — strukturert oversikt over det kunden faktisk godtok
+                (riktige priser og tilvalg), ikke bare totalsummen vevd inn i kontraktteksten.
+                Feedback 7b2b2879. */}
+            {acceptedQuoteSummary && (
+              <div style={{ padding: '14px 18px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
+                    Akseptert tilbud ({acceptedQuoteSummary.version})
+                  </p>
+                  {acceptedQuoteSummary.acceptedAt && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                      Akseptert {new Date(acceptedQuoteSummary.acceptedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: acceptedQuoteSummary.selectedAddons.length > 0 ? 12 : 0 }}>
+                  {([
+                    ['Oppstart', acceptedQuoteSummary.categoryTotals.startup],
+                    ['Opptak', acceptedQuoteSummary.categoryTotals.production],
+                    ['Utstyr', acceptedQuoteSummary.categoryTotals.equipment],
+                    ['Post-produksjon', acceptedQuoteSummary.categoryTotals.post],
+                    ['Andre kostnader', acceptedQuoteSummary.categoryTotals.expenses],
+                  ] as const).filter(([, amount]) => amount !== 0).map(([label, amount]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{label}</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{amount.toLocaleString('nb-NO')} kr</span>
+                    </div>
+                  ))}
+                  {acceptedQuoteSummary.discountAmount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>Rabatt</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>−{acceptedQuoteSummary.discountAmount.toLocaleString('nb-NO')} kr</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text }}>Totalt (eks. mva)</span>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text }}>{acceptedQuoteSummary.totalExclVat.toLocaleString('nb-NO')} kr</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Totalt (inkl. mva)</span>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>{acceptedQuoteSummary.totalInclVat.toLocaleString('nb-NO')} kr</span>
+                  </div>
+                </div>
+                {acceptedQuoteSummary.selectedAddons.length > 0 && (
+                  <div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+                      Valgte tillegg
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {acceptedQuoteSummary.selectedAddons.map(addon => (
+                        <div key={addon.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.text2 }}>{addon.description}</span>
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.text2, whiteSpace: 'nowrap' }}>{addon.amount.toLocaleString('nb-NO')} kr</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import type { QuoteBuilderData, ContractFormFields, OurSignature } from '@/lib/types'
-import { calculateQuoteTotals } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { combinedDeliveryText } from '@/lib/delivery-format'
 
 // ---------------------------------------------------------------------------
@@ -317,6 +317,67 @@ export async function getProjectContractData(projectId: string): Promise<{
     myName,
     currentQuoteId: quoteId,
     contractQuoteId: (contract as { quote_id?: string | null } | null)?.quote_id ?? null,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Strukturert oppsummering av det aksepterte tilbudet — riktige priser og
+// tilvalg kunden faktisk krysset av — til visning under Kontrakt-fanen
+// (feedback 7b2b2879: dagens kontraktstekst vever kun totalsummen inn i
+// prosa, ingen strukturert oversikt over hva som faktisk ble akseptert).
+// ---------------------------------------------------------------------------
+export type AcceptedQuoteSummary = {
+  version: string
+  acceptedAt: string | null
+  categoryTotals: { startup: number; production: number; equipment: number; post: number; expenses: number }
+  discountAmount: number
+  vatAmount: number
+  totalExclVat: number
+  totalInclVat: number
+  selectedAddons: { id: string; description: string; amount: number }[]
+} | null
+
+export async function getAcceptedQuoteSummary(projectId: string): Promise<AcceptedQuoteSummary> {
+  const supabase = await createClient()
+
+  const { data: quote } = await supabase
+    .from('quotes')
+    .select('version, status, accepted_at, quote_data, selected_addon_ids')
+    .eq('project_id', projectId)
+    .eq('status', 'accepted')
+    .order('accepted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!quote?.quote_data) return null
+
+  try {
+    const qd = quote.quote_data as QuoteBuilderData
+    const selectedAddonIds = (quote.selected_addon_ids ?? []) as string[]
+    const totals = calculateQuoteTotals(qd, selectedAddonIds)
+    const selectedAddons = (qd.optionalAddons ?? [])
+      .filter(a => selectedAddonIds.includes(a.id))
+      .map(a => ({ id: a.id, description: a.description, amount: Math.round(addonTotalPrice(a)) }))
+
+    return {
+      version: quote.version || 'V1',
+      acceptedAt: quote.accepted_at,
+      categoryTotals: {
+        startup: Math.round(totals.categoryTotals.startup),
+        production: Math.round(totals.categoryTotals.production),
+        equipment: Math.round(totals.categoryTotals.equipment),
+        post: Math.round(totals.categoryTotals.post),
+        expenses: Math.round(totals.categoryTotals.expenses),
+      },
+      discountAmount: Math.round(totals.discountAmount),
+      vatAmount: Math.round(totals.vatAmount),
+      totalExclVat: Math.round(totals.afterDiscount),
+      totalInclVat: Math.round(totals.finalInclVat),
+      selectedAddons,
+    }
+  } catch (e) {
+    console.error('getAcceptedQuoteSummary error:', e)
+    return null
   }
 }
 

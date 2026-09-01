@@ -32,6 +32,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin/leads',     label: 'Leads' },
       { href: '/admin/pitches',   label: 'Pitcher' },
+      { href: '/admin/contracts', label: 'Kontrakter' },
       { href: '/admin/tapte',     label: 'Tapte prosjekter' },
       { href: '/admin/customers', label: 'Kunder' },
       { href: '/admin/email',     label: 'E-post' },

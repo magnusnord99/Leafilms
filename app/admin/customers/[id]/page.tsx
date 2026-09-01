@@ -163,7 +163,7 @@ export default function CustomerDetailPage() {
       projectIds.length > 0
         ? supabase
             .from('contracts')
-            .select('id, project_id, status, signed_at, created_at, updated_at')
+            .select('id, project_id, status, signed_at, pdf_url, created_at, updated_at')
             .in('project_id', projectIds)
             .order('created_at', { ascending: false })
         : { data: [], error: null },
@@ -618,6 +618,23 @@ export default function CustomerDetailPage() {
                             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
                               Signert {new Date(contract.signed_at).toLocaleDateString('nb-NO')}
                             </span>
+                          )}
+                          {contract.pdf_url ? (
+                            <a
+                              href={contract.pdf_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.accent, textDecoration: 'underline' }}
+                            >
+                              Se PDF
+                            </a>
+                          ) : (
+                            <Link
+                              href={`/admin/projects/${project.id}?tab=kontrakt`}
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.accent, textDecoration: 'underline' }}
+                            >
+                              Åpne kontrakt
+                            </Link>
                           )}
                         </div>
                       ))}

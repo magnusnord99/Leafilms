@@ -312,7 +312,7 @@ export type Contract = {
   id: string
   quote_id: string
   project_id: string
-  pdf_path: string | null
+  pdf_url: string | null
   /** Uforanderlig kopi av leveranselisten på signeringstidspunktet — satt kun ved signering, aldri oppdatert igjen. */
   deliverables: DeliverableItem[] | null
   status: 'pending' | 'sent' | 'signed' | 'cancelled'

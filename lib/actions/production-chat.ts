@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { getPitchTeamAsProdCrew } from '@/lib/actions/preprod'
 import type { ConversationParticipant } from '@/lib/actions/messages'
+import type { PipelineStage } from '@/lib/types'
 
 export type ProductionChatInfo = {
   conversationId: string
@@ -17,6 +18,7 @@ export type ProductionInfo = {
   shootConfirmed: boolean
   customer: { name: string; email: string | null; phone: string | null; address: string | null } | null
   projectLead: { id: string; name: string | null; email: string } | null
+  pipelineStage: PipelineStage
 }
 
 // Nøkkelinfo for produksjonsdagen — prosjektleder, kundekontakt, opptaksdatoer/-status.
@@ -27,7 +29,7 @@ export async function getProductionInfo(projectId: string): Promise<ProductionIn
     const { data: project, error } = await supabase
       .from('projects')
       .select(`
-        id, title, shoot_start, shoot_end, shoot_confirmed,
+        id, title, shoot_start, shoot_end, shoot_confirmed, pipeline_stage,
         customers (name, email, phone, address),
         project_lead:profiles!project_lead_id (id, name, email)
       `)
@@ -47,6 +49,7 @@ export async function getProductionInfo(projectId: string): Promise<ProductionIn
       shootConfirmed: !!project.shoot_confirmed,
       customer,
       projectLead,
+      pipelineStage: project.pipeline_stage,
     }
   } catch (err) {
     console.error('getProductionInfo error:', err)

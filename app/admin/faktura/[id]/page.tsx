@@ -6,6 +6,9 @@ import Link from 'next/link'
 import { getProjectHub, setInvoiceAssignee, advanceToVideresalg } from '@/lib/actions/pipeline'
 import { getPreprodDetail } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
 
 const C = {
   bg:       '#181920',
@@ -59,6 +62,7 @@ export default function FakturaPage() {
   const [saving, setSaving] = useState(false)
   const [marking, setMarking] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [unlocked, setUnlocked] = useState(false)
 
   useEffect(() => {
     if (!projectId) return
@@ -79,6 +83,7 @@ export default function FakturaPage() {
   const assignee = profiles.find(p => p.id === assigneeId) ?? null
 
   async function handleAssign(profileId: string | null) {
+    if (readOnly) return
     setSaving(true)
     setPickerOpen(false)
     setAssigneeId(profileId)
@@ -87,7 +92,7 @@ export default function FakturaPage() {
   }
 
   async function handleMarkDone() {
-    if (marking || taskDone) return
+    if (readOnly || access !== 'current' || marking || taskDone) return
     setMarking(true)
     setTaskDone(true)
     // Finn og oppdater "Send faktura"-tasken
@@ -110,7 +115,37 @@ export default function FakturaPage() {
   }
 
   const project = hub?.project
-  const customer = project?.customer ?? null
+
+  if (!project) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem' }}>Fant ikke prosjektet</span>
+      </div>
+    )
+  }
+
+  const access = getStageAccess('fakturert', project.pipeline_stage)
+
+  if (access === 'not_yet_reached') {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet har ikke nådd fakturering ennå
+          </p>
+          <Link href="/admin/pipeline" style={{ textDecoration: 'none' }}>
+            <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+              ← Tilbake
+            </button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const readOnly = access === 'past' && !unlocked
+
+  const customer = project.customer ?? null
   const customerName = customer?.name ?? null
   const hasInvoiceInfo = !!(customer?.company || customer?.org_nummer || customer?.address || customer?.invoice_email)
 
@@ -118,11 +153,19 @@ export default function FakturaPage() {
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px', fontFamily: 'var(--font-dm-sans)' }}>
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
 
+        {access === 'past' && (
+          <PastStageBanner
+            currentStageLabel={STAGE_LABEL[project.pipeline_stage]}
+            unlocked={unlocked}
+            onUnlock={() => setUnlocked(true)}
+          />
+        )}
+
         {/* Breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 28 }}>
           <Link href="/admin/pipeline" style={{ color: C.text3, fontSize: '0.78rem', textDecoration: 'none' }}>Pipeline</Link>
           <span style={{ color: C.text3, fontSize: '0.78rem' }}>›</span>
-          <span style={{ color: C.text2, fontSize: '0.78rem' }}>{project?.title ?? '—'}</span>
+          <span style={{ color: C.text2, fontSize: '0.78rem' }}>{project.title}</span>
           <span style={{ color: C.text3, fontSize: '0.78rem' }}>›</span>
           <span style={{ color: C.text, fontSize: '0.78rem', fontWeight: 600 }}>Faktura</span>
         </div>
@@ -130,7 +173,7 @@ export default function FakturaPage() {
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
           <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-            {project?.title ?? '—'}
+            {project.title}
           </h1>
           {customerName && (
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: C.text3 }}>{customerName}</p>
@@ -145,7 +188,7 @@ export default function FakturaPage() {
             {/* Checkbox */}
             <button
               onClick={handleMarkDone}
-              disabled={marking}
+              disabled={readOnly || access !== 'current' || marking}
               style={{
                 width: 26, height: 26, borderRadius: 6, flexShrink: 0, cursor: taskDone ? 'default' : 'pointer',
                 background: taskDone ? C.success : 'transparent',
@@ -196,7 +239,7 @@ export default function FakturaPage() {
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setPickerOpen(o => !o)}
-                disabled={saving}
+                disabled={readOnly || saving}
                 style={{
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
                   color: C.accent, background: `${C.accent}14`, border: `1px solid ${C.accent}30`,

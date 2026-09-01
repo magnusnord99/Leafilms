@@ -148,6 +148,7 @@ function NewProjectContent() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [generatingStatus, setGeneratingStatus] = useState<string | null>(null)
+  const [createdProject, setCreatedProject] = useState<{ id: string; title: string; editUrl: string | null } | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [customerInput, setCustomerInput] = useState('')
@@ -438,11 +439,20 @@ function NewProjectContent() {
         }
 
         await new Promise(resolve => setTimeout(resolve, 2000))
-        router.push(`/admin/projects/${project.id}/edit?generated=true`)
+        router.refresh()
+        if (existingProjectId) {
+          router.push(`/admin/projects/${project.id}/edit?generated=true`)
+        } else {
+          setCreatedProject({ id: project.id, title: formData.title, editUrl: `/admin/projects/${project.id}/edit?generated=true` })
+        }
       } else {
-        router.push(`/admin/projects/${project.id}`)
+        router.refresh()
+        if (existingProjectId) {
+          router.push(`/admin/projects/${project.id}`)
+        } else {
+          setCreatedProject({ id: project.id, title: formData.title, editUrl: null })
+        }
       }
-      router.refresh()
     } catch (error) {
       console.error('Error creating project:', error)
       alert('Noe gikk galt. Prøv igjen.')
@@ -455,6 +465,79 @@ function NewProjectContent() {
   const isFormValid = formData.create_pitch
     ? formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
     : formData.title && (!!selectedCustomerId || customerInput.trim().length > 0)
+
+  if (createdProject) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8" style={{ background: C.bg, color: C.text }}>
+        <div className="max-w-md w-full text-center">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <div style={{ width: 32, height: 1, background: C.accent }} />
+            <span style={{
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.6rem',
+              letterSpacing: '0.16em',
+              color: C.accent,
+              textTransform: 'uppercase',
+              fontWeight: 500,
+            }}>
+              Prosjekt opprettet
+            </span>
+            <div style={{ width: 32, height: 1, background: C.accent }} />
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-cormorant)',
+            fontSize: 'clamp(1.6rem, 3.5vw, 2.4rem)',
+            fontWeight: 300,
+            fontStyle: 'italic',
+            color: C.text,
+            lineHeight: 1.2,
+            marginBottom: 32,
+          }}>
+            &ldquo;{createdProject.title}&rdquo; er klart
+          </h1>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => router.push(createdProject.editUrl ?? `/admin/projects/${createdProject.id}`)}
+              style={{
+                padding: '11px 20px',
+                background: C.accent,
+                color: '#fff',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}
+            >
+              Gå til prosjekt
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.href = '/admin/projects/new'}
+              style={{
+                padding: '11px 20px',
+                background: 'transparent',
+                color: C.text3,
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}
+            >
+              Opprett nytt prosjekt
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen p-8 md:p-12" style={{ background: C.bg, color: C.text }}>

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, updatePostProdDelivery, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
 import { updateReviewSettings } from '@/lib/actions/reviews'
 import ReviewPanel from '@/components/project/ReviewPanel'
-import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, getContractHistory, setRequestInvoiceInfo, getAcceptedQuoteSummary, type AcceptedQuoteSummary } from '@/lib/actions/contracts'
+import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, setRequestInvoiceInfo, getAcceptedQuoteSummary, type AcceptedQuoteSummary, getAllContractVersions, duplicateContractVersion, setCurrentContractVersion, updateContractLabel, deleteContractVersion, type ContractVersion } from '@/lib/actions/contracts'
 import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
@@ -653,7 +653,8 @@ export default function ProjectHubPage() {
   const [contractIsPublished, setContractIsPublished] = useState(false)
   const [contractSignature, setContractSignature] = useState<{ signerName: string; signerEmail: string; signedAt: string } | null>(null)
   const [contractPdfUrl, setContractPdfUrl] = useState<string | null>(null)
-  const [contractHistory, setContractHistory] = useState<Awaited<ReturnType<typeof getContractHistory>>>([])
+  const [contractVersions, setContractVersions] = useState<ContractVersion[]>([])
+  const [switchingContractVersion, setSwitchingContractVersion] = useState(false)
   const [acceptedQuoteSummary, setAcceptedQuoteSummary] = useState<AcceptedQuoteSummary>(null)
   const [loadingContract, setLoadingContract] = useState(false)
   const [publishingContract, setPublishingContract] = useState(false)
@@ -972,7 +973,7 @@ export default function ProjectHubPage() {
     setLoadingContract(true)
     const [data] = await Promise.all([
       getProjectContractData(projectId),
-      getContractHistory(projectId).then(setContractHistory),
+      getAllContractVersions(projectId).then(setContractVersions),
       getAcceptedQuoteSummary(projectId).then(setAcceptedQuoteSummary),
     ])
     setContractText(data.contractText)
@@ -1006,6 +1007,53 @@ export default function ProjectHubPage() {
     setMySignatureImage(data.mySignatureImage)
     setMyName(data.myName)
     setLoadingContract(false)
+  }
+
+  // Versjonsvelger for kontrakter — samme mønster som tilbud (feedback a28522fb).
+  // Siden generateContractText/publishContract/unsignContract slår opp is_current=true
+  // implisitt, betyr "bytt versjon" her det samme som "sett som gjeldende": vi
+  // oppdaterer is_current i databasen og laster hele kontrakt-tilstanden på nytt.
+  async function handleSwitchContractVersion(contractId: string) {
+    const version = contractVersions.find(v => v.id === contractId)
+    if (!version || version.isCurrent) return
+    setSwitchingContractVersion(true)
+    try {
+      await setCurrentContractVersion(projectId, contractId)
+      await loadContract()
+    } finally {
+      setSwitchingContractVersion(false)
+    }
+  }
+
+  async function handleDuplicateContractVersion() {
+    setSwitchingContractVersion(true)
+    try {
+      const result = await duplicateContractVersion(projectId)
+      if (!result) {
+        alert('Fant ingen gjeldende kontrakt å forgrene fra.')
+        return
+      }
+      await loadContract()
+    } finally {
+      setSwitchingContractVersion(false)
+    }
+  }
+
+  async function handleContractLabelChange(contractId: string, label: string) {
+    setContractVersions(prev => prev.map(v => v.id === contractId ? { ...v, label: label.trim() || null } : v))
+    await updateContractLabel(contractId, label)
+  }
+
+  async function handleDeleteContractVersion(contractId: string) {
+    const version = contractVersions.find(v => v.id === contractId)
+    if (!version) return
+    if (!confirm(`Slette ${version.label ?? 'denne versjonen'}? Dette kan ikke angres.`)) return
+    const result = await deleteContractVersion(projectId, contractId)
+    if (!result.ok) {
+      alert(result.error ?? 'Kunne ikke slette versjonen.')
+      return
+    }
+    await loadContract()
   }
 
   async function handleUnsignContract() {
@@ -1932,41 +1980,86 @@ export default function ProjectHubPage() {
         {activeTab === 'kontrakt' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* Tidligere kontrakter — arkiverte versjoner (f.eks. en signert avtale som ble
-                erstattet av et nytt tilbud/kontrakt ved videresalg). Rent leseformål. */}
-            {contractHistory.length > 0 && (
-              <div style={{ padding: '12px 16px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 8 }}>
-                  Tidligere kontrakter
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {contractHistory.map(c => (
-                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
-                        {c.status === 'signed'
-                          ? `Signert ${c.signedAt ? new Date(c.signedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`
-                          : c.publishedAt
-                            ? `Publisert ${new Date(c.publishedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                            : 'Utkast'}
-                        {c.label ? ` — ${c.label}` : ''}
+            {/* Versjoner — samme mønster som tilbud (feedback a28522fb): flere versjoner,
+                én er gjeldende, valgfri label. Å klikke en versjon gjør den gjeldende
+                (kontrakt-flyten opererer alltid på is_current=true, se lib/actions/contracts.ts). */}
+            {contractVersions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {contractVersions.map((v, i) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => handleSwitchContractVersion(v.id)}
+                    disabled={switchingContractVersion}
+                    title={v.isCurrent ? 'Dette er den gjeldende kontrakten' : 'Gjør denne til gjeldende kontrakt'}
+                    className="flex items-center gap-1.5"
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                      padding: '5px 10px', borderRadius: 3, cursor: switchingContractVersion ? 'default' : 'pointer',
+                      background: v.isCurrent ? C.accent : C.surface,
+                      color: v.isCurrent ? '#fff' : C.text2,
+                      border: `1px solid ${v.isCurrent ? C.accent : C.border}`,
+                      opacity: switchingContractVersion ? 0.6 : 1,
+                    }}
+                  >
+                    V{i + 1}{v.label ? ` — ${v.label}` : ''}
+                    {v.status === 'signed' && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: v.isCurrent ? '#fff' : C.success }}>
+                        ✓
                       </span>
-                      {c.pdfUrl ? (
+                    )}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleDuplicateContractVersion}
+                  disabled={switchingContractVersion}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                    padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
+                    background: 'transparent', color: C.accent, border: `1px dashed ${C.accent}`,
+                  }}
+                >
+                  + Ny versjon
+                </button>
+
+                {(() => {
+                  const active = contractVersions.find(v => v.isCurrent)
+                  if (!active) return null
+                  return (
+                    <div className="flex items-center gap-2 ml-2">
+                      <input
+                        defaultValue={active.label ?? ''}
+                        placeholder="Notat (f.eks. Videresalg 2027)"
+                        onBlur={e => handleContractLabelChange(active.id, e.target.value)}
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                          padding: '5px 8px', borderRadius: 3, background: C.surface,
+                          border: `1px solid ${C.border}`, color: C.text, width: 160,
+                        }}
+                      />
+                      {active.pdfUrl && (
                         <a
-                          href={c.pdfUrl}
+                          href={active.pdfUrl}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, textDecoration: 'none' }}
-                          onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
-                          onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline' }}
                         >
-                          Åpne PDF →
+                          Åpne PDF
                         </a>
-                      ) : (
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Ingen PDF</span>
+                      )}
+                      {contractVersions.length > 1 && active.status !== 'signed' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteContractVersion(active.id)}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                        >
+                          Slett
+                        </button>
                       )}
                     </div>
-                  ))}
-                </div>
+                  )
+                })()}
               </div>
             )}
 

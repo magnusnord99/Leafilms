@@ -574,29 +574,39 @@ export async function unsignContract(projectId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Hent tidligere kontraktversjoner for et prosjekt (is_current = false) — f.eks.
-// en signert avtale som ble arkivert da et nytt tilbud/kontrakt (videresalg) ble
-// publisert. Rent leseformål, nyeste først.
+// Versjonering av kontrakter — samme mønster som tilbud (feedback a28522fb):
+// flere versjoner per prosjekt, én er_current ("gjeldende"), fritekst-label,
+// mulighet til å forgrene en ny kladd fra gjeldende, bytte hvilken som er
+// gjeldende, og slette utkast. contracts-tabellen har hatt is_current/label
+// siden migrasjon 106 — ingen ny migrasjon nødvendig.
+//
+// generateContractText/publishContract/unpublishContract/unsignContract ser
+// alle opp raden med is_current=true implisitt (se buildContractContext) —
+// derfor er "sett som gjeldende" nok til at resten av kontrakt-flyten
+// automatisk virker på riktig versjon, uten å endre de funksjonene.
 // ---------------------------------------------------------------------------
-export async function getContractHistory(projectId: string): Promise<Array<{
+export type ContractVersion = {
   id: string
   label: string | null
   status: 'pending' | 'sent' | 'signed' | 'cancelled'
+  isCurrent: boolean
   signedAt: string | null
   publishedAt: string | null
   pdfUrl: string | null
-}>> {
+  createdAt: string
+}
+
+export async function getAllContractVersions(projectId: string): Promise<ContractVersion[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('contracts')
-    .select('id, label, status, signed_at, published_at, pdf_url')
+    .select('id, label, status, signed_at, published_at, pdf_url, is_current, created_at')
     .eq('project_id', projectId)
-    .eq('is_current', false)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true })
 
   if (error) {
-    console.error('getContractHistory error:', error)
+    console.error('getAllContractVersions error:', error)
     return []
   }
 
@@ -604,10 +614,103 @@ export async function getContractHistory(projectId: string): Promise<Array<{
     id: row.id,
     label: row.label,
     status: row.status,
+    isCurrent: row.is_current,
     signedAt: row.signed_at,
     publishedAt: row.published_at,
     pdfUrl: row.pdf_url,
+    createdAt: row.created_at,
   }))
+}
+
+// Forgrener en ny kladd-versjon fra gjeldende kontrakt (tekst + skjemafelt kopieres),
+// arkiverer den gamle (is_current = false) og gjør den nye gjeldende. Fungerer også
+// når gjeldende er signert — da forblir den signerte avtalen trygt som historikk.
+export async function duplicateContractVersion(projectId: string): Promise<{ id: string } | null> {
+  const supabase = await createClient()
+
+  const { data: current } = await supabase
+    .from('contracts')
+    .select('id, quote_id, contract_text, form_fields, our_signature')
+    .eq('project_id', projectId)
+    .eq('is_current', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!current) return null
+
+  await supabase.from('contracts').update({ is_current: false }).eq('id', current.id)
+
+  const { data: inserted, error } = await supabase
+    .from('contracts')
+    .insert({
+      project_id: projectId,
+      quote_id: current.quote_id,
+      contract_text: current.contract_text,
+      form_fields: current.form_fields,
+      status: 'pending' as const,
+      is_current: true,
+    })
+    .select('id')
+    .single()
+
+  if (error || !inserted) {
+    console.error('duplicateContractVersion error:', error)
+    // Rull tilbake arkiveringen slik at prosjektet ikke står uten en gjeldende kontrakt
+    await supabase.from('contracts').update({ is_current: true }).eq('id', current.id)
+    return null
+  }
+
+  return { id: inserted.id }
+}
+
+export async function setCurrentContractVersion(projectId: string, contractId: string): Promise<void> {
+  const supabase = await createClient()
+  await supabase.from('contracts').update({ is_current: false }).eq('project_id', projectId)
+  await supabase.from('contracts').update({ is_current: true }).eq('id', contractId)
+}
+
+export async function updateContractLabel(contractId: string, label: string | null): Promise<void> {
+  const supabase = await createClient()
+  await supabase.from('contracts').update({ label: label?.trim() || null }).eq('id', contractId)
+}
+
+export async function deleteContractVersion(projectId: string, contractId: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  const { data: target } = await supabase
+    .from('contracts')
+    .select('status, is_current')
+    .eq('id', contractId)
+    .single()
+
+  if (!target) return { ok: false, error: 'Fant ikke kontrakten' }
+  if (target.status === 'signed') return { ok: false, error: 'Kan ikke slette en signert kontrakt' }
+
+  const { count } = await supabase
+    .from('contracts')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+
+  if ((count ?? 0) <= 1) return { ok: false, error: 'Kan ikke slette den eneste versjonen' }
+
+  const { error } = await supabase.from('contracts').delete().eq('id', contractId)
+  if (error) return { ok: false, error: 'Kunne ikke slette' }
+
+  if (target.is_current) {
+    const { data: fallback } = await supabase
+      .from('contracts')
+      .select('id')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (fallback) {
+      await supabase.from('contracts').update({ is_current: true }).eq('id', fallback.id)
+    }
+  }
+
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------

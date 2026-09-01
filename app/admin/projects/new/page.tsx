@@ -462,6 +462,34 @@ function NewProjectContent() {
     }
   }
 
+  const [creatingQuoteOnly, setCreatingQuoteOnly] = useState(false)
+
+  // "Kun tilbud" — legger til en frittstående pristilbud-seksjon på et prosjekt uten
+  // pitch, slik at "Publiser" (i redigeringssiden) gir en delbar lenke som kun viser
+  // pristilbud + signering, uten pitch-innhold rundt (feedback 8a3c0426). Gjenbruker
+  // eksisterende /p/[token]-visning og publiseringsflyt — ingen ny kundevendt side.
+  async function handleCreateQuoteOnly() {
+    if (!createdProject) return
+    setCreatingQuoteOnly(true)
+    try {
+      const { count } = await supabase
+        .from('sections')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', createdProject.id)
+      if ((count ?? 0) === 0) {
+        await supabase.from('sections').insert({
+          project_id: createdProject.id,
+          type: 'quote',
+          order_index: 1,
+          visible: true,
+        })
+      }
+      router.push(`/admin/projects/${createdProject.id}/quote`)
+    } finally {
+      setCreatingQuoteOnly(false)
+    }
+  }
+
   const isFormValid = formData.create_pitch
     ? formData.title && formData.project_type && formData.legacy_project_type && formData.mediums.length > 0 && formData.target_audience
     : formData.title && (!!selectedCustomerId || customerInput.trim().length > 0)
@@ -515,6 +543,29 @@ function NewProjectContent() {
             >
               Gå til prosjekt
             </button>
+            {!createdProject.editUrl && (
+              <button
+                type="button"
+                onClick={handleCreateQuoteOnly}
+                disabled={creatingQuoteOnly}
+                style={{
+                  padding: '11px 20px',
+                  background: 'transparent',
+                  color: C.accent,
+                  fontFamily: 'var(--font-dm-sans)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  border: `1px dashed ${C.accent}`,
+                  borderRadius: 3,
+                  cursor: creatingQuoteOnly ? 'default' : 'pointer',
+                  opacity: creatingQuoteOnly ? 0.6 : 1,
+                }}
+              >
+                {creatingQuoteOnly ? 'Oppretter...' : 'Lag pristilbud'}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => window.location.href = '/admin/projects/new'}

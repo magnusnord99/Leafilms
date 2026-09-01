@@ -1107,6 +1107,7 @@ export default function PostProdDetailPage() {
                       {!editingDeliverables ? (
                         <button
                           onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true) }}
+                          disabled={readOnly}
                           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
                         >
                           Rediger
@@ -1136,7 +1137,7 @@ export default function PostProdDetailPage() {
                                 setEditingDeliverables(false)
                               }
                             }}
-                            disabled={savingDeliverables}
+                            disabled={readOnly || savingDeliverables}
                             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: savingDeliverables ? 0.6 : 1 }}
                           >
                             {savingDeliverables ? 'Lagrer...' : 'Lagre'}

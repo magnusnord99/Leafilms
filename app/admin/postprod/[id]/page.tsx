@@ -638,9 +638,8 @@ export default function PostProdDetailPage() {
     if (!result.ok) return
     const newTasks = tasks.filter(t => t.id !== taskId)
     setTasks(newTasks)
-    const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
     const newStepperTasks = newTasks.filter(t => !t.is_custom)
-    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixedProject, activeTab, activeVideoDeliverableId, videoDeliverables.length)
+    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
     setSelectedIdx(getInitialIdx(newDisplayTasks))
   }
 

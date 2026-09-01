@@ -793,10 +793,51 @@ export default function PostProdDetailPage() {
         {/* Header */}
         <div style={{ flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: 'rgba(24,25,32,0.97)', backdropFilter: 'blur(8px)' }}>
           <div style={{ padding: '14px 24px 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none' }}>Post-produksjon</Link>
-              <span style={{ color: C.text3 }}>›</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2 }}>{currentProject.title}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none', flexShrink: 0 }}>Post-produksjon</Link>
+                <span style={{ color: C.text3, flexShrink: 0 }}>›</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentProject.title}</span>
+              </div>
+              {(() => {
+                const idx = projects.findIndex(p => p.id === projectId)
+                const prevProject = idx > 0 ? projects[idx - 1] : null
+                const nextProject = idx >= 0 && idx < projects.length - 1 ? projects[idx + 1] : null
+                if (!prevProject && !nextProject) return null
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={() => prevProject && router.push(`/admin/postprod/${prevProject.id}`)}
+                      disabled={!prevProject}
+                      title={prevProject ? prevProject.title : undefined}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', padding: '4px 9px', borderRadius: 6,
+                        background: 'none', border: `1px solid ${C.border}`,
+                        color: prevProject ? C.text2 : C.text3, opacity: prevProject ? 1 : 0.4,
+                        cursor: prevProject ? 'pointer' : 'default',
+                      }}
+                    >
+                      ← Forrige
+                    </button>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, padding: '0 2px' }}>
+                      {idx + 1}/{projects.length}
+                    </span>
+                    <button
+                      onClick={() => nextProject && router.push(`/admin/postprod/${nextProject.id}`)}
+                      disabled={!nextProject}
+                      title={nextProject ? nextProject.title : undefined}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', padding: '4px 9px', borderRadius: 6,
+                        background: 'none', border: `1px solid ${C.border}`,
+                        color: nextProject ? C.text2 : C.text3, opacity: nextProject ? 1 : 0.4,
+                        cursor: nextProject ? 'pointer' : 'default',
+                      }}
+                    >
+                      Neste →
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>

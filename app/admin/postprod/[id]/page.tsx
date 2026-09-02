@@ -15,7 +15,7 @@ import {
   deleteTask,
 } from '@/lib/actions/pipeline'
 import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
-import { updateTaskDueDate } from '@/lib/actions/calendar'
+import { updateTaskDueDate, updateTaskCalendarName, buildTaskCalendarLabel, companyLabel } from '@/lib/actions/calendar'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'
@@ -231,6 +231,8 @@ export default function PostProdDetailPage() {
   const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
 
   const [dueDates, setDueDates] = useState<Record<string, string>>({})
+  const [calendarNames, setCalendarNames] = useState<Record<string, string>>({})
+  const [calendarNameSaved, setCalendarNameSaved] = useState(false)
 
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
@@ -253,6 +255,7 @@ export default function PostProdDetailPage() {
   const [deliverableItems, setDeliverableItems] = useState<DeliverableItem[]>([])
 
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const calendarNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const taskDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingTaskDataRef = useRef<Record<string, Record<string, string>>>({})
   const assigneeDropdownRef = useRef<HTMLDivElement>(null)
@@ -377,6 +380,21 @@ export default function PostProdDetailPage() {
     const dd: Record<string, string> = {}
     for (const t of taskList) dd[t.id] = t.due_date ?? ''
     setDueDates(dd)
+    const cn: Record<string, string> = {}
+    for (const t of taskList) cn[t.id] = t.calendar_name ?? ''
+    setCalendarNames(cn)
+  }
+
+  function handleCalendarNameChange(taskId: string, value: string) {
+    setCalendarNames(prev => ({ ...prev, [taskId]: value }))
+    setCalendarNameSaved(false)
+    if (calendarNameTimerRef.current) clearTimeout(calendarNameTimerRef.current)
+    calendarNameTimerRef.current = setTimeout(async () => {
+      await updateTaskCalendarName(taskId, value)
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, calendar_name: value.trim() || null } : t))
+      setCalendarNameSaved(true)
+      setTimeout(() => setCalendarNameSaved(false), 2000)
+    }, 800)
   }
 
   async function handleDueDateChange(taskId: string, value: string) {
@@ -795,6 +813,8 @@ export default function PostProdDetailPage() {
           <div style={{ padding: '14px 24px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <Link href="/admin/pipeline" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none', flexShrink: 0 }}>Pipeline</Link>
+                <span style={{ color: C.text3, flexShrink: 0 }}>›</span>
                 <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none', flexShrink: 0 }}>Post-produksjon</Link>
                 <span style={{ color: C.text3, flexShrink: 0 }}>›</span>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentProject.title}</span>
@@ -1316,9 +1336,11 @@ export default function PostProdDetailPage() {
             </div>
           )}
 
-          {/* Egendefinerte oppgaver — utenfor den låste stepperen */}
+          {/* Egendefinerte oppgaver — utenfor den låste stepperen. Header-blokken har ikke
+              egen sideskroll, så denne listen må skrolle internt når den blir lang — ellers
+              blir oppgaver utenfor synsfeltet helt utilgjengelige. */}
           {!reseeding && (
-            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}` }}>
+            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}`, maxHeight: '40vh', overflowY: 'auto' }}>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
                 Egendefinerte oppgaver
               </span>
@@ -1803,6 +1825,37 @@ export default function PostProdDetailPage() {
                   onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
+              </div>
+
+              {/* Calendar name override */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Kalendernavn
+                  </label>
+                  {calendarNameSaved && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.success }}>Lagret ✓</span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={calendarNames[selectedTask.id] ?? ''}
+                  onChange={e => handleCalendarNameChange(selectedTask.id, e.target.value)}
+                  placeholder={buildTaskCalendarLabel(selectedTask.title, selectedTask.pipeline_stage, companyLabel(currentProject.customer))}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    color: C.text, background: C.surface,
+                    border: `1px solid ${C.border}`, borderRadius: 8,
+                    padding: '8px 12px', outline: 'none',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                  onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                />
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 6, lineHeight: 1.4 }}>
+                  Tomt felt bruker standardnavnet vist over, i /admin/calendar.
+                </p>
               </div>
 
               {/* Notes */}

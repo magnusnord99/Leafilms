@@ -700,6 +700,8 @@ export type Task = {
   color: string | null
   icon: string | null
   due_date: string | null
+  /** Overstyrer visningsnavnet i kalenderen (/admin/calendar). NULL = bruk standardmalen — se buildTaskCalendarLabel i lib/actions/calendar.ts. */
+  calendar_name: string | null
   status: 'todo' | 'in_progress' | 'done' | 'waiting_review'
   priority: 'low' | 'medium' | 'high' | null
   sort_order: number

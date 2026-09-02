@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
+import { companyLabel, buildTaskCalendarLabel } from '@/lib/calendar-label'
 
 export type ShootingEvent = {
   projectId: string
@@ -22,19 +23,6 @@ export type TaskEvent = {
   customerName: string | null
   dueDate: string          // 'YYYY-MM-DD'
   status: 'todo' | 'in_progress' | 'done'
-}
-
-export function companyLabel(customer: { name: string | null; company?: string | null } | null | undefined): string | null {
-  return customer?.company || customer?.name || null
-}
-
-// Standard kalendernavn for en oppgave når ingen har overstyrt det manuelt (feedback
-// 89524e2d): "POSTPROD - <oppgavetittel> - <firmanavn>" for post-produksjon, siden det er
-// der behovet ble meldt inn — andre steg beholder bare oppgavetittelen som før. Eksportert
-// slik at postprod-siden kan vise samme mal som plassholder i "Kalendernavn"-feltet.
-export function buildTaskCalendarLabel(title: string, pipelineStage: string, company: string | null): string {
-  if (pipelineStage === 'post_prod' && company) return `POSTPROD - ${title} - ${company}`
-  return title
 }
 
 /**

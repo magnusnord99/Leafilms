@@ -15,7 +15,8 @@ import {
   deleteTask,
 } from '@/lib/actions/pipeline'
 import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
-import { updateTaskDueDate, updateTaskCalendarName, buildTaskCalendarLabel, companyLabel } from '@/lib/actions/calendar'
+import { updateTaskDueDate, updateTaskCalendarName } from '@/lib/actions/calendar'
+import { buildTaskCalendarLabel, companyLabel } from '@/lib/calendar-label'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'

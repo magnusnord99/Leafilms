@@ -158,6 +158,14 @@ async function buildContractContext(projectId: string) {
 
   const savedFields = (contract?.form_fields ?? null) as ContractFormFields | null
 
+  // totalpris/antallCrew er utledet fra tilbudet som var gjeldende sist kontrakten ble
+  // lagret (contract.quote_id). Hvis et annet tilbud er blitt gjeldende siden (ny
+  // tilbudsversjon akseptert/valgt, eller en ny kontraktversjon forgrenet fra en gammel),
+  // er den lagrede overrideen fra det gamle tilbudet og skal ignoreres — ellers fortsetter
+  // kontrakten å vise summen fra et utdatert tilbud (feedback 3ca4c71b).
+  const contractQuoteId = (contract as { quote_id?: string | null } | null)?.quote_id ?? null
+  const quoteChanged = contractQuoteId !== null && contractQuoteId !== (quote?.id ?? null)
+
   const formDefaults = {
     orgNummer: savedFields?.orgNummerOverride ?? customer?.org_nummer ?? '',
     produksjonsPeriode: savedFields?.produksjonsPeriode ?? deriveProduksjonsPeriode(shootStart, shootEnd, lang),
@@ -168,9 +176,9 @@ async function buildContractContext(projectId: string) {
     oppstartDato: savedFields?.oppstartDatoOverride ?? autoVars.oppstart_dato,
     opptakDatoer: savedFields?.opptakDatoerOverride ?? autoVars.opptak_datoer,
     leveranse: savedFields?.leveranseOverride ?? autoVars.leveranse,
-    totalpris: savedFields?.totalprisOverride ?? autoVars.totalpris,
+    totalpris: (quoteChanged ? undefined : savedFields?.totalprisOverride) ?? autoVars.totalpris,
     reiseDekkesAv: savedFields?.reiseDekkesAv ?? 'oppdragsgiver' as const,
-    antallCrew: savedFields?.antallCrewOverride ?? autoVars.antall_crew,
+    antallCrew: (quoteChanged ? undefined : savedFields?.antallCrewOverride) ?? autoVars.antall_crew,
   }
 
   return { template, autoVars, formDefaults, contract, lang, quoteId: quote?.id ?? null }

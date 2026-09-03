@@ -134,7 +134,7 @@ export default function PitchesPage() {
               Pitcher
             </h1>
           </div>
-          <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
+          <Link href="/admin/pitches/new" style={{ textDecoration: 'none' }}>
             <button style={{
               padding: '8px 18px',
               background: C.accent,
@@ -266,7 +266,7 @@ export default function PitchesPage() {
               {projects.length === 0 ? 'Ingen pitcher ennå' : 'Ingen pitcher matcher filteret'}
             </p>
             {projects.length === 0 && (
-              <Link href="/admin/projects/new" style={{ textDecoration: 'none' }}>
+              <Link href="/admin/pitches/new" style={{ textDecoration: 'none' }}>
                 <button style={{
                   padding: '9px 20px',
                   background: C.accent,

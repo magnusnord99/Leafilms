@@ -245,7 +245,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
               onChange={(e) => setPickerFilter(e.target.value)}
               placeholder="Søk etter kollega..."
               style={{
-                width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+                width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                 background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none', marginBottom: 8,
               }}
             />
@@ -416,7 +416,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                 placeholder="Skriv en melding..."
                 disabled={sending}
                 style={{
-                  flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.surface,
+                  flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface,
                   border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', outline: 'none', resize: 'none', lineHeight: 1.5,
                 }}
               />

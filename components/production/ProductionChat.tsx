@@ -227,7 +227,7 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
               onChange={(e) => setPickerFilter(e.target.value)}
               placeholder="Søk etter kollega..."
               style={{
-                width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.text,
+                width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                 background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none', marginBottom: 6,
               }}
             />
@@ -313,7 +313,7 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
           placeholder="Skriv en melding til produksjonsteamet..."
           disabled={sending}
           style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.surface2,
+            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2,
             border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', outline: 'none', resize: 'none', lineHeight: 1.5,
           }}
         />

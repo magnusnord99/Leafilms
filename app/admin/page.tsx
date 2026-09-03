@@ -222,7 +222,7 @@ export default function AdminDashboard() {
         />
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
+        <div className="grid grid-cols-2 md:grid-cols-4" style={{ gap: 12, marginBottom: 32 }}>
           {stats.map(s => (
             <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
               <div

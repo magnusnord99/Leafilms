@@ -244,6 +244,7 @@ export default function PostProdDetailPage() {
   const [editingDeliverables, setEditingDeliverables] = useState(false)
   const [draftDeliverables, setDraftDeliverables] = useState<DeliverableItem[]>([])
   const [savingDeliverables, setSavingDeliverables] = useState(false)
+  const [deliverablesError, setDeliverablesError] = useState<string | null>(null)
 
   type DeliverableItem = {
     id?: string
@@ -710,8 +711,14 @@ export default function PostProdDetailPage() {
 
   async function handleOpenDeliveryReview() {
     setOpeningDeliveryReview(true)
-    const { galleryId } = await getOrCreateDeliveryGallery(projectId)
-    router.push(`/admin/selections/${galleryId}`)
+    try {
+      const { galleryId } = await getOrCreateDeliveryGallery(projectId)
+      router.push(`/admin/selections/${galleryId}`)
+    } catch (err) {
+      console.error('handleOpenDeliveryReview error:', err)
+      setActionError('Kunne ikke åpne leveringsgalleriet. Prøv igjen, eller kontakt support hvis feilen vedvarer.')
+      setOpeningDeliveryReview(false)
+    }
   }
 
   async function handleReseed() {
@@ -1079,7 +1086,7 @@ export default function PostProdDetailPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {!editingDeliverables ? (
                         <button
-                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true) }}
+                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true); setDeliverablesError(null) }}
                           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
                         >
                           Rediger
@@ -1087,7 +1094,7 @@ export default function PostProdDetailPage() {
                       ) : (
                         <>
                           <button
-                            onClick={() => setEditingDeliverables(false)}
+                            onClick={() => { setEditingDeliverables(false); setDeliverablesError(null) }}
                             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
                           >
                             Avbryt
@@ -1095,6 +1102,7 @@ export default function PostProdDetailPage() {
                           <button
                             onClick={async () => {
                               setSavingDeliverables(true)
+                              setDeliverablesError(null)
                               const items = draftDeliverables.map(it => ({
                                 id: it.id ?? String(Date.now()),
                                 title: it.title,
@@ -1107,6 +1115,8 @@ export default function PostProdDetailPage() {
                               if (!res.error) {
                                 setDeliverableItems(draftDeliverables)
                                 setEditingDeliverables(false)
+                              } else {
+                                setDeliverablesError(res.error)
                               }
                             }}
                             disabled={savingDeliverables}
@@ -1119,6 +1129,12 @@ export default function PostProdDetailPage() {
                       <button onClick={() => { setShowDeliveryModal(false); setEditingDeliverables(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
                     </div>
                   </div>
+
+                  {deliverablesError && (
+                    <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#f0b0b0', background: '#3a1d1d', border: '1px solid #E05555', borderRadius: 6, padding: '6px 10px', marginBottom: 12, flexShrink: 0 }}>
+                      Kunne ikke lagre: {deliverablesError}
+                    </div>
+                  )}
 
                   {/* Scrollbar content */}
                   <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>

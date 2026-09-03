@@ -23,7 +23,7 @@ import {
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
-import { STAGE_ACCENT, getStageHref } from '@/lib/pipeline-ui'
+import { STAGE_ACCENT } from '@/lib/pipeline-ui'
 import { groupByProjectRoot, pickRepresentativeVersion } from '@/lib/project-grouping'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { combinedDeliveryText } from '@/lib/delivery-format'
@@ -786,7 +786,10 @@ function DraggableCard({
     ? profiles.find(p => p.id === project.resale_assignee_id) ?? null
     : null
 
-  const titleHref = getStageHref(project.id, stage)
+  // Kort-tittelen skal alltid gå til prosjektets oversiktsside, uansett steg — i motsetning
+  // til handlingsknappene ("Send tilbud", "Pre-prod →" osv.) som fortsatt bruker steg-spesifikk
+  // navigasjon via getStageHref().
+  const titleHref = `/admin/projects/${project.id}`
 
   function handleNextStageClick(e: React.MouseEvent) {
     e.stopPropagation()
@@ -1414,9 +1417,9 @@ export function ProjectsBoardView({ view, onViewChange }: {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ProjectsViewToggle view={view} onChange={onViewChange} />
-          <Link href="/admin/leads/new">
+          <Link href="/admin/projects/new">
             <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none' }}>
-              + Ny lead
+              + Nytt prosjekt
             </button>
           </Link>
         </div>

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
+import { IMAGE_CATEGORIES } from '@/lib/image-categories'
 
 // Initialize OpenAI client lazily to avoid build-time errors
 function getOpenAIClient() {
@@ -12,18 +13,7 @@ function getOpenAIClient() {
 }
 
 // Kategorier og underkategorier vi bruker
-const categories = {
-  landskap: ['fjell', 'kyst', 'by', 'natur', 'skog'],
-  sport: ['ski', 'løping', 'sykkel', 'vannsport', 'klatring', 'fotball'],
-  closeup: ['produkt', 'detalj', 'tekstur', 'ansikt'],
-  portrett: ['enkel', 'gruppe', 'bedrift'],
-  event: ['konsert', 'konferanse', 'festival', 'sport'],
-  kommersiell: ['produkt', 'merkevare', 'reklame'],
-  abstrakt: ['kunst', 'mønster', 'farge'],
-  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
-  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
-  industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
-}
+const categories = IMAGE_CATEGORIES
 
 export async function POST(req: NextRequest) {
   try {

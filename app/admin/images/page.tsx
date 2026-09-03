@@ -5,19 +5,11 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Image } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
+import { IMAGE_CATEGORIES, categoryLabel } from '@/lib/image-categories'
 
 const categories = [
-  { value: 'all',          label: 'Alle' },
-  { value: 'landskap',     label: 'Landskap' },
-  { value: 'sport',        label: 'Sport' },
-  { value: 'closeup',      label: 'Close-up' },
-  { value: 'portrett',     label: 'Portrett' },
-  { value: 'event',        label: 'Event' },
-  { value: 'kommersiell',  label: 'Kommersiell' },
-  { value: 'abstrakt',     label: 'Abstrakt' },
-  { value: 'bts',          label: 'BTS' },
-  { value: 'bryllup',      label: 'Bryllup' },
-  { value: 'industri',     label: 'Industri/Corporate' },
+  { value: 'all', label: 'Alle' },
+  ...Object.keys(IMAGE_CATEGORIES).map(value => ({ value, label: categoryLabel(value) })),
 ]
 
 function getImageUrl(image: Image) {
@@ -31,6 +23,11 @@ export default function ImagesPage() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkSubcategory, setBulkSubcategory] = useState('')
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
 
   async function fetchImages() {
     setLoading(true)
@@ -62,6 +59,61 @@ export default function ImagesPage() {
         (img.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : images
+
+  const visibleIds = filtered.map(img => img.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
+  const bulkSubcategoryOptions = IMAGE_CATEGORIES[bulkCategory] || []
+
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        visibleIds.forEach(id => next.delete(id))
+      } else {
+        visibleIds.forEach(id => next.add(id))
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkApply() {
+    if (!bulkCategory || selectedIds.size === 0) return
+    const count = selectedIds.size
+    if (!confirm(`Endre kategori til "${categoryLabel(bulkCategory)}" for ${count} bilde${count === 1 ? '' : 'r'}?`)) return
+
+    setBulkApplying(true)
+    setBulkError(null)
+    try {
+      const { error } = await supabase
+        .from('images')
+        .update({ category: bulkCategory, subcategory: bulkSubcategory || null })
+        .in('id', Array.from(selectedIds))
+      if (error) throw error
+
+      await fetchImages()
+      clearSelection()
+      setBulkCategory('')
+      setBulkSubcategory('')
+    } catch (err) {
+      console.error('Bulk update error:', err)
+      setBulkError(err instanceof Error ? err.message : 'Bulk-oppdatering feilet')
+    } finally {
+      setBulkApplying(false)
+    }
+  }
 
   async function handleDelete(image: Image) {
     if (!confirm(`Slett "${image.title || image.filename}"?\n\nDette kan ikke angres.`)) return
@@ -189,6 +241,50 @@ export default function ImagesPage() {
           </div>
         </div>
 
+        {/* Selection toolbar */}
+        {!loading && filtered.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+            <button
+              onClick={toggleSelectAllVisible}
+              style={{
+                padding: '6px 12px',
+                background: C.surface,
+                color: C.text2,
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.05em',
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}
+            >
+              {allVisibleSelected ? 'Fjern alle synlige' : `Velg alle synlige (${visibleIds.length})`}
+            </button>
+            {selectedIds.size > 0 && (
+              <>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2 }}>
+                  {selectedIds.size} valgt
+                </span>
+                <button
+                  onClick={clearSelection}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.65rem',
+                    color: C.text3,
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tøm valg
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Grid */}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
@@ -216,26 +312,55 @@ export default function ImagesPage() {
             {filtered.map(image => {
               const imgUrl = getImageUrl(image)
               const isDeleting = deletingId === image.id
+              const isSelected = selectedIds.has(image.id)
               return (
                 <div
                   key={image.id}
                   style={{
                     position: 'relative',
                     background: C.surface,
-                    border: `1px solid ${C.border}`,
+                    border: isSelected ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
                     borderRadius: 3,
                     overflow: 'hidden',
                     opacity: isDeleting ? 0.5 : 1,
                     transition: 'opacity 0.15s',
                   }}
                 >
-                  <div style={{ aspectRatio: '4/3', overflow: 'hidden', background: C.surface2 }}>
+                  <div style={{ position: 'relative', aspectRatio: '4/3', overflow: 'hidden', background: C.surface2 }}>
                     <img
                       src={imgUrl}
                       alt={image.title || image.filename}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       loading="lazy"
                     />
+                    <label
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        left: 6,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 3,
+                        background: isSelected ? C.accent : 'rgba(24,25,32,0.7)',
+                        border: `1px solid ${isSelected ? C.accent : 'rgba(255,255,255,0.4)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelected(image.id)}
+                        style={{ position: 'absolute', opacity: 0, width: 20, height: 20, cursor: 'pointer' }}
+                      />
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </label>
                   </div>
                   <div style={{ padding: '8px 10px' }}>
                     <p style={{
@@ -251,7 +376,7 @@ export default function ImagesPage() {
                       {image.title || image.filename}
                     </p>
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
-                      {image.category}{image.subcategory ? ` · ${image.subcategory.split('/').pop()}` : ''}
+                      {categoryLabel(image.category)}{image.subcategory ? ` · ${image.subcategory.split('/').pop()}` : ''}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 4, padding: '0 8px 8px' }}>
@@ -298,7 +423,114 @@ export default function ImagesPage() {
             {filtered.length} {filtered.length !== images.length ? `av ${images.length} ` : ''}bilder
           </p>
         )}
+
+        {selectedIds.size > 0 && <div style={{ height: 80 }} />}
       </div>
+
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: C.sidebar,
+          borderTop: `1px solid ${C.border}`,
+          padding: '14px 32px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+          zIndex: 10,
+        }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text, fontWeight: 500 }}>
+            {selectedIds.size} bilde{selectedIds.size === 1 ? '' : 'r'} valgt
+          </span>
+
+          <select
+            value={bulkCategory}
+            onChange={e => { setBulkCategory(e.target.value); setBulkSubcategory('') }}
+            style={{
+              padding: '7px 10px',
+              background: C.surface,
+              color: C.text,
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.7rem',
+            }}
+          >
+            <option value="">Ny kategori...</option>
+            {Object.keys(IMAGE_CATEGORIES).map(cat => (
+              <option key={cat} value={cat}>{categoryLabel(cat)}</option>
+            ))}
+          </select>
+
+          {bulkSubcategoryOptions.length > 0 && (
+            <select
+              value={bulkSubcategory}
+              onChange={e => setBulkSubcategory(e.target.value)}
+              style={{
+                padding: '7px 10px',
+                background: C.surface,
+                color: C.text,
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.7rem',
+              }}
+            >
+              <option value="">Ingen underkategori</option>
+              {bulkSubcategoryOptions.map(subcat => (
+                <option key={subcat} value={`${bulkCategory}/${subcat}`}>
+                  {subcat.charAt(0).toUpperCase() + subcat.slice(1)}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={handleBulkApply}
+            disabled={!bulkCategory || bulkApplying}
+            style={{
+              padding: '8px 16px',
+              background: bulkCategory ? C.accent : C.surface,
+              color: bulkCategory ? '#fff' : C.text3,
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.65rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+              border: 'none',
+              borderRadius: 3,
+              cursor: bulkCategory && !bulkApplying ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {bulkApplying ? 'Oppdaterer...' : 'Bruk på valgte'}
+          </button>
+
+          <button
+            onClick={clearSelection}
+            style={{
+              padding: '8px 12px',
+              background: 'transparent',
+              color: C.text3,
+              fontFamily: 'var(--font-dm-sans)',
+              fontSize: '0.65rem',
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              cursor: 'pointer',
+            }}
+          >
+            Avbryt
+          </button>
+
+          {bulkError && (
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#E07070' }}>
+              {bulkError}
+            </span>
+          )}
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>

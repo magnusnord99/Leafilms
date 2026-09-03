@@ -5,23 +5,13 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
 import { Image } from '@/lib/types'
+import { IMAGE_CATEGORIES, categoryLabel } from '@/lib/image-categories'
 
 type Props = {
   params: Promise<{ id: string }>
 }
 
-const categories = {
-  landskap: ['fjell', 'kyst', 'by', 'natur', 'skog'],
-  sport: ['ski', 'løping', 'sykkel', 'vannsport', 'klatring', 'fotball'],
-  closeup: ['produkt', 'detalj', 'tekstur', 'ansikt'],
-  portrett: ['enkel', 'gruppe', 'bedrift'],
-  event: ['konsert', 'konferanse', 'festival', 'sport'],
-  kommersiell: ['produkt', 'merkevare', 'reklame'],
-  abstrakt: ['kunst', 'mønster', 'farge'],
-  bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
-  bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
-  industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
-}
+const categories = IMAGE_CATEGORIES
 
 export default function EditImagePage({ params }: Props) {
   const router = useRouter()
@@ -171,7 +161,7 @@ export default function EditImagePage({ params }: Props) {
             >
               {Object.keys(categories).map((cat) => (
                 <option key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  {categoryLabel(cat)}
                 </option>
               ))}
             </select>

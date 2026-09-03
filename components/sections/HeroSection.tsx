@@ -49,8 +49,14 @@ export function HeroSection({
 }: HeroSectionProps) {
   const sectionImage = sectionImageData[section.id]?.[0]
   const sectionVideo = sectionVideoData[section.id]?.[0]
-  const hasVideo = sectionVideos[section.id]?.[0] && sectionVideo
-  const hasImage = sectionImages[section.id]?.[0] && sectionImage
+  const hasVideo = Boolean(sectionVideos[section.id]?.[0] && sectionVideo)
+  const hasImage = Boolean(sectionImages[section.id]?.[0] && sectionImage)
+
+  // Når begge finnes lagret samtidig, avgjør coverPreference hva som faktisk vises.
+  // Default (ingen preferanse satt) er video, for å bevare eksisterende oppførsel.
+  const coverPreference = section.content.coverPreference
+  const showVideo = hasVideo && coverPreference !== 'image'
+  const showImage = hasImage && !showVideo
 
   const currentPos = imagePosition[section.id] || {
     x: sectionImage?.background_position_x ?? 50,
@@ -58,7 +64,7 @@ export function HeroSection({
     zoom: sectionImage?.background_zoom ?? null
   }
 
-  const videoUrl = hasVideo
+  const videoUrl = showVideo
     ? supabase.storage.from('assets').getPublicUrl(sectionVideos[section.id][0].file_path).data.publicUrl
     : null
 
@@ -142,19 +148,19 @@ export function HeroSection({
   return (
     <header
       ref={headerRef}
-      onClick={hasVideo ? undefined : (editMode ? handleBackgroundClick : undefined)}
+      onClick={showVideo ? undefined : (editMode ? handleBackgroundClick : undefined)}
       className={`relative min-h-dvh flex items-end justify-start overflow-hidden ${
-        editMode && !hasVideo ? 'cursor-pointer' : ''
+        editMode && !showVideo ? 'cursor-pointer' : ''
       }`}
       style={{ background: '#0C0B09' }}
     >
       {/* Background video — imperativt opprettet for å garantere muted-attributt på iOS */}
-      {hasVideo && videoUrl && sectionVideo && (
+      {showVideo && videoUrl && sectionVideo && (
         <div ref={videoContainerRef} className="absolute inset-0 w-full h-full z-0" />
       )}
 
       {/* Background image */}
-      {!hasVideo && hasImage && (
+      {showImage && (
         <div
           className="absolute inset-0 w-full h-full z-0 pointer-events-none"
           style={getBackgroundStyle(section.id, 0)}
@@ -162,7 +168,7 @@ export function HeroSection({
       )}
 
       {/* Cinematic gradient overlay — heavier at bottom for text legibility */}
-      {(hasVideo || hasImage) && (
+      {(showVideo || showImage) && (
         <>
           <div className="absolute inset-0 z-[1]" style={{
             background: 'linear-gradient(to top, rgba(12,11,9,0.96) 0%, rgba(12,11,9,0.5) 40%, rgba(12,11,9,0.15) 70%, rgba(12,11,9,0.1) 100%)'
@@ -194,7 +200,7 @@ export function HeroSection({
       {/* Edit controls */}
       {editMode && (hasImage || hasVideo) && (
         <div className="absolute top-5 right-5 z-20 flex gap-2">
-          {hasVideo && onVideoPickerOpen && (
+          {showVideo && onVideoPickerOpen && (
             <button
               onClick={(e) => { e.stopPropagation(); onVideoPickerOpen() }}
               className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
@@ -202,7 +208,23 @@ export function HeroSection({
               Bytt video
             </button>
           )}
-          {hasImage && !hasVideo && onVideoPickerOpen && (
+          {showVideo && hasImage && (
+            <button
+              onClick={(e) => { e.stopPropagation(); updateSectionContent(section.id, 'coverPreference', 'image') }}
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
+            >
+              Bruk bilde i stedet
+            </button>
+          )}
+          {showImage && hasVideo && (
+            <button
+              onClick={(e) => { e.stopPropagation(); updateSectionContent(section.id, 'coverPreference', 'video') }}
+              className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
+            >
+              Bruk video i stedet
+            </button>
+          )}
+          {showImage && !hasVideo && onVideoPickerOpen && (
             <button
               onClick={(e) => { e.stopPropagation(); onVideoPickerOpen() }}
               className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
@@ -210,7 +232,7 @@ export function HeroSection({
               Bytt til video
             </button>
           )}
-          {hasImage && !hasVideo && (
+          {showImage && (
             <button
               onClick={onEditPositionClick}
               className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
@@ -218,7 +240,7 @@ export function HeroSection({
               {editingImageSectionId === section.id ? 'Lukk' : 'Rediger posisjon'}
             </button>
           )}
-          {hasImage && !hasVideo && onImagePickerOpen && (
+          {showImage && onImagePickerOpen && (
             <button
               onClick={(e) => { e.stopPropagation(); onImagePickerOpen() }}
               className="bg-[#201D18]/90 border border-[#38332A] text-[#E8E1D5] px-3 py-1.5 text-[0.6rem] tracking-widest uppercase rounded-[2px] hover:bg-[#2A261F] transition"
@@ -230,7 +252,7 @@ export function HeroSection({
       )}
 
       {/* Image position controls */}
-      {editMode && editingImageSectionId === section.id && hasImage && !hasVideo && (
+      {editMode && editingImageSectionId === section.id && showImage && (
         <ImagePositionControls
           sectionId={section.id}
           sectionImage={sectionImage}

@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+
+# Claude Code lokale sesjonsdata (ikke del av appen, kan bli svært store)
+.claude/
+.superpowers/
+.worktrees/
+.agents/
+
+# Ikke nødvendig for bygg/deploy
+docs/
+*.md

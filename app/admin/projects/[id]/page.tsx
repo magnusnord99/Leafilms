@@ -1714,7 +1714,7 @@ export default function ProjectHubPage() {
                   <Link href={`/admin/boards/${boardId}`} style={{ textDecoration: 'none', flex: '1 1 200px' }}>
                     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                       <div>
-                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>▦ Board</p>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>Board</p>
                         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Planlegging for prosjektet</p>
                       </div>
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.text2, flexShrink: 0 }}>Åpne →</span>
@@ -1725,7 +1725,7 @@ export default function ProjectHubPage() {
                   <Link href={`/admin/selections/${galleryId}`} style={{ textDecoration: 'none', flex: '1 1 200px' }}>
                     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                       <div>
-                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>🖼 Galleri</p>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>Galleri</p>
                         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Kundeseleksjon</p>
                       </div>
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.text2, flexShrink: 0 }}>Åpne →</span>

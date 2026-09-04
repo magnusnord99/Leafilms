@@ -51,6 +51,17 @@ const INFO_COLUMN_PAD = 10
 const INFO_COLUMN_HEADER = 44
 const INFO_COLUMN_GAP = 8
 
+// Leseoperasjon uten opprettelse — brukes av prosjektoversikten for å vise en
+// lenke til boardet kun når det faktisk finnes, se getOrCreateRootBoard for
+// varianten som oppretter ved behov (brukt av "Åpne boards"-knappen i preprod).
+export async function getRootBoardIdForProject(projectId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('boards').select('id')
+    .eq('project_id', projectId).is('parent_board_id', null).maybeSingle()
+  return data?.id ?? null
+}
+
 export async function getOrCreateRootBoard(projectId: string): Promise<string | null> {
   try {
     const supabase = await createClient()

@@ -1298,7 +1298,7 @@ export default function ProjectHubPage() {
     )
   }
 
-  const { project, tasks, quote, pitchToken, hasSections } = hubData
+  const { project, tasks, quote, pitchToken, hasSections, boardId, galleryId } = hubData
   const currentStageLabel = PIPELINE_STAGES.find(s => s.value === project.pipeline_stage)?.label ?? project.pipeline_stage
   const TABS: { id: ActiveTab; label: string }[] = [
     { id: 'oversikt', label: 'Oversikt' },
@@ -1706,6 +1706,34 @@ export default function ProjectHubPage() {
                 </button>
               </Link>
             </div>
+
+            {/* Tilknyttet — board og kundeseleksjon-galleri, vises kun når de finnes, uavhengig av pipeline-steg */}
+            {(boardId || galleryId) && (
+              <div style={{ marginBottom: 24, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {boardId && (
+                  <Link href={`/admin/boards/${boardId}`} style={{ textDecoration: 'none', flex: '1 1 200px' }}>
+                    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>▦ Board</p>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Planlegging for prosjektet</p>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.text2, flexShrink: 0 }}>Åpne →</span>
+                    </div>
+                  </Link>
+                )}
+                {galleryId && (
+                  <Link href={`/admin/selections/${galleryId}`} style={{ textDecoration: 'none', flex: '1 1 200px' }}>
+                    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>🖼 Galleri</p>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Kundeseleksjon</p>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: C.text2, flexShrink: 0 }}>Åpne →</span>
+                    </div>
+                  </Link>
+                )}
+              </div>
+            )}
 
             {/* Møtenotater / e-posttråd */}
             <div style={{ marginBottom: 24, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>

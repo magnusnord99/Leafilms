@@ -62,14 +62,19 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       const selectedAddonIds: string[] = Array.isArray(quote?.selected_addon_ids) ? quote.selected_addon_ids : []
-      if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew) && selectedAddonIds.length > 0) {
+      if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew)) {
         const quoteData = quote.quote_data as QuoteBuilderData
         const selectedAddons = (quoteData.optionalAddons ?? []).filter((a) => selectedAddonIds.includes(a.id))
-        if (selectedAddons.length > 0) {
-          const discountFactor = quoteData.discountFactor ?? 0
-          const baseTotals = calculateQuoteTotals(quoteData)
-          contractText = buildContractTextWithAddons(contractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
-        }
+        const discountFactor = quoteData.discountFactor ?? 0
+        const baseTotals = calculateQuoteTotals(quoteData)
+        // Re-beregnes ALLTID fra gjeldende tilbud — akkurat som forhåndsvisningen kunden ser
+        // (ContractSigningSection.tsx), som alltid oppdaterer 5.1 til fersk sum selv uten
+        // valgte tillegg. Tidligere kjørte dette kun når tillegg var valgt (selectedAddons.length
+        // > 0), så en admin som lastet ned PDF for et prosjekt UTEN tillegg fikk den originale,
+        // frosne summen fra publiseringstidspunktet — som kan avvike fra tilbudet slik det står
+        // i dag hvis det er redigert siden. Det var årsaken til at nedlastet PDF viste en annen
+        // (lavere) pris enn det kunden faktisk ser på det publiserte tilbudet.
+        contractText = buildContractTextWithAddons(contractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
       }
     }
 

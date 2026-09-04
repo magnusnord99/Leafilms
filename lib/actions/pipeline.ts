@@ -9,6 +9,8 @@ import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks, computeLocksFromSiblings, type StepperTaskLite } from '@/lib/task-lock'
 import { pickBestQuote } from '@/lib/quote-builder-utils'
+import { getRootBoardIdForProject } from '@/lib/actions/boards'
+import { getGalleryIdForProject } from '@/lib/actions/selections'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -902,6 +904,8 @@ export async function getProjectHub(projectId: string): Promise<{
   quote: Quote | null
   pitchToken: string | null
   hasSections: boolean
+  boardId: string | null
+  galleryId: string | null
 } | null> {
   try {
     const supabase = await createClient()
@@ -946,7 +950,7 @@ export async function getProjectHub(projectId: string): Promise<{
 
     // Disse fire er uavhengige av hverandre (kun projectId trengs) — kjør parallelt
     // i stedet for som fire sekvensielle round trips.
-    const [tasks, quoteResult, shareResult, sectionCountResult] = await Promise.all([
+    const [tasks, quoteResult, shareResult, sectionCountResult, boardId, gallery] = await Promise.all([
       project.pipeline_stage
         ? getTasksForProject(projectId, project.pipeline_stage)
         : getTasksForProject(projectId),
@@ -971,6 +975,10 @@ export async function getProjectHub(projectId: string): Promise<{
         .from('sections')
         .select('id', { count: 'exact', head: true })
         .eq('project_id', projectId),
+      // Board og kundeseleksjon-galleri kan finnes uavhengig av pipeline-steg — hentes
+      // her slik at "oversikt"-fanen kan vise lenker til alt som er tilknyttet prosjektet.
+      getRootBoardIdForProject(projectId),
+      getGalleryIdForProject(projectId),
     ])
 
     if (quoteResult.error) {
@@ -991,6 +999,8 @@ export async function getProjectHub(projectId: string): Promise<{
       quote: (quoteRow as Quote) ?? null,
       pitchToken: shareRow?.token ?? null,
       hasSections: (sectionCount ?? 0) > 0,
+      boardId,
+      galleryId: gallery?.id ?? null,
     }
   } catch (err) {
     console.error('getProjectHub unexpected error:', err)

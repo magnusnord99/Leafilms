@@ -438,7 +438,7 @@ function PackingSection({
             Utstyr fra lager
           </p>
           <Link
-            href="/admin/utstyr"
+            href={`/admin/utstyr?project=${projectId}`}
             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'none' }}
           >
             Hent mer utstyr →

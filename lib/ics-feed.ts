@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase-server'
+import { companyLabel, buildTaskCalendarLabel } from '@/lib/calendar-label'
 
 // Genererer en iCalendar-feed (RFC 5545) med opptak, leveringsdatoer og interne møter,
 // ment for abonnement fra f.eks. iPhone-kalenderen ("Legg til abonnert kalender"). Leses av
@@ -19,6 +20,16 @@ type ProjectRow = {
 type DeliveryTaskRow = {
   project_id: string
   due_date: string
+}
+
+type TaskRow = {
+  id: string
+  title: string
+  pipeline_stage: string
+  due_date: string
+  calendar_name: string | null
+  project_id: string
+  project: { title: string; customers: { name: string | null; company: string | null } | null } | null
 }
 
 type ProfileRef = { name: string | null; email: string } | { name: string | null; email: string }[] | null
@@ -130,7 +141,7 @@ export async function buildCalendarFeed(): Promise<string> {
   const supabase = createServiceClient()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
 
-  const [{ data: projects }, { data: signedContracts }, { data: deliveryTasks }, { data: meetings }] = await Promise.all([
+  const [{ data: projects }, { data: signedContracts }, { data: deliveryTasks }, { data: meetings }, { data: dueTasks }] = await Promise.all([
     supabase
       .from('projects')
       .select('id, title, pipeline_stage, shoot_start, shoot_end, shoot_confirmed, post_prod_days, customers(name)')
@@ -149,6 +160,14 @@ export async function buildCalendarFeed(): Promise<string> {
         organizer:profiles!meetings_organizer_id_fkey ( name, email ),
         meeting_participants ( status, profiles ( name, email ) )
       `),
+    // Alle andre oppgaver med frist (f.eks. egendefinerte "Klipp"-oppgaver i postprod) —
+    // "Lever ferdig materiale" dekkes allerede av det egne 📦 Levering-arrangementet over,
+    // og ekskluderes derfor her for å unngå duplikat (feedback 5bff440e).
+    supabase
+      .from('tasks')
+      .select('id, title, pipeline_stage, due_date, calendar_name, project_id, project:projects(title, customers(name, company))')
+      .not('due_date', 'is', null)
+      .not('title', 'eq', 'Lever ferdig materiale'),
   ])
 
   const signedProjectIds = new Set((signedContracts ?? []).map((c) => c.project_id as string))
@@ -248,6 +267,28 @@ export async function buildCalendarFeed(): Promise<string> {
         summary: `🗓️ ${m.title}`,
         description: descriptionParts.join('\n\n'),
         status: acceptedCount === participants.length ? 'CONFIRMED' : 'TENTATIVE',
+        stamp,
+      })
+    )
+  }
+
+  // Egendefinerte oppgavefrister (f.eks. "Klipp" i postprod) — samme oppgavesett som
+  // vises i Leafilms sin egen kalender (getCalendarEvents), som ellers manglet helt i
+  // denne feeden uansett hvor mange ganger abonnenten oppdaterte iCal (feedback 5bff440e).
+  for (const t of (dueTasks ?? []) as unknown as TaskRow[]) {
+    if (!t.project) continue
+    const company = companyLabel(t.project.customers)
+    const label = t.calendar_name?.trim() || buildTaskCalendarLabel(t.title, t.pipeline_stage, company)
+    const projectUrl = `${siteUrl}/admin/projects/${t.project_id}`
+    events.push(
+      vevent({
+        uid: `task-${t.id}@leafilms-pitch`,
+        dtstart: dateOnly(t.due_date),
+        dtend: addDays(t.due_date, 1),
+        summary: `✅ ${label}`,
+        description: `${t.project.title}\n\nSe prosjektet i Leafilms: ${projectUrl}`,
+        url: projectUrl,
+        status: 'CONFIRMED',
         stamp,
       })
     )

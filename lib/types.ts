@@ -127,6 +127,8 @@ export type Quote = {
   is_current: boolean
   /** IDs (fra quote_data.optionalAddons) på tilleggene kunden har haket av på det publiserte tilbudet. */
   selected_addon_ids: string[]
+  /** Hvem i teamet som opprettet tilbudet — NULL for tilbud opprettet før migrasjon 146. */
+  created_by: string | null
   created_at: string
   updated_at: string
 }

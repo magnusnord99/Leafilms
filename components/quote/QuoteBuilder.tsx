@@ -34,7 +34,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     reference: 'Video produksjon',
     clientContact: '',
     customerNumber: '',
-    ourContact: 'Bea Valand',
+    ourContact: '',
     paymentInfo: '14 dager',
     deliveryDate: '',
     deliveryDescription: '',
@@ -1320,7 +1320,7 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Vår kontakt</label>
-                <input ref={fieldRefs.ourContact} style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                <input ref={fieldRefs.ourContact} style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Navn" />
               </div>
             </div>
             <div>

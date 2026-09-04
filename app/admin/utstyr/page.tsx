@@ -95,6 +95,14 @@ export default function UtstyrPage() {
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
+            {projectId && (
+              <Link
+                href={`/admin/preprod/${projectId}`}
+                style={{ display: 'inline-block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, textDecoration: 'none', marginBottom: 8 }}
+              >
+                ← Tilbake til preprod
+              </Link>
+            )}
             <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.4rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>
               Utstyr
             </h1>

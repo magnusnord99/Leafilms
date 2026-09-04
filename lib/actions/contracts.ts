@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-server'
 import type { QuoteBuilderData, ContractFormFields, OurSignature } from '@/lib/types'
 import { calculateQuoteTotals, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { combinedDeliveryText } from '@/lib/delivery-format'
+import { buildContractTextWithAddons } from '@/lib/contract-addendum'
 
 // ---------------------------------------------------------------------------
 // Intern hjelpefunksjon: erstatt {{variabel}}-plassholdere
@@ -423,13 +424,21 @@ export async function publishContract(
   contractText: string,
   formFields?: ContractFormFields,
   newSignature?: { signatureImage: string; saveToProfile: boolean }
-): Promise<void> {
+): Promise<{ contractText: string }> {
   const supabase = await createClient()
 
-  // Hent gjeldende quote_id
+  // Hent gjeldende tilbud (full quote_data, ikke bare id) — totalprisen i punkt 5.1
+  // skal ALDRI lagres som den (potensielt utdaterte) teksten klienten sender inn.
+  // Den re-beregnes alltid her, server-side, fra det tilbudet som faktisk er
+  // gjeldende akkurat nå — samme mønster som brukes ved signering (sign/route.ts) og
+  // PDF-nedlasting (download-pdf/route.ts). Uten dette kunne en admin generere
+  // kontraktteksten, redigere tilbudet videre (ny rabatt/crew), og publisere den
+  // gamle, nå utdaterte prisen uten å merke det — det var akkurat det som skjedde med
+  // Coffee at Altitude (feedback 2026-09-04): kunden signerte en kontrakt med feil,
+  // frosset sum selv om det publiserte tilbudet viste riktig pris.
   const { data: quote } = await supabase
     .from('quotes')
-    .select('id')
+    .select('id, quote_data, selected_addon_ids')
     .eq('project_id', projectId)
     .eq('is_current', true)
     .order('created_at', { ascending: false })
@@ -438,6 +447,23 @@ export async function publishContract(
 
   const quoteId = quote?.id ?? null
   const publishedAt = new Date().toISOString()
+
+  let finalContractText = contractText
+  if (quote?.quote_data && Array.isArray((quote.quote_data as { crew?: unknown }).crew)) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('language')
+      .eq('id', projectId)
+      .single()
+    const lang: 'no' | 'en' = (project as { language?: string } | null)?.language === 'en' ? 'en' : 'no'
+
+    const quoteData = quote.quote_data as QuoteBuilderData
+    const selectedAddonIds: string[] = Array.isArray(quote.selected_addon_ids) ? quote.selected_addon_ids : []
+    const selectedAddons = (quoteData.optionalAddons ?? []).filter((a) => selectedAddonIds.includes(a.id))
+    const discountFactor = quoteData.discountFactor ?? 0
+    const baseTotals = calculateQuoteTotals(quoteData)
+    finalContractText = buildContractTextWithAddons(contractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
+  }
 
   // Bygg vår signatur hvis dette er første gang kontrakten signeres internt
   let ourSignaturePayload: OurSignature | null = null
@@ -477,7 +503,7 @@ export async function publishContract(
       .from('contracts')
       .update({
         quote_id: quoteId,
-        contract_text: contractText,
+        contract_text: finalContractText,
         form_fields: formFields ?? null,
         our_signature: existing.our_signature ?? ourSignaturePayload ?? null,
         published_at: publishedAt,
@@ -507,7 +533,7 @@ export async function publishContract(
       .insert({
         project_id: projectId,
         quote_id: quoteId,
-        contract_text: contractText,
+        contract_text: finalContractText,
         form_fields: formFields ?? null,
         // Leafilms' egen signatur følger med til den nye versjonen hvis den allerede
         // finnes (handlePublishClick ber ikke om ny signatur når vi allerede har en) —
@@ -523,6 +549,11 @@ export async function publishContract(
       throw new Error('Kunne ikke opprette kontrakt')
     }
   }
+
+  // Returneres slik at kalleren (kontrakt-editoren) kan oppdatere sin lokale
+  // forhåndsvisning til den faktisk lagrede teksten — den kan avvike fra det som ble
+  // sendt inn hvis totalprisen over ble re-beregnet.
+  return { contractText: finalContractText }
 }
 
 // ---------------------------------------------------------------------------

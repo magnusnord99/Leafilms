@@ -1164,7 +1164,11 @@ export default function ProjectHubPage() {
       if (!proceed) return
     }
     setPublishingContract(true)
-    await publishContract(projectId, contractText, formFields, newSignature)
+    const published = await publishContract(projectId, contractText, formFields, newSignature)
+    // Serveren re-beregner alltid totalprisen fra gjeldende tilbud før lagring, så den
+    // lagrede teksten kan avvike fra det vi nettopp sendte inn — oppdater forhåndsvisningen
+    // til det som faktisk ble lagret, så editoren aldri viser en tekst som er utdatert.
+    setContractText(published.contractText)
     setLastGeneratedFormFields(formFields)
     setLastGeneratedQuoteId(currentQuoteId)
     setContractHasText(true)

@@ -211,13 +211,14 @@ function TaskRow({
     <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
       <button
         onClick={onStatusChange}
-        style={{
-          flexShrink: 0, width: 24, height: 24, borderRadius: 5, cursor: 'pointer', padding: 0,
+        style={{ flexShrink: 0, padding: 6, margin: -6, cursor: 'pointer', border: 'none', background: 'none' }}
+      >
+        <span style={{
+          width: 24, height: 24, borderRadius: 5,
           background: task.status === 'done' ? 'rgba(76,175,125,0.18)' : task.status === 'in_progress' ? 'rgba(240,165,0,0.12)' : 'transparent',
           border: `1.5px solid ${STATUS_COLOR[task.status]}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s',
-        }}
-      >
+        }}>
         {task.status === 'done' && (
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
             <path d="M2 5.5L4.5 8L9 3" stroke={STATUS_COLOR.done} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -226,6 +227,7 @@ function TaskRow({
         {task.status === 'in_progress' && (
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR.in_progress }} />
         )}
+        </span>
       </button>
 
       <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -397,7 +399,7 @@ function AddTaskInput({ value, onChange, dueDate, onDueDateChange, onSubmit, dis
         onKeyDown={e => e.key === 'Enter' && onSubmit()}
         placeholder="Legg til oppgave..."
         style={{
-          flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+          flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
           color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
           borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
         }}

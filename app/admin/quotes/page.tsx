@@ -144,7 +144,7 @@ export default function QuotesPage() {
                 borderRadius: 8,
                 color: C.text,
                 fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.78rem',
+                fontSize: '1rem',
                 outline: 'none',
               }}
             />

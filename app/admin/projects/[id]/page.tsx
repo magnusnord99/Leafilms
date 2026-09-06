@@ -560,13 +560,15 @@ function TaskChecklist({
                 onClick={() => !isAutoChecked && onToggle(task.id, task.status)}
                 disabled={isToggling || isAutoChecked}
                 title={isAutoChecked ? 'Auto-fullført basert på prosjektstatus' : undefined}
-                style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${isDone ? C.success : C.text3}`, background: isDone ? 'rgba(76,175,125,0.15)' : 'transparent', cursor: isAutoChecked ? 'default' : 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 0.15s' }}
+                style={{ padding: 10, margin: -10, border: 'none', background: 'none', cursor: isAutoChecked ? 'default' : 'pointer', flexShrink: 0 }}
               >
+                <span style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${isDone ? C.success : C.text3}`, background: isDone ? 'rgba(76,175,125,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
                 {isDone && (
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                     <path d="M1 4L3 6L7 2" stroke={C.success} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
+                </span>
               </button>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: isDone ? C.text3 : C.text, textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {task.title}
@@ -1380,7 +1382,7 @@ export default function ProjectHubPage() {
                         value={customerSearch}
                         onChange={e => setCustomerSearch(e.target.value)}
                         placeholder="Søk kunde..."
-                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', outline: 'none' }}
+                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', outline: 'none' }}
                       />
                     </div>
                     {customerOptions

@@ -162,16 +162,20 @@ function TaskRow({ item, onToggle }: {
         aria-label={isDone ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
         style={{
           flexShrink: 0,
+          padding: 6, margin: -6,
+          cursor: locked ? 'not-allowed' : toggling ? 'default' : 'pointer',
+          border: 'none', background: 'none',
+          opacity: locked ? 0.4 : toggling ? 0.5 : 1,
+        }}
+      >
+        <span style={{
           width: 24, height: 24,
           borderRadius: 5,
           border: `2px solid ${isDone ? C.success : C.border}`,
           background: isDone ? C.success : 'transparent',
-          cursor: locked ? 'not-allowed' : toggling ? 'default' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.15s',
-          opacity: locked ? 0.4 : toggling ? 0.5 : 1,
-        }}
-      >
+        }}>
         {isDone && (
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
             <path d="M2 5L4 7.5L8 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -183,6 +187,7 @@ function TaskRow({ item, onToggle }: {
             <path d="M3.2 4.3V3a1.8 1.8 0 0 1 3.6 0v1.3" fill="none" />
           </svg>
         )}
+        </span>
       </button>
 
       {/* Task info */}
@@ -353,13 +358,18 @@ function PlanRow({ item, onToggle, onRemove }: {
         title={locked ? `Venter på «${blockedByTitle ?? 'forrige steg'}»` : undefined}
         aria-label={done ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
         style={{
-          flexShrink: 0, width: 24, height: 24, borderRadius: 5,
-          border: `2px solid ${done ? C.success : C.border}`,
-          background: done ? C.success : 'transparent',
-          cursor: locked ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, padding: 6, margin: -6,
+          border: 'none', background: 'none',
+          cursor: locked ? 'not-allowed' : 'pointer',
           opacity: locked ? 0.4 : 1,
         }}
       >
+        <span style={{
+          width: 24, height: 24, borderRadius: 5,
+          border: `2px solid ${done ? C.success : C.border}`,
+          background: done ? C.success : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
         {done && (
           <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
             <path d="M2 5L4 7.5L8 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -371,6 +381,7 @@ function PlanRow({ item, onToggle, onRemove }: {
             <path d="M3.2 4.3V3a1.8 1.8 0 0 1 3.6 0v1.3" fill="none" />
           </svg>
         )}
+        </span>
       </button>
 
       <span style={{
@@ -614,7 +625,7 @@ function DailyPlanPanel({ myTasks, onTaskStatusChange, onTaskStatusSettled }: {
               onKeyDown={e => e.key === 'Enter' && handleAddCustom()}
               placeholder="Egen oppgave..."
               style={{
-                flex: 1, minWidth: 160, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+                flex: 1, minWidth: 160, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                 color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
                 borderRadius: 6, padding: '7px 10px', outline: 'none',
               }}

@@ -123,7 +123,7 @@ export default function UtstyrPage() {
               placeholder="Navn på rom, f.eks. «Lager A» eller «Bil 1»"
               autoFocus
               style={{
-                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                 color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
                 borderRadius: 6, padding: '7px 10px', outline: 'none',
               }}

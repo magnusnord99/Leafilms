@@ -332,7 +332,7 @@ export function ProjectsListView({ view, onViewChange }: {
               style={{
                 width: '100%', padding: '8px 12px 8px 32px', background: C.surface,
                 border: `1px solid ${C.border}`, borderRadius: 3, color: C.text,
-                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none',
               }}
             />
           </div>

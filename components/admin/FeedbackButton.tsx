@@ -191,7 +191,7 @@ export function FeedbackButton() {
                     width: '100%', boxSizing: 'border-box', resize: 'none',
                     background: C.surface2, border: `1px solid ${C.border}`,
                     borderRadius: 8, padding: '9px 10px', outline: 'none',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: C.text, lineHeight: 1.5, marginBottom: 10,
                   }}
                 />
@@ -202,9 +202,10 @@ export function FeedbackButton() {
                     <img src={imagePreview} alt="Vedlegg" style={{ width: '100%', maxHeight: 140, objectFit: 'cover', display: 'block' }} />
                     <button
                       onClick={removeImage}
+                      aria-label="Fjern bilde"
                       style={{
                         position: 'absolute', top: 6, right: 6,
-                        width: 24, height: 24, borderRadius: '50%', border: 'none',
+                        width: 36, height: 36, borderRadius: '50%', border: 'none',
                         background: 'rgba(0,0,0,0.6)', color: '#fff',
                         fontSize: '0.85rem', cursor: 'pointer', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',

@@ -217,7 +217,7 @@ export function PublicProjectClient({
   if (!project) {
     console.error('[PublicProjectClient] No project provided')
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <Text variant="body" className="!text-foreground">
             Feil: Prosjekt ikke funnet
@@ -311,7 +311,7 @@ export function PublicProjectClient({
 
             // Build outer section className
             const sectionClass = (() => {
-              if (section.type === 'concept') return 'min-h-screen flex flex-col items-center justify-center px-0'
+              if (section.type === 'concept') return 'min-h-dvh flex flex-col items-center justify-center px-0'
               if (section.type === 'full_image') return 'px-0 py-0'
               if (section.type === 'timeline') return 'px-0'
               if (section.type === 'deliverables') return 'py-section px-0 md:px-4'

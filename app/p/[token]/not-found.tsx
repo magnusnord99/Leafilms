@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function NotFound() {
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-8"
+      className="min-h-dvh flex items-center justify-center px-8"
       style={{ background: '#0C0B09' }}
     >
       {/* Film grain overlay */}

@@ -180,11 +180,15 @@ export function ImageGallery({ images, editMode, onImageClick }: ImageGalleryPro
               <button
                 key={idx}
                 onClick={() => setCurrentIndex(idx)}
-                className={`w-2 h-2 rounded-full transition ${
-                  currentIndex === idx ? 'bg-dark' : 'bg-dark/30'
-                }`}
+                className="p-2 -m-2"
                 aria-label={`Gå til posisjon ${idx + 1}`}
-              />
+              >
+                <span
+                  className={`block w-2 h-2 rounded-full transition ${
+                    currentIndex === idx ? 'bg-dark' : 'bg-dark/30'
+                  }`}
+                />
+              </button>
             ))}
           </div>
         )}

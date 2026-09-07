@@ -1243,6 +1243,7 @@ export default function PreprodDetailPage() {
             {/* Post-produksjon-brettet: Video/Foto-lanes, egendefinerte lanes, parallell-rad, bibliotek */}
             <PostProdBoard
               projectId={id}
+              shootStart={project.shoot_start ?? null}
               shootEnd={project.shoot_end ?? null}
               postDeadlines={preprod.post_deadlines}
               currentUserId={currentUserId}

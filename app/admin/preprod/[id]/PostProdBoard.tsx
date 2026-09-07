@@ -69,9 +69,10 @@ function Avatar({ id, name, size = 20 }: { id: string; name: string | null; size
 }
 
 export function PostProdBoard({
-  projectId, shootEnd, postDeadlines, currentUserId, onDeadlineChange, onAssignedChange,
+  projectId, shootStart, shootEnd, postDeadlines, currentUserId, onDeadlineChange, onAssignedChange,
 }: {
   projectId: string
+  shootStart: string | null
   shootEnd: string | null
   postDeadlines: { video: string | null; photo: string | null }
   currentUserId: string | null
@@ -232,7 +233,7 @@ export function PostProdBoard({
   // due_date. Samme algoritme som PostCrewSection hadde, portert hit.
   async function suggestDueDates(lane: PostProdBoardLane, deadline: string) {
     if (!deadline) return
-    const start = shootEnd ? new Date(shootEnd) : new Date()
+    const start = shootEnd ? new Date(shootEnd) : shootStart ? new Date(shootStart) : new Date()
     const end = new Date(deadline)
     const totalMs = Math.max(end.getTime() - start.getTime(), 0)
     const n = lane.cards.length

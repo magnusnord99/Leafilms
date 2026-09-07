@@ -123,11 +123,14 @@ export async function updateProjectShootDates(
 ): Promise<void> {
   try {
     const supabase = await createClient()
+    // Enkeltdags opptak: bruker fyller ofte kun ut startdato. Uten fallback
+    // blir shoot_end NULL, og alt som regner ut post-prod-frister fra
+    // shoot_end (f.eks. suggestDueDates i PostProdBoard) mister opptaksdatoen.
     await supabase
       .from('projects')
       .update({
         shoot_start: shootStart || null,
-        shoot_end: shootEnd || null,
+        shoot_end: shootEnd || shootStart || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', projectId)

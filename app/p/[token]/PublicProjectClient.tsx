@@ -379,6 +379,8 @@ export function PublicProjectClient({
                       section={section}
                       editMode={false}
                       language={lang}
+                      projectDeliverables={project.deliverables ?? []}
+                      onProjectDeliverablesChange={noop}
                       sectionImages={sectionImages}
                       sectionImageData={sectionImageData}
                       editingImageSectionId={null}

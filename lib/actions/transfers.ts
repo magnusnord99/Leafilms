@@ -13,7 +13,7 @@ export type ProjectForTransfer = {
     email: string | null
   } | null
   deliverables: Array<{
-    title?: string
+    name?: string
     quantity?: number | null
     format?: string
     description?: string
@@ -29,7 +29,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
   const { data: project } = await supabase
     .from('projects')
     .select(`
-      id, title, language,
+      id, title, language, deliverables,
       customers (id, name, company, email)
     `)
     .eq('id', projectId)
@@ -37,16 +37,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
 
   if (!project) return null
 
-  // Hent leveranseliste fra sections (type = deliverables)
-  const { data: section } = await supabase
-    .from('sections')
-    .select('content')
-    .eq('project_id', projectId)
-    .eq('type', 'deliverables')
-    .maybeSingle()
-
-  type DeliverableContent = { deliverableItems?: ProjectForTransfer['deliverables'] }
-  const deliverables = (section?.content as DeliverableContent | null)?.deliverableItems ?? []
+  const deliverables = (project as { deliverables?: ProjectForTransfer['deliverables'] }).deliverables ?? []
 
   const customer = Array.isArray(project.customers)
     ? project.customers[0] ?? null

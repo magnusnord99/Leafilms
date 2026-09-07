@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -1061,8 +1062,11 @@ export default function PostProdDetailPage() {
               </button>
             </div>
 
-            {/* Leveringsmodal */}
-            {showDeliveryModal && (
+            {/* Leveringsmodal — rendert via portal til document.body: headeren over har
+                backdrop-filter (linje ~810), som lager en ny "containing block" for
+                position:fixed-etterkommere, slik at modalen ellers ble klemt inn i headerens
+                egen boks i stedet for å dekke hele skjermen (skjermbilde fra Magnus). */}
+            {showDeliveryModal && createPortal(
               <div
                 style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
                 onClick={e => { if (e.target === e.currentTarget && !editingDeliverables) setShowDeliveryModal(false) }}
@@ -1240,7 +1244,8 @@ export default function PostProdDetailPage() {
                     )}
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 

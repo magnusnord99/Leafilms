@@ -1432,7 +1432,7 @@ export default function PostProdDetailPage() {
 
             {/* Left: reference materials (links + notes) from earlier steps */}
             {priorStages.length > 0 && (
-              <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: 'auto', padding: '28px 20px' }}>
+              <div className="hidden md:block" style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: 'auto', padding: '28px 20px' }}>
                 <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
                   Fra tidligere steg
                 </label>

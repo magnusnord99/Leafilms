@@ -197,7 +197,7 @@ export default function SelectionAdminClient({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 49px)' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr]" style={{ minHeight: 'calc(100vh - 49px)' }}>
         {/* Sidebar — alltid synlig */}
         <div style={{ borderRight: `1px solid ${C.border}`, background: C.surface, padding: 16 }}>
           <div style={{ background: isOver ? 'rgba(212,134,58,0.08)' : 'rgba(196,148,52,0.06)', border: `1px solid ${isOver ? 'rgba(212,134,58,0.3)' : 'rgba(196,148,52,0.2)'}`, borderRadius: 8, padding: '10px 12px', textAlign: 'center', marginBottom: 16 }}>

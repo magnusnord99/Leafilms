@@ -88,7 +88,7 @@ export default function CustomersPage() {
             placeholder="Søk etter navn, firma eller e-post..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', width: '100%', maxWidth: 420, padding: '9px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, outline: 'none', boxSizing: 'border-box' }}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', width: '100%', maxWidth: 420, padding: '9px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, outline: 'none', boxSizing: 'border-box' }}
             onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
             onBlur={e => { e.currentTarget.style.borderColor = C.border }}
           />

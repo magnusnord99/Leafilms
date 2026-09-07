@@ -210,7 +210,7 @@ export default function ImagesPage() {
                 borderRadius: 3,
                 color: C.text,
                 fontFamily: 'var(--font-dm-sans)',
-                fontSize: '0.72rem',
+                fontSize: '1rem',
                 outline: 'none',
               }}
             />

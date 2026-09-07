@@ -9,8 +9,7 @@ import {
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee,
-  getProjectDeliverablesSection,
-  updateProjectDeliverablesSection,
+  updateProjectDeliverables,
   setProjectLead, getTaskMessageCounts,
   deleteTask,
 } from '@/lib/actions/pipeline'
@@ -242,19 +241,11 @@ export default function PostProdDetailPage() {
   // Leveringsinfo
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   const [editingDeliverables, setEditingDeliverables] = useState(false)
-  const [draftDeliverables, setDraftDeliverables] = useState<DeliverableItem[]>([])
+  const [draftDeliverables, setDraftDeliverables] = useState<SignedDeliverableItem[]>([])
   const [savingDeliverables, setSavingDeliverables] = useState(false)
   const [deliverablesError, setDeliverablesError] = useState<string | null>(null)
 
-  type DeliverableItem = {
-    id?: string
-    title?: string
-    description?: string
-    quantity?: number | string
-    format?: string
-  }
-
-  const [deliverableItems, setDeliverableItems] = useState<DeliverableItem[]>([])
+  const [deliverableItems, setDeliverableItems] = useState<SignedDeliverableItem[]>([])
 
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const calendarNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -321,22 +312,21 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, delivSection, selImgs, gallerySumm] = await Promise.all([
+    const [allProjects, projectTasks, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
       getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
-      getProjectDeliverablesSection(projectId),
       getSelectedImagesForProject(projectId),
       getGalleryIdForProject(projectId),
     ])
     setSelectionImages(selImgs)
     setGallerySummary(gallerySumm)
-    setDeliverableItems(delivSection?.items ?? [])
     setProfiles(allProfiles)
 
     const allProj = allProjects as PostProdProject[]
     const currentProj = allProj.find(p => p.id === projectId)
+    setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
 
     if (projectTasks.length === 0 && currentProj?.project_type) {
@@ -1103,14 +1093,15 @@ export default function PostProdDetailPage() {
                             onClick={async () => {
                               setSavingDeliverables(true)
                               setDeliverablesError(null)
-                              const items = draftDeliverables.map(it => ({
+                              const items: SignedDeliverableItem[] = draftDeliverables.map(it => ({
                                 id: it.id ?? String(Date.now()),
-                                title: it.title,
-                                quantity: typeof it.quantity === 'string' ? (parseInt(it.quantity, 10) || undefined) : it.quantity,
+                                type: it.type,
+                                name: it.name,
+                                quantity: it.type === 'video' ? undefined : it.quantity,
                                 format: it.format,
                                 description: it.description,
                               }))
-                              const res = await updateProjectDeliverablesSection(projectId, items)
+                              const res = await updateProjectDeliverables(projectId, items)
                               setSavingDeliverables(false)
                               if (!res.error) {
                                 setDeliverableItems(draftDeliverables)
@@ -1147,21 +1138,32 @@ export default function PostProdDetailPage() {
                               style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
                               title="Fjern"
                             >×</button>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 80px', gap: 8, marginBottom: 8 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: item.type === 'video' ? '90px 1fr 80px' : '90px 1fr 56px 80px', gap: 8, marginBottom: 8 }}>
+                              <select
+                                value={item.type}
+                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, type: e.target.value as SignedDeliverableItem['type'] } : it))}
+                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 6px', color: C.text, outline: 'none' }}
+                              >
+                                <option value="video">Video</option>
+                                <option value="photo">Foto</option>
+                                <option value="annet">Annet</option>
+                              </select>
                               <input
-                                value={item.title ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, title: e.target.value } : it))}
-                                placeholder="Tittel"
+                                value={item.name ?? ''}
+                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, name: e.target.value } : it))}
+                                placeholder="Navn"
                                 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
                               />
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.quantity ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))}
-                                placeholder="Ant."
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
-                              />
+                              {item.type !== 'video' && (
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={item.quantity ?? ''}
+                                  onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: parseInt(e.target.value, 10) || undefined } : it))}
+                                  placeholder="Ant."
+                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
+                                />
+                              )}
                               <input
                                 value={item.format ?? ''}
                                 onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
@@ -1178,12 +1180,28 @@ export default function PostProdDetailPage() {
                             />
                           </div>
                         ))}
-                        <button
-                          onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), title: '', quantity: 1, format: '', description: '' }])}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer', width: '100%', marginTop: 4 }}
-                        >
-                          + Legg til leveranse
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                          <button
+                            onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), type: 'annet', name: '', quantity: 1, format: '', description: '' }])}
+                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
+                          >
+                            + Legg til leveranse
+                          </button>
+                          <button
+                            onClick={() => {
+                              const count = parseInt(prompt('Hvor mange videoer?') ?? '', 10)
+                              if (!count || count < 1) return
+                              const existingVideoCount = draftDeliverables.filter(d => d.type === 'video').length
+                              const newRows: SignedDeliverableItem[] = Array.from({ length: count }, (_, idx) => ({
+                                id: `${Date.now()}-${idx}`, type: 'video', name: `Reel ${existingVideoCount + idx + 1}`,
+                              }))
+                              setDraftDeliverables(prev => [...prev, ...newRows])
+                            }}
+                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
+                          >
+                            + Legg til flere videoer
+                          </button>
+                        </div>
                       </div>
                     ) : deliverableItems.length === 0 ? (
                       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
@@ -1192,9 +1210,7 @@ export default function PostProdDetailPage() {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         {deliverableItems.map((item, i) => {
-                          const qty = typeof item.quantity === 'number'
-                            ? item.quantity
-                            : (item.quantity != null ? parseInt(item.quantity as string, 10) || null : null)
+                          const qty = item.type === 'video' ? null : (item.quantity ?? null)
                           return (
                             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                               {qty != null && (
@@ -1204,7 +1220,7 @@ export default function PostProdDetailPage() {
                               )}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block', wordBreak: 'break-word' }}>
-                                  {item.title || '—'}
+                                  {item.name || '—'}
                                 </span>
                                 {item.description && (
                                   <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>

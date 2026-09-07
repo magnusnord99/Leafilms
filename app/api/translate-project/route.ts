@@ -118,18 +118,6 @@ export async function POST(req: NextRequest) {
         changed = true
       }
 
-      // Translate deliverable items
-      if (section.type === 'deliverables' && Array.isArray(content.deliverableItems)) {
-        content.deliverableItems = await Promise.all(
-          content.deliverableItems.map(async (item: { id: string; title: string; quantity: number; format: string; description: string }) => ({
-            ...item,
-            title: item.title ? await translateText(item.title, targetLanguage, openai) : item.title,
-            description: item.description ? await translateText(item.description, targetLanguage, openai) : item.description,
-          }))
-        )
-        changed = true
-      }
-
       if (section.type === 'team') {
         if (targetLanguage === 'en') {
           const { data: teamLinks, error: teamLinksError } = await supabase
@@ -182,6 +170,26 @@ export async function POST(req: NextRequest) {
           .update({ content, updated_at: new Date().toISOString() })
           .eq('id', section.id)
       }
+    }
+
+    // Leveranselisten er nå ett felt på selve prosjektet (projects.deliverables), ikke
+    // lenger seksjons-innhold — oversettes én gang her i stedet for inni sections-loopen over.
+    // Se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md.
+    const { data: projectRow } = await supabase
+      .from('projects')
+      .select('deliverables')
+      .eq('id', projectId)
+      .single()
+
+    if (Array.isArray(projectRow?.deliverables) && projectRow.deliverables.length > 0) {
+      const translatedDeliverables = await Promise.all(
+        projectRow.deliverables.map(async (item: { id: string; type: 'video' | 'photo' | 'annet'; name: string; format?: string; description?: string; quantity?: number }) => ({
+          ...item,
+          name: item.name ? await translateText(item.name, targetLanguage, openai) : item.name,
+          description: item.description ? await translateText(item.description, targetLanguage, openai) : item.description,
+        }))
+      )
+      await supabase.from('projects').update({ deliverables: translatedDeliverables }).eq('id', projectId)
     }
 
     // Update project language

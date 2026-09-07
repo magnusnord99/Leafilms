@@ -9,41 +9,28 @@ import { Text } from '@/components/ui'
  */
 
 interface DeliverableCardProps {
-  title?: string
+  type: 'video' | 'photo' | 'annet'
+  name?: string
   quantity?: number
   format?: string // "16:9", "9:16", "1:1", "2:30 min", etc.
-  aspectRatio?: string // Beholder for bakoverkompatibilitet
   description?: string
   onRemove?: () => void
-  onChange?: (field: 'title' | 'quantity' | 'format' | 'description', value: string) => void
+  onChange?: (field: 'type' | 'name' | 'quantity' | 'format' | 'description', value: string) => void
   editMode?: boolean
 }
 
-/** Avgjør om leveransen er video eller bilde basert på tittel og format */
-export function getDeliverableType(title: string, format: string): 'video' | 'image' {
-  const t = (title || '').toLowerCase()
-  const f = (format || '').toLowerCase()
-  const videoKeywords = ['film', 'video', 'cutdown', 'reklame', 'spot', 'klipp', 'redigering', 'teaser', 'reel']
-  const imageKeywords = ['bilde', 'bilder', 'foto', 'produktbilde', 'portrett']
-  if (videoKeywords.some(kw => t.includes(kw))) return 'video'
-  if (imageKeywords.some(kw => t.includes(kw))) return 'image'
-  if (/\d+\s*(min|sek)/.test(f) || f.includes('min') || f.includes('sek')) return 'video'
-  return 'image'
-}
-
 export function DeliverableCard({
-  title = 'LEVERANSE',
+  type,
+  name = 'LEVERANSE',
   quantity,
   format,
-  aspectRatio,
   description,
   onRemove,
   onChange,
   editMode = false
 }: DeliverableCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
-  const displayFormat = format || aspectRatio
-  const deliverableType = getDeliverableType(title, displayFormat || '')
+  const displayFormat = format
 
   /* Styling for redigerbare felt i edit-modus */
   const editableClass = editMode && onChange
@@ -78,26 +65,62 @@ export function DeliverableCard({
           }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center">
-            {/* Type-ikon: video eller bilde */}
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70" title={deliverableType === 'video' ? 'Video' : 'Bilde'}>
-              {deliverableType === 'video' ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-              )}
-            </div>
+            {/* Type-ikon: video, foto eller annet. Klikkbar i edit-modus for å sykle
+                type (video → photo → annet → video) — for lite kort til en <select>. */}
+            {editMode && onChange ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const next = type === 'video' ? 'photo' : type === 'photo' ? 'annet' : 'video'
+                  onChange('type', next)
+                }}
+                title={`${type === 'video' ? 'Video' : type === 'photo' ? 'Bilde' : 'Annet'} — klikk for å endre`}
+                className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70 hover:opacity-100 cursor-pointer bg-transparent border-none p-0"
+              >
+                {type === 'video' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                  </svg>
+                ) : type === 'photo' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70" title={type === 'video' ? 'Video' : type === 'photo' ? 'Bilde' : 'Annet'}>
+                {type === 'video' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                  </svg>
+                ) : type === 'photo' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                )}
+              </div>
+            )}
             {/* Fjern-knapp: vises kun i edit-modus */}
             {editMode && onRemove && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (confirm(`Fjerne leveransen «${title}»?`)) onRemove()
+                  if (confirm(`Fjerne leveransen «${name}»?`)) onRemove()
                 }}
                 className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs flex items-center justify-center transition"
                 title="Fjern leveranse"
@@ -117,26 +140,28 @@ export function DeliverableCard({
                   // innerText (ikke textContent) bevarer linjeskift som faktisk vises i
                   // kontenteditable-feltet som \n, slik at et bevisst linjeskift i
                   // tittelen ikke går tapt ved lagring (feedback 4fcd83a0).
-                  onChange('title', e.currentTarget.innerText || '')
+                  onChange('name', e.currentTarget.innerText || '')
                 }
               }}
               onClick={(e) => editMode && e.stopPropagation()}
             >
-              {title}
+              {name}
             </Text>
 
-            {/* Antall */}
+            {/* Antall — kun for foto/annet, video er alltid én rad = ett navngitt element */}
             {editMode && onChange ? (
-              <input
-                type="number"
-                min={1}
-                value={quantity ?? ''}
-                onChange={(e) => onChange('quantity', e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="0"
-                className="text-dark text-center text-xs w-12 bg-transparent outline-none border-b border-white/20 focus:border-white/60"
-                style={{ fontFamily: 'inherit', color: 'inherit' }}
-              />
+              type !== 'video' && (
+                <input
+                  type="number"
+                  min={1}
+                  value={quantity ?? ''}
+                  onChange={(e) => onChange('quantity', e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="0"
+                  className="text-dark text-center text-xs w-12 bg-transparent outline-none border-b border-white/20 focus:border-white/60"
+                  style={{ fontFamily: 'inherit', color: 'inherit' }}
+                />
+              )
             ) : (
               <Text variant="muted" className="text-dark text-center text-xs">
                 {quantity != null ? `${quantity} stk` : ''}

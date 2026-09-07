@@ -32,8 +32,8 @@ function buildDefaultMessage(project: ProjectForTransfer | null | undefined, typ
   const firstName = project.customer?.name?.split(' ')[0]
 
   const delivLines = project.deliverables
-    .filter(d => d.title)
-    .map(d => `• ${d.quantity ? `${d.quantity}× ` : ''}${d.title}${d.format ? ` (${d.format})` : ''}`)
+    .filter(d => d.name)
+    .map(d => `• ${d.quantity ? `${d.quantity}× ` : ''}${d.name}${d.format ? ` (${d.format})` : ''}`)
     .join('\n')
 
   if (language === 'en') {

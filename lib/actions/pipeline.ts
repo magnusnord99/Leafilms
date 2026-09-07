@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
-import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
+import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks, computeLocksFromSiblings, type StepperTaskLite } from '@/lib/task-lock'
@@ -1767,47 +1767,20 @@ export async function updatePostProdDelivery(
   }
 }
 
-export async function getProjectDeliverablesSection(projectId: string): Promise<{ items: NonNullable<SectionContent['deliverableItems']> } | null> {
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('sections')
-      .select('content')
-      .eq('project_id', projectId)
-      .eq('type', 'deliverables')
-      .maybeSingle()
-    if (error || !data) return null
-    return { items: (data.content as SectionContent | null)?.deliverableItems ?? [] }
-  } catch {
-    return null
-  }
-}
-
-export async function updateProjectDeliverablesSection(
+// Erstatter getProjectDeliverablesSection/updateProjectDeliverablesSection (leste/skrev
+// sections.content.deliverableItems) — leveranselisten er nå ett felt, projects.deliverables,
+// lest/skrevet direkte. Se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md.
+export async function updateProjectDeliverables(
   projectId: string,
-  items: NonNullable<SectionContent['deliverableItems']>
+  items: DeliverableItem[]
 ): Promise<{ error?: string }> {
   try {
     const supabase = await createClient()
-    const { data: section, error: fetchError } = await supabase
-      .from('sections')
-      .select('id, content')
-      .eq('project_id', projectId)
-      .eq('type', 'deliverables')
-      .maybeSingle()
-    if (fetchError) return { error: fetchError.message }
-    if (!section) {
-      const { error: insertError } = await supabase
-        .from('sections')
-        .insert({ project_id: projectId, type: 'deliverables', content: { deliverableItems: items } })
-      if (insertError) return { error: insertError.message }
-    } else {
-      const { error: updateError } = await supabase
-        .from('sections')
-        .update({ content: { ...(section.content as object), deliverableItems: items }, updated_at: new Date().toISOString() })
-        .eq('id', section.id)
-      if (updateError) return { error: updateError.message }
-    }
+    const { error } = await supabase
+      .from('projects')
+      .update({ deliverables: items, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { error: error.message }
     return {}
   } catch {
     return { error: 'Noe gikk galt' }

@@ -56,15 +56,19 @@ quotes — Pristilbud
   status: draft | sent | accepted | rejected
   quote_data inneholder bl.a. total_price, line_items
 
-sections — Innhold på prosjektsiden (JSONB per type). Den kundevendte, strukturerte
-  leveranselisten som styrer post-produksjonspipelinen ligger HER, ikke i
-  projects.delivery_description.
+sections — Innhold på prosjektsiden (JSONB per type), øvrige seksjonstyper (hero, goal,
+  concept, team, osv.) — IKKE lenger leveranselisten, se projects.deliverables under.
   id, project_id, type, content (JSONB), updated_at
-  type = 'deliverables' → content->'deliverableItems' er en array av
-    { id, title, quantity, format, aspectRatio, description }
+
+projects.deliverables — Den kundevendte, strukturerte leveranselisten som styrer
+  post-produksjonspipelinen. En levende kopi av siste signerte kontrakts leveranseliste,
+  men også redigerbar direkte (pitch-editor eller post-prod-siden) uavhengig av signering.
+  Array av { id, type: 'video'|'photo'|'annet', name, format?, description?, quantity? }.
+  quantity er kun meningsfullt for 'photo'/'annet' — video er alltid én rad = ett navngitt
+  element (aldri en samlerad med antall).
 
 projects.delivery_description / delivery_video / delivery_photo — tre uavhengige
-  fritekstfelt satt av admin (ikke samme som sections.deliverableItems over). Kan hver
+  fritekstfelt satt av admin (ikke samme som projects.deliverables over). Kan hver
   for seg være tomme — sjekk alle tre før du konkluderer med at leveringsinfo mangler.
 
 team_members — Eksternt team-bibliotek
@@ -79,6 +83,6 @@ Eksempel-spørringer:
 - Oppgaver tildelt en bruker: SELECT t.title, t.status FROM tasks t JOIN task_assignees ta ON ta.task_id = t.id JOIN profiles p ON p.id = ta.profile_id WHERE p.name ILIKE '%Magnus%'
 - Finn prosjekt på navn ELLER kunde: SELECT id, title, client_name FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%'
 - Pristilbud for et prosjekt (søk på tittel OG kunde): SELECT version, status, quote_data->>'total_price' AS pris FROM quotes WHERE project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
-- Hva som skal leveres til en kunde (leveranser/postprod): SELECT jsonb_pretty(content->'deliverableItems') FROM sections WHERE type = 'deliverables' AND project_id = (SELECT id FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1)
+- Hva som skal leveres til en kunde (leveranser/postprod): SELECT jsonb_pretty(deliverables) FROM projects WHERE title ILIKE '%navn%' OR client_name ILIKE '%navn%' LIMIT 1
 - Opptak i en gitt måned med bekreftelsesstatus: SELECT p.title, p.client_name, p.shoot_start, p.shoot_end, (p.shoot_confirmed OR EXISTS (SELECT 1 FROM contracts c WHERE c.project_id = p.id AND c.status = 'signed')) AS confirmed FROM projects p WHERE p.shoot_start >= '2026-09-01' AND p.shoot_start < '2026-10-01'
 - Ubekreftede opptak i en gitt måned: SELECT p.title, p.client_name, p.shoot_start FROM projects p WHERE p.shoot_start >= '2026-09-01' AND p.shoot_start < '2026-10-01' AND p.shoot_confirmed = false AND NOT EXISTS (SELECT 1 FROM contracts c WHERE c.project_id = p.id AND c.status = 'signed')`

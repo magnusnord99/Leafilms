@@ -3,7 +3,8 @@
 import { use, useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Section, CollagePreset, Image } from '@/lib/types'
+import { Section, CollagePreset, Image, DeliverableItem } from '@/lib/types'
+import { updateProjectDeliverables } from '@/lib/actions/pipeline'
 import { Button, Card, Heading, Text } from '@/components/ui'
 import { HeroPreview } from '@/components/preview/HeroPreview'
 import { SectionPreview } from '@/components/preview/SectionPreview'
@@ -189,6 +190,18 @@ export default function EditProject({ params }: Props) {
       console.error('Toggle contract hidden error:', err)
       setProject(prev => prev ? { ...prev, pipeline_data: { ...prev.pipeline_data, contract_hidden_from_pitch: !nextHidden } } : prev)
       alert('Kunne ikke oppdatere synlighet for kontrakten. Prøv igjen.')
+    }
+  }
+
+  const handleDeliverablesChange = async (items: DeliverableItem[]) => {
+    if (!project) return
+    const previous = project.deliverables ?? []
+    setProject(prev => prev ? { ...prev, deliverables: items } : prev)
+    const res = await updateProjectDeliverables(id, items)
+    if (res.error) {
+      console.error('Update deliverables error:', res.error)
+      setProject(prev => prev ? { ...prev, deliverables: previous } : prev)
+      alert('Kunne ikke lagre leveranser. Prøv igjen.')
     }
   }
 
@@ -548,6 +561,7 @@ export default function EditProject({ params }: Props) {
                   }}
                   onOpenPresetPicker={() => setShowPresetPicker(true)}
                   project={project}
+                  onProjectDeliverablesChange={handleDeliverablesChange}
                 />
               )
             })}

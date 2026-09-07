@@ -109,6 +109,11 @@ export default function ProjectQuotePage({ params }: Props) {
         if (proj?.delivery_description) {
           initial.deliveryDescription = proj.delivery_description
         }
+        // Prefyll fra pitchens leveranseliste hvis den allerede er satt (samme felt som
+        // postprod/pitch-siden leser — se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md §5).
+        if (proj?.deliverables && proj.deliverables.length > 0) {
+          initial.deliverables = proj.deliverables
+        }
 
         // Pre-populate customer if project has one
         if (proj?.customer_id) {

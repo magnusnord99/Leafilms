@@ -188,14 +188,14 @@ ${context ? `EKSTRA KONTEKST FRA KUNDEN:\n${context}` : ''}
       generatedContent.timeline = { timelineItems: timelineText }
     }
 
-    // 4.5 LEVERANSER-seksjon (dynamisk basert på kontekst)
+    // 4.5 LEVERANSER — skrives direkte til projects.deliverables (den samlede listen
+    // postprod/pitch-siden/tilbudsbyggeren leser fra), ikke lenger til seksjonens content.
+    // Se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md.
     const deliverablesSection = sections?.find(s => s.type === 'deliverables')
+    let generatedDeliverables: Awaited<ReturnType<typeof generateDeliverables>> | null = null
     if (deliverablesSection) {
-      const deliverableItems = await generateDeliverables(projectContext, contentType, mediums, scope, context, language)
-      generatedContent.deliverables = { 
-        ...generatedContent.deliverables,
-        deliverableItems 
-      }
+      generatedDeliverables = await generateDeliverables(projectContext, contentType, mediums, scope, context, language)
+      await supabase.from('projects').update({ deliverables: generatedDeliverables }).eq('id', projectId)
     }
 
     // 5. Velg TEAM-medlemmer
@@ -619,7 +619,7 @@ async function generateDeliverables(
   scope: string,
   context: string,
   language: string = 'no'
-): Promise<Array<{ id: string; title: string; quantity: number; format: string; description: string }>> {
+): Promise<Array<{ id: string; type: 'video' | 'photo' | 'annet'; name: string; quantity?: number; format: string; description: string }>> {
   const contentTypeLabel = contentType === 'film'
     ? (language === 'en' ? 'Film' : 'Film')
     : contentType === 'photo'
@@ -627,15 +627,16 @@ async function generateDeliverables(
       : (language === 'en' ? 'Film and Photo' : 'Film og Foto')
 
   const prompt = language === 'en'
-    ? `${projectContext}\n\nTASK: Based on the project information above, suggest 3-5 concrete deliverables for this project.\n\nEach deliverable should have:\n- title: Short name (e.g. "PRODUCT PHOTOS", "MAIN FILM", "INSTAGRAM REELS", "DOCUMENTATION")\n- quantity: Integer number only (e.g. 20, 1, 5) — no units, no text\n- format: Format/aspect ratio/duration (e.g. "16:9", "9:16", "1:1", "2:30 min", "30 sec")\n- description: A short description (1-2 sentences) of what the deliverable entails\n\nAdapt to:\n- Content type: ${contentTypeLabel}\n- Platforms: ${mediums?.join(', ') || 'Not specified'}\n- Scope: ${scope || 'Not specified'}\n\n${context ? 'Pay special attention to any specific wishes in the context.' : ''}\n\nRespond ONLY with valid JSON:\n[\n  { "id": "1", "title": "TITLE", "quantity": 1, "format": "format", "description": "Short description" },\n  ...\n]`
+    ? `${projectContext}\n\nTASK: Based on the project information above, suggest 3-5 concrete deliverables for this project.\n\nEach deliverable should have:\n- type: One of "video", "photo", "annet" (other)\n- name: Short name (e.g. "PRODUCT PHOTOS", "MAIN FILM", "INSTAGRAM REELS", "DOCUMENTATION"). For type "video", if there would naturally be more than one separate video (e.g. several distinct reels), create ONE ROW PER VIDEO with its own name — never bundle multiple videos into one row with a quantity.\n- quantity: Integer number only (e.g. 20, 5) — ONLY for type "photo" or "annet", omit entirely for type "video"\n- format: Format/aspect ratio/duration (e.g. "16:9, 20 sec", "9:16, 30 sec", "1:1")\n- description: A short description (1-2 sentences) of what the deliverable entails\n\nAdapt to:\n- Content type: ${contentTypeLabel}\n- Platforms: ${mediums?.join(', ') || 'Not specified'}\n- Scope: ${scope || 'Not specified'}\n\n${context ? 'Pay special attention to any specific wishes in the context.' : ''}\n\nRespond ONLY with valid JSON:\n[\n  { "id": "1", "type": "video", "name": "NAME", "format": "format", "description": "Short description" },\n  { "id": "2", "type": "photo", "name": "NAME", "quantity": 10, "format": "format", "description": "Short description" },\n  ...\n]`
     : `${projectContext}
 
 OPPGAVE: Basert på prosjektinformasjonen over, foreslå 3-5 konkrete leveranser (deliverables) for dette prosjektet.
 
 Hver leveranse skal ha:
-- title: Kort navn på leveransen (f.eks. "PRODUKTBILDER", "HOVEDFILM", "INSTAGRAM REELS", "DOKUMENTASJON")
-- quantity: Kun et heltall (f.eks. 20, 1, 5) — ingen tekst, ingen enheter
-- format: Format/aspect ratio/varighet (f.eks. "16:9", "9:16", "1:1", "2:30 min", "30 sek")
+- type: Én av "video", "photo", "annet"
+- name: Kort navn på leveransen (f.eks. "PRODUKTBILDER", "HOVEDFILM", "INSTAGRAM REELS", "DOKUMENTASJON"). For type "video", hvis det naturlig blir flere separate videoer (f.eks. flere ulike reels), lag ÉN RAD PER VIDEO med eget navn — aldri slå sammen flere videoer i én rad med et antall.
+- quantity: Kun et heltall (f.eks. 20, 5) — KUN for type "photo" eller "annet", utelat helt for type "video"
+- format: Format/aspect ratio/varighet (f.eks. "16:9, 20 sek", "9:16, 30 sek", "1:1")
 - description: En kort beskrivelse (1-2 setninger) av hva leveransen innebærer
 
 Tilpass leveransene til:
@@ -647,7 +648,8 @@ ${context ? `Legg spesielt merke til eventuelle spesifikke ønsker i konteksten.
 
 Svar BARE med gyldig JSON i dette formatet:
 [
-  { "id": "1", "title": "TITTEL", "quantity": 1, "format": "format", "description": "Kort beskrivelse" },
+  { "id": "1", "type": "video", "name": "NAVN", "format": "format", "description": "Kort beskrivelse" },
+  { "id": "2", "type": "photo", "name": "NAVN", "quantity": 10, "format": "format", "description": "Kort beskrivelse" },
   ...
 ]`
 
@@ -674,13 +676,24 @@ Svar BARE med gyldig JSON i dette formatet:
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0])
       // Sørg for at alle items har riktig struktur
-      return parsed.map((item: { id?: string; title?: string; quantity?: number | string; format?: string; description?: string }, index: number) => ({
-        id: item.id || String(index + 1),
-        title: item.title || 'LEVERANSE',
-        quantity: typeof item.quantity === 'number' ? item.quantity : (parseInt(item.quantity ?? '', 10) || 1),
-        format: item.format || '',
-        description: item.description || ''
-      }))
+      const validTypes = ['video', 'photo', 'annet'] as const
+      return parsed.map((item: { id?: string; type?: string; name?: string; quantity?: number | string; format?: string; description?: string }, index: number) => {
+        const type = validTypes.includes(item.type as (typeof validTypes)[number])
+          ? (item.type as (typeof validTypes)[number])
+          : 'annet'
+        // Video-leveranser er alltid én navngitt rad — aldri et antall (se prompt-instruksjonen over)
+        const rawQuantity = type !== 'video'
+          ? (typeof item.quantity === 'number' ? item.quantity : parseInt(String(item.quantity ?? ''), 10))
+          : undefined
+        return {
+          id: item.id || String(index + 1),
+          type,
+          name: item.name || 'LEVERANSE',
+          ...(rawQuantity !== undefined && !Number.isNaN(rawQuantity) ? { quantity: rawQuantity } : {}),
+          format: item.format || '',
+          description: item.description || ''
+        }
+      })
     }
   } catch (e) {
     console.error('Error generating deliverables:', e)
@@ -690,41 +703,41 @@ Svar BARE med gyldig JSON i dette formatet:
   if (language === 'en') {
     if (contentType === 'film') {
       return [
-        { id: '1', title: 'MAIN FILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading and sound design.' },
-        { id: '2', title: 'CUTDOWNS', quantity: 3, format: '30 sec', description: 'Shorter versions adapted for different platforms.' },
-        { id: '3', title: 'BEHIND THE SCENES', quantity: 1, format: '1:00 min', description: 'Documentation of the production process.' }
+        { id: '1', type: 'video', name: 'MAIN FILM', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading and sound design.' },
+        { id: '2', type: 'video', name: 'CUTDOWN', format: '30 sec', description: 'Shorter version adapted for social media.' },
+        { id: '3', type: 'video', name: 'BEHIND THE SCENES', format: '1:00 min', description: 'Documentation of the production process.' }
       ]
     } else if (contentType === 'photo') {
       return [
-        { id: '1', title: 'PRODUCT PHOTOS', quantity: 20, format: '3:2', description: 'Professional product photos with retouching.' },
-        { id: '2', title: 'LIFESTYLE PHOTOS', quantity: 10, format: '16:9', description: 'Images showing the product in use.' },
-        { id: '3', title: 'SOCIAL MEDIA', quantity: 15, format: '1:1', description: 'Adapted images for Instagram and Facebook.' }
+        { id: '1', type: 'photo', name: 'PRODUCT PHOTOS', quantity: 20, format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '2', type: 'photo', name: 'LIFESTYLE PHOTOS', quantity: 10, format: '16:9', description: 'Images showing the product in use.' },
+        { id: '3', type: 'photo', name: 'SOCIAL MEDIA', quantity: 15, format: '1:1', description: 'Adapted images for Instagram and Facebook.' }
       ]
     } else {
       return [
-        { id: '1', title: 'MAIN FILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading.' },
-        { id: '2', title: 'PRODUCT PHOTOS', quantity: 15, format: '3:2', description: 'Professional product photos with retouching.' },
-        { id: '3', title: 'REELS', quantity: 5, format: '9:16 - 15 sec', description: 'Short videos for social media.' }
+        { id: '1', type: 'video', name: 'MAIN FILM', format: '16:9 - 2:00 min', description: 'Finished edited film with colour grading.' },
+        { id: '2', type: 'photo', name: 'PRODUCT PHOTOS', quantity: 15, format: '3:2', description: 'Professional product photos with retouching.' },
+        { id: '3', type: 'video', name: 'REEL', format: '9:16 - 15 sec', description: 'Short video for social media.' }
       ]
     }
   }
   if (contentType === 'film') {
     return [
-      { id: '1', title: 'HOVEDFILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.' },
-      { id: '2', title: 'CUTDOWNS', quantity: 3, format: '30 sek', description: 'Kortere versjoner tilpasset ulike plattformer.' },
-      { id: '3', title: 'BEHIND THE SCENES', quantity: 1, format: '1:00 min', description: 'Dokumentasjon av produksjonsprosessen.' }
+      { id: '1', type: 'video', name: 'HOVEDFILM', format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering og lyddesign.' },
+      { id: '2', type: 'video', name: 'CUTDOWN', format: '30 sek', description: 'Kortere versjon tilpasset sosiale medier.' },
+      { id: '3', type: 'video', name: 'BEHIND THE SCENES', format: '1:00 min', description: 'Dokumentasjon av produksjonsprosessen.' }
     ]
   } else if (contentType === 'photo') {
     return [
-      { id: '1', title: 'PRODUKTBILDER', quantity: 20, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
-      { id: '2', title: 'LIVSSTILSBILDER', quantity: 10, format: '16:9', description: 'Bilder som viser produktet i bruk.' },
-      { id: '3', title: 'SOSIALE MEDIER', quantity: 15, format: '1:1', description: 'Tilpassede bilder for Instagram og Facebook.' }
+      { id: '1', type: 'photo', name: 'PRODUKTBILDER', quantity: 20, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
+      { id: '2', type: 'photo', name: 'LIVSSTILSBILDER', quantity: 10, format: '16:9', description: 'Bilder som viser produktet i bruk.' },
+      { id: '3', type: 'photo', name: 'SOSIALE MEDIER', quantity: 15, format: '1:1', description: 'Tilpassede bilder for Instagram og Facebook.' }
     ]
   } else {
     return [
-      { id: '1', title: 'HOVEDFILM', quantity: 1, format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering.' },
-      { id: '2', title: 'PRODUKTBILDER', quantity: 15, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
-      { id: '3', title: 'REELS', quantity: 5, format: '9:16 - 15 sek', description: 'Korte videoer for sosiale medier.' }
+      { id: '1', type: 'video', name: 'HOVEDFILM', format: '16:9 - 2:00 min', description: 'Ferdig redigert hovedfilm med fargekorrigering.' },
+      { id: '2', type: 'photo', name: 'PRODUKTBILDER', quantity: 15, format: '3:2', description: 'Profesjonelle produktbilder med retusjering.' },
+      { id: '3', type: 'video', name: 'REEL', format: '9:16 - 15 sek', description: 'Kort video for sosiale medier.' }
     ]
   }
 }

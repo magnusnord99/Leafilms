@@ -65,20 +65,56 @@ export function DeliverableCard({
           }}
         >
           <div className="flex flex-col items-center justify-center h-full text-center">
-            {/* Type-ikon: video eller bilde */}
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70" title={type === 'video' ? 'Video' : type === 'photo' ? 'Bilde' : 'Annet'}>
-              {type === 'video' ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-              )}
-            </div>
+            {/* Type-ikon: video, foto eller annet. Klikkbar i edit-modus for å sykle
+                type (video → photo → annet → video) — for lite kort til en <select>. */}
+            {editMode && onChange ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const next = type === 'video' ? 'photo' : type === 'photo' ? 'annet' : 'video'
+                  onChange('type', next)
+                }}
+                title={`${type === 'video' ? 'Video' : type === 'photo' ? 'Bilde' : 'Annet'} — klikk for å endre`}
+                className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70 hover:opacity-100 cursor-pointer bg-transparent border-none p-0"
+              >
+                {type === 'video' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                  </svg>
+                ) : type === 'photo' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-70" title={type === 'video' ? 'Video' : type === 'photo' ? 'Bilde' : 'Annet'}>
+                {type === 'video' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                  </svg>
+                ) : type === 'photo' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                )}
+              </div>
+            )}
             {/* Fjern-knapp: vises kun i edit-modus */}
             {editMode && onRemove && (
               <button
@@ -112,18 +148,20 @@ export function DeliverableCard({
               {name}
             </Text>
 
-            {/* Antall */}
+            {/* Antall — kun for foto/annet, video er alltid én rad = ett navngitt element */}
             {editMode && onChange ? (
-              <input
-                type="number"
-                min={1}
-                value={quantity ?? ''}
-                onChange={(e) => onChange('quantity', e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="0"
-                className="text-dark text-center text-xs w-12 bg-transparent outline-none border-b border-white/20 focus:border-white/60"
-                style={{ fontFamily: 'inherit', color: 'inherit' }}
-              />
+              type !== 'video' && (
+                <input
+                  type="number"
+                  min={1}
+                  value={quantity ?? ''}
+                  onChange={(e) => onChange('quantity', e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="0"
+                  className="text-dark text-center text-xs w-12 bg-transparent outline-none border-b border-white/20 focus:border-white/60"
+                  style={{ fontFamily: 'inherit', color: 'inherit' }}
+                />
+              )
             ) : (
               <Text variant="muted" className="text-dark text-center text-xs">
                 {quantity != null ? `${quantity} stk` : ''}

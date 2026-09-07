@@ -17,6 +17,7 @@ import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
@@ -1587,6 +1588,21 @@ export default function ProjectHubPage() {
         {/* Tab content */}
         {activeTab === 'oversikt' && (
           <div>
+            {/* Leveranser — samme data og utseende som i postprod, se DeliverablesButton */}
+            <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>Leveranser</span>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <DeliverablesButton
+                  projectId={project.id}
+                  items={project.deliverables ?? []}
+                  onSaved={items => setHubData(prev => prev ? { ...prev, project: { ...prev.project, deliverables: items } } : prev)}
+                  variant="toolbar"
+                />
+              </div>
+            </div>
+
             {/* Leveranse */}
             <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: deliveryEdit ? 10 : 0 }}>

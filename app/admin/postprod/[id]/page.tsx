@@ -1,7 +1,6 @@
 'use client'
 
 import { Fragment, useEffect, useState, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -10,7 +9,6 @@ import {
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee,
-  updateProjectDeliverables,
   setProjectLead, getTaskMessageCounts,
   deleteTask,
 } from '@/lib/actions/pipeline'
@@ -24,6 +22,7 @@ import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedD
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 
 const C = {
   bg:       '#181920',
@@ -240,11 +239,6 @@ export default function PostProdDetailPage() {
   const leadDropdownRef = useRef<HTMLDivElement>(null)
 
   // Leveringsinfo
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
-  const [editingDeliverables, setEditingDeliverables] = useState(false)
-  const [draftDeliverables, setDraftDeliverables] = useState<SignedDeliverableItem[]>([])
-  const [savingDeliverables, setSavingDeliverables] = useState(false)
-  const [deliverablesError, setDeliverablesError] = useState<string | null>(null)
 
   const [deliverableItems, setDeliverableItems] = useState<SignedDeliverableItem[]>([])
 
@@ -1039,214 +1033,8 @@ export default function PostProdDetailPage() {
               </div>
             )}
 
-            {/* Info om levering-knapp */}
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '4px 10px',
-                  borderRadius: 6, cursor: 'pointer',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-                {deliverableItems.length > 0 && (
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, display: 'inline-block', marginLeft: 2 }} />
-                )}
-              </button>
-            </div>
-
-            {/* Leveringsmodal — rendert via portal til document.body: headeren over har
-                backdrop-filter (linje ~810), som lager en ny "containing block" for
-                position:fixed-etterkommere, slik at modalen ellers ble klemt inn i headerens
-                egen boks i stedet for å dekke hele skjermen (skjermbilde fra Magnus). */}
-            {showDeliveryModal && createPortal(
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
-                onClick={e => { if (e.target === e.currentTarget && !editingDeliverables) setShowDeliveryModal(false) }}
-              >
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 460, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                      Leveranser
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {!editingDeliverables ? (
-                        <button
-                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true); setDeliverablesError(null) }}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                        >
-                          Rediger
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => { setEditingDeliverables(false); setDeliverablesError(null) }}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                          >
-                            Avbryt
-                          </button>
-                          <button
-                            onClick={async () => {
-                              setSavingDeliverables(true)
-                              setDeliverablesError(null)
-                              const items: SignedDeliverableItem[] = draftDeliverables.map(it => ({
-                                id: it.id ?? String(Date.now()),
-                                type: it.type,
-                                name: it.name,
-                                quantity: it.type === 'video' ? undefined : it.quantity,
-                                format: it.format,
-                                description: it.description,
-                              }))
-                              const res = await updateProjectDeliverables(projectId, items)
-                              setSavingDeliverables(false)
-                              if (!res.error) {
-                                setDeliverableItems(draftDeliverables)
-                                setEditingDeliverables(false)
-                              } else {
-                                setDeliverablesError(res.error)
-                              }
-                            }}
-                            disabled={savingDeliverables}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: savingDeliverables ? 0.6 : 1 }}
-                          >
-                            {savingDeliverables ? 'Lagrer...' : 'Lagre'}
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => { setShowDeliveryModal(false); setEditingDeliverables(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
-                    </div>
-                  </div>
-
-                  {deliverablesError && (
-                    <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#f0b0b0', background: '#3a1d1d', border: '1px solid #E05555', borderRadius: 6, padding: '6px 10px', marginBottom: 12, flexShrink: 0 }}>
-                      Kunne ikke lagre: {deliverablesError}
-                    </div>
-                  )}
-
-                  {/* Scrollbar content */}
-                  <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                    {editingDeliverables ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {draftDeliverables.map((item, i) => (
-                          <div key={item.id ?? i} style={{ background: C.surface2, borderRadius: 8, padding: '12px 14px', position: 'relative' }}>
-                            <button
-                              onClick={() => setDraftDeliverables(prev => prev.filter((_, idx) => idx !== i))}
-                              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
-                              title="Fjern"
-                            >×</button>
-                            <div style={{ display: 'grid', gridTemplateColumns: item.type === 'video' ? '90px 1fr 80px' : '90px 1fr 56px 80px', gap: 8, marginBottom: 8 }}>
-                              <select
-                                value={item.type}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, type: e.target.value as SignedDeliverableItem['type'] } : it))}
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 6px', color: C.text, outline: 'none' }}
-                              >
-                                <option value="video">Video</option>
-                                <option value="photo">Foto</option>
-                                <option value="annet">Annet</option>
-                              </select>
-                              <input
-                                value={item.name ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, name: e.target.value } : it))}
-                                placeholder="Navn"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                              {item.type !== 'video' && (
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={item.quantity ?? ''}
-                                  onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: parseInt(e.target.value, 10) || undefined } : it))}
-                                  placeholder="Ant."
-                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
-                                />
-                              )}
-                              <input
-                                value={item.format ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
-                                placeholder="Format"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                            </div>
-                            <textarea
-                              value={item.description ?? ''}
-                              onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
-                              placeholder="Beskrivelse (valgfri)"
-                              rows={2}
-                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                          <button
-                            onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), type: 'annet', name: '', quantity: 1, format: '', description: '' }])}
-                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
-                          >
-                            + Legg til leveranse
-                          </button>
-                          <button
-                            onClick={() => {
-                              const count = parseInt(prompt('Hvor mange videoer?') ?? '', 10)
-                              if (!count || count < 1) return
-                              const existingVideoCount = draftDeliverables.filter(d => d.type === 'video').length
-                              const newRows: SignedDeliverableItem[] = Array.from({ length: count }, (_, idx) => ({
-                                id: `${Date.now()}-${idx}`, type: 'video', name: `Reel ${existingVideoCount + idx + 1}`,
-                              }))
-                              setDraftDeliverables(prev => [...prev, ...newRows])
-                            }}
-                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
-                          >
-                            + Legg til flere videoer
-                          </button>
-                        </div>
-                      </div>
-                    ) : deliverableItems.length === 0 ? (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
-                        Ingen leveranser er lagt til ennå. Trykk «Rediger» for å legge til.
-                      </p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {deliverableItems.map((item, i) => {
-                          const qty = item.type === 'video' ? null : (item.quantity ?? null)
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                              {qty != null && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.accent, minWidth: 24, textAlign: 'right', flexShrink: 0, paddingTop: 1 }}>
-                                  {qty}
-                                </span>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block', wordBreak: 'break-word' }}>
-                                  {item.name || '—'}
-                                </span>
-                                {item.description && (
-                                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>
-                                    {item.description}
-                                  </span>
-                                )}
-                              </div>
-                              {item.format && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4, marginTop: 2 }}>
-                                  {item.format}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>,
-              document.body
-            )}
+            {/* Info om levering-knapp — delt komponent med prosjektoversikten, se DeliverablesButton */}
+            <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} />
           </div>
 
           {/* Film/Bilder-faner for mixed-prosjekter */}
@@ -1287,23 +1075,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  marginLeft: 'auto', marginRight: 12,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '3px 9px',
-                  borderRadius: 5, cursor: 'pointer', flexShrink: 0,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-              </button>
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" />
             </div>
           )}
 

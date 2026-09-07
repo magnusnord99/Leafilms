@@ -11,7 +11,7 @@ import { getMyInternalTasks, updateAdminTaskStatus } from '@/lib/actions/admin-t
 import {
   getDailyPlanItems, addTaskToPlan, addCustomPlanItem, toggleCustomPlanItem, removePlanItem, reorderPlanItems,
 } from '@/lib/actions/daily-plan'
-import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, type Task, type AdminTask, type DailyPlanItem } from '@/lib/types'
+import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task, type TaskStatus, type AdminTask, type DailyPlanItem } from '@/lib/types'
 
 const C = {
   bg:       '#181920',
@@ -122,10 +122,11 @@ function isOverdue(dateStr: string | null): boolean {
 
 function TaskRow({ item, onToggle }: {
   item: MyItem
-  onToggle: (item: MyItem) => Promise<void>
+  onToggle: (item: MyItem, nextStatus: TaskStatus) => Promise<void>
 }) {
   const [toggling, setToggling] = useState(false)
   const isDone = item.status === 'done'
+  const isInProgress = item.status === 'in_progress' || item.status === 'waiting_review'
   const locked = item.locked
   const overdue = isOverdue(item.due_date) && !isDone
   const dateLabel = formatDate(item.due_date)
@@ -133,10 +134,12 @@ function TaskRow({ item, onToggle }: {
   const priority = item.priority ? PRIORITY_CONFIG[item.priority] : null
   const stageLabel = item.project ? (PIPELINE_STAGE_LABELS[item.project.pipeline_stage] ?? item.project.pipeline_stage) : null
 
+  // Sykler todo → pågår → ferdig → todo (samme rekkefølge som TaskList i postprod/preprod),
+  // i stedet for å hoppe rett fra hva som helst til ferdig ved ett klikk (feedback 29bc8f2d).
   async function handleToggleDone() {
     if (locked) return
     setToggling(true)
-    await onToggle(item)
+    await onToggle(item, TASK_STATUS_CYCLE[item.status])
     setToggling(false)
   }
 
@@ -154,18 +157,18 @@ function TaskRow({ item, onToggle }: {
       onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
       onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = C.surface}
     >
-      {/* Toggle checkbox */}
+      {/* Status-toggle: sykler todo → pågår → ferdig */}
       <button
         onClick={handleToggleDone}
         disabled={toggling || locked}
-        title={locked ? `Venter på «${item.blockedByTitle ?? 'forrige steg'}»` : undefined}
-        aria-label={isDone ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
+        title={locked ? `Venter på «${item.blockedByTitle ?? 'forrige steg'}»` : `Sett til ${TASK_STATUS_LABELS[TASK_STATUS_CYCLE[item.status]]}`}
+        aria-label={isDone ? 'Marker som ikke ferdig' : isInProgress ? 'Marker som ferdig' : 'Marker som pågår'}
         style={{
           flexShrink: 0,
           width: 24, height: 24,
           borderRadius: 5,
-          border: `2px solid ${isDone ? C.success : C.border}`,
-          background: isDone ? C.success : 'transparent',
+          border: `2px solid ${isDone ? C.success : isInProgress ? C.warning : C.border}`,
+          background: isDone ? C.success : isInProgress ? 'rgba(240,165,0,0.14)' : 'transparent',
           cursor: locked ? 'not-allowed' : toggling ? 'default' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.15s',
@@ -176,6 +179,9 @@ function TaskRow({ item, onToggle }: {
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
             <path d="M2 5L4 7.5L8 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
+        )}
+        {!isDone && isInProgress && (
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.warning }} />
         )}
         {locked && (
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={C.text3} strokeWidth="1.3">
@@ -319,6 +325,7 @@ function PlanRow({ item, onToggle, onRemove }: {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: item.id })
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: item.id })
   const done = planItemDone(item)
+  const inProgress = item.kind === 'task' && (item.task.status === 'in_progress' || item.task.status === 'waiting_review')
   const locked = planItemLocked(item)
   const blockedByTitle = item.kind === 'task' ? item.task.blockedByTitle : null
 
@@ -350,12 +357,12 @@ function PlanRow({ item, onToggle, onRemove }: {
       <button
         onClick={locked ? undefined : onToggle}
         disabled={locked}
-        title={locked ? `Venter på «${blockedByTitle ?? 'forrige steg'}»` : undefined}
-        aria-label={done ? 'Marker som ikke ferdig' : 'Marker som ferdig'}
+        title={locked ? `Venter på «${blockedByTitle ?? 'forrige steg'}»` : item.kind === 'task' ? `Sett til ${TASK_STATUS_LABELS[TASK_STATUS_CYCLE[item.task.status]]}` : undefined}
+        aria-label={done ? 'Marker som ikke ferdig' : inProgress ? 'Marker som ferdig' : item.kind === 'task' ? 'Marker som pågår' : 'Marker som ferdig'}
         style={{
           flexShrink: 0, width: 24, height: 24, borderRadius: 5,
-          border: `2px solid ${done ? C.success : C.border}`,
-          background: done ? C.success : 'transparent',
+          border: `2px solid ${done ? C.success : inProgress ? C.warning : C.border}`,
+          background: done ? C.success : inProgress ? 'rgba(240,165,0,0.14)' : 'transparent',
           cursor: locked ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           opacity: locked ? 0.4 : 1,
         }}
@@ -364,6 +371,9 @@ function PlanRow({ item, onToggle, onRemove }: {
           <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
             <path d="M2 5L4 7.5L8 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
+        )}
+        {!done && inProgress && (
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.warning }} />
         )}
         {locked && (
           <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={C.text3} strokeWidth="1.3">
@@ -472,7 +482,7 @@ function TaskPicker({ candidates, onPick, onClose }: {
 
 function DailyPlanPanel({ myTasks, onTaskStatusChange, onTaskStatusSettled }: {
   myTasks: TaskWithProject[]
-  onTaskStatusChange: (taskId: string, status: 'todo' | 'in_progress' | 'done') => void
+  onTaskStatusChange: (taskId: string, status: TaskStatus) => void
   onTaskStatusSettled: () => void
 }) {
   const [items, setItems] = useState<DailyPlanItem[]>([])
@@ -524,7 +534,9 @@ function DailyPlanPanel({ myTasks, onTaskStatusChange, onTaskStatusSettled }: {
 
   async function handleToggle(item: DailyPlanItem) {
     if (item.kind === 'task') {
-      const nextStatus = item.task.status === 'done' ? 'todo' : 'done'
+      // Samme 3-veis syklus (todo → pågår → ferdig) som resten av appen, i stedet for å
+      // hoppe rett til ferdig ved ett klikk (feedback 29bc8f2d).
+      const nextStatus = TASK_STATUS_CYCLE[item.task.status]
       setItems(prev => prev.map(i => i.id === item.id && i.kind === 'task' ? { ...i, task: { ...i.task, status: nextStatus } } : i))
       onTaskStatusChange(item.task.id, nextStatus)
       await updateTaskStatus(item.task.id, nextStatus)
@@ -655,7 +667,7 @@ export default function MyTasksPage() {
     })
   }, [])
 
-  function handleStatusChange(taskId: string, status: 'todo' | 'in_progress' | 'done') {
+  function handleStatusChange(taskId: string, status: TaskStatus) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
   }
 
@@ -666,8 +678,7 @@ export default function MyTasksPage() {
 
   // Interne oppgaver har ingen låsing/rekkefølge på tvers av andre oppgaver, så et enkelt
   // optimistisk lokalt oppdatering er nok — ingen grunn til å hente prosjektoppgavene på nytt.
-  async function handleToggle(item: MyItem) {
-    const next = item.status === 'done' ? 'todo' : 'done'
+  async function handleToggle(item: MyItem, next: TaskStatus) {
     if (item.source === 'internal') {
       setInternalTasks(prev => prev.map(t => t.id === item.id ? { ...t, status: next } : t))
       await updateAdminTaskStatus(item.id, next)

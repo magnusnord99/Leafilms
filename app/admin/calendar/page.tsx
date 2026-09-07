@@ -385,7 +385,13 @@ export default function CalendarPage() {
                     key={i}
                     onClick={() => { if (dateStr) setDayMenuDate(dateStr) }}
                     style={{
-                      minHeight: 110,
+                      // Fast høyde i stedet for minHeight — ellers ble radhøyden ulik fra uke
+                      // til uke avhengig av hvor mange hendelser den travleste dagen hadde,
+                      // noe som gjorde kalenderen rotete å bla i (feedback a52d40ce). Høyden
+                      // er satt til å romme datotall + MAX_VISIBLE (3) hendelser + "+N til" —
+                      // lange navn trunkeres heller med ellipsis (allerede på plass under).
+                      height: 134,
+                      overflow: 'hidden',
                       padding: '6px 6px 8px',
                       borderRight: (i + 1) % 7 !== 0 ? `1px solid ${C.border}` : 'none',
                       borderBottom: i < totalCells - 7 ? `1px solid ${C.border}` : 'none',

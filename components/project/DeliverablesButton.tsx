@@ -16,6 +16,20 @@ const C = {
   accent:   '#7C5CFC',
 }
 
+// En video kan leveres i flere formater samtidig (f.eks. reel til Instagram
+// i 9:16 og samme klipp i 16:9 til YouTube) — lagres som kommaseparert
+// tekst i DeliverableItem.format for bakoverkompatibilitet med andre steder
+// som viser feltet som fritekst (tilbud, PDF, AI-import).
+const VIDEO_FORMATS = ['4:5', '9:16', '16:9'] as const
+
+function parseFormats(format?: string): string[] {
+  return (format ?? '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+function toggleFormat(current: string[], value: string): string[] {
+  return current.includes(value) ? current.filter(f => f !== value) : [...current, value]
+}
+
 // Delt mellom postprod-brettet og prosjektoversikten — begge viser/redigerer
 // samme projects.deliverables-data og skal derfor se identiske ut.
 export function DeliverablesButton({
@@ -148,7 +162,7 @@ export function DeliverablesButton({
                         style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
                         title="Fjern"
                       >×</button>
-                      <div style={{ display: 'grid', gridTemplateColumns: item.type === 'video' ? '90px 1fr 80px' : '90px 1fr 56px 80px', gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: item.type === 'video' ? '90px 1fr' : '90px 1fr 56px 80px', gap: 8, marginBottom: 8 }}>
                         <select
                           value={item.type}
                           onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, type: e.target.value as DeliverableItem['type'] } : it))}
@@ -174,13 +188,39 @@ export function DeliverablesButton({
                             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
                           />
                         )}
-                        <input
-                          value={item.format ?? ''}
-                          onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
-                          placeholder="Format"
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                        />
+                        {item.type !== 'video' && (
+                          <input
+                            value={item.format ?? ''}
+                            onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
+                            placeholder="Format"
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
+                          />
+                        )}
                       </div>
+                      {item.type === 'video' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3, marginRight: 2 }}>Format:</span>
+                          {VIDEO_FORMATS.map(f => {
+                            const selected = parseFormats(item.format).includes(f)
+                            return (
+                              <button
+                                key={f}
+                                type="button"
+                                onClick={() => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, format: toggleFormat(parseFormats(it.format), f).join(', ') } : it))}
+                                style={{
+                                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+                                  padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
+                                  border: `1px solid ${selected ? C.accent : C.border}`,
+                                  background: selected ? C.accent : 'transparent',
+                                  color: selected ? '#fff' : C.text2,
+                                }}
+                              >
+                                {f}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                       <textarea
                         value={item.description ?? ''}
                         onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}

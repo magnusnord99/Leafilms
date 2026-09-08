@@ -61,6 +61,10 @@ export function TaskList({
   const [newTitle, setNewTitle] = useState('')
   const [creating, setCreating] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // Fullførte oppgaver kollapses bak et eget toggle når listen inneholder mange
+  // egendefinerte oppgaver — ellers druknet de gjenstående oppgavene i en lang liste
+  // av allerede ferdige (feedback 508f4338).
+  const [showDone, setShowDone] = useState(false)
 
   async function handleAssigneeToggle(taskId: string, profileId: string) {
     if (readOnly) return
@@ -113,14 +117,10 @@ export function TaskList({
     waiting_review: { label: TASK_STATUS_LABELS.waiting_review, color: C.warning  },
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {tasks.length === 0 ? (
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', padding: '4px 0' }}>
-          {emptyLabel ?? 'Ingen oppgaver funnet for dette steget.'}
-        </p>
-      ) : (
-        tasks.map(task => {
+  const openTasks = tasks.filter(t => t.status !== 'done')
+  const doneTasks = tasks.filter(t => t.status === 'done')
+
+  function renderTask(task: Task) {
           const s = STATUS_STYLE[task.status]
           const isOpen = pickerOpenId === task.id
           const assignedIds = new Set(task.assignees.map(a => a.id))
@@ -252,8 +252,44 @@ export function TaskList({
                 </div>
               )}
             </div>
-          )
-        })
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {tasks.length === 0 ? (
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', padding: '4px 0' }}>
+          {emptyLabel ?? 'Ingen oppgaver funnet for dette steget.'}
+        </p>
+      ) : (
+        <>
+          {openTasks.map(renderTask)}
+          {openTasks.length === 0 && doneTasks.length > 0 && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic', padding: '4px 0' }}>
+              Alle oppgaver er fullført.
+            </p>
+          )}
+          {doneTasks.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowDone(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginTop: 2,
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text3,
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                }}
+              >
+                <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: showDone ? 'rotate(90deg)' : 'none' }}>▸</span>
+                {doneTasks.length} fullført{doneTasks.length !== 1 ? 'e' : ''}
+              </button>
+              {showDone && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                  {doneTasks.map(renderTask)}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Legg til oppgave */}

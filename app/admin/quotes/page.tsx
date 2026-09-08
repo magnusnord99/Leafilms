@@ -6,47 +6,56 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 import { timeAgo } from '@/lib/format'
+import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+import type { QuoteBuilderData } from '@/lib/types'
 
-type ContractRow = {
+type QuoteRow = {
   id: string
   project_id: string
-  status: 'pending' | 'sent' | 'signed' | 'cancelled'
-  signed_at: string | null
-  pdf_url: string | null
+  version: string
+  label: string | null
+  status: 'draft' | 'sent' | 'accepted' | 'rejected'
+  accepted_at: string | null
+  pdf_path: string | null
   updated_at: string
   project_title: string | null
   customer_name: string | null
+  amount: number | null
 }
 
-const STATUS_LABEL: Record<ContractRow['status'], string> = {
-  pending: 'Ventende',
+const STATUS_LABEL: Record<QuoteRow['status'], string> = {
+  draft: 'Utkast',
   sent: 'Sendt',
-  signed: 'Signert',
-  cancelled: 'Kansellert',
+  accepted: 'Godtatt',
+  rejected: 'Avslått',
 }
 
-const STATUS_COLOR: Record<ContractRow['status'], string> = {
-  pending: C.text3,
+const STATUS_COLOR: Record<QuoteRow['status'], string> = {
+  draft: C.text3,
   sent: C.accent,
-  signed: '#4CAF7D',
-  cancelled: C.danger,
+  accepted: '#4CAF7D',
+  rejected: C.danger,
 }
 
-export default function ContractsPage() {
+function formatNok(amount: number): string {
+  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
+}
+
+export default function QuotesPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [contracts, setContracts] = useState<ContractRow[]>([])
-  const [filterStatus, setFilterStatus] = useState<'all' | ContractRow['status']>('all')
+  const [quotes, setQuotes] = useState<QuoteRow[]>([])
+  const [filterStatus, setFilterStatus] = useState<'all' | QuoteRow['status']>('all')
   const [search, setSearch] = useState('')
 
-  useEffect(() => { fetchContracts() }, [])
+  useEffect(() => { fetchQuotes() }, [])
 
-  async function fetchContracts() {
+  async function fetchQuotes() {
     try {
       const { data, error } = await supabase
-        .from('contracts')
+        .from('quotes')
         .select(`
-          id, project_id, status, signed_at, pdf_url, updated_at,
+          id, project_id, version, label, status, accepted_at, pdf_path, updated_at, quote_data, selected_addon_ids,
           projects(title, customers(name), client_name)
         `)
         .eq('is_current', true)
@@ -55,21 +64,25 @@ export default function ContractsPage() {
       if (error) throw error
 
       type Row = {
-        id: string; project_id: string; status: ContractRow['status']; signed_at: string | null
-        pdf_url: string | null; updated_at: string
+        id: string; project_id: string; version: string; label: string | null
+        status: QuoteRow['status']; accepted_at: string | null; pdf_path: string | null
+        updated_at: string; quote_data: QuoteBuilderData | null; selected_addon_ids: string[] | null
         projects?: { title: string | null; client_name: string | null; customers?: { name: string | null } | null } | null
       }
-      const mapped: ContractRow[] = ((data || []) as unknown as Row[]).map(c => ({
-        id: c.id,
-        project_id: c.project_id,
-        status: c.status,
-        signed_at: c.signed_at,
-        pdf_url: c.pdf_url,
-        updated_at: c.updated_at,
-        project_title: c.projects?.title ?? null,
-        customer_name: c.projects?.customers?.name ?? c.projects?.client_name ?? null,
+      const mapped: QuoteRow[] = ((data || []) as unknown as Row[]).map(q => ({
+        id: q.id,
+        project_id: q.project_id,
+        version: q.version,
+        label: q.label,
+        status: q.status,
+        accepted_at: q.accepted_at,
+        pdf_path: q.pdf_path,
+        updated_at: q.updated_at,
+        project_title: q.projects?.title ?? null,
+        customer_name: q.projects?.customers?.name ?? q.projects?.client_name ?? null,
+        amount: getQuoteAmountExclVat(q.quote_data, q.selected_addon_ids ?? undefined),
       }))
-      setContracts(mapped)
+      setQuotes(mapped)
     } catch (err) {
       console.error(err)
     } finally {
@@ -77,22 +90,22 @@ export default function ContractsPage() {
     }
   }
 
-  const filtered = contracts.filter(c => {
-    if (filterStatus !== 'all' && c.status !== filterStatus) return false
+  const filtered = quotes.filter(q => {
+    if (filterStatus !== 'all' && q.status !== filterStatus) return false
     if (search) {
-      const q = search.toLowerCase()
-      const name = (c.customer_name || '').toLowerCase()
-      const title = (c.project_title || '').toLowerCase()
-      if (!title.includes(q) && !name.includes(q)) return false
+      const s = search.toLowerCase()
+      const name = (q.customer_name || '').toLowerCase()
+      const title = (q.project_title || '').toLowerCase()
+      if (!title.includes(s) && !name.includes(s)) return false
     }
     return true
   })
 
   const counts = {
-    all: contracts.length,
-    pending: contracts.filter(c => c.status === 'pending').length,
-    sent: contracts.filter(c => c.status === 'sent').length,
-    signed: contracts.filter(c => c.status === 'signed').length,
+    all: quotes.length,
+    draft: quotes.filter(q => q.status === 'draft').length,
+    sent: quotes.filter(q => q.status === 'sent').length,
+    accepted: quotes.filter(q => q.status === 'accepted').length,
   }
 
   return (
@@ -102,10 +115,10 @@ export default function ContractsPage() {
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2 }}>
-            Kontrakter
+            Tilbud
           </h1>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
-            Alle kontrakter på tvers av prosjekter
+            Alle tilbud på tvers av prosjekter
           </p>
         </div>
 
@@ -138,7 +151,7 @@ export default function ContractsPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, alignSelf: 'flex-end' }}>
-            {([['all', 'Alle', counts.all], ['pending', 'Ventende', counts.pending], ['sent', 'Sendt', counts.sent], ['signed', 'Signert', counts.signed]] as const).map(([val, label, count]) => (
+            {([['all', 'Alle', counts.all], ['draft', 'Utkast', counts.draft], ['sent', 'Sendt', counts.sent], ['accepted', 'Godtatt', counts.accepted]] as const).map(([val, label, count]) => (
               <button
                 key={val}
                 onClick={() => setFilterStatus(val)}
@@ -191,21 +204,21 @@ export default function ContractsPage() {
             background: C.surface,
           }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>
-              {contracts.length === 0 ? 'Ingen kontrakter ennå' : 'Ingen kontrakter matcher filteret'}
+              {quotes.length === 0 ? 'Ingen tilbud ennå' : 'Ingen tilbud matcher filteret'}
             </p>
           </div>
         ) : (
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            {filtered.map((contract, i) => (
+            {filtered.map((quote, i) => (
               <div
-                key={contract.id}
+                key={quote.id}
                 style={{
                   borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : 'none',
                   background: C.surface,
                   transition: 'background 0.1s',
                   cursor: 'pointer',
                 }}
-                onClick={() => router.push(`/admin/projects/${contract.project_id}?tab=kontrakt`)}
+                onClick={() => router.push(`/admin/projects/${quote.project_id}/quote`)}
                 onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = C.surface}
               >
@@ -214,39 +227,43 @@ export default function ContractsPage() {
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <p style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text,
-                      marginBottom: contract.customer_name ? 2 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {contract.project_title || '(uten tittel)'}
+                      {quote.project_title || '(uten tittel)'}
                     </p>
-                    {contract.customer_name && (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
-                        {contract.customer_name}
-                      </p>
-                    )}
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                      {[quote.customer_name, quote.label || quote.version].filter(Boolean).join(' · ')}
+                    </p>
                   </div>
+
+                  {quote.amount != null && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.text, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {formatNok(quote.amount)}
+                    </span>
+                  )}
 
                   <span style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
-                    color: STATUS_COLOR[contract.status], background: `${STATUS_COLOR[contract.status]}18`,
+                    color: STATUS_COLOR[quote.status], background: `${STATUS_COLOR[quote.status]}18`,
                     padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
                   }}>
-                    {STATUS_LABEL[contract.status]}
+                    {STATUS_LABEL[quote.status]}
                   </span>
 
-                  {contract.signed_at && (
+                  {quote.accepted_at && (
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      Signert {new Date(contract.signed_at).toLocaleDateString('nb-NO')}
+                      Godtatt {new Date(quote.accepted_at).toLocaleDateString('nb-NO')}
                     </span>
                   )}
 
                   <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {timeAgo(contract.updated_at)}
+                    {timeAgo(quote.updated_at)}
                   </span>
 
                   <div style={{ display: 'flex', gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                    {contract.pdf_url && (
+                    {quote.pdf_path && (
                       <a
-                        href={contract.pdf_url}
+                        href={supabase.storage.from('assets').getPublicUrl(quote.pdf_path).data.publicUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -274,7 +291,7 @@ export default function ContractsPage() {
                       </a>
                     )}
                     <Link
-                      href={`/admin/projects/${contract.project_id}?tab=kontrakt`}
+                      href={`/admin/projects/${quote.project_id}/quote`}
                       style={{ textDecoration: 'none' }}
                       onClick={e => e.stopPropagation()}
                     >

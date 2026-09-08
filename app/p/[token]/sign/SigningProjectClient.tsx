@@ -119,7 +119,7 @@ export function SigningProjectClient({
   if (!project) {
     console.error('[SigningProjectClient] No project provided')
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <Text variant="body" className="!text-foreground">
             Feil: Prosjekt ikke funnet

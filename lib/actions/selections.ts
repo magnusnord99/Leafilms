@@ -128,7 +128,7 @@ export async function createGallery(
 export async function getOrCreateDeliveryGallery(projectId: string): Promise<{ galleryId: string }> {
   const supabase = await createClient()
 
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('selection_galleries')
     .select('id')
     .eq('project_id', projectId)
@@ -138,6 +138,7 @@ export async function getOrCreateDeliveryGallery(projectId: string): Promise<{ g
     .limit(1)
     .maybeSingle()
 
+  if (lookupError) console.error('getOrCreateDeliveryGallery lookup error:', lookupError)
   if (existing) return { galleryId: existing.id }
 
   const { galleryId } = await createGallery(projectId, undefined, 'delivery')
@@ -189,7 +190,7 @@ export async function searchProjectsToLink(query: string): Promise<{ id: string;
 export async function getGalleryIdForProject(projectId: string): Promise<{ id: string; status: SelectionGallery['status'] } | null> {
   const supabase = await createClient()
 
-  const { data: gallery } = await supabase
+  const { data: gallery, error } = await supabase
     .from('selection_galleries')
     .select('id, status')
     .eq('project_id', projectId)
@@ -198,6 +199,7 @@ export async function getGalleryIdForProject(projectId: string): Promise<{ id: s
     .limit(1)
     .maybeSingle()
 
+  if (error) console.error('getGalleryIdForProject error:', error)
   return gallery ?? null
 }
 

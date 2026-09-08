@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Section, Image, SectionImage } from '@/lib/types'
+import { Section, Image, SectionImage, DeliverableItem } from '@/lib/types'
 import { DeliverableGrid, ImagePositionControls } from '@/components/project'
 
 type DeliverablesSectionProps = {
   section: Section
   editMode: boolean
   language?: 'no' | 'en'
+  projectDeliverables: DeliverableItem[]
+  onProjectDeliverablesChange: (items: DeliverableItem[]) => void
   sectionImages: Record<string, Image[]>
   sectionImageData: Record<string, SectionImage[]>
   editingImageSectionId: string | null
@@ -26,6 +28,8 @@ export function DeliverablesSection({
   section,
   editMode,
   language = 'no',
+  projectDeliverables,
+  onProjectDeliverablesChange,
   sectionImages,
   sectionImageData,
   editingImageSectionId,
@@ -160,12 +164,10 @@ export function DeliverablesSection({
           {/* Deliverables grid */}
           <div onClick={(e) => e.stopPropagation()} className="min-h-[120px]">
             <DeliverableGrid
-              items={section.content.deliverableItems}
+              items={projectDeliverables}
               editMode={editMode}
               language={language}
-              onItemsChange={(newItems) => {
-                updateSectionContent(section.id, 'deliverableItems', newItems)
-              }}
+              onItemsChange={onProjectDeliverablesChange}
             />
           </div>
         </div>

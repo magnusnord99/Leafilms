@@ -75,6 +75,14 @@ export type DeliverableItem = {
   id: string
   type: 'video' | 'photo' | 'annet'
   name: string
+  /** Kommaseparert liste over valgte aspect ratios for video, f.eks. "9:16, 4:5". Fritekst for photo/annet. */
+  format?: string
+  description?: string
+  /** Kun meningsfullt for 'photo'/'annet' — video er alltid én rad = ett navngitt element, se spec §3. */
+  quantity?: number
+  /** Lengde på video, valgt strukturert i stedet for fritekst — se DeliverablesButton. */
+  durationValue?: number
+  durationUnit?: 'sek' | 'min'
 }
 
 export type Project = {
@@ -127,6 +135,8 @@ export type Quote = {
   is_current: boolean
   /** IDs (fra quote_data.optionalAddons) på tilleggene kunden har haket av på det publiserte tilbudet. */
   selected_addon_ids: string[]
+  /** Hvem i teamet som opprettet tilbudet — NULL for tilbud opprettet før migrasjon 146. */
+  created_by: string | null
   created_at: string
   updated_at: string
 }
@@ -372,6 +382,9 @@ export type SectionContent = {
   client?: string
   sectionLabel?: string
   sectionHeading?: string
+  // hero: hvilket medie som skal vises som forside når BÅDE bilde og video finnes lagret
+  // for seksjonen. Uten denne vinner video alltid — se HeroSection.tsx
+  coverPreference?: 'video' | 'image'
   // about_us: bildeId-referanser til bildekolonnen (ikke via det delte section_images-galleriet,
   // som her allerede brukes til kundelogoene)
   contentImageIds?: string[]
@@ -700,6 +713,8 @@ export type Task = {
   color: string | null
   icon: string | null
   due_date: string | null
+  /** Overstyrer visningsnavnet i kalenderen (/admin/calendar). NULL = bruk standardmalen — se buildTaskCalendarLabel i lib/actions/calendar.ts. */
+  calendar_name: string | null
   status: 'todo' | 'in_progress' | 'done' | 'waiting_review'
   priority: 'low' | 'medium' | 'high' | null
   sort_order: number

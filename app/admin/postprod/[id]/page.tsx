@@ -6,16 +6,16 @@ import Link from 'next/link'
 import {
   getPostProdProjects, getPostProdProject, getTasksForProject, updateTaskStatus,
   reseedPostProdTasks, setProjectType,
+  ensurePostProdVideoTasksSeeded,
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee,
-  getProjectDeliverablesSection,
-  updateProjectDeliverablesSection,
   setProjectLead, getTaskMessageCounts,
   deleteTask,
 } from '@/lib/actions/pipeline'
 import { updatePreprodTaskStatus } from '@/lib/actions/preprod'
-import { updateTaskDueDate } from '@/lib/actions/calendar'
+import { updateTaskDueDate, updateTaskCalendarName } from '@/lib/actions/calendar'
+import { buildTaskCalendarLabel, companyLabel } from '@/lib/calendar-label'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'
@@ -26,6 +26,7 @@ import { getAvatarColor } from '@/lib/avatar-colors'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 
 const C = {
   bg:       '#181920',
@@ -236,28 +237,19 @@ export default function PostProdDetailPage() {
   const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
 
   const [dueDates, setDueDates] = useState<Record<string, string>>({})
+  const [calendarNames, setCalendarNames] = useState<Record<string, string>>({})
+  const [calendarNameSaved, setCalendarNameSaved] = useState(false)
 
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
 
   // Leveringsinfo
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
-  const [editingDeliverables, setEditingDeliverables] = useState(false)
-  const [draftDeliverables, setDraftDeliverables] = useState<DeliverableItem[]>([])
-  const [savingDeliverables, setSavingDeliverables] = useState(false)
 
-  type DeliverableItem = {
-    id?: string
-    title?: string
-    description?: string
-    quantity?: number | string
-    format?: string
-  }
-
-  const [deliverableItems, setDeliverableItems] = useState<DeliverableItem[]>([])
+  const [deliverableItems, setDeliverableItems] = useState<SignedDeliverableItem[]>([])
 
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const calendarNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const taskDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingTaskDataRef = useRef<Record<string, Record<string, string>>>({})
   const assigneeDropdownRef = useRef<HTMLDivElement>(null)
@@ -324,25 +316,32 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, viewedProj, projectTasks, userProfile, allProfiles, delivSection, selImgs, gallerySumm] = await Promise.all([
+    const [allProjects, viewedProj, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
       getPostProdProject(projectId),
-      getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
-      getProjectDeliverablesSection(projectId),
       getSelectedImagesForProject(projectId),
       getGalleryIdForProject(projectId),
     ])
     setViewedProject(viewedProj)
     setSelectionImages(selImgs)
     setGallerySummary(gallerySumm)
-    setDeliverableItems(delivSection?.items ?? [])
     setProfiles(allProfiles)
 
     const allProj = allProjects as PostProdProject[]
     const currentProj = allProj.find(p => p.id === projectId) ?? viewedProj
+    const currentProjVideoDeliverables = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video')
+    setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
+
+    // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
+    // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
+    // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
+    // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
+    if (currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+
+    const projectTasks = await getTasksForProject(projectId, 'post_prod')
 
     if (projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
@@ -358,8 +357,7 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
       setLoading(false)
       return
     }
@@ -368,8 +366,7 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
@@ -387,6 +384,21 @@ export default function PostProdDetailPage() {
     const dd: Record<string, string> = {}
     for (const t of taskList) dd[t.id] = t.due_date ?? ''
     setDueDates(dd)
+    const cn: Record<string, string> = {}
+    for (const t of taskList) cn[t.id] = t.calendar_name ?? ''
+    setCalendarNames(cn)
+  }
+
+  function handleCalendarNameChange(taskId: string, value: string) {
+    setCalendarNames(prev => ({ ...prev, [taskId]: value }))
+    setCalendarNameSaved(false)
+    if (calendarNameTimerRef.current) clearTimeout(calendarNameTimerRef.current)
+    calendarNameTimerRef.current = setTimeout(async () => {
+      await updateTaskCalendarName(taskId, value)
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, calendar_name: value.trim() || null } : t))
+      setCalendarNameSaved(true)
+      setTimeout(() => setCalendarNameSaved(false), 2000)
+    }, 800)
   }
 
   async function handleDueDateChange(taskId: string, value: string) {
@@ -415,10 +427,19 @@ export default function PostProdDetailPage() {
   // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
   // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
   // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
-  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverablesList: SignedDeliverableItem[]): number {
+    const videoDeliverableCount = videoDeliverablesList.length
     const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
     if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
-    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    // Uten deep-link og uten en fane som allerede er valgt, defaulter vi til
+    // første video-leveranse — ellers filtrerer computeDisplayTasks bort alle
+    // per-leveranse-steg (deliverable_id !== null) og viser kun de delte
+    // stegene (Logging/Ferdig), se samme mønster i handleSwitchTab.
+    let resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    if (!resolvedDeliverableId && videoDeliverableCount >= 2) {
+      resolvedDeliverableId = videoDeliverablesList[0].id
+      setActiveVideoDeliverableId(resolvedDeliverableId)
+    }
     if (isMixedProject && deepTask?.sub_type) {
       setActiveTab(deepTask.sub_type)
       return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)
@@ -711,8 +732,14 @@ export default function PostProdDetailPage() {
   async function handleOpenDeliveryReview() {
     if (readOnly) return
     setOpeningDeliveryReview(true)
-    const { galleryId } = await getOrCreateDeliveryGallery(projectId)
-    router.push(`/admin/selections/${galleryId}`)
+    try {
+      const { galleryId } = await getOrCreateDeliveryGallery(projectId)
+      router.push(`/admin/selections/${galleryId}`)
+    } catch (err) {
+      console.error('handleOpenDeliveryReview error:', err)
+      setActionError('Kunne ikke åpne leveringsgalleriet. Prøv igjen, eller kontakt support hvis feilen vedvarer.')
+      setOpeningDeliveryReview(false)
+    }
   }
 
   async function handleReseed() {
@@ -835,6 +862,8 @@ export default function PostProdDetailPage() {
           <div style={{ padding: '14px 24px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <Link href="/admin/pipeline" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none', flexShrink: 0 }}>Pipeline</Link>
+                <span style={{ color: C.text3, flexShrink: 0 }}>›</span>
                 <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, textDecoration: 'none', flexShrink: 0 }}>Post-produksjon</Link>
                 <span style={{ color: C.text3, flexShrink: 0 }}>›</span>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentProject.title}</span>
@@ -1067,176 +1096,8 @@ export default function PostProdDetailPage() {
               </div>
             )}
 
-            {/* Info om levering-knapp */}
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '4px 10px',
-                  borderRadius: 6, cursor: 'pointer',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-                {deliverableItems.length > 0 && (
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, display: 'inline-block', marginLeft: 2 }} />
-                )}
-              </button>
-            </div>
-
-            {/* Leveringsmodal */}
-            {showDeliveryModal && (
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
-                onClick={e => { if (e.target === e.currentTarget && !editingDeliverables) setShowDeliveryModal(false) }}
-              >
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 460, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                      Leveranser
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {!editingDeliverables ? (
-                        <button
-                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true) }}
-                          disabled={readOnly}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                        >
-                          Rediger
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => setEditingDeliverables(false)}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                          >
-                            Avbryt
-                          </button>
-                          <button
-                            onClick={async () => {
-                              setSavingDeliverables(true)
-                              const items = draftDeliverables.map(it => ({
-                                id: it.id ?? String(Date.now()),
-                                title: it.title,
-                                quantity: typeof it.quantity === 'string' ? (parseInt(it.quantity, 10) || undefined) : it.quantity,
-                                format: it.format,
-                                description: it.description,
-                              }))
-                              const res = await updateProjectDeliverablesSection(projectId, items)
-                              setSavingDeliverables(false)
-                              if (!res.error) {
-                                setDeliverableItems(draftDeliverables)
-                                setEditingDeliverables(false)
-                              }
-                            }}
-                            disabled={readOnly || savingDeliverables}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: savingDeliverables ? 0.6 : 1 }}
-                          >
-                            {savingDeliverables ? 'Lagrer...' : 'Lagre'}
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => { setShowDeliveryModal(false); setEditingDeliverables(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
-                    </div>
-                  </div>
-
-                  {/* Scrollbar content */}
-                  <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                    {editingDeliverables ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {draftDeliverables.map((item, i) => (
-                          <div key={item.id ?? i} style={{ background: C.surface2, borderRadius: 8, padding: '12px 14px', position: 'relative' }}>
-                            <button
-                              onClick={() => setDraftDeliverables(prev => prev.filter((_, idx) => idx !== i))}
-                              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
-                              title="Fjern"
-                            >×</button>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 80px', gap: 8, marginBottom: 8 }}>
-                              <input
-                                value={item.title ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, title: e.target.value } : it))}
-                                placeholder="Tittel"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.quantity ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))}
-                                placeholder="Ant."
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
-                              />
-                              <input
-                                value={item.format ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
-                                placeholder="Format"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                            </div>
-                            <textarea
-                              value={item.description ?? ''}
-                              onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
-                              placeholder="Beskrivelse (valgfri)"
-                              rows={2}
-                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), title: '', quantity: 1, format: '', description: '' }])}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer', width: '100%', marginTop: 4 }}
-                        >
-                          + Legg til leveranse
-                        </button>
-                      </div>
-                    ) : deliverableItems.length === 0 ? (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
-                        Ingen leveranser er lagt til ennå. Trykk «Rediger» for å legge til.
-                      </p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {deliverableItems.map((item, i) => {
-                          const qty = typeof item.quantity === 'number'
-                            ? item.quantity
-                            : (item.quantity != null ? parseInt(item.quantity as string, 10) || null : null)
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                              {qty != null && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.accent, minWidth: 24, textAlign: 'right', flexShrink: 0, paddingTop: 1 }}>
-                                  {qty}
-                                </span>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block', wordBreak: 'break-word' }}>
-                                  {item.title || '—'}
-                                </span>
-                                {item.description && (
-                                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>
-                                    {item.description}
-                                  </span>
-                                )}
-                              </div>
-                              {item.format && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4, marginTop: 2 }}>
-                                  {item.format}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Info om levering-knapp — delt komponent med prosjektoversikten, se DeliverablesButton */}
+            <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} readOnly={readOnly} />
           </div>
 
           {/* Film/Bilder-faner for mixed-prosjekter */}
@@ -1277,23 +1138,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  marginLeft: 'auto', marginRight: 12,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '3px 9px',
-                  borderRadius: 5, cursor: 'pointer', flexShrink: 0,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-              </button>
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" />
             </div>
           )}
 
@@ -1364,9 +1209,11 @@ export default function PostProdDetailPage() {
             </div>
           )}
 
-          {/* Egendefinerte oppgaver — utenfor den låste stepperen */}
+          {/* Egendefinerte oppgaver — utenfor den låste stepperen. Header-blokken har ikke
+              egen sideskroll, så denne listen må skrolle internt når den blir lang — ellers
+              blir oppgaver utenfor synsfeltet helt utilgjengelige. */}
           {!reseeding && (
-            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}` }}>
+            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}`, maxHeight: '40vh', overflowY: 'auto' }}>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
                 Egendefinerte oppgaver
               </span>
@@ -1442,7 +1289,7 @@ export default function PostProdDetailPage() {
 
             {/* Left: reference materials (links + notes) from earlier steps */}
             {priorStages.length > 0 && (
-              <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: 'auto', padding: '28px 20px' }}>
+              <div className="hidden md:block" style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: 'auto', padding: '28px 20px' }}>
                 <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
                   Fra tidligere steg
                 </label>
@@ -1852,6 +1699,37 @@ export default function PostProdDetailPage() {
                   onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
+              </div>
+
+              {/* Calendar name override */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Kalendernavn
+                  </label>
+                  {calendarNameSaved && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.success }}>Lagret ✓</span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={calendarNames[selectedTask.id] ?? ''}
+                  onChange={e => handleCalendarNameChange(selectedTask.id, e.target.value)}
+                  placeholder={buildTaskCalendarLabel(selectedTask.title, selectedTask.pipeline_stage, companyLabel(currentProject.customer))}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    color: C.text, background: C.surface,
+                    border: `1px solid ${C.border}`, borderRadius: 8,
+                    padding: '8px 12px', outline: 'none',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                  onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                />
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 6, lineHeight: 1.4 }}>
+                  Tomt felt bruker standardnavnet vist over, i /admin/calendar.
+                </p>
               </div>
 
               {/* Notes */}

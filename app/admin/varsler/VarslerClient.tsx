@@ -14,6 +14,21 @@ import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
 
+// Varsler som forventer en konkret handling fra mottakeren (i motsetning til
+// meldinger/reaksjoner man bare leser) — brukt av "Krever handling"-filteret
+// under (feedback e4ebee27). Uleste varsler av disse typene regnes som ubesvarte;
+// møteinvitasjoner har i tillegg en faktisk svar-status å sjekke mot.
+const ACTION_TYPES = new Set<Notification['type']>([
+  'task_assigned', 'lead_assigned', 'resale_assigned', 'invoice_assigned', 'quote_assigned',
+  'meeting_invite', 'pitch_review_requested', 'quote_review_requested', 'gallery_review_requested',
+])
+
+function needsAction(n: Notification): boolean {
+  if (!ACTION_TYPES.has(n.type)) return false
+  if (n.type === 'meeting_invite') return n.meeting_response_status !== 'accepted' && n.meeting_response_status !== 'declined'
+  return !n.read
+}
+
 type Channel = 'project' | 'task' | 'quote' | 'preprod' | 'direct'
 
 // Hvilken meldingskanal varselet hører til — styrer om Svar/reaksjoner vises
@@ -273,6 +288,14 @@ export default function VarslerClient({ notifications: initialNotifications }: {
 
   const unreadCount = notifications.filter(n => !n.read).length
   const readCount = notifications.length - unreadCount
+  const actionCount = notifications.filter(needsAction).length
+
+  const [filter, setFilter] = useState<'all' | 'unread' | 'action'>('all')
+  const filteredNotifications = notifications.filter(n => {
+    if (filter === 'unread') return !n.read
+    if (filter === 'action') return needsAction(n)
+    return true
+  })
 
   const [groupByProject, setGroupByProject] = useState(false)
   useEffect(() => {
@@ -293,7 +316,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   const groupedNotifications = (() => {
     if (!groupByProject) return null
     const groups = new Map<string, { title: string; items: Notification[] }>()
-    for (const n of notifications) {
+    for (const n of filteredNotifications) {
       const key = n.project_id ?? '__other__'
       const title = n.project_id ? (n.projects?.title || 'Ukjent prosjekt') : 'Annet'
       if (!groups.has(key)) groups.set(key, { title, items: [] })
@@ -307,7 +330,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
     })
   })()
 
-  const displayList = groupedNotifications ? groupedNotifications.flatMap(g => g.items) : notifications
+  const displayList = groupedNotifications ? groupedNotifications.flatMap(g => g.items) : filteredNotifications
   const groupHeaderBefore = groupedNotifications
     ? new Map(groupedNotifications.map(g => [g.items[0].id, g] as const))
     : null
@@ -334,6 +357,26 @@ export default function VarslerClient({ notifications: initialNotifications }: {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <PushNotificationToggle />
+            <div style={{ display: 'flex', gap: 4, background: C.surface2, borderRadius: 7, padding: 3 }}>
+              {([
+                ['all', 'Alle'],
+                ['unread', `Ulest${unreadCount > 0 ? ` (${unreadCount})` : ''}`],
+                ['action', `Krever handling${actionCount > 0 ? ` (${actionCount})` : ''}`],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: filter === key ? 600 : 400,
+                    color: filter === key ? C.text : C.text3,
+                    background: filter === key ? C.surface : 'none',
+                    border: 'none', padding: '6px 10px', borderRadius: 5, cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={toggleGroupByProject}
@@ -368,10 +411,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
         </div>
 
         {/* Liste */}
-        {notifications.length === 0 ? (
+        {filteredNotifications.length === 0 ? (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '48px 24px', textAlign: 'center' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>
-              Ingen varsler ennå.
+              {notifications.length === 0 ? 'Ingen varsler ennå.' : 'Ingen varsler i denne visningen.'}
             </p>
           </div>
         ) : (

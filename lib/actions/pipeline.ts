@@ -4,11 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { notifyAssignment } from '@/lib/notify-assignment'
 import Anthropic from '@anthropic-ai/sdk'
-import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, SectionContent, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
+import type { PipelineStage, ProjectType, Task, TaskMessage, ProjectWithPipeline, Quote, PipelineData, AssigneeJoin, TaskRow, ProjectRow, DeliverableItem } from '@/lib/types'
 import { PIPELINE_STAGES } from '@/lib/types'
 import { computeInsertionOrder, mergeReseededSequence, assignSortOrder, reorderExistingIds, type SequenceRow } from '@/lib/postprod-flow'
 import { computeStepperLocks, computeLocksFromSiblings, type StepperTaskLite } from '@/lib/task-lock'
 import { pickBestQuote } from '@/lib/quote-builder-utils'
+import { getRootBoardIdForProject } from '@/lib/actions/boards'
+import { getGalleryIdForProject } from '@/lib/actions/selections'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -944,6 +946,8 @@ export async function getProjectHub(projectId: string): Promise<{
   quote: Quote | null
   pitchToken: string | null
   hasSections: boolean
+  boardId: string | null
+  galleryId: string | null
 } | null> {
   try {
     const supabase = await createClient()
@@ -988,7 +992,7 @@ export async function getProjectHub(projectId: string): Promise<{
 
     // Disse fire er uavhengige av hverandre (kun projectId trengs) — kjør parallelt
     // i stedet for som fire sekvensielle round trips.
-    const [tasks, quoteResult, shareResult, sectionCountResult] = await Promise.all([
+    const [tasks, quoteResult, shareResult, sectionCountResult, boardId, gallery] = await Promise.all([
       project.pipeline_stage
         ? getTasksForProject(projectId, project.pipeline_stage)
         : getTasksForProject(projectId),
@@ -1013,6 +1017,10 @@ export async function getProjectHub(projectId: string): Promise<{
         .from('sections')
         .select('id', { count: 'exact', head: true })
         .eq('project_id', projectId),
+      // Board og kundeseleksjon-galleri kan finnes uavhengig av pipeline-steg — hentes
+      // her slik at "oversikt"-fanen kan vise lenker til alt som er tilknyttet prosjektet.
+      getRootBoardIdForProject(projectId),
+      getGalleryIdForProject(projectId),
     ])
 
     if (quoteResult.error) {
@@ -1033,6 +1041,8 @@ export async function getProjectHub(projectId: string): Promise<{
       quote: (quoteRow as Quote) ?? null,
       pitchToken: shareRow?.token ?? null,
       hasSections: (sectionCount ?? 0) > 0,
+      boardId,
+      galleryId: gallery?.id ?? null,
     }
   } catch (err) {
     console.error('getProjectHub unexpected error:', err)
@@ -1799,47 +1809,20 @@ export async function updatePostProdDelivery(
   }
 }
 
-export async function getProjectDeliverablesSection(projectId: string): Promise<{ items: NonNullable<SectionContent['deliverableItems']> } | null> {
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('sections')
-      .select('content')
-      .eq('project_id', projectId)
-      .eq('type', 'deliverables')
-      .maybeSingle()
-    if (error || !data) return null
-    return { items: (data.content as SectionContent | null)?.deliverableItems ?? [] }
-  } catch {
-    return null
-  }
-}
-
-export async function updateProjectDeliverablesSection(
+// Erstatter getProjectDeliverablesSection/updateProjectDeliverablesSection (leste/skrev
+// sections.content.deliverableItems) — leveranselisten er nå ett felt, projects.deliverables,
+// lest/skrevet direkte. Se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md.
+export async function updateProjectDeliverables(
   projectId: string,
-  items: NonNullable<SectionContent['deliverableItems']>
+  items: DeliverableItem[]
 ): Promise<{ error?: string }> {
   try {
     const supabase = await createClient()
-    const { data: section, error: fetchError } = await supabase
-      .from('sections')
-      .select('id, content')
-      .eq('project_id', projectId)
-      .eq('type', 'deliverables')
-      .maybeSingle()
-    if (fetchError) return { error: fetchError.message }
-    if (!section) {
-      const { error: insertError } = await supabase
-        .from('sections')
-        .insert({ project_id: projectId, type: 'deliverables', content: { deliverableItems: items } })
-      if (insertError) return { error: insertError.message }
-    } else {
-      const { error: updateError } = await supabase
-        .from('sections')
-        .update({ content: { ...(section.content as object), deliverableItems: items }, updated_at: new Date().toISOString() })
-        .eq('id', section.id)
-      if (updateError) return { error: updateError.message }
-    }
+    const { error } = await supabase
+      .from('projects')
+      .update({ deliverables: items, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) return { error: error.message }
     return {}
   } catch {
     return { error: 'Noe gikk galt' }
@@ -2536,6 +2519,36 @@ async function ensureVideoDeliverablesSeeded(
       )
     }
   }
+}
+
+/**
+ * Wrapper rundt ensureVideoDeliverablesSeeded til bruk utenfor getPostProdBoard
+ * (Board-visningen på /admin/preprod/[id]) — postprod-stepper-siden
+ * (/admin/postprod/[id]) leste tidligere tasks rått via getTasksForProject
+ * uten noen gang å kjøre denne migreringen. Et prosjekt som fikk sine
+ * post-prod-steg seedet FØR det hadde 2+ video-leveranser (deliverable_id
+ * fortsatt NULL på Grovklipp/Klipp/Farger/Lyd) viste dermed samme delte
+ * oppgave på tvers av alle video-faner der — redigering av én video endret
+ * alle. Kall denne før getTasksForProject når prosjektet har 2+ video-
+ * leveranser, så blir de gamle flate radene splittet per leveranse.
+ */
+export async function ensurePostProdVideoTasksSeeded(projectId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: proj } = await supabase
+    .from('projects')
+    .select('project_type, deliverables')
+    .eq('id', projectId)
+    .single()
+
+  const projectType = (proj?.project_type ?? null) as ProjectType | null
+  if (!projectType) return
+
+  const deliverables = (proj?.deliverables ?? []) as DeliverableItem[]
+  const videoDeliverables = deliverables.filter(d => d.type === 'video')
+  if (videoDeliverables.length < 2) return
+
+  const videoDbSubType: 'video' | 'photo' | null = projectType === 'mixed' ? 'video' : null
+  await ensureVideoDeliverablesSeeded(supabase, projectId, videoDbSubType, videoDeliverables)
 }
 
 /**

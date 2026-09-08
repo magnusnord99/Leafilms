@@ -352,14 +352,23 @@ export function TimelineSection({
             <button
               key={i}
               onClick={() => setMobileIndex(i)}
+              aria-label={`Gå til fase ${i + 1}`}
               style={{
-                width: i === mobileIndex ? 20 : 4,
-                height: 2,
-                background: i === mobileIndex ? '#C49434' : '#2A261F',
-                borderRadius: 1,
-                transition: 'all 0.25s',
+                padding: '17px 8px',
+                margin: '-17px -8px',
               }}
-            />
+            >
+              <span
+                style={{
+                  display: 'block',
+                  width: i === mobileIndex ? 20 : 4,
+                  height: 2,
+                  background: i === mobileIndex ? '#C49434' : '#2A261F',
+                  borderRadius: 1,
+                  transition: 'all 0.25s',
+                }}
+              />
+            </button>
           ))}
         </div>
 

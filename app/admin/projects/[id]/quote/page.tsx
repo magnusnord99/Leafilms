@@ -9,6 +9,7 @@ import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBu
 import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData, pickBestQuote, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
+import { usePublishing } from '@/hooks/project/usePublishing'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -34,6 +35,10 @@ export default function ProjectQuotePage({ params }: Props) {
   const [existingQuoteId, setExistingQuoteId] = useState<string | null>(null)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [profiles, setProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+  const [shareLink, setShareLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const { publishing, togglePublish } = usePublishing(project, setProject, shareLink, setShareLink, projectId)
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
   const savingRef = useRef(false)
@@ -41,6 +46,10 @@ export default function ProjectQuotePage({ params }: Props) {
   useEffect(() => {
     loadAll()
   }, [projectId])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
+  }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -50,7 +59,7 @@ export default function ProjectQuotePage({ params }: Props) {
     setExistingQuoteId(null)
     setBuilderData(null)
     try {
-      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, equipmentGroupsRes, discountFactorsRes, profilesRes] = await Promise.all([
+      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, equipmentGroupsRes, discountFactorsRes, profilesRes, shareRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
@@ -62,6 +71,7 @@ export default function ProjectQuotePage({ params }: Props) {
         supabase.from('equipment_groups').select('*, items:equipment_group_items(*, catalog_item:price_catalog(*))').order('name'),
         supabase.from('discount_factors').select('*').order('shoot_day'),
         supabase.from('profiles').select('id, name, email').returns<{ id: string; name: string | null; email: string }[]>(),
+        supabase.from('project_shares').select('token').eq('project_id', projectId).maybeSingle(),
       ])
 
       const proj = projectRes.data as Project | null
@@ -72,6 +82,9 @@ export default function ProjectQuotePage({ params }: Props) {
       // ellers åpnes plutselig et nyere, usignert tilleggstilbud som om DET var
       // det kunden hadde akseptert (feedback 08a0235b).
       const existingQuote = pickBestQuote(allQuotes)
+
+      const shareToken = (shareRes.data as { token: string } | null)?.token
+      setShareLink(shareToken ? `${window.location.origin}/p/${shareToken}` : null)
 
       setProject(proj)
       setQuotes(allQuotes)
@@ -95,6 +108,11 @@ export default function ProjectQuotePage({ params }: Props) {
         const initial = createEmptyBuilderData(proj?.title || '')
         if (proj?.delivery_description) {
           initial.deliveryDescription = proj.delivery_description
+        }
+        // Prefyll fra pitchens leveranseliste hvis den allerede er satt (samme felt som
+        // postprod/pitch-siden leser — se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md §5).
+        if (proj?.deliverables && proj.deliverables.length > 0) {
+          initial.deliverables = proj.deliverables
         }
 
         // Pre-populate customer if project has one
@@ -138,7 +156,7 @@ export default function ProjectQuotePage({ params }: Props) {
         }
 
         // ourContact: project_lead → quote_assignee → fallback
-        if (!initial.ourContact || initial.ourContact === 'Bea Valand') {
+        if (!initial.ourContact) {
           const leadId = projAny.project_lead_id ?? projAny.quote_assignee_id
           const lead = leadId ? profiles.find(p => p.id === leadId) : null
           if (lead?.name) initial.ourContact = lead.name
@@ -198,7 +216,7 @@ export default function ProjectQuotePage({ params }: Props) {
         setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data } : q))
       } else {
         // Første tilbud for prosjektet — blir automatisk gjeldende versjon
-        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true }).select('*').single()
+        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true, created_by: currentUserId }).select('*').single()
         if (newQuote) {
           setExistingQuoteId(newQuote.id)
           setQuotes(prev => [...prev, newQuote as Quote])
@@ -249,6 +267,7 @@ export default function ProjectQuotePage({ params }: Props) {
         status: 'draft' as const,
         quote_data: newData,
         is_current: true,
+        created_by: currentUserId,
       }).select('*').single()
 
       if (error || !newQuote) {
@@ -403,6 +422,57 @@ export default function ProjectQuotePage({ params }: Props) {
           )}
         </div>
 
+        {/* Signeringslenke — publiser prosjektet og hent kunde-lenken direkte herfra,
+            uten å måtte innom pitch-editoren (feedback ba2012b0). */}
+        <div
+          className="flex items-center justify-between gap-3 mb-6"
+          style={{ padding: '12px 16px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}
+        >
+          {shareLink ? (
+            <>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4CAF7D', marginBottom: 3 }}>
+                  Publisert
+                </p>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {shareLink}
+                </p>
+              </div>
+              <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(shareLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000) }}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
+                >
+                  {linkCopied ? 'Kopiert ✓' : 'Kopier lenke'}
+                </button>
+                <button
+                  type="button"
+                  onClick={togglePublish}
+                  disabled={publishing}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: 'transparent', color: C.text3, border: `1px solid ${C.border}`, opacity: publishing ? 0.6 : 1 }}
+                >
+                  Avpubliser
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                Ikke publisert — kunden kan ikke se tilbudet eller signere ennå.
+              </p>
+              <button
+                type="button"
+                onClick={togglePublish}
+                disabled={publishing}
+                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '7px 14px', borderRadius: 6, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', opacity: publishing ? 0.6 : 1, flexShrink: 0 }}
+              >
+                {publishing ? 'Publiserer …' : 'Publiser og lag signeringslenke →'}
+              </button>
+            </>
+          )}
+        </div>
+
         {/* Versjoner */}
         {quotes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -456,8 +526,14 @@ export default function ProjectQuotePage({ params }: Props) {
             {existingQuoteId && (() => {
               const active = quotes.find(q => q.id === existingQuoteId)
               if (!active) return null
+              const creator = active.created_by ? profiles.find(p => p.id === active.created_by) : null
               return (
                 <div className="flex items-center gap-2 ml-2">
+                  {creator && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }} title={`Opprettet ${new Date(active.created_at).toLocaleDateString('nb-NO')}`}>
+                      Opprettet av {creator.name ?? creator.email}
+                    </span>
+                  )}
                   <input
                     defaultValue={active.label ?? ''}
                     placeholder="Notat (f.eks. 2 filmer)"

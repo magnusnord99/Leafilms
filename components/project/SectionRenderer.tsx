@@ -1,6 +1,6 @@
 'use client'
 
-import { Section, Image, SectionImage, CaseStudy, TeamMember, CollagePreset, Project } from '@/lib/types'
+import { Section, Image, SectionImage, CaseStudy, TeamMember, CollagePreset, Project, DeliverableItem } from '@/lib/types'
 import {
   ConceptSection,
   GoalSection,
@@ -62,6 +62,7 @@ type SectionRendererProps = {
   onImageClick: (position?: string) => void
   onOpenPresetPicker: () => void
   project: Project
+  onProjectDeliverablesChange: (items: DeliverableItem[]) => void
 }
 
 export function SectionRenderer({
@@ -103,7 +104,8 @@ export function SectionRenderer({
   selectedPreset,
   onImageClick,
   onOpenPresetPicker,
-  project
+  project,
+  onProjectDeliverablesChange
 }: SectionRendererProps) {
   const handleImageClick = (sectionId: string) => {
     if (editMode && !sectionImages[sectionId]?.[0]) {
@@ -221,6 +223,8 @@ export function SectionRenderer({
             section={section}
             editMode={editMode}
             language={project?.language ?? 'no'}
+            projectDeliverables={project?.deliverables ?? []}
+            onProjectDeliverablesChange={onProjectDeliverablesChange}
             sectionImages={sectionImages}
             sectionImageData={sectionImageData}
             editingImageSectionId={editingImageSectionId}

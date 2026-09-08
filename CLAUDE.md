@@ -38,9 +38,10 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 - `supabase/migrations/143_project_documents.sql` (oppretter project_documents-tabellen — "Last opp"-knappen for dokumenter på kundens prosjektvisning feiler stille inntil den er kjørt, se feedback 230366b1)
-- `supabase/migrations/144_resale_visible_at.sql` (legger til resale_visible_at-kolonne på projects — uten denne feiler advanceToVideresalg() sin update stille, og prosjekter fortsetter å bli synlige i Videresalg-kolonnen umiddelbart i stedet for etter 3 uker, se feedback b92936d5)
-
+- `supabase/migrations/146_quote_created_by.sql` (legger til created_by-kolonne på quotes — "Opprettet av X"-teksten ved siden av versjonsvelgeren på tilbudssiden vises ikke før denne er kjørt, se feedback ec244372)
 Disse er skrevet men ikke kjort mot Supabase enna.
+
+**Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).
 
 ## Utviklingsfilosofi
 

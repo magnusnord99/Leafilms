@@ -449,7 +449,7 @@ function PackingSection({
             Utstyr fra lager
           </p>
           <Link
-            href="/admin/utstyr"
+            href={`/admin/utstyr?project=${projectId}`}
             style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'none' }}
           >
             Hent mer utstyr →
@@ -1289,6 +1289,7 @@ export default function PreprodDetailPage() {
             {/* Post-produksjon-brettet: Video/Foto-lanes, egendefinerte lanes, parallell-rad, bibliotek */}
             <PostProdBoard
               projectId={id}
+              shootStart={project.shoot_start ?? null}
               shootEnd={project.shoot_end ?? null}
               postDeadlines={preprod.post_deadlines}
               currentUserId={currentUserId}

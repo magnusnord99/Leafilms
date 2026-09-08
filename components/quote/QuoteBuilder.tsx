@@ -34,7 +34,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     reference: 'Video produksjon',
     clientContact: '',
     customerNumber: '',
-    ourContact: 'Bea Valand',
+    ourContact: '',
     paymentInfo: '14 dager',
     deliveryDate: '',
     deliveryDescription: '',
@@ -665,41 +665,80 @@ function DeliverablesSection({
   items: DeliverableItem[]
   onChange: (items: DeliverableItem[]) => void
 }) {
-  const update = (id: string, field: 'type' | 'name', value: string) =>
-    onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
+  const update = (id: string, field: 'type' | 'name' | 'format' | 'description' | 'quantity', value: string) =>
+    onChange(items.map(i => (i.id === id ? { ...i, [field]: field === 'quantity' ? (parseInt(value, 10) || undefined) : value } : i)))
   const add = () => onChange([...items, { id: newId(), type: 'video', name: '' }])
   const remove = (id: string) => onChange(items.filter(i => i.id !== id))
+  // Video er alltid individuelt navngitte rader (ingen quantity) — bulk-tillegg lager N rader
+  // med placeholder-navn i stedet for ett antall-felt. Se
+  // docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md §3.
+  const addVideos = () => {
+    const count = parseInt(prompt('Hvor mange videoer?') ?? '', 10)
+    if (!count || count < 1) return
+    const existingVideoCount = items.filter(i => i.type === 'video').length
+    const newRows: DeliverableItem[] = Array.from({ length: count }, (_, idx) => ({
+      id: newId(), type: 'video', name: `Reel ${existingVideoCount + idx + 1}`,
+    }))
+    onChange([...items, ...newRows])
+  }
 
   return (
     <div>
       <div style={sectionHeaderStyle}>
         <span style={sectionLabelStyle}>Leveranser (video/foto)</span>
-        <Button size="sm" variant="ghost" onClick={add} type="button">+ Legg til leveranse</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button size="sm" variant="ghost" onClick={add} type="button">+ Legg til leveranse</Button>
+          <Button size="sm" variant="ghost" onClick={addVideos} type="button">+ Legg til flere videoer</Button>
+        </div>
       </div>
 
       {items.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map(item => (
-            <div key={item.id} className="group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <select
-                style={{ ...inputBase, width: 100, flexShrink: 0 }}
-                value={item.type}
-                onChange={e => update(item.id, 'type', e.target.value)}
-              >
-                <option value="video">Video</option>
-                <option value="photo">Foto</option>
-                <option value="annet">Annet</option>
-              </select>
+            <div key={item.id} className="group" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px', border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <select
+                  style={{ ...inputBase, width: 100, flexShrink: 0 }}
+                  value={item.type}
+                  onChange={e => update(item.id, 'type', e.target.value)}
+                >
+                  <option value="video">Video</option>
+                  <option value="photo">Foto</option>
+                  <option value="annet">Annet</option>
+                </select>
+                <input
+                  style={{ ...inputBase, flex: 1 }}
+                  value={item.name}
+                  onChange={e => update(item.id, 'name', e.target.value)}
+                  placeholder="F.eks. Hovedfilm, Reel, Produktbilder"
+                />
+                {item.type !== 'video' && (
+                  <input
+                    type="number"
+                    min={1}
+                    style={{ ...inputBase, width: 64, flexShrink: 0 }}
+                    value={item.quantity ?? ''}
+                    onChange={e => update(item.id, 'quantity', e.target.value)}
+                    placeholder="Ant."
+                  />
+                )}
+                <input
+                  style={{ ...inputBase, width: 120, flexShrink: 0 }}
+                  value={item.format ?? ''}
+                  onChange={e => update(item.id, 'format', e.target.value)}
+                  placeholder="Format"
+                />
+                <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+                  title="Fjern">×</button>
+              </div>
               <input
-                style={{ ...inputBase, flex: 1 }}
-                value={item.name}
-                onChange={e => update(item.id, 'name', e.target.value)}
-                placeholder="F.eks. Hovedfilm, Reel, Produktbilder"
+                style={{ ...inputBase, fontSize: '0.7rem' }}
+                value={item.description ?? ''}
+                onChange={e => update(item.id, 'description', e.target.value)}
+                placeholder="Beskrivelse (valgfri)"
               />
-              <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-                title="Fjern">×</button>
             </div>
           ))}
         </div>
@@ -1320,7 +1359,7 @@ export function QuoteBuilder({
               </div>
               <div>
                 <label style={labelStyle}>Vår kontakt</label>
-                <input ref={fieldRefs.ourContact} style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Bea Valand" />
+                <input ref={fieldRefs.ourContact} style={fieldStyle} value={data.ourContact} onChange={e => set('ourContact', e.target.value)} placeholder="Navn" />
               </div>
             </div>
             <div>

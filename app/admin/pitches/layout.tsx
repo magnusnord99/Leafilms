@@ -15,6 +15,10 @@ const tabs = [
 export default function PitchesLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
+  // "Ny pitch" er et eget fullskjerms-skjema (samme stil som /admin/projects/new) —
+  // fanebaren under gir ingen verdi der og forstyrrer det fokuserte opprettelses-flowet.
+  if (pathname === '/admin/pitches/new') return <div>{children}</div>
+
   return (
     <div>
       {/* Sticky sub-nav — sits below the 48px admin header */}

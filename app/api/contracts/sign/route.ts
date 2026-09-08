@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     const baseContractText = contract.contract_text ?? contractSnapshot
     let finalContractText = baseContractText
 
-    if (quoteData && selectedAddons.length > 0) {
+    if (quoteData) {
       const discountFactor = quoteData.discountFactor ?? 0
       addonsTotal = selectedAddons.reduce((sum, a) => sum + addonDiscountedPrice(a, discountFactor), 0)
       const baseTotals = calculateQuoteTotals(quoteData)
@@ -153,7 +153,11 @@ export async function POST(request: NextRequest) {
       finalPriceInclVatWithAddons = baseTotals.finalInclVat + addonsInclVat
 
       // Oppdaterer totalsummen i punkt 5.1 direkte (samme funksjon som forhåndsvisningen
-      // bruker før signering, app/p/[token]/ContractSigningSection.tsx) — aldri divergerende.
+      // bruker før signering, app/p/[token]/ContractSigningSection.tsx) — ALLTID, selv uten
+      // valgte tillegg, siden forhåndsvisningen alltid viser fersk sum fra gjeldende tilbud
+      // (se buildContractTextWithAddons). Tidligere kjørte denne kun når tillegg > 0, så en
+      // kunde uten tillegg kunne signere en kontrakt med en utdatert, frosset sum fra forrige
+      // publisering hvis tilbudet var endret siden — mens forhåndsvisningen viste riktig sum.
       finalContractText = buildContractTextWithAddons(baseContractText, baseTotals.afterDiscount, selectedAddons, discountFactor, lang)
     }
 

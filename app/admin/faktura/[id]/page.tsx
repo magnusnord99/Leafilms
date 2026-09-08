@@ -126,24 +126,16 @@ export default function FakturaPage() {
 
   const access = getStageAccess('fakturert', project.pipeline_stage)
 
-  if (access === 'not_yet_reached') {
-    return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet har ikke nådd fakturering ennå
-          </p>
-          <Link href="/admin/pipeline" style={{ textDecoration: 'none' }}>
-            <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-              ← Tilbake
-            </button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const readOnly = access === 'past' && !unlocked
+  // Faktura hadde ingen stegsperre i det hele tatt før denne featuren — i
+  // motsetning til pre-prod/post-prod (som alltid har blokkert helt før
+  // fakturering) finnes det en reell inngang hit før prosjektet når
+  // fakturert: invoice_assigned-varselet (satt fra pre-prod, se
+  // InvoiceAssigneeCard) lenker alltid til denne siden uavhengig av steg. Et
+  // hardt blokkskjerm ville brutt den lenken, så not_yet_reached rendres her
+  // skrivebeskyttet i stedet — samme mønster som 'past', bare uten
+  // opplåsingsmulighet siden det ikke gir mening å "låse opp" et steg som
+  // ikke er nådd ennå.
+  const readOnly = access !== 'current' && !unlocked
 
   const customer = project.customer ?? null
   const customerName = customer?.name ?? null

@@ -335,15 +335,20 @@ export default function PostProdDetailPage() {
     setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
 
+    // Åpne på et steg prosjektet ikke er i akkurat nå (forbi eller ikke nådd
+    // ennå) skal aldri seede/reseede oppgaver — det ville mutert data fra en
+    // rent skrivebeskyttet visning. Se lib/pipeline-stage-lock.ts.
+    const isCurrentStage = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) === 'current'
+
     // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
     // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
     // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
     // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
-    if (currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+    if (isCurrentStage && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
 
     const projectTasks = await getTasksForProject(projectId, 'post_prod')
 
-    if (projectTasks.length === 0 && currentProj?.project_type) {
+    if (isCurrentStage && projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
       if (result.error) {
         setSeedError(result.error)
@@ -390,6 +395,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleCalendarNameChange(taskId: string, value: string) {
+    if (readOnly) return
     setCalendarNames(prev => ({ ...prev, [taskId]: value }))
     setCalendarNameSaved(false)
     if (calendarNameTimerRef.current) clearTimeout(calendarNameTimerRef.current)
@@ -936,6 +942,7 @@ export default function PostProdDetailPage() {
                 <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
                   <button
                     onClick={() => setLeadDropdownOpen(v => !v)}
+                    disabled={readOnly}
                     style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
                       display: 'flex', alignItems: 'center', gap: 6,
@@ -974,6 +981,7 @@ export default function PostProdDetailPage() {
                       {projectLead && (
                         <button
                           onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                          disabled={readOnly}
                           style={{
                             width: '100%', textAlign: 'left',
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -989,6 +997,7 @@ export default function PostProdDetailPage() {
                         <button
                           key={p.id}
                           onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                          disabled={readOnly}
                           style={{
                             width: '100%', textAlign: 'left',
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -1138,7 +1147,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
-              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" />
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" readOnly={readOnly} />
             </div>
           )}
 
@@ -1716,6 +1725,7 @@ export default function PostProdDetailPage() {
                   value={calendarNames[selectedTask.id] ?? ''}
                   onChange={e => handleCalendarNameChange(selectedTask.id, e.target.value)}
                   placeholder={buildTaskCalendarLabel(selectedTask.title, selectedTask.pipeline_stage, companyLabel(currentProject.customer))}
+                  disabled={readOnly}
                   style={{
                     width: '100%', boxSizing: 'border-box',
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',

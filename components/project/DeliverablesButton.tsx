@@ -75,6 +75,7 @@ export function DeliverablesButton({
   }
 
   async function save() {
+    if (readOnly) return
     setSaving(true)
     setError(null)
     const next: DeliverableItem[] = draft.map(it => ({

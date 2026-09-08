@@ -19,12 +19,13 @@ export function libraryDragId(item: PostProdLibraryItem): string {
   return `lib:${item.id}`
 }
 
-function LibraryCard({ item, onDelete }: { item: PostProdLibraryItem; onDelete: (id: string) => void }) {
+function LibraryCard({ item, onDelete, readOnly = false }: { item: PostProdLibraryItem; onDelete: (id: string) => void; readOnly?: boolean }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: libraryDragId(item) })
   const [deleting, setDeleting] = useState(false)
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
+    if (readOnly) return
     setDeleting(true)
     const result = await deleteTaskLibraryItem(item.id)
     if (result.ok) onDelete(item.id)
@@ -48,7 +49,7 @@ function LibraryCard({ item, onDelete }: { item: PostProdLibraryItem; onDelete: 
       <button
         onClick={handleDelete}
         onPointerDown={e => e.stopPropagation()}
-        disabled={deleting}
+        disabled={readOnly || deleting}
         title="Slett fra biblioteket"
         style={{ background: 'none', border: 'none', cursor: deleting ? 'wait' : 'pointer', color: C.text3, padding: 0, lineHeight: 0, marginLeft: 2 }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
@@ -62,7 +63,7 @@ function LibraryCard({ item, onDelete }: { item: PostProdLibraryItem; onDelete: 
   )
 }
 
-export function PostProdLibraryPanel({ refreshKey }: { refreshKey: number }) {
+export function PostProdLibraryPanel({ refreshKey, readOnly = false }: { refreshKey: number; readOnly?: boolean }) {
   const [items, setItems] = useState<PostProdLibraryItem[]>([])
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function PostProdLibraryPanel({ refreshKey }: { refreshKey: number }) {
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {items.map(item => (
-          <LibraryCard key={item.id} item={item} onDelete={id => setItems(prev => prev.filter(i => i.id !== id))} />
+          <LibraryCard key={item.id} item={item} onDelete={id => setItems(prev => prev.filter(i => i.id !== id))} readOnly={readOnly} />
         ))}
       </div>
     </div>

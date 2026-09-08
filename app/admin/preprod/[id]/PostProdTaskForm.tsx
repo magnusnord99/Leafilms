@@ -18,7 +18,7 @@ const C = {
 type DestinationOption = { key: string; label: string; destination: PostProdDestination }
 
 export function PostProdTaskForm({
-  projectId, lanes, videoShared, videoTabs, profiles, onAdded,
+  projectId, lanes, videoShared, videoTabs, profiles, onAdded, readOnly = false,
 }: {
   projectId: string
   lanes: PostProdBoardLane[]
@@ -26,6 +26,7 @@ export function PostProdTaskForm({
   videoTabs: VideoDeliverableTab[] | null
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onAdded: () => void
+  readOnly?: boolean
 }) {
   const videoOptions: DestinationOption[] = videoTabs && videoTabs.length > 0
     ? [
@@ -59,6 +60,7 @@ export function PostProdTaskForm({
   const [saving, setSaving] = useState(false)
 
   async function handleAdd() {
+    if (readOnly) return
     const trimmed = title.trim()
     if (!trimmed || saving) return
     const destination = options.find(o => o.key === destinationKey)?.destination
@@ -128,7 +130,7 @@ export function PostProdTaskForm({
 
       <button
         onClick={handleAdd}
-        disabled={!title.trim() || saving}
+        disabled={readOnly || !title.trim() || saving}
         style={{
           fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600, padding: '7px 12px', borderRadius: 6,
           cursor: title.trim() ? 'pointer' : 'not-allowed',

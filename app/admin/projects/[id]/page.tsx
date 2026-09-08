@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, updateProjectDeliveryInfo, updatePostProdDelivery, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
 import { updateReviewSettings } from '@/lib/actions/reviews'
 import ReviewPanel from '@/components/project/ReviewPanel'
 import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, setRequestInvoiceInfo, getAcceptedQuoteSummary, type AcceptedQuoteSummary, getAllContractVersions, duplicateContractVersion, setCurrentContractVersion, updateContractLabel, deleteContractVersion, type ContractVersion } from '@/lib/actions/contracts'
@@ -17,6 +17,8 @@ import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { DeliverablesButton, summarizeDeliverables } from '@/components/project/DeliverablesButton'
+import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
@@ -661,12 +663,6 @@ export default function ProjectHubPage() {
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [, startTransition] = useTransition()
-  const [deliveryEdit, setDeliveryEdit] = useState(false)
-  const [deliveryValue, setDeliveryValue] = useState('')
-  const [deliveryVideoValue, setDeliveryVideoValue] = useState('')
-  const [deliveryPhotoValue, setDeliveryPhotoValue] = useState('')
-  const [postProdDaysValue, setPostProdDaysValue] = useState('')
-  const [savingDelivery, setSavingDelivery] = useState(false)
   const [shootEdit, setShootEdit] = useState(false)
   const [shootStart, setShootStart] = useState('')
   const [shootEnd, setShootEnd] = useState('')
@@ -778,10 +774,6 @@ export default function ProjectHubPage() {
     if (!data) setError('Fant ikke prosjektet.')
     else {
       setHubData(data)
-      setDeliveryValue(data.project.delivery_description ?? '')
-      setDeliveryVideoValue(data.project.delivery_video ?? '')
-      setDeliveryPhotoValue(data.project.delivery_photo ?? '')
-      setPostProdDaysValue(data.project.post_prod_days != null ? String(data.project.post_prod_days) : '')
       setShootStart(data.project.shoot_start ?? '')
       setShootEnd(data.project.shoot_end ?? '')
       setShootConfirmedManually(data.project.shoot_confirmed ?? false)
@@ -875,24 +867,6 @@ export default function ProjectHubPage() {
       await updateTaskStatus(taskId, nextStatus)
       setTogglingTaskId(null)
     })
-  }
-
-  async function handleSaveDelivery() {
-    setSavingDelivery(true)
-    const postProdDays = postProdDaysValue.trim() ? Number(postProdDaysValue) : null
-    await Promise.all([
-      updateProjectDeliveryInfo(projectId, deliveryValue.trim() || null, postProdDays),
-      updatePostProdDelivery(projectId, deliveryVideoValue.trim() || null, deliveryPhotoValue.trim() || null),
-    ])
-    setHubData(prev => prev ? { ...prev, project: {
-      ...prev.project,
-      delivery_description: deliveryValue.trim() || null,
-      delivery_video: deliveryVideoValue.trim() || null,
-      delivery_photo: deliveryPhotoValue.trim() || null,
-      post_prod_days: postProdDays,
-    } } : prev)
-    setSavingDelivery(false)
-    setDeliveryEdit(false)
   }
 
   async function handleSaveShootDates() {
@@ -1587,91 +1561,22 @@ export default function ProjectHubPage() {
         {/* Tab content */}
         {activeTab === 'oversikt' && (
           <div>
-            {/* Leveranse */}
+            {/* Leveranser — samme data og utseende som i postprod, se DeliverablesButton */}
             <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: deliveryEdit ? 10 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, flexShrink: 0 }}>Leveres</span>
-                  {!deliveryEdit && (
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: project.delivery_description ? C.text : C.text3, fontStyle: project.delivery_description ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {project.delivery_description || 'Ikke satt — legg til i tilbud eller her'}
-                    </span>
-                  )}
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, flexShrink: 0 }}>Leveranser</span>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: project.deliverables?.length ? C.text : C.text3, fontStyle: project.deliverables?.length ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {summarizeDeliverables(project.deliverables ?? []) ?? 'Ikke satt'}
+                  </span>
                 </div>
-                {!deliveryEdit && (
-                  <button onClick={() => setDeliveryEdit(true)} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', flexShrink: 0, marginLeft: 8 }}>
-                    Rediger
-                  </button>
-                )}
+                <DeliverablesButton
+                  projectId={project.id}
+                  items={project.deliverables ?? []}
+                  onSaved={items => setHubData(prev => prev ? { ...prev, project: { ...prev.project, deliverables: items } } : prev)}
+                  variant="toolbar"
+                />
               </div>
-              {!deliveryEdit && (project.delivery_video || project.delivery_photo || project.post_prod_days != null) && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginTop: 6 }}>
-                  {[
-                    project.delivery_video && `Video: ${project.delivery_video}`,
-                    project.delivery_photo && `Foto: ${project.delivery_photo}`,
-                    project.post_prod_days != null && `Etterarbeid: ${project.post_prod_days} dager`,
-                  ].filter(Boolean).join(' · ')}
-                </p>
-              )}
-              {deliveryEdit && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Leveringsbeskrivelse</label>
-                    <input
-                      autoFocus
-                      value={deliveryValue}
-                      onChange={e => setDeliveryValue(e.target.value)}
-                      placeholder="F.eks. 2 kampanjefilmer á 90 sek + 30 produktbilder"
-                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 160px' }}>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Video</label>
-                      <input
-                        value={deliveryVideoValue}
-                        onChange={e => setDeliveryVideoValue(e.target.value)}
-                        placeholder="F.eks. 1 etterfilm"
-                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
-                      />
-                    </div>
-                    <div style={{ flex: '1 1 160px' }}>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Foto</label>
-                      <input
-                        value={deliveryPhotoValue}
-                        onChange={e => setDeliveryPhotoValue(e.target.value)}
-                        placeholder="F.eks. 20 redigerte bilder"
-                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
-                      />
-                    </div>
-                    <div style={{ width: 130 }}>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Etterarbeidsdager</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={postProdDaysValue}
-                        onChange={e => setPostProdDaysValue(e.target.value)}
-                        placeholder="F.eks. 5"
-                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={handleSaveDelivery} disabled={savingDelivery} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '5px 12px', borderRadius: 6, background: C.accent, color: '#fff', border: 'none', cursor: 'pointer', opacity: savingDelivery ? 0.6 : 1 }}>
-                      {savingDelivery ? '...' : 'Lagre'}
-                    </button>
-                    <button onClick={() => {
-                      setDeliveryEdit(false)
-                      setDeliveryValue(project.delivery_description ?? '')
-                      setDeliveryVideoValue(project.delivery_video ?? '')
-                      setDeliveryPhotoValue(project.delivery_photo ?? '')
-                      setPostProdDaysValue(project.post_prod_days != null ? String(project.post_prod_days) : '')
-                    }} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' }}>
-                      Avbryt
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Opptaksdatoer */}
@@ -1750,6 +1655,11 @@ export default function ProjectHubPage() {
                   Åpne →
                 </button>
               </Link>
+            </div>
+
+            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, se ProjectDocuments */}
+            <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <ProjectDocuments projectId={projectId} />
             </div>
 
             {/* Tilknyttet — board og kundeseleksjon-galleri, vises kun når de finnes, uavhengig av pipeline-steg */}

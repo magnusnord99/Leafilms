@@ -791,6 +791,48 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 }
 
 /**
+ * Henter ETT prosjekt uten filter på pipeline_stage — i motsetning til
+ * getPostProdProjects() (som kun viser AKTIVE post-prod-prosjekter for
+ * oversikten) brukes denne av [id]-siden for å kunne vise et prosjekt som
+ * har gått forbi post-prod skrivebeskyttet, se
+ * docs/superpowers/specs/2026-09-01-pipeline-stage-history-lock-design.md.
+ */
+export async function getPostProdProject(id: string): Promise<(ProjectWithPipeline & { task_count: number; done_count: number }) | null> {
+  try {
+    const supabase = await createClient()
+
+    const { data: row, error } = await supabase
+      .from('projects')
+      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
+      .eq('id', id)
+      .single()
+
+    if (error || !row) return null
+
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select('status')
+      .eq('project_id', id)
+      .eq('pipeline_stage', 'post_prod')
+
+    const task_count = tasks?.length ?? 0
+    const done_count = tasks?.filter(t => t.status === 'done').length ?? 0
+
+    return {
+      ...(row as ProjectRow),
+      customer: (row as ProjectRow).customers ?? null,
+      customers: undefined,
+      project_lead: (row as { project_lead?: ProjectWithPipeline['project_lead'] }).project_lead ?? null,
+      task_count,
+      done_count,
+    } as ProjectWithPipeline & { task_count: number; done_count: number }
+  } catch (err) {
+    console.error('getPostProdProject error:', err)
+    return null
+  }
+}
+
+/**
  * Oppretter en ny task. sort_order settes til max(sort_order) + 1
  * for samme project + stage.
  */
@@ -2477,6 +2519,36 @@ async function ensureVideoDeliverablesSeeded(
       )
     }
   }
+}
+
+/**
+ * Wrapper rundt ensureVideoDeliverablesSeeded til bruk utenfor getPostProdBoard
+ * (Board-visningen på /admin/preprod/[id]) — postprod-stepper-siden
+ * (/admin/postprod/[id]) leste tidligere tasks rått via getTasksForProject
+ * uten noen gang å kjøre denne migreringen. Et prosjekt som fikk sine
+ * post-prod-steg seedet FØR det hadde 2+ video-leveranser (deliverable_id
+ * fortsatt NULL på Grovklipp/Klipp/Farger/Lyd) viste dermed samme delte
+ * oppgave på tvers av alle video-faner der — redigering av én video endret
+ * alle. Kall denne før getTasksForProject når prosjektet har 2+ video-
+ * leveranser, så blir de gamle flate radene splittet per leveranse.
+ */
+export async function ensurePostProdVideoTasksSeeded(projectId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: proj } = await supabase
+    .from('projects')
+    .select('project_type, deliverables')
+    .eq('id', projectId)
+    .single()
+
+  const projectType = (proj?.project_type ?? null) as ProjectType | null
+  if (!projectType) return
+
+  const deliverables = (proj?.deliverables ?? []) as DeliverableItem[]
+  const videoDeliverables = deliverables.filter(d => d.type === 'video')
+  if (videoDeliverables.length < 2) return
+
+  const videoDbSubType: 'video' | 'photo' | null = projectType === 'mixed' ? 'video' : null
+  await ensureVideoDeliverablesSeeded(supabase, projectId, videoDbSubType, videoDeliverables)
 }
 
 /**

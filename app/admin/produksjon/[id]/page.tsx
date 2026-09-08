@@ -8,6 +8,9 @@ import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
 import { C } from '@/lib/admin-theme'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
 
 function formatDate(d: string | null) {
   if (!d) return null
@@ -38,6 +41,7 @@ export default function ProduksjonPage() {
   const [members, setMembers] = useState<ConversationParticipant[]>([])
   const [currentUser, setCurrentUser] = useState<ConversationParticipant | null>(null)
   const [allProfiles, setAllProfiles] = useState<ConversationParticipant[]>([])
+  const [unlocked, setUnlocked] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -78,6 +82,23 @@ export default function ProduksjonPage() {
     )
   }
 
+  const access = getStageAccess('produksjon', info.pipelineStage)
+
+  if (access === 'not_yet_reached') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet har ikke nådd produksjon ennå
+          </p>
+          <button onClick={() => router.push('/admin/pipeline')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+            ← Tilbake
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const shootRange = info.shootStart
     ? info.shootEnd && info.shootEnd !== info.shootStart
       ? `${formatDate(info.shootStart)} – ${formatDate(info.shootEnd)}`
@@ -87,6 +108,13 @@ export default function ProduksjonPage() {
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {access === 'past' && (
+          <PastStageBanner
+            currentStageLabel={STAGE_LABEL[info.pipelineStage]}
+            unlocked={unlocked}
+            onUnlock={() => setUnlocked(true)}
+          />
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <Link href="/admin/pipeline" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textDecoration: 'none' }}>Pipeline</Link>
           <span style={{ color: C.text3, fontSize: '0.7rem' }}>/</span>

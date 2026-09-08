@@ -1,16 +1,15 @@
 'use client'
 
 import { Fragment, useEffect, useState, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  getPostProdProjects, getTasksForProject, updateTaskStatus,
+  getPostProdProjects, getPostProdProject, getTasksForProject, updateTaskStatus,
   reseedPostProdTasks, setProjectType,
+  ensurePostProdVideoTasksSeeded,
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee,
-  updateProjectDeliverables,
   setProjectLead, getTaskMessageCounts,
   deleteTask,
 } from '@/lib/actions/pipeline'
@@ -24,6 +23,10 @@ import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedD
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 
 const C = {
   bg:       '#181920',
@@ -198,6 +201,8 @@ export default function PostProdDetailPage() {
   const projectId = params.id as string
 
   const [projects, setProjects] = useState<PostProdProject[]>([])
+  const [viewedProject, setViewedProject] = useState<PostProdProject | null>(null)
+  const [unlocked, setUnlocked] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -240,11 +245,6 @@ export default function PostProdDetailPage() {
   const leadDropdownRef = useRef<HTMLDivElement>(null)
 
   // Leveringsinfo
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
-  const [editingDeliverables, setEditingDeliverables] = useState(false)
-  const [draftDeliverables, setDraftDeliverables] = useState<SignedDeliverableItem[]>([])
-  const [savingDeliverables, setSavingDeliverables] = useState(false)
-  const [deliverablesError, setDeliverablesError] = useState<string | null>(null)
 
   const [deliverableItems, setDeliverableItems] = useState<SignedDeliverableItem[]>([])
 
@@ -277,6 +277,7 @@ export default function PostProdDetailPage() {
   }, [leadDropdownOpen])
 
   async function handleSetLead(profileId: string | null) {
+    if (readOnly) return
     const prev = projectLead
     const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
@@ -292,8 +293,9 @@ export default function PostProdDetailPage() {
   const customTasks = tasks.filter(t => t.is_custom)
 
   // For mixed-prosjekter: vis kun tasks for aktiv tab
-  const isMixed = projects.find(p => p.id === projectId)?.project_type === 'mixed'
-  const videoDeliverables = ((projects.find(p => p.id === projectId)?.deliverables ?? []) as SignedDeliverableItem[])
+  const viewedOrListedProject = projects.find(p => p.id === projectId) ?? viewedProject
+  const isMixed = viewedOrListedProject?.project_type === 'mixed'
+  const videoDeliverables = ((viewedOrListedProject?.deliverables ?? []) as SignedDeliverableItem[])
     .filter(d => d.type === 'video')
   const hasVideoTabs = videoDeliverables.length >= 2 && (!isMixed || activeTab === 'video')
   const displayTasks = computeDisplayTasks(stepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
@@ -303,6 +305,7 @@ export default function PostProdDetailPage() {
   const selectedTask = displayTasks[selectedIdx] ?? null
 
   async function handleDeleteSelectionComment(imageId: string, commentId: string) {
+    if (readOnly) return
     await deleteImageComment(commentId)
     setSelectionImages(prev => prev.map(img =>
       img.id === imageId ? { ...img, comments: img.comments.filter(c => c.id !== commentId) } : img
@@ -313,24 +316,39 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
+    const [allProjects, viewedProj, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
-      getTasksForProject(projectId, 'post_prod'),
+      getPostProdProject(projectId),
       getCurrentUserProfile(),
       getAllProfiles(),
       getSelectedImagesForProject(projectId),
       getGalleryIdForProject(projectId),
     ])
+    setViewedProject(viewedProj)
     setSelectionImages(selImgs)
     setGallerySummary(gallerySumm)
     setProfiles(allProfiles)
 
     const allProj = allProjects as PostProdProject[]
-    const currentProj = allProj.find(p => p.id === projectId)
+    const currentProj = allProj.find(p => p.id === projectId) ?? viewedProj
+    const currentProjVideoDeliverables = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video')
     setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
 
-    if (projectTasks.length === 0 && currentProj?.project_type) {
+    // Åpne på et steg prosjektet ikke er i akkurat nå (forbi eller ikke nådd
+    // ennå) skal aldri seede/reseede oppgaver — det ville mutert data fra en
+    // rent skrivebeskyttet visning. Se lib/pipeline-stage-lock.ts.
+    const isCurrentStage = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) === 'current'
+
+    // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
+    // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
+    // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
+    // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
+    if (isCurrentStage && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+
+    const projectTasks = await getTasksForProject(projectId, 'post_prod')
+
+    if (isCurrentStage && projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
       if (result.error) {
         setSeedError(result.error)
@@ -344,8 +362,7 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
       setLoading(false)
       return
     }
@@ -354,8 +371,7 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
@@ -379,6 +395,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleCalendarNameChange(taskId: string, value: string) {
+    if (readOnly) return
     setCalendarNames(prev => ({ ...prev, [taskId]: value }))
     setCalendarNameSaved(false)
     if (calendarNameTimerRef.current) clearTimeout(calendarNameTimerRef.current)
@@ -391,6 +408,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleDueDateChange(taskId: string, value: string) {
+    if (readOnly) return
     setDueDates(prev => ({ ...prev, [taskId]: value }))
     await updateTaskDueDate(taskId, value || null)
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: value || null } : t))
@@ -415,10 +433,19 @@ export default function PostProdDetailPage() {
   // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
   // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
   // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
-  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverablesList: SignedDeliverableItem[]): number {
+    const videoDeliverableCount = videoDeliverablesList.length
     const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
     if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
-    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    // Uten deep-link og uten en fane som allerede er valgt, defaulter vi til
+    // første video-leveranse — ellers filtrerer computeDisplayTasks bort alle
+    // per-leveranse-steg (deliverable_id !== null) og viser kun de delte
+    // stegene (Logging/Ferdig), se samme mønster i handleSwitchTab.
+    let resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    if (!resolvedDeliverableId && videoDeliverableCount >= 2) {
+      resolvedDeliverableId = videoDeliverablesList[0].id
+      setActiveVideoDeliverableId(resolvedDeliverableId)
+    }
     if (isMixedProject && deepTask?.sub_type) {
       setActiveTab(deepTask.sub_type)
       return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)
@@ -456,6 +483,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleLinkChange(taskId: string, key: string, value: string) {
+    if (readOnly) return
     const newData = { ...(pendingTaskDataRef.current[taskId] ?? {}), [key]: value }
     pendingTaskDataRef.current[taskId] = newData
     setTaskData(prev => ({ ...prev, [taskId]: newData }))
@@ -471,6 +499,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleNotesChange(taskId: string, value: string) {
+    if (readOnly) return
     setNotes(prev => ({ ...prev, [taskId]: value }))
     setNotesSaving(true)
     setNotesSaved(false)
@@ -484,6 +513,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleAdvance(taskId: string, to: 'in_progress' | 'done') {
+    if (readOnly) return
     setTogglingId(taskId)
     setActionError(null)
     const prevTask = tasks.find(t => t.id === taskId)
@@ -522,6 +552,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleReject() {
+    if (readOnly) return
     if (!rejectionNote.trim()) {
       setRejectionNoteError(true)
       return
@@ -555,6 +586,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleGoBack(taskId: string) {
+    if (readOnly) return
     if (!selectedTask) return
     setTogglingId(taskId)
     setActionError(null)
@@ -589,6 +621,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleToggleAssignee(taskId: string, profileId: string) {
+    if (readOnly) return
     const profile = profiles.find(p => p.id === profileId)
     if (!profile) return
     const task = tasks.find(t => t.id === taskId)
@@ -605,6 +638,7 @@ export default function PostProdDetailPage() {
   }
 
   function handleCustomTaskStatusChange(taskId: string, status: Task['status']) {
+    if (readOnly) return
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
     updatePreprodTaskStatus(taskId, status)
   }
@@ -626,13 +660,13 @@ export default function PostProdDetailPage() {
   }
 
   async function handleDeleteStepperTask(taskId: string) {
+    if (readOnly) return
     const result = await deleteTask(taskId)
     if (!result.ok) return
     const newTasks = tasks.filter(t => t.id !== taskId)
     setTasks(newTasks)
-    const isMixedProject = projects.find(p => p.id === projectId)?.project_type === 'mixed'
     const newStepperTasks = newTasks.filter(t => !t.is_custom)
-    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixedProject, activeTab, activeVideoDeliverableId, videoDeliverables.length)
+    const newDisplayTasks = computeDisplayTasks(newStepperTasks, isMixed, activeTab, activeVideoDeliverableId, videoDeliverables.length)
     setSelectedIdx(getInitialIdx(newDisplayTasks))
   }
 
@@ -679,6 +713,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleSelectType(type: ProjectType) {
+    if (readOnly) return
     setReseeding(true)
     setSeedError(null)
     await setProjectType(projectId, type)
@@ -701,6 +736,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleOpenDeliveryReview() {
+    if (readOnly) return
     setOpeningDeliveryReview(true)
     try {
       const { galleryId } = await getOrCreateDeliveryGallery(projectId)
@@ -713,6 +749,7 @@ export default function PostProdDetailPage() {
   }
 
   async function handleReseed() {
+    if (readOnly) return
     if (!confirm('Nullstill alle oppgaver og generer på nytt? Fremdrift, notater og chat-meldinger går tapt.')) return
     setReseeding(true)
     setSeedError(null)
@@ -742,13 +779,13 @@ export default function PostProdDetailPage() {
     )
   }
 
-  const currentProject = projects.find(p => p.id === projectId)
+  const currentProject = viewedOrListedProject
   if (!currentProject) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet er ikke lenger i post-produksjon
+            Fant ikke prosjektet
           </p>
           <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
             ← Tilbake
@@ -757,6 +794,25 @@ export default function PostProdDetailPage() {
       </div>
     )
   }
+
+  const access = getStageAccess('post_prod', currentProject.pipeline_stage)
+
+  if (access === 'not_yet_reached') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet har ikke nådd post-produksjon ennå
+          </p>
+          <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+            ← Tilbake
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const readOnly = access === 'past' && !unlocked
 
   const typeConf = currentProject.project_type ? TYPE_CONFIG[currentProject.project_type] : null
   // Progress viser alltid total (begge flyter) i progress-bar i headeren
@@ -858,6 +914,13 @@ export default function PostProdDetailPage() {
                 )
               })()}
             </div>
+            {access === 'past' && (
+              <PastStageBanner
+                currentStageLabel={STAGE_LABEL[currentProject.pipeline_stage]}
+                unlocked={unlocked}
+                onUnlock={() => setUnlocked(true)}
+              />
+            )}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
@@ -879,6 +942,7 @@ export default function PostProdDetailPage() {
                 <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
                   <button
                     onClick={() => setLeadDropdownOpen(v => !v)}
+                    disabled={readOnly}
                     style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
                       display: 'flex', alignItems: 'center', gap: 6,
@@ -917,6 +981,7 @@ export default function PostProdDetailPage() {
                       {projectLead && (
                         <button
                           onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                          disabled={readOnly}
                           style={{
                             width: '100%', textAlign: 'left',
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -932,6 +997,7 @@ export default function PostProdDetailPage() {
                         <button
                           key={p.id}
                           onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                          disabled={readOnly}
                           style={{
                             width: '100%', textAlign: 'left',
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -1039,214 +1105,8 @@ export default function PostProdDetailPage() {
               </div>
             )}
 
-            {/* Info om levering-knapp */}
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '4px 10px',
-                  borderRadius: 6, cursor: 'pointer',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-                {deliverableItems.length > 0 && (
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent, display: 'inline-block', marginLeft: 2 }} />
-                )}
-              </button>
-            </div>
-
-            {/* Leveringsmodal — rendert via portal til document.body: headeren over har
-                backdrop-filter (linje ~810), som lager en ny "containing block" for
-                position:fixed-etterkommere, slik at modalen ellers ble klemt inn i headerens
-                egen boks i stedet for å dekke hele skjermen (skjermbilde fra Magnus). */}
-            {showDeliveryModal && createPortal(
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
-                onClick={e => { if (e.target === e.currentTarget && !editingDeliverables) setShowDeliveryModal(false) }}
-              >
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 460, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                      Leveranser
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {!editingDeliverables ? (
-                        <button
-                          onClick={() => { setDraftDeliverables(deliverableItems.map((it, i) => ({ ...it, id: it.id ?? String(i) }))); setEditingDeliverables(true); setDeliverablesError(null) }}
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                        >
-                          Rediger
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => { setEditingDeliverables(false); setDeliverablesError(null) }}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}
-                          >
-                            Avbryt
-                          </button>
-                          <button
-                            onClick={async () => {
-                              setSavingDeliverables(true)
-                              setDeliverablesError(null)
-                              const items: SignedDeliverableItem[] = draftDeliverables.map(it => ({
-                                id: it.id ?? String(Date.now()),
-                                type: it.type,
-                                name: it.name,
-                                quantity: it.type === 'video' ? undefined : it.quantity,
-                                format: it.format,
-                                description: it.description,
-                              }))
-                              const res = await updateProjectDeliverables(projectId, items)
-                              setSavingDeliverables(false)
-                              if (!res.error) {
-                                setDeliverableItems(draftDeliverables)
-                                setEditingDeliverables(false)
-                              } else {
-                                setDeliverablesError(res.error)
-                              }
-                            }}
-                            disabled={savingDeliverables}
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: savingDeliverables ? 0.6 : 1 }}
-                          >
-                            {savingDeliverables ? 'Lagrer...' : 'Lagre'}
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => { setShowDeliveryModal(false); setEditingDeliverables(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: '2px 6px' }}>×</button>
-                    </div>
-                  </div>
-
-                  {deliverablesError && (
-                    <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: '#f0b0b0', background: '#3a1d1d', border: '1px solid #E05555', borderRadius: 6, padding: '6px 10px', marginBottom: 12, flexShrink: 0 }}>
-                      Kunne ikke lagre: {deliverablesError}
-                    </div>
-                  )}
-
-                  {/* Scrollbar content */}
-                  <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                    {editingDeliverables ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {draftDeliverables.map((item, i) => (
-                          <div key={item.id ?? i} style={{ background: C.surface2, borderRadius: 8, padding: '12px 14px', position: 'relative' }}>
-                            <button
-                              onClick={() => setDraftDeliverables(prev => prev.filter((_, idx) => idx !== i))}
-                              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
-                              title="Fjern"
-                            >×</button>
-                            <div style={{ display: 'grid', gridTemplateColumns: item.type === 'video' ? '90px 1fr 80px' : '90px 1fr 56px 80px', gap: 8, marginBottom: 8 }}>
-                              <select
-                                value={item.type}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, type: e.target.value as SignedDeliverableItem['type'] } : it))}
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 6px', color: C.text, outline: 'none' }}
-                              >
-                                <option value="video">Video</option>
-                                <option value="photo">Foto</option>
-                                <option value="annet">Annet</option>
-                              </select>
-                              <input
-                                value={item.name ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, name: e.target.value } : it))}
-                                placeholder="Navn"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                              {item.type !== 'video' && (
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={item.quantity ?? ''}
-                                  onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: parseInt(e.target.value, 10) || undefined } : it))}
-                                  placeholder="Ant."
-                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
-                                />
-                              )}
-                              <input
-                                value={item.format ?? ''}
-                                onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
-                                placeholder="Format"
-                                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
-                              />
-                            </div>
-                            <textarea
-                              value={item.description ?? ''}
-                              onChange={e => setDraftDeliverables(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
-                              placeholder="Beskrivelse (valgfri)"
-                              rows={2}
-                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                          <button
-                            onClick={() => setDraftDeliverables(prev => [...prev, { id: String(Date.now()), type: 'annet', name: '', quantity: 1, format: '', description: '' }])}
-                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
-                          >
-                            + Legg til leveranse
-                          </button>
-                          <button
-                            onClick={() => {
-                              const count = parseInt(prompt('Hvor mange videoer?') ?? '', 10)
-                              if (!count || count < 1) return
-                              const existingVideoCount = draftDeliverables.filter(d => d.type === 'video').length
-                              const newRows: SignedDeliverableItem[] = Array.from({ length: count }, (_, idx) => ({
-                                id: `${Date.now()}-${idx}`, type: 'video', name: `Reel ${existingVideoCount + idx + 1}`,
-                              }))
-                              setDraftDeliverables(prev => [...prev, ...newRows])
-                            }}
-                            style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, background: 'none', border: `1px dashed ${C.accent}`, borderRadius: 6, padding: '8px', cursor: 'pointer' }}
-                          >
-                            + Legg til flere videoer
-                          </button>
-                        </div>
-                      </div>
-                    ) : deliverableItems.length === 0 ? (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
-                        Ingen leveranser er lagt til ennå. Trykk «Rediger» for å legge til.
-                      </p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {deliverableItems.map((item, i) => {
-                          const qty = item.type === 'video' ? null : (item.quantity ?? null)
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < deliverableItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                              {qty != null && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.accent, minWidth: 24, textAlign: 'right', flexShrink: 0, paddingTop: 1 }}>
-                                  {qty}
-                                </span>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, display: 'block', wordBreak: 'break-word' }}>
-                                  {item.name || '—'}
-                                </span>
-                                {item.description && (
-                                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, display: 'block', marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>
-                                    {item.description}
-                                  </span>
-                                )}
-                              </div>
-                              {item.format && (
-                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4, marginTop: 2 }}>
-                                  {item.format}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>,
-              document.body
-            )}
+            {/* Info om levering-knapp — delt komponent med prosjektoversikten, se DeliverablesButton */}
+            <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} readOnly={readOnly} />
           </div>
 
           {/* Film/Bilder-faner for mixed-prosjekter */}
@@ -1287,23 +1147,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                style={{
-                  marginLeft: 'auto', marginRight: 12,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  color: deliverableItems.length > 0 ? C.text2 : C.text3,
-                  background: 'none', border: `1px solid ${C.border}`, padding: '3px 9px',
-                  borderRadius: 5, cursor: 'pointer', flexShrink: 0,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
-                Info om levering
-              </button>
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" readOnly={readOnly} />
             </div>
           )}
 
@@ -1396,6 +1240,7 @@ export default function PostProdDetailPage() {
                 onAssigneesChange={handleCustomTaskAssigneesChange}
                 onDueDateChange={handleCustomTaskDueDateChange}
                 emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
+                readOnly={readOnly}
               />
             </div>
           )}
@@ -1880,6 +1725,7 @@ export default function PostProdDetailPage() {
                   value={calendarNames[selectedTask.id] ?? ''}
                   onChange={e => handleCalendarNameChange(selectedTask.id, e.target.value)}
                   placeholder={buildTaskCalendarLabel(selectedTask.title, selectedTask.pipeline_stage, companyLabel(currentProject.customer))}
+                  disabled={readOnly}
                   style={{
                     width: '100%', boxSizing: 'border-box',
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
@@ -1909,6 +1755,7 @@ export default function PostProdDetailPage() {
                 <textarea
                   value={notes[selectedTask.id] ?? ''}
                   onChange={e => handleNotesChange(selectedTask.id, e.target.value)}
+                  disabled={readOnly}
                   placeholder="Skriv notater for denne oppgaven..."
                   rows={5}
                   style={{
@@ -1933,7 +1780,7 @@ export default function PostProdDetailPage() {
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button
                         onClick={() => handleAdvance(selectedTask.id, 'done')}
-                        disabled={togglingId === selectedTask.id}
+                        disabled={readOnly || togglingId === selectedTask.id}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -1948,6 +1795,7 @@ export default function PostProdDetailPage() {
                       </button>
                       <button
                         onClick={() => { setShowRejectionForm(true); setRejectionNote(''); setRejectionNoteError(false) }}
+                        disabled={readOnly}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: 'pointer',
@@ -1971,6 +1819,7 @@ export default function PostProdDetailPage() {
                         autoFocus
                         value={rejectionNote}
                         onChange={e => { setRejectionNote(e.target.value); setRejectionNoteError(false) }}
+                        disabled={readOnly}
                         placeholder="Hva var ikke godkjent? Beskriv hva som må rettes..."
                         rows={4}
                         style={{
@@ -1994,7 +1843,7 @@ export default function PostProdDetailPage() {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={() => { setShowRejectionForm(false); setRejectionNote(''); setRejectionNoteError(false) }}
-                          disabled={rejecting}
+                          disabled={readOnly || rejecting}
                           style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
                             padding: '8px 16px', borderRadius: 7, cursor: 'pointer',
@@ -2005,7 +1854,7 @@ export default function PostProdDetailPage() {
                         </button>
                         <button
                           onClick={handleReject}
-                          disabled={rejecting}
+                          disabled={readOnly || rejecting}
                           style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
                             padding: '8px 18px', borderRadius: 7, cursor: rejecting ? 'default' : 'pointer',
@@ -2028,7 +1877,7 @@ export default function PostProdDetailPage() {
                     {selectedTask.status === 'todo' && (
                       <button
                         onClick={() => handleAdvance(selectedTask.id, 'in_progress')}
-                        disabled={togglingId === selectedTask.id}
+                        disabled={readOnly || togglingId === selectedTask.id}
                         style={{
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                           padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -2050,7 +1899,7 @@ export default function PostProdDetailPage() {
                       if (!confirm('Marker Selektering som fullført uten at kunden har sendt inn? Bruk kun dette hvis dere har blitt enige utenom systemet.')) return
                       handleAdvance(selectedTask.id, 'done')
                     }}
-                    disabled={togglingId === selectedTask.id}
+                    disabled={readOnly || togglingId === selectedTask.id}
                     style={{
                       marginTop: 10, background: 'none', border: 'none', padding: 0,
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3,
@@ -2066,7 +1915,7 @@ export default function PostProdDetailPage() {
                   {selectedTask.status === 'todo' && (
                     <button
                       onClick={() => handleAdvance(selectedTask.id, 'in_progress')}
-                      disabled={togglingId === selectedTask.id}
+                      disabled={readOnly || togglingId === selectedTask.id}
                       style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                         padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -2080,7 +1929,7 @@ export default function PostProdDetailPage() {
                   {(selectedTask.status === 'in_progress' || selectedTask.status === 'todo') && (
                     <button
                       onClick={() => handleAdvance(selectedTask.id, 'done')}
-                      disabled={togglingId === selectedTask.id}
+                      disabled={readOnly || togglingId === selectedTask.id}
                       style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
                         padding: '10px 22px', borderRadius: 8, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',
@@ -2100,7 +1949,7 @@ export default function PostProdDetailPage() {
               {isSelectedDone && (
                 <button
                   onClick={() => handleGoBack(selectedTask.id)}
-                  disabled={togglingId === selectedTask.id}
+                  disabled={readOnly || togglingId === selectedTask.id}
                   style={{
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
                     padding: '8px 16px', borderRadius: 7, cursor: togglingId === selectedTask.id ? 'default' : 'pointer',

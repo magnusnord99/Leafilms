@@ -35,6 +35,20 @@ function durationLabel(item: DeliverableItem): string | null {
   return `${item.durationValue} ${item.durationUnit ?? 'sek'}`
 }
 
+// Kort oppsummering for steder som vil vise "4 videoer, 20 bilder" uten å
+// måtte åpne Leveranser-modalen — se DeliverablesButton/prosjektoversikten.
+export function summarizeDeliverables(items: DeliverableItem[]): string | null {
+  if (items.length === 0) return null
+  const videoCount = items.filter(i => i.type === 'video').length
+  const photoCount = items.filter(i => i.type === 'photo').reduce((sum, i) => sum + (i.quantity ?? 1), 0)
+  const otherCount = items.filter(i => i.type === 'annet').reduce((sum, i) => sum + (i.quantity ?? 1), 0)
+  const parts: string[] = []
+  if (videoCount > 0) parts.push(`${videoCount} ${videoCount === 1 ? 'video' : 'videoer'}`)
+  if (photoCount > 0) parts.push(`${photoCount} ${photoCount === 1 ? 'bilde' : 'bilder'}`)
+  if (otherCount > 0) parts.push(`${otherCount} annet`)
+  return parts.length > 0 ? parts.join(', ') : null
+}
+
 // Delt mellom postprod-brettet og prosjektoversikten — begge viser/redigerer
 // samme projects.deliverables-data og skal derfor se identiske ut.
 export function DeliverablesButton({

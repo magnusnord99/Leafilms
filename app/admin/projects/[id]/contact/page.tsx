@@ -11,6 +11,7 @@ import { ProjectMessage } from '@/lib/types'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import type { PipelineStage } from '@/lib/types'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
@@ -180,6 +181,13 @@ export default function ProjectContactPage() {
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 64px' }}>
       <div style={{ maxWidth: 860, margin: '0 auto' }}>
+
+        {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+        {projectStage && (
+          <div style={{ marginBottom: 16 }}>
+            <PipelineProgress currentStage={projectStage} projectId={projectId} />
+          </div>
+        )}
 
         {access === 'past' && (
           <PastStageBanner

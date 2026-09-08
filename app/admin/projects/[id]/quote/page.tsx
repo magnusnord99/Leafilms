@@ -10,6 +10,7 @@ import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData, pickBestQuote, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
 import { usePublishing } from '@/hooks/project/usePublishing'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -421,6 +422,13 @@ export default function ProjectQuotePage({ params }: Props) {
             </p>
           )}
         </div>
+
+        {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+        {project?.pipeline_stage && (
+          <div className="mb-6">
+            <PipelineProgress currentStage={project.pipeline_stage} projectId={projectId} />
+          </div>
+        )}
 
         {/* Signeringslenke — publiser prosjektet og hent kunde-lenken direkte herfra,
             uten å måtte innom pitch-editoren (feedback ba2012b0). */}

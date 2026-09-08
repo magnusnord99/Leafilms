@@ -30,6 +30,11 @@ function toggleFormat(current: string[], value: string): string[] {
   return current.includes(value) ? current.filter(f => f !== value) : [...current, value]
 }
 
+function durationLabel(item: DeliverableItem): string | null {
+  if (item.durationValue == null) return null
+  return `${item.durationValue} ${item.durationUnit ?? 'sek'}`
+}
+
 // Delt mellom postprod-brettet og prosjektoversikten — begge viser/redigerer
 // samme projects.deliverables-data og skal derfor se identiske ut.
 export function DeliverablesButton({
@@ -64,6 +69,8 @@ export function DeliverablesButton({
       quantity: it.type === 'video' ? undefined : it.quantity,
       format: it.format,
       description: it.description,
+      durationValue: it.type === 'video' ? it.durationValue : undefined,
+      durationUnit: it.type === 'video' && it.durationValue != null ? (it.durationUnit ?? 'sek') : undefined,
     }))
     const res = await updateProjectDeliverables(projectId, next)
     setSaving(false)
@@ -158,7 +165,10 @@ export function DeliverablesButton({
                   {draft.map((item, i) => (
                     <div key={item.id ?? i} style={{ background: C.surface2, borderRadius: 8, padding: '12px 14px', position: 'relative' }}>
                       <button
-                        onClick={() => setDraft(prev => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => {
+                          if (!confirm(`Slette leveransen${item.name ? ` «${item.name}»` : ''}? Dette kan ikke angres.`)) return
+                          setDraft(prev => prev.filter((_, idx) => idx !== i))
+                        }}
                         style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1rem', lineHeight: 1, padding: '2px 5px' }}
                         title="Fjern"
                       >×</button>
@@ -221,6 +231,40 @@ export function DeliverablesButton({
                           })}
                         </div>
                       )}
+                      {item.type === 'video' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3, marginRight: 2 }}>Lengde:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={item.durationValue ?? ''}
+                            onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, durationValue: e.target.value === '' ? undefined : parseInt(e.target.value, 10) } : it))}
+                            placeholder="0"
+                            style={{ width: 56, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
+                          />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {(['sek', 'min'] as const).map(u => {
+                              const selected = (item.durationUnit ?? 'sek') === u
+                              return (
+                                <button
+                                  key={u}
+                                  type="button"
+                                  onClick={() => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, durationUnit: u } : it))}
+                                  style={{
+                                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+                                    padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
+                                    border: `1px solid ${selected ? C.accent : C.border}`,
+                                    background: selected ? C.accent : 'transparent',
+                                    color: selected ? '#fff' : C.text2,
+                                  }}
+                                >
+                                  {u}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                       <textarea
                         value={item.description ?? ''}
                         onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
@@ -261,6 +305,7 @@ export function DeliverablesButton({
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {items.map((item, i) => {
                     const qty = item.type === 'video' ? null : (item.quantity ?? null)
+                    const duration = durationLabel(item)
                     return (
                       <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < items.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                         {qty != null && (
@@ -278,10 +323,19 @@ export function DeliverablesButton({
                             </span>
                           )}
                         </div>
-                        {item.format && (
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0, background: C.surface2, padding: '2px 6px', borderRadius: 4, marginTop: 2 }}>
-                            {item.format}
-                          </span>
+                        {(item.format || duration) && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0, marginTop: 2 }}>
+                            {item.format && (
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: C.surface2, padding: '2px 6px', borderRadius: 4 }}>
+                                {item.format}
+                              </span>
+                            )}
+                            {duration && (
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: C.surface2, padding: '2px 6px', borderRadius: 4 }}>
+                                {duration}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )

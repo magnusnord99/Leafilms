@@ -75,11 +75,14 @@ export type DeliverableItem = {
   id: string
   type: 'video' | 'photo' | 'annet'
   name: string
-  /** Fritekst, dekker format og lengde sammen — f.eks. "16:9, 20 sek", "1:1". Se docs/superpowers/specs/2026-09-07-unified-deliverables-list-design.md §2.1. */
+  /** Kommaseparert liste over valgte aspect ratios for video, f.eks. "9:16, 4:5". Fritekst for photo/annet. */
   format?: string
   description?: string
   /** Kun meningsfullt for 'photo'/'annet' — video er alltid én rad = ett navngitt element, se spec §3. */
   quantity?: number
+  /** Lengde på video, valgt strukturert i stedet for fritekst — se DeliverablesButton. */
+  durationValue?: number
+  durationUnit?: 'sek' | 'min'
 }
 
 export type Project = {

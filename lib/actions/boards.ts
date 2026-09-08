@@ -2,9 +2,10 @@
 
 import { randomBytes } from 'crypto'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, LinkContent } from '@/lib/types'
+import type { Board, BoardCard, BoardCardContent, BoardCardType, BoardEdge, BoardRefContent, BoardScheduleContent, LinkContent } from '@/lib/types'
 import { getBoardComments, type BoardCommentsByCard } from '@/lib/actions/boardComments'
 import { combinedDeliveryText } from '@/lib/delivery-format'
+import { resolveSchedulePeople } from '@/lib/actions/schedule-people'
 
 export type ChildBoardMeta = { title: string; cardCount: number }
 
@@ -322,6 +323,91 @@ export async function getSharedScheduleCard(token: string, cardId: string): Prom
     }
   } catch (err) {
     console.error('getSharedScheduleCard:', err)
+    return null
+  }
+}
+
+export type ProductionScheduleItem = {
+  id: string
+  time: string
+  label: string
+  location: string | null
+  locationLink: string | null
+  people: { name: string; role: string | null }[]
+}
+
+export type ProductionScheduleCard = {
+  cardId: string
+  title: string | null
+  items: ProductionScheduleItem[]
+}
+
+export type ProductionBoardSummary = {
+  boardId: string
+  leadContact: BoardLeadProfile | null
+  customerContact: BoardCustomerContact | null
+  schedules: ProductionScheduleCard[]
+}
+
+/**
+ * Utsnitt av boardet for /admin/produksjon/[id]: kontaktpersonene satt på
+ * boardet (samme par som BoardContacts/BoardInfoPanel viser/redigerer) og
+ * alle schedule-korts programpunkter, skrivebeskyttet og med personer
+ * ferdig slått opp til navn (server-side, via resolveSchedulePeople — samme
+ * hjelpefunksjon ScheduleCardPage bruker klient-side). Returnerer null når
+ * prosjektet ikke har et board ennå — produksjonssiden skjuler da disse
+ * seksjonene i stedet for å vise et tomt board.
+ */
+export async function getProductionBoardSummary(projectId: string): Promise<ProductionBoardSummary | null> {
+  try {
+    const supabase = await createClient()
+    const { data: board } = await supabase
+      .from('boards')
+      .select('id, lead_profile_id, customer_contact_id')
+      .eq('project_id', projectId).is('parent_board_id', null).maybeSingle()
+    if (!board) return null
+
+    const [{ data: leadProfile }, { data: customerContact }, { data: cards }] = await Promise.all([
+      board.lead_profile_id
+        ? supabase.from('profiles').select('id, name, email, color, phone').eq('id', board.lead_profile_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      board.customer_contact_id
+        ? supabase.from('customer_contacts').select('id, name, role, phone').eq('id', board.customer_contact_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from('board_cards').select('id, content').eq('board_id', board.id).eq('type', 'schedule').order('z_index'),
+    ])
+
+    const scheduleCards = (cards ?? []) as { id: string; content: BoardScheduleContent }[]
+    const allRefs = scheduleCards.flatMap(c => (c.content.items ?? []).flatMap(i => i.people ?? []))
+    const resolved = await resolveSchedulePeople(allRefs)
+    const byKey = new Map(resolved.map(r => [`${r.ref.type}:${r.ref.id}`, r]))
+
+    const schedules: ProductionScheduleCard[] = scheduleCards.map(c => ({
+      cardId: c.id,
+      title: c.content.title ?? null,
+      items: [...(c.content.items ?? [])]
+        .sort((a, b) => a.time.localeCompare(b.time))
+        .map(i => ({
+          id: i.id,
+          time: i.time,
+          label: i.label,
+          location: i.location ?? null,
+          locationLink: i.locationLink ?? null,
+          people: (i.people ?? []).map(ref => {
+            const p = byKey.get(`${ref.type}:${ref.id}`)
+            return { name: p?.name ?? 'Ukjent', role: p?.role ?? null }
+          }),
+        })),
+    }))
+
+    return {
+      boardId: board.id,
+      leadContact: leadProfile,
+      customerContact,
+      schedules,
+    }
+  } catch (err) {
+    console.error('getProductionBoardSummary:', err)
     return null
   }
 }

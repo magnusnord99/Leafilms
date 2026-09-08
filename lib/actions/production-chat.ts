@@ -1,9 +1,9 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import { getPitchTeamAsProdCrew } from '@/lib/actions/preprod'
+import { getPitchTeamAsProdCrew, type PreprodCrewMember, type PreprodData } from '@/lib/actions/preprod'
 import type { ConversationParticipant } from '@/lib/actions/messages'
-import type { PipelineStage } from '@/lib/types'
+import type { DeliverableItem, PipelineData, PipelineStage } from '@/lib/types'
 
 export type ProductionChatInfo = {
   conversationId: string
@@ -19,17 +19,21 @@ export type ProductionInfo = {
   customer: { name: string; email: string | null; phone: string | null; address: string | null } | null
   projectLead: { id: string; name: string | null; email: string } | null
   pipelineStage: PipelineStage
+  prodCrew: PreprodCrewMember[]
+  deliverables: DeliverableItem[]
 }
 
-// Nøkkelinfo for produksjonsdagen — prosjektleder, kundekontakt, opptaksdatoer/-status.
-// Alt hentes fra eksisterende felter, ingen ny lagring for dette i v1.
+// Nøkkelinfo for produksjonsdagen — prosjektleder, kundekontakt, opptaksdatoer/-status,
+// crew og leveranser. prod_crew/deliverables leses fra samme rad som resten (ingen
+// egen spørring) — samme felt som pre-prod-sidens CrewSection og postprod/prosjekt-
+// oversiktens DeliverablesButton bruker.
 export async function getProductionInfo(projectId: string): Promise<ProductionInfo | null> {
   try {
     const supabase = await createClient()
     const { data: project, error } = await supabase
       .from('projects')
       .select(`
-        id, title, shoot_start, shoot_end, shoot_confirmed, pipeline_stage,
+        id, title, shoot_start, shoot_end, shoot_confirmed, pipeline_stage, pipeline_data, deliverables,
         customers (name, email, phone, address),
         project_lead:profiles!project_lead_id (id, name, email)
       `)
@@ -40,6 +44,8 @@ export async function getProductionInfo(projectId: string): Promise<ProductionIn
 
     const customer = Array.isArray(project.customers) ? project.customers[0] ?? null : project.customers
     const projectLead = Array.isArray(project.project_lead) ? project.project_lead[0] ?? null : project.project_lead
+    const pipelineData = (project.pipeline_data as PipelineData) ?? {}
+    const preprodData = pipelineData.preprod as PreprodData | undefined
 
     return {
       id: project.id,
@@ -50,6 +56,8 @@ export async function getProductionInfo(projectId: string): Promise<ProductionIn
       customer,
       projectLead,
       pipelineStage: project.pipeline_stage,
+      prodCrew: preprodData?.prod_crew ?? [],
+      deliverables: (project.deliverables as DeliverableItem[]) ?? [],
     }
   } catch (err) {
     console.error('getProductionInfo error:', err)

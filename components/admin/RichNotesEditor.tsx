@@ -71,11 +71,13 @@ export default function RichNotesEditor({
   onChange,
   placeholder,
   minHeight = 96,
+  readOnly = false,
 }: {
   value: string
   onChange: (html: string) => void
   placeholder?: string
   minHeight?: number
+  readOnly?: boolean
 }) {
   const editor = useEditor({
     extensions: [
@@ -84,6 +86,7 @@ export default function RichNotesEditor({
       Placeholder.configure({ placeholder: placeholder ?? '' }),
     ],
     content: value,
+    editable: !readOnly,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     immediatelyRender: false,
     editorProps: {
@@ -95,9 +98,11 @@ export default function RichNotesEditor({
 
   if (!editor) return null
 
+  editor.setEditable(!readOnly)
+
   return (
     <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-      <Toolbar editor={editor} />
+      {!readOnly && <Toolbar editor={editor} />}
       <div style={{ padding: '10px 12px' }}>
         <EditorContent editor={editor} className="rich-notes-editor" />
       </div>

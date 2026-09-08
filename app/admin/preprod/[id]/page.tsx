@@ -16,6 +16,9 @@ import PreprodChat from '@/components/preprod/PreprodChat'
 import type { Task } from '@/lib/types'
 import type { PreprodDetail, PostProdTaskLite } from '@/lib/actions/preprod'
 import { getAvatarColor } from '@/lib/avatar-colors'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
 
 const C = {
   bg:       '#181920',
@@ -58,11 +61,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // ─── Moodboard/planlegging (boards) ───────────────────────────────────────────
 
 function MoodboardCard({
-  url, done, projectId, onChange,
+  url, done, projectId, onChange, readOnly = false,
 }: {
-  url: string; done: boolean; projectId: string; onChange: (patch: Partial<PreprodData>) => void
+  url: string; done: boolean; projectId: string; onChange: (patch: Partial<PreprodData>) => void; readOnly?: boolean
 }) {
   function toggleDone() {
+    if (readOnly) return
     const next = !done
     onChange({ millanote_done: next })
     updatePreprodData(projectId, { millanote_done: next })
@@ -97,6 +101,7 @@ function MoodboardCard({
           type="checkbox"
           checked={done}
           onChange={toggleDone}
+          disabled={readOnly}
           style={{ width: 14, height: 14, accentColor: C.success, cursor: 'pointer' }}
         />
         Moodboard/planlegging ferdig
@@ -128,12 +133,13 @@ function buildPackingCandidates(
 }
 
 function AssigneePicker({
-  assignedId, assignedName, candidates, onAssign,
+  assignedId, assignedName, candidates, onAssign, disabled = false,
 }: {
   assignedId: string | null
   assignedName: string | null
   candidates: PackingCandidate[]
   onAssign: (assignee: PackingCandidate | null) => void
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -155,6 +161,7 @@ function AssigneePicker({
     <div ref={ref} style={{ position: 'relative', flexShrink: 0, lineHeight: 0 }}>
       <button
         onClick={() => setOpen(v => !v)}
+        disabled={disabled}
         title={assigned ? `Tas med av ${assigned.name}` : 'Tildel hvem som tar med'}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}
       >
@@ -301,10 +308,11 @@ function SortToggle({ mode, onChange }: { mode: PackingSortMode; onChange: (mode
   )
 }
 
-function PackedToggle({ packed, onToggle }: { packed: boolean; onToggle: () => void }) {
+function PackedToggle({ packed, onToggle, disabled = false }: { packed: boolean; onToggle: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onToggle}
+      disabled={disabled}
       title={packed ? 'Merk som ikke pakket' : 'Merk som pakket'}
       style={{
         width: 22, height: 22, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
@@ -325,7 +333,7 @@ function PackedToggle({ packed, onToggle }: { packed: boolean; onToggle: () => v
 
 function PackingSection({
   projectId, freetextItems, quoteEquipment, storageUnits, prodCrew, profiles, currentUserId,
-  onFreetextChange, onAssignUnit, onTogglePacked,
+  onFreetextChange, onAssignUnit, onTogglePacked, readOnly = false,
 }: {
   projectId: string
   freetextItems: PackingItem[]
@@ -337,6 +345,7 @@ function PackingSection({
   onFreetextChange: (items: PackingItem[]) => void
   onAssignUnit: (unitId: string, assignee: PackingCandidate | null) => void
   onTogglePacked: (unitId: string) => void
+  readOnly?: boolean
 }) {
   const [newItem, setNewItem] = useState('')
   const [sortMode, setSortMode] = useState<PackingSortMode>('category')
@@ -357,6 +366,7 @@ function PackingSection({
     : (onlyMine ? freetextItems.filter(i => i.assignee_id === currentUserId) : freetextItems)
 
   function save(next: PackingItem[]) {
+    if (readOnly) return
     onFreetextChange(next)
     updatePreprodData(projectId, { packing_list: next })
   }
@@ -405,6 +415,7 @@ function PackingSection({
         {quoteEquipment.length > 0 && (
           <button
             onClick={importFromQuote}
+            disabled={readOnly}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500,
               padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
@@ -464,7 +475,7 @@ function PackingSection({
                 </p>
                 {group.items.map(unit => (
                   <div key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}>
-                    <PackedToggle packed={unit.packed} onToggle={() => onTogglePacked(unit.id)} />
+                    <PackedToggle packed={unit.packed} onToggle={() => onTogglePacked(unit.id)} disabled={readOnly} />
                     <span style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', flex: 1,
                       color: unit.packed ? C.text3 : C.text,
@@ -477,6 +488,7 @@ function PackingSection({
                       assignedName={unit.assignee_name}
                       candidates={candidates}
                       onAssign={assignee => onAssignUnit(unit.id, assignee)}
+                      disabled={readOnly}
                     />
                   </div>
                 ))}
@@ -497,6 +509,7 @@ function PackingSection({
             onChange={e => setNewItem(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addItem()}
             placeholder="Legg til utstyr..."
+            disabled={readOnly}
             style={{
               flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
               color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
@@ -507,7 +520,7 @@ function PackingSection({
           />
           <button
             onClick={addItem}
-            disabled={!newItem.trim()}
+            disabled={readOnly || !newItem.trim()}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
               padding: '7px 12px', borderRadius: 6, cursor: newItem.trim() ? 'pointer' : 'not-allowed',
@@ -534,7 +547,7 @@ function PackingSection({
                 key={item.id}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}` }}
               >
-                <PackedToggle packed={item.checked} onToggle={() => toggleItem(item.id)} />
+                <PackedToggle packed={item.checked} onToggle={() => toggleItem(item.id)} disabled={readOnly} />
                 <span style={{
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
                   color: item.checked ? C.text3 : C.text,
@@ -548,9 +561,11 @@ function PackingSection({
                   assignedName={item.assignee_name ?? null}
                   candidates={candidates}
                   onAssign={assignee => assignItem(item.id, assignee)}
+                  disabled={readOnly}
                 />
                 <button
                   onClick={() => removeItem(item.id)}
+                  disabled={readOnly}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
@@ -571,7 +586,7 @@ function PackingSection({
 // ─── Crew section ─────────────────────────────────────────────────────────────
 
 function CrewSection({
-  title, crew, projectId, field, profiles, onChange, onCrewAdded,
+  title, crew, projectId, field, profiles, onChange, onCrewAdded, readOnly = false,
 }: {
   title: string
   crew: PreprodCrewMember[]
@@ -580,6 +595,7 @@ function CrewSection({
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
   onChange: (crew: PreprodCrewMember[]) => void
   onCrewAdded?: (updated: PreprodCrewMember[]) => void
+  readOnly?: boolean
 }) {
   const [showPicker, setShowPicker] = useState(false)
   const [selectedId, setSelectedId] = useState('')
@@ -592,6 +608,7 @@ function CrewSection({
   const available = profiles.filter(p => !crew.some(c => c.profile_id === p.id))
 
   async function importFromPitch() {
+    if (readOnly) return
     setImporting(true)
     const pitchCrew = await getPitchTeamAsProdCrew(projectId)
     if (pitchCrew.length > 0) {
@@ -607,7 +624,7 @@ function CrewSection({
   }
 
   function addCrew() {
-    if (!selectedId) return
+    if (readOnly || !selectedId) return
     const profile = profiles.find(p => p.id === selectedId)
     if (!profile) return
     const next = [...crew, { profile_id: selectedId, name: profile.name ?? profile.email, role: role.trim() || 'Crew' }]
@@ -620,6 +637,7 @@ function CrewSection({
   }
 
   function remove(profileId: string) {
+    if (readOnly) return
     const next = crew.filter(c => c.profile_id !== profileId)
     onChange(next)
     updatePreprodData(projectId, { [field]: next })
@@ -634,7 +652,7 @@ function CrewSection({
   }
 
   function saveEdit() {
-    if (!editingId || !editSelectedId) return
+    if (readOnly || !editingId || !editSelectedId) return
     const profile = profiles.find(p => p.id === editSelectedId)
     const next = crew.map(c =>
       c.profile_id === editingId
@@ -654,7 +672,7 @@ function CrewSection({
           {field === 'prod_crew' && !showPicker && (
             <button
               onClick={importFromPitch}
-              disabled={importing}
+              disabled={readOnly || importing}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500,
                 padding: '3px 8px', borderRadius: 5, cursor: importing ? 'wait' : 'pointer',
@@ -669,6 +687,7 @@ function CrewSection({
           {!showPicker && (
             <button
               onClick={() => setShowPicker(true)}
+              disabled={readOnly}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
                 padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
@@ -713,7 +732,7 @@ function CrewSection({
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={addCrew}
-              disabled={!selectedId}
+              disabled={readOnly || !selectedId}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
                 padding: '5px 12px', borderRadius: 5, cursor: selectedId ? 'pointer' : 'not-allowed',
@@ -753,6 +772,7 @@ function CrewSection({
                   </div>
                   <button
                     onClick={() => isEditing ? setEditingId(null) : startEdit(member)}
+                    disabled={readOnly}
                     title="Rediger"
                     style={{ background: isEditing ? C.accentBg : 'none', border: `1px solid ${isEditing ? 'rgba(124,92,252,0.3)' : 'transparent'}`, borderRadius: 4, cursor: 'pointer', color: isEditing ? C.accent : C.text3, padding: '3px 5px', lineHeight: 0, transition: 'all 0.12s' }}
                   >
@@ -763,6 +783,7 @@ function CrewSection({
                   </button>
                   <button
                     onClick={() => remove(member.profile_id)}
+                    disabled={readOnly}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, transition: 'color 0.12s' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
@@ -795,6 +816,7 @@ function CrewSection({
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         onClick={saveEdit}
+                        disabled={readOnly}
                         style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 12px', borderRadius: 5, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
                       >
                         Lagre
@@ -823,10 +845,12 @@ function InvoiceAssigneeCard({
   projectId,
   currentAssigneeId,
   profiles,
+  readOnly = false,
 }: {
   projectId: string
   currentAssigneeId: string | null
   profiles: { id: string; name: string | null; email: string; color: string | null }[]
+  readOnly?: boolean
 }) {
   const [assigneeId, setAssigneeId] = useState<string | null>(currentAssigneeId)
   const [open, setOpen] = useState(false)
@@ -845,6 +869,7 @@ function InvoiceAssigneeCard({
   const assignee = profiles.find(p => p.id === assigneeId) ?? null
 
   async function select(profileId: string | null) {
+    if (readOnly) return
     setSaving(true)
     setOpen(false)
     setAssigneeId(profileId)
@@ -868,7 +893,7 @@ function InvoiceAssigneeCard({
         <div ref={ref} style={{ position: 'relative' }}>
           <button
             onClick={() => setOpen(v => !v)}
-            disabled={saving}
+            disabled={readOnly || saving}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
               color: C.accent, background: `${C.accent}14`, border: `1px solid ${C.accent}30`,
@@ -939,6 +964,7 @@ export default function PreprodDetailPage() {
   const [advancing, setAdvancing] = useState(false)
   const [storageUnits, setStorageUnits] = useState<ProjectEquipmentUnit[]>([])
   const [postProdHasAssignee, setPostProdHasAssignee] = useState(false)
+  const [unlocked, setUnlocked] = useState(false)
 
   useEffect(() => {
     getPreprodDetail(id).then(detail => {
@@ -973,6 +999,7 @@ export default function PreprodDetailPage() {
   }, [leadDropdownOpen])
 
   async function handleSetLead(profileId: string | null) {
+    if (readOnly) return
     const prev = projectLead
     const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
@@ -1062,12 +1089,14 @@ export default function PreprodDetailPage() {
     )
   }
 
-  if (project.pipeline_stage !== 'pre_prod') {
+  const access = getStageAccess('pre_prod', project.pipeline_stage)
+
+  if (access === 'not_yet_reached') {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet er ikke lenger i pre-produksjon
+            Prosjektet har ikke nådd pre-produksjon ennå
           </p>
           <button onClick={() => router.push('/admin/preprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
             ← Tilbake
@@ -1076,6 +1105,8 @@ export default function PreprodDetailPage() {
       </div>
     )
   }
+
+  const readOnly = access === 'past' && !unlocked
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
@@ -1104,23 +1135,26 @@ export default function PreprodDetailPage() {
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4A9EFF', background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.25)', padding: '3px 10px', borderRadius: 5 }}>
               Pre-produksjon
             </span>
-            <button
-              onClick={handleAdvanceToProduction}
-              disabled={advancing}
-              style={{
-                marginLeft: 'auto', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
-                padding: '7px 16px', borderRadius: 7, cursor: advancing ? 'default' : 'pointer',
-                background: C.accent, color: '#fff', border: 'none',
-                opacity: advancing ? 0.6 : 1, transition: 'opacity 0.15s',
-              }}
-            >
-              {advancing ? 'Sender...' : '→ Send til produksjon'}
-            </button>
+            {access === 'current' && (
+              <button
+                onClick={handleAdvanceToProduction}
+                disabled={advancing}
+                style={{
+                  marginLeft: 'auto', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+                  padding: '7px 16px', borderRadius: 7, cursor: advancing ? 'default' : 'pointer',
+                  background: C.accent, color: '#fff', border: 'none',
+                  opacity: advancing ? 0.6 : 1, transition: 'opacity 0.15s',
+                }}
+              >
+                {advancing ? 'Sender...' : '→ Send til produksjon'}
+              </button>
+            )}
           </div>
           {/* Prosjektleder */}
           <div style={{ position: 'relative', marginTop: 6 }} ref={leadDropdownRef}>
             <button
               onClick={() => setLeadDropdownOpen(v => !v)}
+              disabled={readOnly}
               style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -1159,6 +1193,7 @@ export default function PreprodDetailPage() {
                 {projectLead && (
                   <button
                     onClick={() => { handleSetLead(null); setLeadDropdownOpen(false) }}
+                    disabled={readOnly}
                     style={{
                       width: '100%', textAlign: 'left',
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -1174,6 +1209,7 @@ export default function PreprodDetailPage() {
                   <button
                     key={p.id}
                     onClick={() => { handleSetLead(p.id); setLeadDropdownOpen(false) }}
+                    disabled={readOnly}
                     style={{
                       width: '100%', textAlign: 'left',
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
@@ -1204,6 +1240,14 @@ export default function PreprodDetailPage() {
           </div>
         </div>
 
+        {access === 'past' && (
+          <PastStageBanner
+            currentStageLabel={STAGE_LABEL[project.pipeline_stage]}
+            unlocked={unlocked}
+            onUnlock={() => setUnlocked(true)}
+          />
+        )}
+
         {/* Main layout */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_320px]" style={{ gap: 20, alignItems: 'start' }}>
 
@@ -1226,6 +1270,7 @@ export default function PreprodDetailPage() {
                 onTaskDeleted={handleTaskDeleted}
                 onAssigneesChange={handleTaskAssigneesChange}
                 onDueDateChange={handleTaskDueDateChange}
+                readOnly={readOnly}
               />
             </div>
 
@@ -1238,6 +1283,7 @@ export default function PreprodDetailPage() {
               profiles={profiles}
               onChange={next => patchPreprod({ prod_crew: next })}
               onCrewAdded={next => handleCrewChanged(next)}
+              readOnly={readOnly}
             />
 
             {/* Post-produksjon-brettet: Video/Foto-lanes, egendefinerte lanes, parallell-rad, bibliotek */}
@@ -1255,6 +1301,7 @@ export default function PreprodDetailPage() {
                   return hasAny
                 })
               }}
+              readOnly={readOnly}
             />
           </div>
 
@@ -1265,6 +1312,7 @@ export default function PreprodDetailPage() {
               done={preprod.millanote_done}
               projectId={id}
               onChange={patchPreprod}
+              readOnly={readOnly}
             />
             <PackingSection
               projectId={id}
@@ -1277,11 +1325,13 @@ export default function PreprodDetailPage() {
               onFreetextChange={next => patchPreprod({ packing_list: next })}
               onAssignUnit={handleAssignUnit}
               onTogglePacked={handleTogglePacked}
+              readOnly={readOnly}
             />
             <InvoiceAssigneeCard
               projectId={id}
               currentAssigneeId={(project as { invoice_assignee_id?: string | null }).invoice_assignee_id ?? null}
               profiles={profiles}
+              readOnly={readOnly}
             />
           </div>
 

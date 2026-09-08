@@ -8,6 +8,10 @@ import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, LeadRecord, Lead
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { ProjectMessage } from '@/lib/types'
+import { getStageAccess } from '@/lib/pipeline-stage-lock'
+import { STAGE_LABEL } from '@/lib/pipeline-ui'
+import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import type { PipelineStage } from '@/lib/types'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
 // som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
@@ -45,6 +49,8 @@ export default function ProjectContactPage() {
   const projectId = params.id as string
 
   const [projectTitle, setProjectTitle] = useState<string | null>(null)
+  const [projectStage, setProjectStage] = useState<PipelineStage | null>(null)
+  const [unlocked, setUnlocked] = useState(false)
   const [customer, setCustomer] = useState<{ name: string; company: string | null; email?: string | null; phone?: string | null } | null>(null)
   const [lead, setLead] = useState<LeadRecord | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,6 +85,7 @@ export default function ProjectContactPage() {
       getLeadByProjectId(projectId),
     ]).then(([hub, leadData]) => {
       setProjectTitle(hub?.project.title ?? null)
+      setProjectStage(hub?.project.pipeline_stage ?? null)
       setCustomer(hub?.project.customer ?? null)
       setLead(leadData)
       setNotes(notesToHtml(leadData?.notes ?? ''))
@@ -141,6 +148,27 @@ export default function ProjectContactPage() {
     )
   }
 
+  const access = projectStage ? getStageAccess('lead', projectStage) : 'current'
+
+  if (access === 'not_yet_reached') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
+            Prosjektet har ikke nådd dette steget ennå
+          </p>
+          <Link href="/admin/pipeline" style={{ textDecoration: 'none' }}>
+            <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+              ← Tilbake
+            </button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const readOnly = access === 'past' && !unlocked
+
   // Use lead info if available, fall back to customer info
   const name = lead?.name ?? customer?.name ?? projectTitle ?? 'Ukjent'
   const company = lead?.company ?? customer?.company ?? null
@@ -152,6 +180,14 @@ export default function ProjectContactPage() {
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 64px' }}>
       <div style={{ maxWidth: 860, margin: '0 auto' }}>
+
+        {access === 'past' && (
+          <PastStageBanner
+            currentStageLabel={projectStage ? STAGE_LABEL[projectStage] : ''}
+            unlocked={unlocked}
+            onUnlock={() => setUnlocked(true)}
+          />
+        )}
 
         {/* Breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24 }}>
@@ -198,6 +234,7 @@ export default function ProjectContactPage() {
                   <button
                     key={val}
                     onClick={() => handleStatusChange(val)}
+                    disabled={readOnly}
                     style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
                       padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
@@ -318,6 +355,7 @@ export default function ProjectContactPage() {
                   value={notes}
                   onChange={handleNotesChange}
                   placeholder="Legg til notater..."
+                  readOnly={readOnly}
                 />
               </div>
             )}
@@ -409,6 +447,7 @@ export default function ProjectContactPage() {
                 leadId={lead.id}
                 assignedTo={lead.assigned_to}
                 canCreate={lead.status !== 'converted' && lead.status !== 'lost'}
+                readOnly={readOnly}
               />
             )}
 

@@ -69,7 +69,7 @@ function Avatar({ id, name, size = 20 }: { id: string; name: string | null; size
 }
 
 export function PostProdBoard({
-  projectId, shootStart, shootEnd, postDeadlines, currentUserId, onDeadlineChange, onAssignedChange,
+  projectId, shootStart, shootEnd, postDeadlines, currentUserId, onDeadlineChange, onAssignedChange, readOnly = false,
 }: {
   projectId: string
   shootStart: string | null
@@ -78,6 +78,7 @@ export function PostProdBoard({
   currentUserId: string | null
   onDeadlineChange: (subType: 'video' | 'photo', date: string | null) => void
   onAssignedChange: (hasAny: boolean) => void
+  readOnly?: boolean
 }) {
   const [board, setBoard] = useState<PostProdBoardData>({ projectType: null, lanes: [], videoShared: null, videoTabs: null, parallel: [] })
   const [activeVideoTabId, setActiveVideoTabId] = useState<string | null>(null)
@@ -128,6 +129,7 @@ export function PostProdBoard({
   }
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (readOnly) return
     const { active, over } = event
     if (!over) return
 
@@ -195,26 +197,31 @@ export function PostProdBoard({
   }, [projectId])
 
   async function handleToggleAssignee(taskId: string, profileId: string) {
+    if (readOnly) return
     await toggleTaskAssignee(taskId, profileId)
     refetch()
   }
 
   async function handleDueDate(taskId: string, date: string | null) {
+    if (readOnly) return
     await updateTaskDueDate(taskId, date)
     refetch()
   }
 
   async function handleDelete(taskId: string) {
+    if (readOnly) return
     await deleteTask(taskId)
     refetch()
   }
 
   async function handleSaveToLibrary(taskId: string) {
+    if (readOnly) return
     await addTaskToLibrary(taskId)
     setLibraryRefreshKey(k => k + 1)
   }
 
   async function handleCreateLane() {
+    if (readOnly) return
     const trimmed = newLaneName.trim()
     if (!trimmed) return
     setNewLaneName('')
@@ -247,6 +254,7 @@ export function PostProdBoard({
   }
 
   function handleLaneDeadlineChange(lane: PostProdBoardLane, value: string) {
+    if (readOnly) return
     const date = value || null
     if (lane.kind === 'video' || lane.kind === 'photo') {
       onDeadlineChange(lane.kind, date)
@@ -272,13 +280,14 @@ export function PostProdBoard({
           type="date"
           value={card.dueDate ?? ''}
           onChange={e => handleDueDate(card.id, e.target.value || null)}
+          disabled={readOnly}
           title="Frist"
           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: card.dueDate ? C.text2 : C.text3, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 5px', outline: 'none' }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {card.assignees.map(a => <Avatar key={a.id} id={a.id} name={a.name} />)}
         </div>
-        <button onClick={() => setOpenAssigneeFor(isOpen ? null : card.id)} title="Tildel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>
+        <button onClick={() => setOpenAssigneeFor(isOpen ? null : card.id)} disabled={readOnly} title="Tildel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
           </svg>
@@ -290,10 +299,10 @@ export function PostProdBoard({
           profiles={profiles}
           messageCount={messageCounts[card.id] ?? 0}
         />
-        <button onClick={() => handleSaveToLibrary(card.id)} title="Lagre i bibliotek" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, fontSize: '0.7rem' }}>
+        <button onClick={() => handleSaveToLibrary(card.id)} disabled={readOnly} title="Lagre i bibliotek" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, fontSize: '0.7rem' }}>
           ★
         </button>
-        <button onClick={() => handleDelete(card.id)} title="Slett" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>
+        <button onClick={() => handleDelete(card.id)} disabled={readOnly} title="Slett" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0 }}>
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M2 2l8 8M10 2L2 10" />
           </svg>
@@ -342,6 +351,7 @@ export function PostProdBoard({
               type="date"
               value={laneDeadlineValue(lane)}
               onChange={e => handleLaneDeadlineChange(lane, e.target.value)}
+              disabled={readOnly}
               style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', outline: 'none' }}
             />
           </div>
@@ -408,18 +418,19 @@ export function PostProdBoard({
           value={newLaneName}
           onChange={e => setNewLaneName(e.target.value)}
           placeholder="Ny lane, f.eks. Animasjon"
+          disabled={readOnly}
           style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
         />
         <button
           onClick={handleCreateLane}
-          disabled={!newLaneName.trim()}
+          disabled={readOnly || !newLaneName.trim()}
           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: newLaneName.trim() ? 'pointer' : 'not-allowed', background: 'transparent', color: C.text3, border: `1px solid ${C.border}` }}
         >
           + Ny lane
         </button>
       </div>
 
-      <PostProdLibraryPanel refreshKey={libraryRefreshKey} />
+      <PostProdLibraryPanel refreshKey={libraryRefreshKey} readOnly={readOnly} />
 
       <PostProdTaskForm
         projectId={projectId}
@@ -428,6 +439,7 @@ export function PostProdBoard({
         videoTabs={board.videoTabs}
         profiles={profiles}
         onAdded={refetch}
+        readOnly={readOnly}
       />
     </div>
     </DndContext>

@@ -42,10 +42,11 @@ function Initials({ p, active }: { p: Profile; active: boolean }) {
   )
 }
 
-function AssigneePicker({ task, profiles, onToggle }: {
+function AssigneePicker({ task, profiles, onToggle, readOnly = false }: {
   task: Task
   profiles: Profile[]
   onToggle: (taskId: string, profileId: string) => void
+  readOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -63,6 +64,7 @@ function AssigneePicker({ task, profiles, onToggle }: {
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(v => !v)}
+        disabled={readOnly}
         title="Tildel oppgave"
         style={{
           display: 'flex', alignItems: 'center', gap: 3,
@@ -135,11 +137,12 @@ function AssigneePicker({ task, profiles, onToggle }: {
   )
 }
 
-export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate }: {
+export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate, readOnly = false }: {
   projectId: string
   leadId: string
   assignedTo: string | null
   canCreate: boolean
+  readOnly?: boolean
 }) {
   const [stage, setStage] = useState<PipelineStage | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -238,6 +241,7 @@ export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate
         <div ref={ownerRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setOwnerOpen(v => !v)}
+            disabled={readOnly}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
               padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
@@ -324,6 +328,7 @@ export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate
                 }}>
                   <button
                     onClick={() => handleStatus(task)}
+                    disabled={readOnly}
                     title="Bytt status"
                     style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
@@ -349,14 +354,14 @@ export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate
                       {new Date(task.due_date).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
                     </span>
                   )}
-                  <AssigneePicker task={task} profiles={profiles} onToggle={handleToggleAssignee} />
+                  <AssigneePicker task={task} profiles={profiles} onToggle={handleToggleAssignee} readOnly={readOnly} />
                 </div>
               )
             })}
           </div>
         )}
 
-        {canCreate && (
+        {canCreate && !readOnly && (
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
             {/* Hurtigknapper */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>

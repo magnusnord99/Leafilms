@@ -52,12 +52,13 @@ export function summarizeDeliverables(items: DeliverableItem[]): string | null {
 // Delt mellom postprod-brettet og prosjektoversikten — begge viser/redigerer
 // samme projects.deliverables-data og skal derfor se identiske ut.
 export function DeliverablesButton({
-  projectId, items, onSaved, variant = 'block',
+  projectId, items, onSaved, variant = 'block', readOnly = false,
 }: {
   projectId: string
   items: DeliverableItem[]
   onSaved: (items: DeliverableItem[]) => void
   variant?: 'block' | 'toolbar'
+  readOnly?: boolean
 }) {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -74,6 +75,7 @@ export function DeliverablesButton({
   }
 
   async function save() {
+    if (readOnly) return
     setSaving(true)
     setError(null)
     const next: DeliverableItem[] = draft.map(it => ({
@@ -150,7 +152,7 @@ export function DeliverablesButton({
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {!editing ? (
-                  <button onClick={startEditing} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}>
+                  <button onClick={startEditing} disabled={readOnly} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: readOnly ? 'not-allowed' : 'pointer', opacity: readOnly ? 0.5 : 1 }}>
                     Rediger
                   </button>
                 ) : (
@@ -158,7 +160,7 @@ export function DeliverablesButton({
                     <button onClick={() => { setEditing(false); setError(null) }} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer' }}>
                       Avbryt
                     </button>
-                    <button onClick={save} disabled={saving} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                    <button onClick={save} disabled={saving || readOnly} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
                       {saving ? 'Lagrer...' : 'Lagre'}
                     </button>
                   </>

@@ -2480,6 +2480,36 @@ async function ensureVideoDeliverablesSeeded(
 }
 
 /**
+ * Wrapper rundt ensureVideoDeliverablesSeeded til bruk utenfor getPostProdBoard
+ * (Board-visningen på /admin/preprod/[id]) — postprod-stepper-siden
+ * (/admin/postprod/[id]) leste tidligere tasks rått via getTasksForProject
+ * uten noen gang å kjøre denne migreringen. Et prosjekt som fikk sine
+ * post-prod-steg seedet FØR det hadde 2+ video-leveranser (deliverable_id
+ * fortsatt NULL på Grovklipp/Klipp/Farger/Lyd) viste dermed samme delte
+ * oppgave på tvers av alle video-faner der — redigering av én video endret
+ * alle. Kall denne før getTasksForProject når prosjektet har 2+ video-
+ * leveranser, så blir de gamle flate radene splittet per leveranse.
+ */
+export async function ensurePostProdVideoTasksSeeded(projectId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: proj } = await supabase
+    .from('projects')
+    .select('project_type, deliverables')
+    .eq('id', projectId)
+    .single()
+
+  const projectType = (proj?.project_type ?? null) as ProjectType | null
+  if (!projectType) return
+
+  const deliverables = (proj?.deliverables ?? []) as DeliverableItem[]
+  const videoDeliverables = deliverables.filter(d => d.type === 'video')
+  if (videoDeliverables.length < 2) return
+
+  const videoDbSubType: 'video' | 'photo' | null = projectType === 'mixed' ? 'video' : null
+  await ensureVideoDeliverablesSeeded(supabase, projectId, videoDbSubType, videoDeliverables)
+}
+
+/**
  * Henter alt post-produksjon-brettet trenger: Video/Foto-lanes (materialisert
  * fra task_templates hvis prosjektet ikke har noen post-prod-oppgaver i det
  * hele tatt ennå), prosjektets egendefinerte lanes, og parallell-oppgaver —

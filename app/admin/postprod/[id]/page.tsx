@@ -6,6 +6,7 @@ import Link from 'next/link'
 import {
   getPostProdProjects, getTasksForProject, updateTaskStatus,
   reseedPostProdTasks, setProjectType,
+  ensurePostProdVideoTasksSeeded,
   updateTaskNotes, updateTaskData, getCurrentUserProfile,
   rejectFeedbackAndReset, resetTaskAndSubsequent,
   getAllProfiles, toggleTaskAssignee,
@@ -307,9 +308,8 @@ export default function PostProdDetailPage() {
     setLoading(true)
     setSeedError(null)
 
-    const [allProjects, projectTasks, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
+    const [allProjects, userProfile, allProfiles, selImgs, gallerySumm] = await Promise.all([
       getPostProdProjects(),
-      getTasksForProject(projectId, 'post_prod'),
       getCurrentUserProfile(),
       getAllProfiles(),
       getSelectedImagesForProject(projectId),
@@ -321,8 +321,17 @@ export default function PostProdDetailPage() {
 
     const allProj = allProjects as PostProdProject[]
     const currentProj = allProj.find(p => p.id === projectId)
+    const currentProjVideoDeliverables = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video')
     setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
+
+    // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
+    // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
+    // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
+    // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
+    if (currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+
+    const projectTasks = await getTasksForProject(projectId, 'post_prod')
 
     if (projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
@@ -338,8 +347,7 @@ export default function PostProdDetailPage() {
       setTasks(seeded)
       initNotes(seeded)
       initTaskData(seeded)
-      const seededVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', seededVideoCount))
+      setSelectedIdx(resolveDeepLinkIdx(seeded, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
       setLoading(false)
       return
     }
@@ -348,8 +356,7 @@ export default function PostProdDetailPage() {
     setTasks(projectTasks)
     initNotes(projectTasks)
     initTaskData(projectTasks)
-    const projectVideoCount = ((currentProj?.deliverables ?? []) as SignedDeliverableItem[]).filter(d => d.type === 'video').length
-    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', projectVideoCount))
+    setSelectedIdx(resolveDeepLinkIdx(projectTasks, currentProj?.project_type === 'mixed', currentProjVideoDeliverables))
     const customTaskIds = projectTasks.filter(t => t.is_custom).map(t => t.id)
     if (customTaskIds.length > 0) getTaskMessageCounts(customTaskIds).then(setMessageCounts)
     if (currentProj) {
@@ -409,10 +416,19 @@ export default function PostProdDetailPage() {
   // Løser deep-link-index mot listen slik den faktisk vil se ut i displayTasks.
   // For mixed-prosjekter må vi bytte aktiv tab til den deep-linkede oppgavens
   // sub_type FØR vi filtrerer, ellers matcher ikke indeksen displayTasks.
-  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverableCount: number): number {
+  function resolveDeepLinkIdx(list: Task[], isMixedProject: boolean, videoDeliverablesList: SignedDeliverableItem[]): number {
+    const videoDeliverableCount = videoDeliverablesList.length
     const deepTask = deepLinkTaskId ? list.find(t => t.id === deepLinkTaskId) : null
     if (deepTask?.deliverable_id) setActiveVideoDeliverableId(deepTask.deliverable_id)
-    const resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    // Uten deep-link og uten en fane som allerede er valgt, defaulter vi til
+    // første video-leveranse — ellers filtrerer computeDisplayTasks bort alle
+    // per-leveranse-steg (deliverable_id !== null) og viser kun de delte
+    // stegene (Logging/Ferdig), se samme mønster i handleSwitchTab.
+    let resolvedDeliverableId = deepTask?.deliverable_id ?? activeVideoDeliverableId
+    if (!resolvedDeliverableId && videoDeliverableCount >= 2) {
+      resolvedDeliverableId = videoDeliverablesList[0].id
+      setActiveVideoDeliverableId(resolvedDeliverableId)
+    }
     if (isMixedProject && deepTask?.sub_type) {
       setActiveTab(deepTask.sub_type)
       return getInitialIdx(computeDisplayTasks(list, true, deepTask.sub_type, resolvedDeliverableId, videoDeliverableCount), deepLinkTaskId)

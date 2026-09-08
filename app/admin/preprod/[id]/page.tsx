@@ -20,6 +20,7 @@ import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { CrewSection } from '@/components/admin/CrewSection'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 
 const C = {
   bg:       '#181920',
@@ -864,6 +865,11 @@ export default function PreprodDetailPage() {
           <Link href="/admin/preprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textDecoration: 'none' }}>Pre-prod</Link>
           <span style={{ color: C.text3, fontSize: '0.72rem' }}>›</span>
           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>{project.title}</span>
+        </div>
+
+        {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+        <div style={{ marginBottom: 22 }}>
+          <PipelineProgress currentStage={project.pipeline_stage} projectId={id} />
         </div>
 
         {/* Header */}

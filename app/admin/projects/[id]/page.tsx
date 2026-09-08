@@ -11,7 +11,7 @@ import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { updateProjectShootDates, setShootConfirmed as setShootConfirmedAction } from '@/lib/actions/calendar'
 import { markAsLost } from '@/lib/actions/lost'
 import { LOST_REASON_LABELS, type LostReason } from '@/lib/lost-constants'
-import { PIPELINE_STAGES, PipelineStage, Task } from '@/lib/types'
+import { PIPELINE_STAGES, Task } from '@/lib/types'
 import type { Quote, ContractFormFields, OurSignature } from '@/lib/types'
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/shared/SignatureCanvas'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
@@ -19,6 +19,7 @@ import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { DeliverablesButton, summarizeDeliverables } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
@@ -39,76 +40,6 @@ const C = {
 
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
 type ActiveTab = 'oversikt' | 'pitch' | 'kontrakt'
-
-// Snarveier fra stepperen til stadier med egen side, slik at man kan hoppe rett
-// til f.eks. postprod uten å måtte finne prosjektet igjen via sidemenyen (feedback e5ecec91).
-// Kun stadier prosjektet allerede har nådd (isPast || isCurrent) er klikkbare.
-function stageHref(stage: PipelineStage, projectId: string): string | null {
-  switch (stage) {
-    case 'tilbud_sendt': return `/admin/projects/${projectId}/quote`
-    case 'pre_prod': return `/admin/preprod/${projectId}`
-    case 'produksjon': return `/admin/produksjon/${projectId}`
-    case 'post_prod': return `/admin/postprod/${projectId}`
-    default: return null
-  }
-}
-
-function PipelineProgress({
-  currentStage, projectId, onGoToTab,
-}: {
-  currentStage: PipelineStage
-  projectId: string
-  onGoToTab: (tab: 'kontrakt') => void
-}) {
-  const currentIndex = PIPELINE_STAGES.findIndex(s => s.value === currentStage)
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', gap: 0 }}>
-      {PIPELINE_STAGES.map((stage, i) => {
-        const isPast = i < currentIndex
-        const isCurrent = i === currentIndex
-        const reached = isPast || isCurrent
-        const href = reached ? stageHref(stage.value, projectId) : null
-        const isKontrakt = reached && stage.value === 'kontrakt'
-        const dot = (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            <div style={{
-              width: isCurrent ? 10 : 7,
-              height: isCurrent ? 10 : 7,
-              borderRadius: '50%',
-              background: isPast ? C.accent : isCurrent ? C.accent : C.surface2,
-              border: isCurrent ? `2px solid rgba(124,92,252,0.4)` : 'none',
-              boxShadow: isCurrent ? '0 0 8px rgba(124,92,252,0.4)' : 'none',
-            }} />
-            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.5rem', color: isCurrent ? C.accent : isPast ? C.text3 : C.text3, whiteSpace: 'nowrap', fontWeight: isCurrent ? 600 : 400, opacity: isCurrent ? 1 : isPast ? 0.7 : 0.4 }}>
-              {stage.label}
-            </span>
-          </div>
-        )
-        return (
-          <div key={stage.value} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            {i > 0 && (
-              <div style={{ width: 18, height: 1, background: isPast || isCurrent ? C.accent : C.border }} />
-            )}
-            {href ? (
-              <Link href={href} title={`Gå til ${stage.label}`} style={{ textDecoration: 'none', cursor: 'pointer' }}>
-                {dot}
-              </Link>
-            ) : isKontrakt ? (
-              <button
-                type="button"
-                onClick={() => onGoToTab('kontrakt')}
-                title={`Gå til ${stage.label}`}
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-              >
-                {dot}
-              </button>
-            ) : dot}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 type Profile = { id: string; name: string | null; email: string; color: string | null }
 

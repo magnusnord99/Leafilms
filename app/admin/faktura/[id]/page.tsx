@@ -9,6 +9,7 @@ import { getAvatarColor } from '@/lib/avatar-colors'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 
 const C = {
   bg:       '#181920',
@@ -144,6 +145,11 @@ export default function FakturaPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px', fontFamily: 'var(--font-dm-sans)' }}>
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
+
+        {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+        <div style={{ marginBottom: 16 }}>
+          <PipelineProgress currentStage={project.pipeline_stage} projectId={projectId} />
+        </div>
 
         {access === 'past' && (
           <PastStageBanner

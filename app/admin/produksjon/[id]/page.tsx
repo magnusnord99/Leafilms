@@ -17,6 +17,7 @@ import { C } from '@/lib/admin-theme'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 
 function formatDate(d: string | null) {
   if (!d) return null
@@ -233,6 +234,12 @@ export default function ProduksjonPage() {
           <span style={{ color: C.text3, fontSize: '0.7rem' }}>/</span>
           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>Produksjon</span>
         </div>
+
+        {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+        <div style={{ marginBottom: 16 }}>
+          <PipelineProgress currentStage={info.pipelineStage} projectId={id} />
+        </div>
+
         <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.3rem', fontWeight: 700, color: C.text, marginBottom: 24 }}>
           {info.title}
         </h1>

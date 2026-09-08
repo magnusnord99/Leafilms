@@ -26,6 +26,7 @@ import { getAvatarColor } from '@/lib/avatar-colors'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
+import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 
 const C = {
@@ -913,6 +914,10 @@ export default function PostProdDetailPage() {
                   </div>
                 )
               })()}
+            </div>
+            {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
+            <div style={{ marginBottom: 10 }}>
+              <PipelineProgress currentStage={currentProject.pipeline_stage} projectId={projectId} />
             </div>
             {access === 'past' && (
               <PastStageBanner

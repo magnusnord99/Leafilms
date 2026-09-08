@@ -18,6 +18,7 @@ import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { DeliverablesButton, summarizeDeliverables } from '@/components/project/DeliverablesButton'
+import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
@@ -1654,6 +1655,11 @@ export default function ProjectHubPage() {
                   Åpne →
                 </button>
               </Link>
+            </div>
+
+            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, se ProjectDocuments */}
+            <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <ProjectDocuments projectId={projectId} />
             </div>
 
             {/* Tilknyttet — board og kundeseleksjon-galleri, vises kun når de finnes, uavhengig av pipeline-steg */}

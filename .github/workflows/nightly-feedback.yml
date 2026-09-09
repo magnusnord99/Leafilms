@@ -1,0 +1,64 @@
+name: Nightly Feedback Triage
+
+on:
+  schedule:
+    - cron: '13 0 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Authenticate to GCP (for ./deploy.sh)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure git identity
+        run: |
+          git config user.name "leafilms-nightly-bot"
+          git config user.email "noreply@leafilms.no"
+
+      - name: Load nightly prompt
+        id: prompt
+        run: |
+          {
+            echo 'text<<NIGHTLY_PROMPT_EOF'
+            cat .github/prompts/nightly-feedback.md
+            echo 'NIGHTLY_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QUOTE_API_URL: ${{ secrets.QUOTE_API_URL }}
+          QUOTE_API_TOKEN: ${{ secrets.QUOTE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.prompt.outputs.text }}
+          claude_args: |
+            --allowedTools "Bash,Read,Write,Edit,Grep,Glob"
+            --max-turns 120

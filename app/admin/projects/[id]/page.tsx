@@ -252,11 +252,13 @@ function TilbudStepper({
   projectTitle: string
   isContractPublished: boolean
 }) {
+  // Pitch er valgfritt — tilbud og kontrakt kan settes opp og sendes helt uten at
+  // det finnes en pitch (f.eks. et rent tilbud+kontrakt-løp uten pitch-presentasjon).
   const step1Done = hasSections
   const step2QuoteDone = quote != null
   const step2ContractDone = isContractPublished
   const step2Done = step2QuoteDone && step2ContractDone
-  const allDone = step1Done && step2Done
+  const allDone = step2Done
 
   const step1Href = step1Done
     ? `/admin/projects/${projectId}/edit`
@@ -287,7 +289,7 @@ function TilbudStepper({
           color: step1Done ? C.text3 : C.text,
           textDecoration: step1Done ? 'line-through' : 'none',
         }}>
-          Sett opp pitch
+          Sett opp pitch <span style={{ color: C.text3, fontWeight: 400 }}>(valgfritt)</span>
         </span>
         <Link href={step1Href} style={{ textDecoration: 'none', flexShrink: 0 }}>
           <button style={{
@@ -301,15 +303,14 @@ function TilbudStepper({
         </Link>
       </div>
 
-      {/* Steg 2 — Tilbud + Kontrakt (kombinert) */}
+      {/* Steg 2 — Tilbud + Kontrakt (kombinert). Uavhengig av steg 1 — pitch er valgfritt. */}
       <div style={{
         padding: '14px 16px', borderRadius: 8, background: C.surface,
-        border: `1px solid ${step2Done ? 'rgba(76,175,125,0.2)' : step1Done ? C.accent + '60' : C.border}`,
-        opacity: step1Done ? 1 : 0.4,
-        transition: 'border-color 0.15s, opacity 0.15s',
+        border: `1px solid ${step2Done ? 'rgba(76,175,125,0.2)' : C.accent + '60'}`,
+        transition: 'border-color 0.15s',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <StepIndicator done={step2Done} active={step1Done && !step2Done} num={2} />
+          <StepIndicator done={step2Done} active={!step2Done} num={2} />
           <div style={{ flex: 1 }}>
             <span style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500,
@@ -323,18 +324,16 @@ function TilbudStepper({
               <SubCheck label="Kontrakt" done={step2ContractDone} />
             </div>
           </div>
-          {step1Done && (
-            <Link href={step2Href} style={{ textDecoration: 'none', flexShrink: 0 }}>
-              <button style={{
-                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                padding: '5px 12px', borderRadius: 5, cursor: 'pointer', border: 'none',
-                background: step1Done && !step2Done ? C.accent : C.surface2,
-                color: step1Done && !step2Done ? '#fff' : C.text2,
-              }}>
-                {step2BtnLabel}
-              </button>
-            </Link>
-          )}
+          <Link href={step2Href} style={{ textDecoration: 'none', flexShrink: 0 }}>
+            <button style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+              padding: '5px 12px', borderRadius: 5, cursor: 'pointer', border: 'none',
+              background: !step2Done ? C.accent : C.surface2,
+              color: !step2Done ? '#fff' : C.text2,
+            }}>
+              {step2BtnLabel}
+            </button>
+          </Link>
         </div>
       </div>
 
@@ -372,7 +371,7 @@ function TilbudStepper({
         )}
         {!allDone && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textAlign: 'center', marginTop: 8 }}>
-            Fullfør begge stegene for å sende tilbudet
+            Fullfør tilbud og kontrakt for å sende
           </p>
         )}
       </div>
@@ -1820,14 +1819,15 @@ export default function ProjectHubPage() {
               ))}
             </div>
             {!hasSections ? (
-              /* Ingen pitch opprettet enda */
+              /* Ingen pitch opprettet enda — valgfritt, blokkerer ikke tilbudet under */
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 18px' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 6 }}>
-                  Ingen pitch opprettet enda
+                  Ingen pitch opprettet enda <span style={{ color: C.text3, fontWeight: 400 }}>(valgfritt)</span>
                 </p>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginBottom: 18, lineHeight: 1.6 }}>
                   Opprett en pitch med AI. Kundeinformasjon hentes automatisk fra prosjektet.
                   {notesValue.trim() && ' E-posttråden du har limt inn vil bli brukt som kontekst.'}
+                  {' '}Trenger du ikke pitch, kan du gå rett til tilbudet under.
                 </p>
                 <Link href={`/admin/projects/new?project_id=${encodeURIComponent(projectId)}&customer_id=${project.customer_id ?? ''}&title=${encodeURIComponent(project.title)}&context=${encodeURIComponent(notesValue.trim())}`}>
                   <button style={{
@@ -1840,33 +1840,37 @@ export default function ProjectHubPage() {
                 </Link>
               </div>
             ) : (
-              /* Pitch finnes — vis vanlige lenker */
-              <>
-                {[
-                  { title: 'Pitch-dokument', desc: 'Rediger pitchens innhold og seksjoner', href: `/admin/projects/${projectId}/edit`, btn: 'Åpne editor →' },
-                  { title: 'Tilbud', desc: 'Bygg og administrer tilbudet', href: `/admin/projects/${projectId}/quote`, btn: 'Åpne tilbud →', badge: quote?.status },
-                ].map(item => (
-                  <div key={item.href} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text }}>{item.title}</p>
-                        {item.badge && (
-                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: item.badge === 'accepted' ? C.success : item.badge === 'sent' ? C.accent : C.text3, background: `${item.badge === 'accepted' ? C.success : item.badge === 'sent' ? C.accent : C.text3}18`, padding: '2px 7px', borderRadius: 4 }}>
-                            {item.badge === 'draft' ? 'Utkast' : item.badge === 'sent' ? 'Sendt' : item.badge === 'accepted' ? 'Akseptert' : 'Avslått'}
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>{item.desc}</p>
-                    </div>
-                    <Link href={item.href}>
-                      <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-                        {item.btn}
-                      </button>
-                    </Link>
-                  </div>
-                ))}
-              </>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 3 }}>Pitch-dokument</p>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Rediger pitchens innhold og seksjoner</p>
+                </div>
+                <Link href={`/admin/projects/${projectId}/edit`}>
+                  <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+                    Åpne editor →
+                  </button>
+                </Link>
+              </div>
             )}
+            {/* Tilbud — alltid tilgjengelig, uavhengig av om pitchen over er opprettet */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text }}>Tilbud</p>
+                  {quote?.status && (
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: quote.status === 'accepted' ? C.success : quote.status === 'sent' ? C.accent : C.text3, background: `${quote.status === 'accepted' ? C.success : quote.status === 'sent' ? C.accent : C.text3}18`, padding: '2px 7px', borderRadius: 4 }}>
+                      {quote.status === 'draft' ? 'Utkast' : quote.status === 'sent' ? 'Sendt' : quote.status === 'accepted' ? 'Akseptert' : 'Avslått'}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Bygg og administrer tilbudet</p>
+              </div>
+              <Link href={`/admin/projects/${projectId}/quote`}>
+                <button style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
+                  Åpne tilbud →
+                </button>
+              </Link>
+            </div>
 
             {pitchToken && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

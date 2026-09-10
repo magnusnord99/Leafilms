@@ -39,6 +39,8 @@ export default function ProjectQuotePage({ params }: Props) {
   const [shareLink, setShareLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  // Kun for å vise en forklarende tekst ved publisering — se hasAnySections-sjekken under.
+  const [hasAnySections, setHasAnySections] = useState(true)
   const { publishing, togglePublish } = usePublishing(project, setProject, shareLink, setShareLink, projectId)
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
@@ -60,7 +62,7 @@ export default function ProjectQuotePage({ params }: Props) {
     setExistingQuoteId(null)
     setBuilderData(null)
     try {
-      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, equipmentGroupsRes, discountFactorsRes, profilesRes, shareRes] = await Promise.all([
+      const [projectRes, teamRes, customersRes, quoteRes, sectionsRes, catalogRes, equipmentGroupsRes, discountFactorsRes, profilesRes, shareRes, sectionCountRes] = await Promise.all([
         supabase.from('projects').select('*').eq('id', projectId).single(),
         supabase.from('team_members').select('*').order('order_index'),
         supabase.from('customers').select('*').order('name'),
@@ -73,7 +75,9 @@ export default function ProjectQuotePage({ params }: Props) {
         supabase.from('discount_factors').select('*').order('shoot_day'),
         supabase.from('profiles').select('id, name, email').returns<{ id: string; name: string | null; email: string }[]>(),
         supabase.from('project_shares').select('token').eq('project_id', projectId).maybeSingle(),
+        supabase.from('sections').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
       ])
+      setHasAnySections((sectionCountRes.count ?? 0) > 0)
 
       const proj = projectRes.data as Project | null
       const members = (teamRes.data || []) as TeamMember[]
@@ -213,15 +217,15 @@ export default function ProjectQuotePage({ params }: Props) {
         const currentStatus = quotes.find(q => q.id === existingQuoteId)?.status
         const preserveStatus = currentStatus === 'accepted' || currentStatus === 'rejected'
         const updatePayload = preserveStatus ? record : { ...record, status: 'draft' as const }
-        await supabase.from('quotes').update(updatePayload).eq('id', existingQuoteId)
+        const { error: updateError } = await supabase.from('quotes').update(updatePayload).eq('id', existingQuoteId)
+        if (updateError) throw updateError
         setQuotes(prev => prev.map(q => q.id === existingQuoteId ? { ...q, version: record.version, quote_data: data } : q))
       } else {
         // Første tilbud for prosjektet — blir automatisk gjeldende versjon
-        const { data: newQuote } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true, created_by: currentUserId }).select('*').single()
-        if (newQuote) {
-          setExistingQuoteId(newQuote.id)
-          setQuotes(prev => [...prev, newQuote as Quote])
-        }
+        const { data: newQuote, error: insertError } = await supabase.from('quotes').insert({ ...record, status: 'draft' as const, is_current: true, created_by: currentUserId }).select('*').single()
+        if (insertError) throw insertError
+        setExistingQuoteId(newQuote.id)
+        setQuotes(prev => [...prev, newQuote as Quote])
       }
 
       // Synkroniser leveransebeskrivelse til prosjektet
@@ -466,9 +470,16 @@ export default function ProjectQuotePage({ params }: Props) {
             </>
           ) : (
             <>
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
-                Ikke publisert — kunden kan ikke se tilbudet eller signere ennå.
-              </p>
+              <div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                  Ikke publisert — kunden kan ikke se tilbudet eller signere ennå.
+                </p>
+                {!hasAnySections && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 4 }}>
+                    Prosjektet har ingen pitch — kunden får en enkel side med kun tilbud og signering.
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={togglePublish}

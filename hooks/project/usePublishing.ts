@@ -58,6 +58,26 @@ export function usePublishing(
           }
         }
 
+        // Prosjekter uten pitch (kun tilbud + kontrakt — "signeringspitch") har ingen
+        // seksjoner i det hele tatt. Uten en 'quote'-seksjon viser den offentlige siden
+        // kun "Ingen seksjoner å vise" i stedet for selve tilbudet, over signeringen.
+        // Legg til den samme minimale seksjonen som "Lag pristilbud"-snarveien ved
+        // prosjektopprettelse bruker (se handleCreateQuoteOnly i ProjectForm.tsx),
+        // slik at ALLE veier til publisering av et pitch-løst prosjekt gir en fungerende side.
+        const { count: sectionCount } = await supabase
+          .from('sections')
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+
+        if ((sectionCount ?? 0) === 0) {
+          await supabase.from('sections').insert({
+            project_id: projectId,
+            type: 'quote',
+            order_index: 1,
+            visible: true,
+          })
+        }
+
         const token = Math.random().toString(36).substring(2, 15) +
                       Math.random().toString(36).substring(2, 15)
 

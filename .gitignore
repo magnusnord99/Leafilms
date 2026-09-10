@@ -47,3 +47,9 @@ supabase/.temp/
 
 # Git worktrees
 .worktrees/
+
+# google-github-actions/auth writes exported credentials here, in the repo
+# working directory — must stay untracked or the nightly-feedback workflow's
+# clean-tree check (see .github/prompts/nightly-feedback.md step 1) never
+# passes.
+gha-creds-*.json

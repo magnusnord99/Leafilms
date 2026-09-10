@@ -302,7 +302,6 @@ export default function ProjectQuotePage({ params }: Props) {
   }
 
   async function handleDeleteVersion(quoteId: string) {
-    if (quotes.length <= 1) return
     const target = quotes.find(q => q.id === quoteId)
     if (!target || target.status !== 'draft') return
     if (!confirm(`Slette ${target.label ? `${target.version} — ${target.label}` : target.version}? Dette kan ikke angres.`)) return
@@ -319,6 +318,14 @@ export default function ProjectQuotePage({ params }: Props) {
       if (fallback) {
         setExistingQuoteId(fallback.id)
         setBuilderData(fallback.quote_data as unknown as QuoteBuilderData)
+      } else {
+        // Slettet det eneste tilbudet — tilbake til "ingen tilbud ennå"-tilstanden,
+        // samme oppsett som loadAll() bygger når prosjektet aldri har hatt et tilbud.
+        setExistingQuoteId(null)
+        const initial = createEmptyBuilderData(project?.title || '')
+        if (project?.delivery_description) initial.deliveryDescription = project.delivery_description
+        if (project?.deliverables && project.deliverables.length > 0) initial.deliverables = project.deliverables
+        setBuilderData(initial)
       }
     }
     setQuotes(remaining)
@@ -572,7 +579,7 @@ export default function ProjectQuotePage({ params }: Props) {
                       Sett som gjeldende
                     </button>
                   )}
-                  {quotes.length > 1 && active.status === 'draft' && (
+                  {active.status === 'draft' && (
                     <button
                       type="button"
                       onClick={() => handleDeleteVersion(active.id)}

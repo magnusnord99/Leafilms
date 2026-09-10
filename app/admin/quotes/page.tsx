@@ -82,6 +82,19 @@ export default function QuotesPage() {
     }
   }
 
+  // Kun kladder kan slettes herfra — contracts.quote_id har ON DELETE CASCADE, så å
+  // slette et sendt/akseptert tilbud ville også fjernet en eventuell signert kontrakt.
+  async function handleDelete(quote: QuoteRow) {
+    if (quote.status !== 'draft') return
+    if (!confirm(`Slette tilbudet for ${quote.project_title || 'dette prosjektet'}? Dette kan ikke angres.`)) return
+    const { error } = await supabase.from('quotes').delete().eq('id', quote.id)
+    if (error) {
+      alert('Kunne ikke slette tilbudet: ' + error.message)
+      return
+    }
+    setQuotes(prev => prev.filter(q => q.id !== quote.id))
+  }
+
   const filteredPickerProjects = (pickerProjects ?? []).filter(p => {
     if (!pickerSearch.trim()) return true
     const q = pickerSearch.toLowerCase()
@@ -201,6 +214,21 @@ export default function QuotesPage() {
                   color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', outline: 'none',
                 }}
               />
+              <Link
+                href="/admin/projects/new"
+                style={{
+                  display: 'block', textAlign: 'left', padding: '10px 12px', marginBottom: 10,
+                  background: C.accentBg, border: `1px dashed ${C.accent}`, borderRadius: 6,
+                  textDecoration: 'none',
+                }}
+              >
+                <span style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.accent }}>
+                  + Nytt prosjekt
+                </span>
+                <span style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 2 }}>
+                  Prosjektet trenger ikke en pitch — bare tittel og kunde, så går du rett til tilbudet
+                </span>
+              </Link>
               <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {pickerLoading && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, padding: '8px 0' }}>Laster prosjekter...</p>
@@ -417,6 +445,23 @@ export default function QuotesPage() {
                         Åpne
                       </button>
                     </Link>
+                    {quote.status === 'draft' && (
+                      <button
+                        onClick={() => handleDelete(quote)}
+                        style={{
+                          padding: '5px 10px',
+                          background: 'transparent',
+                          color: C.danger,
+                          fontFamily: 'var(--font-dm-sans)',
+                          fontSize: '0.72rem',
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Slett
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

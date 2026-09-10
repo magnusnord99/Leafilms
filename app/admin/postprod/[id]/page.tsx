@@ -28,6 +28,7 @@ import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
+import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 
 const C = {
   bg:       '#181920',
@@ -1145,6 +1146,12 @@ export default function PostProdDetailPage() {
 
             {/* Info om levering-knapp — delt komponent med prosjektoversikten, se DeliverablesButton */}
             <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} readOnly={readOnly} />
+
+            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
+                prosjektoversikten (feedback 8578db28) */}
+            <div style={{ marginTop: 10, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <ProjectDocuments projectId={projectId} />
+            </div>
           </div>
 
           {/* Film/Bilder-faner for mixed-prosjekter */}

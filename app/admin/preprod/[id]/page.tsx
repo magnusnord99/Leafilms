@@ -20,6 +20,7 @@ import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { CrewSection } from '@/components/admin/CrewSection'
+import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 
 const C = {
@@ -1084,6 +1085,12 @@ export default function PreprodDetailPage() {
               profiles={profiles}
               readOnly={readOnly}
             />
+
+            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
+                prosjektoversikten (feedback 8578db28) */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+              <ProjectDocuments projectId={id} />
+            </div>
           </div>
 
         </div>

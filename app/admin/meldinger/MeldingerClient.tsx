@@ -28,6 +28,12 @@ function displayName(p: { name: string | null; email: string }) {
   return p.name || p.email
 }
 
+// Usendte utkast lagres lokalt per bruker og samtale, slik at man kan bytte samtale
+// eller forlate siden uten å miste det man har begynt å skrive.
+function draftKey(userId: string, conversationId: string) {
+  return `meldinger-draft-${userId}-${conversationId}`
+}
+
 export function MeldingerClient({ currentUser, initialConversations, allProfiles }: Props) {
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [selectedId, setSelectedId] = useState<string | null>(initialConversations[0]?.id ?? null)
@@ -89,6 +95,15 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
     })
     return () => { cancelled = true }
   }, [selectedId])
+
+  // Hent frem et evt. lagret utkast for samtalen man går inn i
+  useEffect(() => {
+    if (!selectedId) {
+      setInput('')
+      return
+    }
+    setInput(window.localStorage.getItem(draftKey(currentUser.id, selectedId)) ?? '')
+  }, [selectedId, currentUser.id])
 
   // Sanntidsoppdatering av reaksjoner i den åpne tråden
   useEffect(() => {
@@ -157,6 +172,16 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Skriv utkastet til localStorage med én gang — da overlever det både bytte av
+  // samtale og navigering bort fra siden.
+  function handleInputChange(value: string) {
+    setInput(value)
+    if (!selectedId) return
+    const key = draftKey(currentUser.id, selectedId)
+    if (value) window.localStorage.setItem(key, value)
+    else window.localStorage.removeItem(key)
+  }
+
   async function sendMessage() {
     if (!input.trim() || sending || !selectedId) return
     setSending(true)
@@ -170,6 +195,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
       if (res.ok) {
         const { message } = await res.json()
         setInput('')
+        window.localStorage.removeItem(draftKey(currentUser.id, selectedId))
         setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
         setConversations((prev) => prev.map((c) => (
           c.id === selectedId
@@ -405,7 +431,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
             >
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()

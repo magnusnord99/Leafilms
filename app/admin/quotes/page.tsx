@@ -9,6 +9,14 @@ import { timeAgo } from '@/lib/format'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
 import type { QuoteBuilderData } from '@/lib/types'
 
+type PickerProject = {
+  id: string
+  title: string
+  client_name: string | null
+  customers: { name: string | null } | null
+  updated_at: string
+}
+
 type QuoteRow = {
   id: string
   project_id: string
@@ -48,7 +56,38 @@ export default function QuotesPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | QuoteRow['status']>('all')
   const [search, setSearch] = useState('')
 
+  // Prosjektvelger for "+ Opprett tilbud" — et tilbud hører alltid til et prosjekt,
+  // så vi lar brukeren søke opp/velge prosjektet i stedet for et frittstående skjema.
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerProjects, setPickerProjects] = useState<PickerProject[] | null>(null)
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerSearch, setPickerSearch] = useState('')
+
   useEffect(() => { fetchQuotes() }, [])
+
+  async function openPicker() {
+    setShowPicker(true)
+    setPickerSearch('')
+    if (pickerProjects) return
+    setPickerLoading(true)
+    try {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, title, client_name, customers(name), updated_at')
+        .neq('status', 'archived')
+        .order('updated_at', { ascending: false })
+      setPickerProjects((data ?? []) as unknown as PickerProject[])
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  const filteredPickerProjects = (pickerProjects ?? []).filter(p => {
+    if (!pickerSearch.trim()) return true
+    const q = pickerSearch.toLowerCase()
+    const customerName = p.customers?.name ?? p.client_name ?? ''
+    return p.title.toLowerCase().includes(q) || customerName.toLowerCase().includes(q)
+  })
 
   async function fetchQuotes() {
     try {
@@ -113,14 +152,84 @@ export default function QuotesPage() {
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2 }}>
-            Tilbud
-          </h1>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
-            Alle tilbud på tvers av prosjekter
-          </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2 }}>
+              Tilbud
+            </h1>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginTop: 4 }}>
+              Alle tilbud på tvers av prosjekter
+            </p>
+          </div>
+          <button
+            onClick={openPicker}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 18px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}
+          >
+            + Opprett tilbud
+          </button>
         </div>
+
+        {showPicker && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px', zIndex: 50 }}
+            onClick={() => setShowPicker(false)}
+          >
+            <div
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, width: '100%', maxWidth: 440, maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
+                  Velg prosjekt for tilbudet
+                </p>
+                <button
+                  onClick={() => setShowPicker(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: 4 }}
+                >
+                  ×
+                </button>
+              </div>
+              <input
+                type="text"
+                autoFocus
+                value={pickerSearch}
+                onChange={e => setPickerSearch(e.target.value)}
+                placeholder="Søk på tittel eller kunde..."
+                style={{
+                  width: '100%', padding: '8px 12px', marginBottom: 12,
+                  background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
+                  color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', outline: 'none',
+                }}
+              />
+              <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pickerLoading && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, padding: '8px 0' }}>Laster prosjekter...</p>
+                )}
+                {!pickerLoading && filteredPickerProjects.length === 0 && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, padding: '8px 0' }}>Fant ingen prosjekter.</p>
+                )}
+                {!pickerLoading && filteredPickerProjects.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => router.push(`/admin/projects/${p.id}/quote`)}
+                    style={{
+                      textAlign: 'left', padding: '10px 12px', background: C.surface2,
+                      border: `1px solid ${C.border}`, borderRadius: 6, cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>
+                      {p.title || '(uten tittel)'}
+                    </span>
+                    <span style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 2 }}>
+                      {p.customers?.name ?? p.client_name ?? 'Ingen kunde'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>

@@ -514,6 +514,11 @@ export default function PostProdDetailPage() {
     commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), [key]: value })
   }
 
+  function handleCustomerFeedbackChange(taskId: string, value: string) {
+    if (readOnly) return
+    commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), customer_feedback: value })
+  }
+
   function handleExtraLinkChange(taskId: string, index: number, value: string) {
     if (readOnly) return
     const links = getExtraLinks(pendingTaskDataRef.current[taskId] ?? {})
@@ -1864,6 +1869,43 @@ export default function PostProdDetailPage() {
                 </p>
               </div>
 
+              {/* Kundetilbakemelding — avgrenset fra interne Notater under, slik at det som
+                  faktisk kom fra kunden ikke drukner i staben sine egne arbeidsnotater
+                  (feedback cc0e71be). Lagres i samme task_data-JSONB som lenkene. */}
+              {(() => {
+                const currentData = taskData[selectedTask.id] ?? {}
+                return (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.warning, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Kundetilbakemelding
+                      </label>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: taskDataSaved ? C.success : C.text3, transition: 'color 0.2s' }}>
+                        {taskDataSaving ? 'Lagrer...' : taskDataSaved ? 'Lagret ✓' : ''}
+                      </span>
+                    </div>
+                    <textarea
+                      value={currentData.customer_feedback ?? ''}
+                      onChange={e => handleCustomerFeedbackChange(selectedTask.id, e.target.value)}
+                      disabled={readOnly}
+                      placeholder="Lim inn det kunden faktisk har sagt/spurt om her..."
+                      rows={3}
+                      style={{
+                        width: '100%', boxSizing: 'border-box',
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                        color: C.text, background: 'rgba(240,165,0,0.05)',
+                        border: `1px solid rgba(240,165,0,0.3)`, borderRadius: 8,
+                        padding: '12px 14px', resize: 'vertical',
+                        outline: 'none', lineHeight: 1.6,
+                        transition: 'border-color 0.15s',
+                      }}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.warning }}
+                      onBlur={e => { e.currentTarget.style.borderColor = 'rgba(240,165,0,0.3)' }}
+                    />
+                  </div>
+                )
+              })()}
+
               {/* Notes */}
               <div style={{ marginBottom: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2095,7 +2137,8 @@ export default function PostProdDetailPage() {
 
               {isSelectedLocked && (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, fontStyle: 'italic' }}>
-                  Fullfør «{stepperTasks[selectedIdx - 1]?.title ?? 'forrige oppgave'}» for å låse opp dette steget.
+                  Fullfør «{displayTasks[selectedIdx - 1]?.title ?? 'forrige oppgave'}» for å starte dette steget —
+                  du kan likevel skrive notater og lenker her allerede nå.
                 </p>
               )}
 

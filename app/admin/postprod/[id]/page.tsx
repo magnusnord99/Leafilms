@@ -1556,6 +1556,13 @@ export default function PostProdDetailPage() {
                 </div>
               )}
 
+              {/* To kolonner for å redusere scrolling per steg: fakta om steget
+                  (lenker, tildelt, frist, kalendernavn) til venstre, fritekst
+                  (kundetilbakemelding, notater) til høyre. Ett steg per prosjekt
+                  kan lett bli 7-12+, så vertikal plass per steg teller. */}
+              <div className="grid grid-cols-1 md:grid-cols-2" style={{ columnGap: 32 }}>
+              <div>
+
               {/* Task links (kun stegets egne redigerbare lenker — lenker fra tidligere
                   steg vises i referansepanelet til venstre, se priorStages) */}
               {(() => {
@@ -1696,8 +1703,10 @@ export default function PostProdDetailPage() {
                 )
               })()}
 
-              {/* Assignee */}
-              <div style={{ marginBottom: 24 }} ref={assigneeDropdownRef}>
+              {/* Tildelt + Frist i samme rad — begge er korte felt, ingen grunn til at
+                  de skal ta hver sin fulle linje */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+              <div ref={assigneeDropdownRef}>
                 <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                   Tildelt
                 </label>
@@ -1816,8 +1825,7 @@ export default function PostProdDetailPage() {
                 </div>
               </div>
 
-              {/* Due date */}
-              <div style={{ marginBottom: 20 }}>
+              <div>
                 <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                   Frist
                 </label>
@@ -1835,6 +1843,7 @@ export default function PostProdDetailPage() {
                   onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
+              </div>
               </div>
 
               {/* Calendar name override */}
@@ -1868,6 +1877,9 @@ export default function PostProdDetailPage() {
                   Tomt felt bruker standardnavnet vist over, i /admin/calendar.
                 </p>
               </div>
+
+              </div>
+              <div>
 
               {/* Kundetilbakemelding — avgrenset fra interne Notater under, slik at det som
                   faktisk kom fra kunden ikke drukner i staben sine egne arbeidsnotater
@@ -1934,6 +1946,9 @@ export default function PostProdDetailPage() {
                   onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                 />
+              </div>
+
+              </div>
               </div>
 
               {/* Action button */}

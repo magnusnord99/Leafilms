@@ -1751,7 +1751,10 @@ export default function PostProdDetailPage() {
                             </span>
                           )}
                         </div>
-                        <span>
+                        <span
+                          title={selectedTask.assignees.length === 1 ? (selectedTask.assignees[0].name ?? selectedTask.assignees[0].email) : undefined}
+                          style={{ maxWidth: 84, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
                           {selectedTask.assignees.length === 1
                             ? (selectedTask.assignees[0].name ?? selectedTask.assignees[0].email)
                             : `${selectedTask.assignees.length} personer`}
@@ -1834,6 +1837,7 @@ export default function PostProdDetailPage() {
                   value={dueDates[selectedTask.id] ?? ''}
                   onChange={e => handleDueDateChange(selectedTask.id, e.target.value)}
                   style={{
+                    width: 138, boxSizing: 'border-box',
                     fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,

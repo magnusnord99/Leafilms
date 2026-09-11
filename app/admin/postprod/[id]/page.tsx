@@ -956,7 +956,7 @@ export default function PostProdDetailPage() {
             </div>
             {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
             <div style={{ marginBottom: 10 }}>
-              <PipelineProgress currentStage={currentProject.pipeline_stage} projectId={projectId} />
+              <PipelineProgress currentStage={currentProject.pipeline_stage} projectId={projectId} viewingStage="post_prod" />
             </div>
             {access === 'past' && (
               <PastStageBanner

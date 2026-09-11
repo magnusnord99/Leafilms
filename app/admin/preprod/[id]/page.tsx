@@ -870,7 +870,7 @@ export default function PreprodDetailPage() {
 
         {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
         <div style={{ marginBottom: 22 }}>
-          <PipelineProgress currentStage={project.pipeline_stage} projectId={id} />
+          <PipelineProgress currentStage={project.pipeline_stage} projectId={id} viewingStage="pre_prod" />
         </div>
 
         {/* Header */}

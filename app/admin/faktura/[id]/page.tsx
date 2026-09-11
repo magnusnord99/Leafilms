@@ -148,7 +148,7 @@ export default function FakturaPage() {
 
         {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
         <div style={{ marginBottom: 16 }}>
-          <PipelineProgress currentStage={project.pipeline_stage} projectId={projectId} />
+          <PipelineProgress currentStage={project.pipeline_stage} projectId={projectId} viewingStage="fakturert" />
         </div>
 
         {access === 'past' && (

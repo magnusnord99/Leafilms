@@ -237,7 +237,7 @@ export default function ProduksjonPage() {
 
         {/* Stegmeny — samme som prosjektoversikten, for å bla mellom stegene uten å måtte om via den */}
         <div style={{ marginBottom: 16 }}>
-          <PipelineProgress currentStage={info.pipelineStage} projectId={id} />
+          <PipelineProgress currentStage={info.pipelineStage} projectId={id} viewingStage="produksjon" />
         </div>
 
         <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.3rem', fontWeight: 700, color: C.text, marginBottom: 24 }}>

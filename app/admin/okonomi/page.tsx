@@ -150,7 +150,7 @@ function SummaryCard({ label, amount, color }: { label: string; amount: number; 
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, margin: 0, marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         {label}
       </p>
-      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color, margin: 0 }}>
+      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {formatNok(displayed)}
       </p>
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: 0, marginTop: 4 }}>
@@ -463,8 +463,11 @@ export default function OkonomiPage() {
           )}
         </div>
 
-        {/* Summary cards */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+        {/* Summary cards — grid i stedet for flex:1-rad: med et stort kronebeløp (som ikke
+            kan brytes pga. mellomrom uten linjeskift i Intl-formateringen) presset inn i tre
+            sideliggende kort, spilte tallet utenfor kort-rammen på smale skjermer i stedet for
+            å trigge wrap (feedback dfec163a). Én kolonne på mobil unngår at kortene klemmes. */}
+        <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 16, marginBottom: 32 }}>
           <SummaryCard label="Potensiell inntekt" amount={potentialTotal} color={amber} />
           <SummaryCard label="Kommende betalinger" amount={upcomingTotal} color={blue} />
           <SummaryCard label="Inntjeninger" amount={earnedTotal} color={green} />

@@ -228,7 +228,7 @@ export default function DownloadClient({
                   width: '100%', boxSizing: 'border-box',
                   background: S.surface2, border: `1px solid ${phase === 'wrong-password' ? S.danger : S.border}`,
                   borderRadius: S.radiusSm, padding: '10px 12px',
-                  fontFamily: S.fontBody, fontSize: '0.84rem', color: S.text,
+                  fontFamily: S.fontBody, fontSize: '1rem', color: S.text,
                   outline: 'none',
                 }}
               />

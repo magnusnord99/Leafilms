@@ -514,7 +514,7 @@ export default function AlbumGalleryClient({
                   onChange={e => setCommentAuthor(e.target.value)}
                   placeholder={t.yourNameOptional}
                   style={{
-                    width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.78rem',
+                    width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '1rem',
                     color: S.text, background: S.bg, border: `1px solid ${S.border}`,
                     borderRadius: 8, padding: '7px 10px', outline: 'none', marginBottom: 8,
                   }}
@@ -525,7 +525,7 @@ export default function AlbumGalleryClient({
                     onChange={e => setCommentDraft(e.target.value)}
                     placeholder={t.writeCommentToPhotographer}
                     rows={2}
-                    style={{ flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.85rem', color: S.text, background: S.bg, border: `1px solid ${S.border}`, borderRadius: 10, padding: '8px 10px', outline: 'none' }}
+                    style={{ flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '1rem', color: S.text, background: S.bg, border: `1px solid ${S.border}`, borderRadius: 10, padding: '8px 10px', outline: 'none' }}
                   />
                   <button
                     onClick={() => saveComment(img.id, commentDraft, commentAuthor)}
@@ -603,7 +603,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, commentAuthor, onA
           onChange={e => onAuthorChange(e.target.value)}
           placeholder={t.yourNameOptional}
           style={{
-            width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '0.76rem',
+            width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', fontSize: '1rem',
             color: S.text, background: S.bg, border: `1px solid ${S.border}`,
             borderRadius: 8, padding: '6px 10px', outline: 'none', marginBottom: 6,
           }}
@@ -615,7 +615,7 @@ function CommentPanel({ image, commentDraft, onCommentChange, commentAuthor, onA
             placeholder={t.writeComment}
             rows={2}
             style={{
-              flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '0.82rem',
+              flex: 1, resize: 'none', fontFamily: 'sans-serif', fontSize: '1rem',
               color: S.text, background: S.bg, border: `1px solid ${S.border}`,
               borderRadius: 10, padding: '7px 10px', outline: 'none', lineHeight: 1.5,
             }}

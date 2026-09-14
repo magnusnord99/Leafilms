@@ -145,7 +145,11 @@ function SummaryCard({ label, amount, color }: { label: string; amount: number; 
       borderRadius: 8,
       padding: '20px 24px',
       flex: 1,
-      minWidth: 0,
+      // Uten en reell minstebredde kollapser kortene til en tredjedel av mobilskjermen
+      // (flex-basis 0) og beløpsteksten renner utenfor rammen — flexWrap på raden slår
+      // aldri inn. Med 200px brekker de til én kolonne på mobil og står fortsatt på rad
+      // side om side på desktop.
+      minWidth: 200,
     }}>
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, margin: 0, marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         {label}

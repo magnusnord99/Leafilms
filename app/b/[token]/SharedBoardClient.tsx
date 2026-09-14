@@ -16,7 +16,7 @@ export const CINEMATIC_PALETTE: BoardPalette = {
 export default function SharedBoardClient({ token, data }: { token: string; data: SharedBoardData }) {
   const router = useRouter()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: S.bg }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: S.bg }}>
       {/* Under 768px: infopanelet blir en dropdown øverst (se PublicBoardInfoPanel),
           så raden må bli en kolonne med panelet først i stedet for til høyre. */}
       <style>{`

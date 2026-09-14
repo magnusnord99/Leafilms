@@ -216,6 +216,8 @@ export default function PostProdDetailPage() {
   const [projects, setProjects] = useState<PostProdProject[]>([])
   const [viewedProject, setViewedProject] = useState<PostProdProject | null>(null)
   const [unlocked, setUnlocked] = useState(false)
+  // Egendefinerte oppgaver starter kollapset — se feedback 214db97b/02003de2.
+  const [showCustomTasks, setShowCustomTasks] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -1153,9 +1155,11 @@ export default function PostProdDetailPage() {
             <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} readOnly={readOnly} />
 
             {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
-                prosjektoversikten (feedback 8578db28) */}
+                prosjektoversikten (feedback 8578db28). Starter kollapset her —
+                sammen med leveranser og egendefinerte oppgaver tok headeren for
+                mye plass fra selve steg-innholdet under (feedback 214db97b). */}
             <div style={{ marginTop: 10, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <ProjectDocuments projectId={projectId} />
+              <ProjectDocuments projectId={projectId} defaultCollapsed />
             </div>
           </div>
 
@@ -1268,32 +1272,49 @@ export default function PostProdDetailPage() {
             </div>
           )}
 
-          {/* Egendefinerte oppgaver — utenfor den låste stepperen. Header-blokken har ikke
-              egen sideskroll, så denne listen må skrolle internt når den blir lang — ellers
-              blir oppgaver utenfor synsfeltet helt utilgjengelige. */}
-          {!reseeding && (
-            <div style={{ padding: '14px 16px', borderTop: `1px solid ${C.border}`, maxHeight: '40vh', overflowY: 'auto' }}>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
-                Egendefinerte oppgaver
-              </span>
-              <TaskList
-                tasks={customTasks}
-                profiles={profiles}
-                onStatusChange={handleCustomTaskStatusChange}
-                currentUserId={currentUser?.id ?? null}
-                messageCounts={messageCounts}
-                deepLinkTaskId={deepLinkTaskId}
-                projectId={projectId}
-                pipelineStage="post_prod"
-                onTaskCreated={handleCustomTaskCreated}
-                onTaskDeleted={handleCustomTaskDeleted}
-                onAssigneesChange={handleCustomTaskAssigneesChange}
-                onDueDateChange={handleCustomTaskDueDateChange}
-                emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
-                readOnly={readOnly}
-              />
-            </div>
-          )}
+          {/* Egendefinerte oppgaver — utenfor den låste stepperen. Kollapset bak en
+              chevron som standard (feedback 214db97b/02003de2: sammen med filer og
+              leveranser tok denne for mye plass fra selve steg-innholdet under).
+              Auto-utvidet når en dyplenke peker på en av disse oppgavene, ellers
+              ville lenken vist en skjult chat. Listen skroller internt når den
+              blir lang — ellers blir oppgaver utenfor synsfeltet utilgjengelige. */}
+          {!reseeding && (() => {
+            const expanded = showCustomTasks || customTasks.some(t => t.id === deepLinkTaskId)
+            return (
+              <div style={{ borderTop: `1px solid ${C.border}` }}>
+                <button
+                  onClick={() => setShowCustomTasks(v => !v)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: expanded ? 'rotate(90deg)' : 'none', color: C.text3, fontSize: '0.7rem' }}>▸</span>
+                  <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Egendefinerte oppgaver{customTasks.length > 0 ? ` (${customTasks.length})` : ''}
+                  </span>
+                  <span style={{ fontSize: '0.9rem', color: C.text3, fontWeight: 600, lineHeight: 1 }}>{expanded ? '−' : '+'}</span>
+                </button>
+                {expanded && (
+                  <div style={{ padding: '0 16px 14px', maxHeight: '40vh', overflowY: 'auto' }}>
+                    <TaskList
+                      tasks={customTasks}
+                      profiles={profiles}
+                      onStatusChange={handleCustomTaskStatusChange}
+                      currentUserId={currentUser?.id ?? null}
+                      messageCounts={messageCounts}
+                      deepLinkTaskId={deepLinkTaskId}
+                      projectId={projectId}
+                      pipelineStage="post_prod"
+                      onTaskCreated={handleCustomTaskCreated}
+                      onTaskDeleted={handleCustomTaskDeleted}
+                      onAssigneesChange={handleCustomTaskAssigneesChange}
+                      onDueDateChange={handleCustomTaskDueDateChange}
+                      emptyLabel="Ingen egendefinerte oppgaver for dette prosjektet ennå."
+                      readOnly={readOnly}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Content */}

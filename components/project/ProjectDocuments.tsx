@@ -25,11 +25,17 @@ function formatFileSize(bytes: number | null): string {
 // 143_project_documents.sql. Selvstendig komponent (henter sin egen
 // dokumentliste) siden denne alltid vises for ett prosjekt om gangen,
 // i motsetning til kundesiden som batch-henter for flere prosjekter.
-export function ProjectDocuments({ projectId }: { projectId: string }) {
+//
+// defaultCollapsed: listen (ikke opplastingsknappen) starter skjult bak en
+// chevron — brukt på postprod-siden der filer + egendefinerte oppgaver +
+// info om levering til sammen tok for mye plass (feedback 214db97b).
+// Andre steder beholder default (false) uendret oppførsel.
+export function ProjectDocuments({ projectId, defaultCollapsed = false }: { projectId: string; defaultCollapsed?: boolean }) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   useEffect(() => {
     let cancelled = false
@@ -97,8 +103,16 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: documents.length > 0 ? 10 : 0 }}>
-        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>Filer</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: !collapsed && documents.length > 0 ? 10 : 0 }}>
+        <button
+          onClick={() => setCollapsed(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: collapsed ? 'none' : 'rotate(90deg)', color: C.text3, fontSize: '0.65rem' }}>▸</span>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3 }}>
+            Filer{documents.length > 0 ? ` (${documents.length})` : ''}
+          </span>
+        </button>
         <label
           htmlFor={inputId}
           style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.accent, background: 'none', border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 10px', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1 }}
@@ -122,12 +136,12 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
           Kunne ikke hente filer: {loadError}
         </p>
       )}
-      {!loading && !loadError && documents.length === 0 && (
+      {!collapsed && !loading && !loadError && documents.length === 0 && (
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
           Ingen filer lastet opp ennå.
         </p>
       )}
-      {documents.length > 0 && (
+      {!collapsed && documents.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {documents.map(doc => {
             const supabase = createClient()

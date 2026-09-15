@@ -63,6 +63,7 @@ export default function EmailPage() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [meetingLink, setMeetingLink] = useState('')
+  const [useLeafilmsAddress, setUseLeafilmsAddress] = useState(false)
   const [generatingDraft, setGeneratingDraft] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -129,7 +130,7 @@ export default function EmailPage() {
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, emailType, to: toEmail.trim(), subject: subject.trim(), body: body.trim(), meetingLink: meetingLink.trim() || undefined }),
+        body: JSON.stringify({ projectId, emailType, to: toEmail.trim(), subject: subject.trim(), body: body.trim(), meetingLink: meetingLink.trim() || undefined, useLeafilmsAddress }),
       })
       if (res.ok) {
         if (emailType === 'pitch' && hubData?.project.pipeline_stage === 'tilbud_sendt') {
@@ -248,6 +249,18 @@ export default function EmailPage() {
                 {generatingDraft ? 'Genererer...' : '↺ Generer nytt utkast'}
               </button>
             </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={useLeafilmsAddress}
+                onChange={e => setUseLeafilmsAddress(e.target.checked)}
+                style={{ accentColor: C.accent, width: 14, height: 14, cursor: 'pointer' }}
+              />
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                Send fra post@leafilms.no i stedet for min egen adresse
+              </span>
+            </label>
 
             {sendResult && (
               <div style={{ padding: '10px 14px', borderRadius: 8, background: sendResult.ok ? 'rgba(76,175,125,0.08)' : 'rgba(224,85,85,0.08)', border: `1px solid ${sendResult.ok ? 'rgba(76,175,125,0.25)' : 'rgba(224,85,85,0.25)'}` }}>

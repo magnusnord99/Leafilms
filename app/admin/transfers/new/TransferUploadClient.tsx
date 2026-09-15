@@ -162,6 +162,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
   const [usePassword, setUsePassword] = useState(false)
   const [password, setPassword] = useState('')
   const [sendEmail, setSendEmail] = useState(!!initialProject?.customer?.email)
+  const [useLeafilmsAddress, setUseLeafilmsAddress] = useState(false)
   const [language, setLanguage] = useState<'no' | 'en'>(initialProject?.language ?? 'no')
   const [copied, setCopied] = useState(false)
 
@@ -284,6 +285,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
               to: recipientEmail.trim(),
               subject,
               body: htmlBody,
+              useLeafilmsAddress,
             }),
           })
           emailSent = emailRes.ok
@@ -707,6 +709,19 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
               </p>
             </div>
           </label>
+          {sendEmail && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+              <input
+                type="checkbox"
+                checked={useLeafilmsAddress}
+                onChange={e => setUseLeafilmsAddress(e.target.checked)}
+                style={{ accentColor: C.accent, width: 14, height: 14, cursor: 'pointer' }}
+              />
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                Send fra post@leafilms.no i stedet for min egen adresse
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Utløpsdato */}

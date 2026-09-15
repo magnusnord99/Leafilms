@@ -9,10 +9,24 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Ikke autentisert' }, { status: 401 })
     }
 
-    const { projectId, emailType, to, subject, body, meetingLink } = await req.json()
+    const { projectId, emailType, to, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
 
     if (!to || !subject || !body) {
       return Response.json({ error: 'Manglende felt: to, subject, body' }, { status: 400 })
+    }
+
+    let fromAddress = 'Leafilms <post@leafilms.no>'
+
+    if (!useLeafilmsAddress) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.email) {
+        fromAddress = `${profile.name ?? 'Leafilms'} <${profile.email}>`
+      }
     }
 
     let resendMessageId: string | null = null
@@ -27,7 +41,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'Leafilms <post@leafilms.no>',
+          from: fromAddress,
           to: [to],
           subject,
           text: emailText,

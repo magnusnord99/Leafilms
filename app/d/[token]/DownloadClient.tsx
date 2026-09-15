@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { S } from '@/lib/client-theme'
 import { formatFileSize } from '@/lib/utils/file-size'
+import { recordDownload } from '@/lib/actions/transfers'
 
 type Props = {
   filename: string
@@ -91,17 +92,15 @@ export default function DownloadClient({
 
     setPhase('downloading')
 
-    // TODO: Kall server action for å hente presigned R2-URL og verifisere passord
-    // Simulerer en forsinkelse for prototypen
-    await new Promise(r => setTimeout(r, 1400))
+    const result = await recordDownload(token)
+    if ('error' in result) {
+      setPhase('error')
+      setErrorMsg(result.error)
+      return
+    }
 
-    // Prototype: simuler vellykket nedlasting
     setPhase('done')
-
-    // Ved ekte implementasjon:
-    // const result = await recordDownload(token, passwordInput)
-    // if ('error' in result) { setPhase('error'); setErrorMsg(result.error); return }
-    // window.location.href = result.downloadUrl
+    window.location.href = result.downloadUrl
   }
 
   return (

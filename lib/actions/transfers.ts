@@ -2,6 +2,22 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { randomBytes } from 'crypto'
+import { r2, R2_BUCKET } from '@/lib/r2'
+import {
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+
+// Under denne størrelsen (og for siste del av enhver opplasting) godtar R2/S3
+// hvilken som helst delstørrelse — 25 MB gir et jevnt antall presigned URLer
+// uten å bli unødvendig mange for de aller største filene.
+// (Ikke exportert: "use server"-filer kan kun eksportere async-funksjoner —
+// klienten får verdien via initiateUpload()'s returverdi i stedet.)
+const UPLOAD_PART_SIZE = 25 * 1024 * 1024
 
 export type ProjectForTransfer = {
   id: string
@@ -101,7 +117,7 @@ export type CreateTransferInput = {
   recipient_email?: string
   recipient_name?: string
   language?: 'no' | 'en'
-  // r2_key fylles inn etter opplasting — kan settes som placeholder
+  // Må være satt til en fullført R2-nøkkel fra completeUpload() før kall
   r2_key?: string
 }
 
@@ -162,7 +178,91 @@ export async function getTransferByToken(token: string): Promise<{
   return { transfer, link: link as TransferLink }
 }
 
-// Oppretter en ny leveranse (uten R2-integrasjon ennå — r2_key settes til placeholder)
+// Starter en multipart-opplasting til R2 og returnerer det som trengs for at
+// klienten skal kunne laste opp delene direkte (uten å gå via Next.js-serveren
+// — nødvendig for filer i GB/TB-klassen).
+export async function initiateUpload(input: { filename: string; contentType?: string }): Promise<
+  { key: string; uploadId: string; partSize: number } | { error: string }
+> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  const key = `transfers/${randomBytes(16).toString('hex')}/${input.filename}`
+
+  try {
+    const { UploadId } = await r2.send(new CreateMultipartUploadCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      ContentType: input.contentType || undefined,
+    }))
+    if (!UploadId) return { error: 'R2 returnerte ingen upload-ID' }
+    return { key, uploadId: UploadId, partSize: UPLOAD_PART_SIZE }
+  } catch (err) {
+    console.error('[initiateUpload]', err)
+    return { error: 'Kunne ikke starte opplasting til R2' }
+  }
+}
+
+// Genererer en presigned URL for én enkelt del av en multipart-opplasting.
+// Klienten PUT-er filbiten direkte til denne URL-en.
+export async function getUploadPartUrl(input: { key: string; uploadId: string; partNumber: number }): Promise<
+  { url: string } | { error: string }
+> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  try {
+    const url = await getSignedUrl(r2, new UploadPartCommand({
+      Bucket: R2_BUCKET,
+      Key: input.key,
+      UploadId: input.uploadId,
+      PartNumber: input.partNumber,
+    }), { expiresIn: 3600 })
+    return { url }
+  } catch (err) {
+    console.error('[getUploadPartUrl]', err)
+    return { error: 'Kunne ikke generere opplastings-URL' }
+  }
+}
+
+// Fullfører multipart-opplastingen etter at alle delene er PUT-et til R2.
+export async function completeUpload(input: {
+  key: string
+  uploadId: string
+  parts: { ETag: string; PartNumber: number }[]
+}): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  try {
+    await r2.send(new CompleteMultipartUploadCommand({
+      Bucket: R2_BUCKET,
+      Key: input.key,
+      UploadId: input.uploadId,
+      MultipartUpload: { Parts: input.parts },
+    }))
+    return { ok: true }
+  } catch (err) {
+    console.error('[completeUpload]', err)
+    return { error: 'Kunne ikke fullføre opplastingen' }
+  }
+}
+
+// Rydder opp i R2 hvis opplastingen avbrytes eller feiler underveis.
+export async function abortUpload(input: { key: string; uploadId: string }): Promise<void> {
+  try {
+    await r2.send(new AbortMultipartUploadCommand({ Bucket: R2_BUCKET, Key: input.key, UploadId: input.uploadId }))
+  } catch (err) {
+    console.error('[abortUpload]', err)
+  }
+}
+
+// Oppretter en ny leveranse. Kalles ETTER at filen allerede er ferdig lastet
+// opp til R2 (input.r2_key peker på et fullført objekt) — se initiateUpload/
+// completeUpload over.
 export async function createTransfer(input: CreateTransferInput): Promise<{
   transfer: Transfer
   link: TransferLink
@@ -172,7 +272,8 @@ export async function createTransfer(input: CreateTransferInput): Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Ikke autentisert' }
 
-  const r2Key = input.r2_key || `transfers/${randomBytes(16).toString('hex')}/${input.filename}`
+  if (!input.r2_key) return { error: 'Mangler r2_key — filen må lastes opp før leveransen opprettes' }
+  const r2Key = input.r2_key
 
   const expiresAt = input.expires_in_days
     ? new Date(Date.now() + input.expires_in_days * 24 * 60 * 60 * 1000).toISOString()
@@ -224,7 +325,7 @@ export async function createTransfer(input: CreateTransferInput): Promise<{
   return { transfer: transfer as Transfer, link: link as TransferLink, downloadUrl }
 }
 
-// Registrerer en nedlasting og returnerer presigned URL (stub — R2 ikke koblet til ennå)
+// Registrerer en nedlasting og returnerer en presigned R2-URL gyldig i 1 time
 export async function recordDownload(token: string): Promise<{
   downloadUrl: string
   filename: string
@@ -239,15 +340,17 @@ export async function recordDownload(token: string): Promise<{
     .update({ download_count: result.transfer.download_count + 1 })
     .eq('id', result.transfer.id)
 
-  // TODO: Generer presigned R2 download-URL her
-  // const url = await getSignedUrl(r2Client, new GetObjectCommand({
-  //   Bucket: process.env.R2_BUCKET_NAME,
-  //   Key: result.transfer.r2_key,
-  // }), { expiresIn: 3600 })
+  try {
+    const downloadUrl = await getSignedUrl(r2, new GetObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: result.transfer.r2_key,
+      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(result.transfer.filename)}"`,
+    }), { expiresIn: 3600 })
 
-  return {
-    downloadUrl: '#', // erstattes med ekte R2 presigned URL
-    filename: result.transfer.filename,
+    return { downloadUrl, filename: result.transfer.filename }
+  } catch (err) {
+    console.error('[recordDownload]', err)
+    return { error: 'Kunne ikke generere nedlastingslenke' }
   }
 }
 

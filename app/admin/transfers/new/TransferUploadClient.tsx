@@ -2,9 +2,59 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTransfer } from '@/lib/actions/transfers'
+import { createTransfer, initiateUpload, getUploadPartUrl, completeUpload, abortUpload } from '@/lib/actions/transfers'
 import { formatFileSize } from '@/lib/utils/file-size'
 import type { ProjectForTransfer } from '@/lib/actions/transfers'
+
+// Laster filen opp til R2 som en multipart-opplasting, rett fra nettleseren
+// (filbitene går aldri innom Next.js-serveren — nødvendig for filer i
+// GB/TB-klassen). Et lite antall deler lastes opp parallelt for å unngå at
+// veldig store filer tar evigheter som ren sekvensiell opplasting.
+async function uploadFileToR2(
+  file: File,
+  key: string,
+  uploadId: string,
+  partSize: number,
+  onProgress: (pct: number) => void
+): Promise<{ ETag: string; PartNumber: number }[]> {
+  const totalParts = Math.max(1, Math.ceil(file.size / partSize))
+  const parts: { ETag: string; PartNumber: number }[] = new Array(totalParts)
+  const uploadedPerPart = new Array(totalParts).fill(0)
+  const CONCURRENCY = 4
+  let nextIndex = 0
+
+  const reportProgress = () => {
+    const uploaded = uploadedPerPart.reduce((a, b) => a + b, 0)
+    onProgress(Math.min(99, (uploaded / file.size) * 100))
+  }
+
+  const worker = async () => {
+    while (nextIndex < totalParts) {
+      const i = nextIndex++
+      const partNumber = i + 1
+      const start = i * partSize
+      const end = Math.min(start + partSize, file.size)
+      const blob = file.slice(start, end)
+
+      const urlResult = await getUploadPartUrl({ key, uploadId, partNumber })
+      if ('error' in urlResult) throw new Error(urlResult.error)
+
+      const res = await fetch(urlResult.url, { method: 'PUT', body: blob })
+      if (!res.ok) throw new Error(`Opplasting av del ${partNumber} feilet (${res.status})`)
+      const etag = res.headers.get('ETag')
+      if (!etag) {
+        throw new Error('Mangler ETag i svaret fra R2 — CORS-policyen på bucketen må inkludere "ExposeHeaders": ["ETag"]')
+      }
+
+      parts[i] = { ETag: etag, PartNumber: partNumber }
+      uploadedPerPart[i] = end - start
+      reportProgress()
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, totalParts) }, worker))
+  return parts
+}
 
 const C = {
   bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
@@ -220,18 +270,35 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
 
     setState({ phase: 'uploading', file, progress: 0 })
 
-    // Simuler progress (erstattes med ekte R2 multipart-upload)
-    let prog = 0
-    const interval = setInterval(() => {
-      prog = Math.min(prog + Math.random() * 12, 88)
-      setState({ phase: 'uploading', file, progress: prog })
-    }, 180)
+    let uploadKey: string | undefined
+    let uploadId: string | undefined
 
     try {
+      const initResult = await initiateUpload({ filename: file.name, contentType: file.type || undefined })
+      if ('error' in initResult) {
+        setState({ phase: 'error', message: initResult.error })
+        return
+      }
+      uploadKey = initResult.key
+      uploadId = initResult.uploadId
+
+      const parts = await uploadFileToR2(file, initResult.key, initResult.uploadId, initResult.partSize, (pct) => {
+        setState({ phase: 'uploading', file, progress: pct })
+      })
+
+      const completeResult = await completeUpload({ key: initResult.key, uploadId: initResult.uploadId, parts })
+      if ('error' in completeResult) {
+        setState({ phase: 'error', message: completeResult.error })
+        return
+      }
+
+      setState({ phase: 'uploading', file, progress: 100 })
+
       const result = await createTransfer({
         filename: file.name,
         filesize_bytes: file.size,
         content_type: file.type || undefined,
+        r2_key: initResult.key,
         message: message || undefined,
         expires_in_days: expiry === 'never' ? undefined : parseInt(expiry),
         recipient_email: recipientEmail || undefined,
@@ -244,15 +311,10 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
         language,
       })
 
-      clearInterval(interval)
-
       if ('error' in result) {
         setState({ phase: 'error', message: result.error })
         return
       }
-
-      setState({ phase: 'uploading', file, progress: 100 })
-      await new Promise(r => setTimeout(r, 400))
 
       // Send e-post hvis aktivert og vi har e-postadresse
       let emailSent = false
@@ -296,8 +358,8 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
 
       setState({ phase: 'done', downloadUrl: result.downloadUrl, filename: file.name, emailSent })
     } catch (err) {
-      clearInterval(interval)
-      setState({ phase: 'error', message: String(err) })
+      if (uploadKey && uploadId) abortUpload({ key: uploadKey, uploadId }).catch(() => {})
+      setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
     }
   }
 

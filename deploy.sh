@@ -74,7 +74,7 @@ print(match.group(1) if match else '')
     --max-instances 10
 else
   # Ny service - trenger environment variables
-  if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$OPENAI_API_KEY" ] || [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$QUOTE_API_URL" ] || [ -z "$QUOTE_API_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+  if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$OPENAI_API_KEY" ] || [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$QUOTE_API_URL" ] || [ -z "$QUOTE_API_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET_NAME" ]; then
     echo "❌ Error: Environment variables not set!"
     echo ""
     echo "Please set the following environment variables:"
@@ -85,6 +85,10 @@ else
     echo "  - QUOTE_API_URL"
     echo "  - QUOTE_API_TOKEN"
     echo "  - SUPABASE_SERVICE_ROLE_KEY"
+    echo "  - R2_ACCOUNT_ID"
+    echo "  - R2_ACCESS_KEY_ID"
+    echo "  - R2_SECRET_ACCESS_KEY"
+    echo "  - R2_BUCKET_NAME"
     exit 1
   fi
 
@@ -94,7 +98,7 @@ else
     --region europe-north1 \
     --platform managed \
     --allow-unauthenticated \
-    --set-env-vars="NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY,OPENAI_API_KEY=$OPENAI_API_KEY,ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY,QUOTE_API_URL=$QUOTE_API_URL,QUOTE_API_TOKEN=$QUOTE_API_TOKEN,SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+    --set-env-vars="NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY,OPENAI_API_KEY=$OPENAI_API_KEY,ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY,QUOTE_API_URL=$QUOTE_API_URL,QUOTE_API_TOKEN=$QUOTE_API_TOKEN,SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY,R2_ACCOUNT_ID=$R2_ACCOUNT_ID,R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME=$R2_BUCKET_NAME" \
     --memory 1Gi \
     --cpu 1 \
     --timeout 300 \

@@ -148,6 +148,8 @@ function TaskRow({ item, onToggle }: {
       display: 'flex',
       alignItems: 'center',
       gap: 12,
+      rowGap: 4,
+      flexWrap: 'wrap',
       padding: '10px 16px',
       borderBottom: `1px solid ${C.border}`,
       background: C.surface,
@@ -204,6 +206,7 @@ function TaskRow({ item, onToggle }: {
             color: isDone || locked ? C.text3 : C.text,
             textDecoration: isDone ? 'line-through' : 'none',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            minWidth: 0,
           }}>
             {item.title}
           </span>

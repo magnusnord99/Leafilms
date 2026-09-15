@@ -86,12 +86,16 @@ export function FeedbackButton() {
 
   return (
     <>
-      {/* Floating trigger */}
+      {/* Floating trigger — løftet høyere på mobil (bottom-20 = 80px) enn på
+          desktop (sm:bottom-5 = 20px), siden send-knappen i f.eks. meldinger
+          ofte havner nede i høyre hjørne når sidepanelet kollapser på smale
+          skjermer og ellers ville kollidert med denne (feedback 2397c172). */}
       <button
         onClick={() => setOpen(true)}
         title="Meld inn feil eller ønske"
+        className="fixed right-5 bottom-20 sm:bottom-5"
         style={{
-          position: 'fixed', bottom: 20, right: 20, zIndex: 90,
+          zIndex: 90,
           width: 40, height: 40, borderRadius: '50%', border: 'none',
           background: C.surface, boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
           color: C.text3, fontSize: '1.1rem', cursor: 'pointer',

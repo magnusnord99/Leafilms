@@ -22,6 +22,10 @@ type Props = {
   currentUser: { id: string; name: string | null; email: string; color: string | null }
   initialMembers: ConversationParticipant[]
   allProfiles: ConversationParticipant[]
+  // Gjenbrukt for lead-chatten (app/admin/leads/[id]/page.tsx) — samme
+  // komponent, kun tittel/placeholder skiller seg fra produksjonschatten.
+  title?: string
+  placeholder?: string
 }
 
 function displayName(p: { name: string | null; email: string }) {
@@ -43,7 +47,10 @@ function Avatar({ p, size = 26 }: { p: ConversationParticipant; size?: number })
   )
 }
 
-export function ProductionChat({ conversationId, currentUser, initialMembers, allProfiles }: Props) {
+export function ProductionChat({
+  conversationId, currentUser, initialMembers, allProfiles,
+  title = 'Produksjonschat', placeholder = 'Skriv en melding til produksjonsteamet...',
+}: Props) {
   const [members, setMembers] = useState<ConversationParticipant[]>(initialMembers)
   const [messages, setMessages] = useState<ConversationMessage[]>([])
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
@@ -179,7 +186,7 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
       {/* Medlemmer */}
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>
-          Produksjonschat
+          {title}
         </p>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {members.map((m) => (
@@ -310,7 +317,7 @@ export function ProductionChat({ conversationId, currentUser, initialMembers, al
             }
           }}
           rows={1}
-          placeholder="Skriv en melding til produksjonsteamet..."
+          placeholder={placeholder}
           disabled={sending}
           style={{
             flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2,

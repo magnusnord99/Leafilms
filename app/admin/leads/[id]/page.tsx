@@ -6,6 +6,10 @@ import Link from 'next/link'
 import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { getOrCreateLeadConversation } from '@/lib/actions/lead-chat'
+import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
+import type { ConversationParticipant } from '@/lib/actions/messages'
+import { ProductionChat } from '@/components/production/ProductionChat'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
 // som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
@@ -93,6 +97,10 @@ export default function LeadDetailPage() {
 
   const [lead, setLead] = useState<LeadRecord | null>(null)
   const [loading, setLoading] = useState(true)
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null)
+  const [chatMembers, setChatMembers] = useState<ConversationParticipant[]>([])
+  const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
+  const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
   const [notes, setNotes] = useState('')
   const [notesSaving, setNotesSaving] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
@@ -113,6 +121,21 @@ export default function LeadDetailPage() {
       setLead(data)
       setNotes(notesToHtml(data?.notes ?? ''))
       setLoading(false)
+    })
+  }, [leadId])
+
+  useEffect(() => {
+    Promise.all([
+      getOrCreateLeadConversation(leadId),
+      getCurrentUserProfile(),
+      getAllProfiles(),
+    ]).then(([chat, user, profiles]) => {
+      if (chat) {
+        setChatConversationId(chat.conversationId)
+        setChatMembers(chat.members)
+      }
+      setChatCurrentUser(user)
+      setChatAllProfiles(profiles)
     })
   }, [leadId])
 
@@ -568,6 +591,21 @@ export default function LeadDetailPage() {
 
           {/* Right column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Lead-chat — internt team-chat om denne leaden, samme komponent
+                som produksjonschatten (feedback 1e30296b) */}
+            {chatConversationId && chatCurrentUser && (
+              <div style={{ height: 420 }}>
+                <ProductionChat
+                  conversationId={chatConversationId}
+                  currentUser={chatCurrentUser}
+                  initialMembers={chatMembers}
+                  allProfiles={chatAllProfiles.filter(p => p.id !== chatCurrentUser.id)}
+                  title="Lead-chat"
+                  placeholder="Skriv en melding om denne leaden..."
+                />
+              </div>
+            )}
 
             {/* Oppgaver + ansvarlig */}
             {lead.converted_to_project_id && (

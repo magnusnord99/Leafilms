@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     let fromAddress = 'Leafilms <post@leafilms.no>'
 
     if (!useLeafilmsAddress) {
+      const supabase = await createClient()
       const { data: profile } = await supabase
         .from('profiles')
         .select('name, email')

@@ -15,7 +15,7 @@ export function MeldingerBadge() {
       .from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('type', 'direct_message')
+      .in('type', ['direct_message', 'conversation_message_mention'])
       .eq('read', false)
     setUnread(count ?? 0)
   }
@@ -33,7 +33,10 @@ export function MeldingerBadge() {
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-          (payload) => { if ((payload.new as { type: string }).type === 'direct_message') setUnread((n) => n + 1) }
+          (payload) => {
+            const type = (payload.new as { type: string }).type
+            if (type === 'direct_message' || type === 'conversation_message_mention') setUnread((n) => n + 1)
+          }
         )
         .on(
           'postgres_changes',

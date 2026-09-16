@@ -6,6 +6,8 @@ import { markConversationRead, type ConversationParticipant } from '@/lib/action
 import { addConversationMember, removeConversationMember } from '@/lib/actions/production-chat'
 import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import { MessageReactions } from '@/components/shared/MessageReactions'
+import { MentionTextInput } from '@/components/shared/MentionTextInput'
+import { extractMentionIds, splitMentionSegments } from '@/lib/mentions'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { C } from '@/lib/admin-theme'
 
@@ -15,6 +17,7 @@ type ConversationMessage = {
   sender_id: string
   content: string
   created_at: string
+  mentions: string[]
 }
 
 type Props = {
@@ -139,11 +142,12 @@ export function ProductionChat({
     if (!input.trim() || sending) return
     setSending(true)
     const content = input.trim()
+    const mentions = extractMentionIds(content, members)
     try {
       const res = await fetch(`/api/messages/${conversationId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, mentions }),
       })
       if (res.ok) {
         const { message } = await res.json()
@@ -289,7 +293,11 @@ export function ProductionChat({
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: own ? '#fff' : C.text,
                   lineHeight: 1.5, margin: 0, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
                 }}>
-                  {msg.content}
+                  {splitMentionSegments(msg.content, msg.mentions ?? [], members).map((seg, i) =>
+                    seg.isMention
+                      ? <span key={i} style={{ fontWeight: 700, color: own ? '#fff' : C.accent }}>{seg.text}</span>
+                      : <span key={i}>{seg.text}</span>
+                  )}
                 </p>
               </div>
               <MessageReactions
@@ -307,15 +315,12 @@ export function ProductionChat({
         onSubmit={(e) => { e.preventDefault(); sendMessage() }}
         style={{ flexShrink: 0, padding: '12px 18px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8, alignItems: 'flex-end' }}
       >
-        <textarea
+        <MentionTextInput
+          as="textarea"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              sendMessage()
-            }
-          }}
+          onChange={setInput}
+          onEnter={sendMessage}
+          profiles={members}
           rows={1}
           placeholder={placeholder}
           disabled={sending}

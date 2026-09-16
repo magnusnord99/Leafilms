@@ -68,10 +68,11 @@ export async function POST(
       return Response.json({ error: 'Ikke tilgang til denne samtalen' }, { status: 403 })
     }
 
-    const { content } = await req.json()
+    const { content, mentions } = await req.json()
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return Response.json({ error: 'Melding kan ikke være tom' }, { status: 400 })
     }
+    const mentionIds = Array.isArray(mentions) ? mentions.filter((m) => typeof m === 'string') : []
 
     const serviceClient = createServiceClient()
     const { data, error } = await serviceClient
@@ -80,6 +81,7 @@ export async function POST(
         conversation_id: conversationId,
         sender_id: user.id,
         content: content.trim(),
+        mentions: mentionIds,
       })
       .select()
       .single()

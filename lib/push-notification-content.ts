@@ -42,6 +42,7 @@ const PHRASE: Record<string, string> = {
   feedback_reply: 'svarte på tilbakemeldingen din',
   contract_signed: 'signerte kontrakten',
   direct_message: 'sendte deg en direktemelding',
+  conversation_message_mention: 'nevnte deg i en melding',
   conversation_message_reaction: 'reagerte på meldingen din',
   meeting_invite: 'inviterte deg til et møte',
   meeting_response: 'svarte på møteinvitasjonen din',
@@ -62,6 +63,7 @@ function pushUrlFor(n: PushNotificationRow, taskPipelineStage: string | null): s
     case 'task_turn_ready':
       return `/admin/postprod/${n.project_id}?task=${n.task_id}`
     case 'direct_message':
+    case 'conversation_message_mention':
     case 'conversation_message_reaction':
       return '/admin/meldinger'
     case 'meeting_invite':

@@ -51,6 +51,7 @@ function channelFor(n: Notification): Channel | null {
     case 'preprod_message_reaction':
       return 'preprod'
     case 'direct_message':
+    case 'conversation_message_mention':
     case 'conversation_message_reaction':
       return 'direct'
     default:
@@ -168,7 +169,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/projects/${n.project_id}`)
     } else if (n.type === 'task_turn_ready') {
       router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}`)
-    } else if (n.type === 'direct_message' || n.type === 'conversation_message_reaction') {
+    } else if (n.type === 'direct_message' || n.type === 'conversation_message_mention' || n.type === 'conversation_message_reaction') {
       router.push('/admin/meldinger')
     } else if (n.type === 'meeting_invite' || n.type === 'meeting_response') {
       router.push('/admin/calendar')
@@ -464,7 +465,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
-                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' || n.type === 'board_comment_mention' || n.type === 'preprod_mention' ? (
+                      ) : n.type === 'project_message_mention' || n.type === 'task_message_mention' || n.type === 'quote_mention' || n.type === 'board_comment_mention' || n.type === 'preprod_mention' || n.type === 'conversation_message_mention' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="4" />
                           <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5" />
@@ -511,6 +512,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'feedback_reply' ? 'svarte på tilbakemeldingen din'
                             : n.type === 'contract_signed' ? 'signerte kontrakten'
                             : n.type === 'direct_message' ? 'sendte deg en direktemelding'
+                            : n.type === 'conversation_message_mention' ? 'nevnte deg i en melding'
                             : n.type === 'meeting_invite' ? 'inviterte deg til et møte'
                             : n.type === 'meeting_response' ? 'svarte på møteinvitasjonen din'
                             : n.type === 'project_message_reaction' ? 'reagerte på meldingen din i prosjekt-chatten'

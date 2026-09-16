@@ -62,7 +62,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` },
         (payload) => {
           const row = payload.new as { type: string }
-          if (row.type === 'direct_message') refreshConversations()
+          if (row.type === 'direct_message' || row.type === 'conversation_message_mention') refreshConversations()
         }
       )
       .subscribe()

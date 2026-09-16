@@ -41,6 +41,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/151_email_discussion_chat.sql` (legger til email_discussion_project_id på conversations — e-postdiskusjon-chatten på e-post-siden i pipeline feiler stille inntil denne er kjørt, se feedback e9431fb7)
 - `supabase/migrations/152_harden_profile_role.sql` (nye auth-brukere får role=customer i stedet for admin (var 'admin' som DEFAULT!); trigger blokkerer ikke-admin fra å PATCH-e sin egen role — hastet fra en cursor-bugbot-branch fra august som aldri ble merget, opprinnelig nummerert 143 men det var tatt av project_documents da den ble gjenopplivet 2026-09-16)
 - `supabase/migrations/153_harden_tasks_rls.sql` (staff-only RLS på tasks/task_templates/task_assignees — customer JWT kan slette hele produksjonspipelinen inntil den er kjørt. Samme august-bugbot-batch som 152, opprinnelig nummerert 144)
+- `supabase/migrations/154_harden_leads_rls.sql` (staff-only RLS på leads/email_log — customer JWT kan lese/slette hele CRM-en og e-postarkivet inntil den er kjørt. Samme batch, opprinnelig nummerert 145)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).

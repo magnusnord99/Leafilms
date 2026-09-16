@@ -3,8 +3,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTransfer, initiateUpload, getUploadPartUrl, completeUpload, abortUpload } from '@/lib/actions/transfers'
+import { createClient } from '@/lib/supabase-client'
 import { formatFileSize } from '@/lib/utils/file-size'
 import type { ProjectForTransfer } from '@/lib/actions/transfers'
+import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
+import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
+import type { ConversationParticipant } from '@/lib/actions/messages'
+import { ProductionChat } from '@/components/production/ProductionChat'
 
 // Laster filen opp til R2 som en multipart-opplasting, rett fra nettleseren
 // (filbitene går aldri innom Next.js-serveren — nødvendig for filer i
@@ -215,6 +220,12 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
   const [useLeafilmsAddress, setUseLeafilmsAddress] = useState(false)
   const [language, setLanguage] = useState<'no' | 'en'>(initialProject?.language ?? 'no')
   const [copied, setCopied] = useState(false)
+  const [backgroundImage, setBackgroundImage] = useState<File | null>(null)
+  const [backgroundImagePreview, setBackgroundImagePreview] = useState<string | null>(null)
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null)
+  const [chatMembers, setChatMembers] = useState<ConversationParticipant[]>([])
+  const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
+  const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
 
   // Bytt språk — regenerer standardmeldingen kun hvis den ikke er redigert manuelt
   const switchLanguage = (next: 'no' | 'en') => {
@@ -238,6 +249,23 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
     }
   }, [initialProject?.id])
 
+  // E-postdiskusjon — kun når et prosjekt er valgt (feedback e9431fb7).
+  useEffect(() => {
+    if (!initialProject?.id) return
+    Promise.all([
+      getOrCreateEmailDiscussionConversation(initialProject.id),
+      getCurrentUserProfile(),
+      getAllProfiles(),
+    ]).then(([chat, user, profiles]) => {
+      if (chat) {
+        setChatConversationId(chat.conversationId)
+        setChatMembers(chat.members)
+      }
+      setChatCurrentUser(user)
+      setChatAllProfiles(profiles)
+    })
+  }, [initialProject?.id])
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
@@ -257,6 +285,24 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) setState({ phase: 'selected', file })
+  }
+
+  const onBackgroundImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBackgroundImage(file)
+    setBackgroundImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+  }
+
+  const removeBackgroundImage = () => {
+    setBackgroundImage(null)
+    setBackgroundImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
   }
 
   const removeFile = () => {
@@ -294,6 +340,21 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
 
       setState({ phase: 'uploading', file, progress: 100 })
 
+      // Bakgrunnsbildet er dekorativt (ikke selve leveransefilen), så det går til det
+      // eksisterende offentlige "assets"-bucketet i stedet for R2 — enklere enn presigned
+      // URL-er, og trenger ingen utløp/tilgangskontroll utover selve /d/[token]-lenken.
+      let backgroundImagePath: string | undefined
+      if (backgroundImage) {
+        const supabase = createClient()
+        const path = `transfer-backgrounds/${initResult.key.split('/')[1]}/${Date.now()}-${backgroundImage.name}`
+        const { error: bgError } = await supabase.storage.from('assets').upload(path, backgroundImage)
+        if (bgError) {
+          setState({ phase: 'error', message: 'Kunne ikke laste opp bakgrunnsbildet: ' + bgError.message })
+          return
+        }
+        backgroundImagePath = path
+      }
+
       const result = await createTransfer({
         filename: file.name,
         filesize_bytes: file.size,
@@ -309,6 +370,8 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
             : `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Leveranse'} — ${initialProject.title}`
           : undefined,
         language,
+        customer_id: initialProject?.customer?.id,
+        background_image_path: backgroundImagePath,
       })
 
       if ('error' in result) {
@@ -652,7 +715,8 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
         )}
       </div>
 
-      {/* Høyre: Skjema */}
+      {/* Høyre: Skjema + e-postdiskusjon */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`,
         borderRadius: 14, padding: '24px',
@@ -803,6 +867,58 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
           </select>
         </div>
 
+        {/* Bakgrunnsbilde på nedlastingssiden */}
+        <div>
+          <label style={labelStyle}>
+            Bakgrunnsbilde{' '}
+            <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(valgfritt)</span>
+          </label>
+          {backgroundImagePreview ? (
+            <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+              <img src={backgroundImagePreview} alt="Bakgrunnsbilde" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+              <button
+                onClick={removeBackgroundImage}
+                style={{
+                  position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', border: 'none',
+                  borderRadius: 5, color: '#fff', fontSize: '0.68rem', padding: '3px 8px', cursor: 'pointer',
+                }}
+              >
+                Fjern
+              </button>
+            </div>
+          ) : (
+            <label
+              htmlFor="background-image-upload"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `1px dashed ${C.border}`, borderRadius: 8, padding: '14px', cursor: 'pointer',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3,
+              }}
+            >
+              + Last opp bakgrunnsbilde til nedlastingssiden
+            </label>
+          )}
+          <input
+            id="background-image-upload"
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={onBackgroundImageChange}
+          />
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '6px 0 0' }}>
+            Vises som bakgrunn på siden kunden lander på — f.eks. et av bildene fra leveransen. Uten dette brukes standard mørk bakgrunn.
+          </p>
+        </div>
+
+        {/* Kundelogo — info, faktisk verdi kommer fra kundekortet (Kunder → logo) */}
+        {initialProject?.customer?.logo_path && (
+          <div style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '10px 14px' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, margin: 0 }}>
+              ✓ {initialProject.customer.name} sin lagrede logo vises automatisk på nedlastingssiden.
+            </p>
+          </div>
+        )}
+
         {/* Passord-toggle */}
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: usePassword ? 8 : 0 }}>
@@ -862,6 +978,22 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
             Velg en fil for å fortsette
           </p>
         )}
+      </div>
+
+      {/* E-postdiskusjon — internt team-chat om denne leveransen/prosjektet,
+          samme komponent som lead-chat og produksjonschatten (feedback e9431fb7) */}
+      {chatConversationId && chatCurrentUser && (
+        <div style={{ height: 420 }}>
+          <ProductionChat
+            conversationId={chatConversationId}
+            currentUser={chatCurrentUser}
+            initialMembers={chatMembers}
+            allProfiles={chatAllProfiles.filter(p => p.id !== chatCurrentUser.id)}
+            title="E-postdiskusjon"
+            placeholder="Diskuter e-posten som skal sendes..."
+          />
+        </div>
+      )}
       </div>
     </div>
   )

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { C } from '@/lib/admin-theme'
-import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData, ProjectDocument } from '@/lib/types'
+import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData, ProjectDocument, CustomerLogoFile } from '@/lib/types'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
@@ -123,6 +123,9 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [contacts, setContacts] = useState<CustomerContact[]>([])
   const [projects, setProjects] = useState<ProjectWithDetails[]>([])
+  const [logoFiles, setLogoFiles] = useState<CustomerLogoFile[]>([])
+  const [uploadingMainLogo, setUploadingMainLogo] = useState(false)
+  const [uploadingLogoFile, setUploadingLogoFile] = useState(false)
 
   const [invoiceEdit, setInvoiceEdit] = useState(false)
   const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ company: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
@@ -131,9 +134,14 @@ export default function CustomerDetailPage() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [{ data: customerData, error: customerError }, contactsData] = await Promise.all([
+    const [{ data: customerData, error: customerError }, contactsData, { data: logoFilesData }] = await Promise.all([
       supabase.from('customers').select('*').eq('id', customerId).single(),
       getCustomerContacts(customerId),
+      supabase
+        .from('customer_logo_files')
+        .select('id, customer_id, uploaded_by, file_name, file_path, file_type, file_size, created_at')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false }),
     ])
 
     if (customerError) {
@@ -144,6 +152,7 @@ export default function CustomerDetailPage() {
 
     setCustomer(customerData as Customer)
     setContacts(contactsData)
+    setLogoFiles((logoFilesData ?? []) as CustomerLogoFile[])
 
     const { data: projectsData, error: projectsError } = await supabase
       .from('projects')
@@ -257,6 +266,86 @@ export default function CustomerDetailPage() {
     setProjects(prev => prev.map(p =>
       p.id === projectId ? { ...p, documents: p.documents.filter(d => d.id !== doc.id) } : p
     ))
+  }
+
+  async function handleUploadMainLogo(file: File) {
+    if (!customer) return
+    setUploadingMainLogo(true)
+    const supabase = createClient()
+    const path = `customer-logos/${customer.id}/main-${Date.now()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
+    if (uploadError) {
+      alert('Kunne ikke laste opp logoen: ' + uploadError.message)
+      setUploadingMainLogo(false)
+      return
+    }
+    const oldPath = customer.logo_path
+    const { error: updateError } = await supabase.from('customers').update({ logo_path: path }).eq('id', customer.id)
+    setUploadingMainLogo(false)
+    if (updateError) {
+      alert('Logoen ble lastet opp, men kunne ikke lagres på kunden. Prøv igjen.')
+      return
+    }
+    if (oldPath) await supabase.storage.from('assets').remove([oldPath])
+    setCustomer(prev => prev ? { ...prev, logo_path: path } : prev)
+  }
+
+  async function handleRemoveMainLogo() {
+    if (!customer?.logo_path) return
+    if (!confirm('Fjerne hovedlogoen?')) return
+    const supabase = createClient()
+    const path = customer.logo_path
+    const { error } = await supabase.from('customers').update({ logo_path: null }).eq('id', customer.id)
+    if (error) {
+      alert('Kunne ikke fjerne logoen. Prøv igjen.')
+      return
+    }
+    await supabase.storage.from('assets').remove([path])
+    setCustomer(prev => prev ? { ...prev, logo_path: null } : prev)
+  }
+
+  async function handleUploadLogoFile(file: File) {
+    if (!customer) return
+    setUploadingLogoFile(true)
+    const supabase = createClient()
+    const path = `customer-logos/${customer.id}/pack/${Date.now()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
+    if (uploadError) {
+      alert('Kunne ikke laste opp filen: ' + uploadError.message)
+      setUploadingLogoFile(false)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: inserted, error: insertError } = await supabase
+      .from('customer_logo_files')
+      .insert({
+        customer_id: customer.id,
+        uploaded_by: user?.id ?? null,
+        file_name: file.name,
+        file_path: path,
+        file_type: file.type || null,
+        file_size: file.size,
+      })
+      .select()
+      .single()
+    setUploadingLogoFile(false)
+    if (insertError || !inserted) {
+      alert('Filen ble lastet opp, men kunne ikke lagres. Prøv igjen.')
+      return
+    }
+    setLogoFiles(prev => [inserted as CustomerLogoFile, ...prev])
+  }
+
+  async function handleDeleteLogoFile(file: CustomerLogoFile) {
+    if (!confirm(`Slette «${file.file_name}»?`)) return
+    const supabase = createClient()
+    await supabase.storage.from('assets').remove([file.file_path])
+    const { error } = await supabase.from('customer_logo_files').delete().eq('id', file.id)
+    if (error) {
+      alert('Kunne ikke slette filen. Prøv igjen.')
+      return
+    }
+    setLogoFiles(prev => prev.filter(f => f.id !== file.id))
   }
 
   async function handleDeleteProject(project: ProjectWithDetails) {
@@ -469,6 +558,132 @@ export default function CustomerDetailPage() {
                 Ingen kontaktpersoner lagt til ennå.
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Logo — hovedlogo brukes automatisk på leveransesider (og senere pitcher), logo-pakken
+            er flere filvarianter brukt ved redigering/compositing. Samme opplastingsmønster som
+            prosjekt-dokumenter (assets-bucket + egen metadata-tabell), se 149_customer_logos.sql. */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 22px', marginBottom: 24 }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
+            Logo
+          </p>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            {/* Hovedlogo */}
+            <div style={{ flex: '1 1 240px', minWidth: 220 }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2, marginBottom: 8 }}>
+                Hovedlogo <span style={{ fontWeight: 400, color: C.text3 }}>— brukes på leveransesider</span>
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 8, flexShrink: 0,
+                  background: C.surface2, border: `1px solid ${C.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                }}>
+                  {customer.logo_path ? (
+                    <img
+                      src={createClient().storage.from('assets').getPublicUrl(customer.logo_path).data.publicUrl}
+                      alt="Hovedlogo"
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '1.2rem', color: C.text3 }}>—</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label
+                    htmlFor="main-logo-upload"
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingMainLogo ? 'default' : 'pointer', opacity: uploadingMainLogo ? 0.6 : 1 }}
+                  >
+                    {uploadingMainLogo ? 'Laster opp...' : customer.logo_path ? 'Bytt logo' : '+ Last opp logo'}
+                  </label>
+                  <input
+                    id="main-logo-upload"
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingMainLogo}
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleUploadMainLogo(file)
+                      e.target.value = ''
+                    }}
+                  />
+                  {customer.logo_path && (
+                    <button
+                      onClick={handleRemoveMainLogo}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.danger, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      Fjern
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Logo-pakke */}
+            <div style={{ flex: '2 1 320px', minWidth: 280 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2 }}>
+                  Logo-pakke <span style={{ fontWeight: 400, color: C.text3 }}>— brukes ved redigering</span>
+                </p>
+                <label
+                  htmlFor="logo-pack-upload"
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingLogoFile ? 'default' : 'pointer', opacity: uploadingLogoFile ? 0.6 : 1 }}
+                >
+                  {uploadingLogoFile ? 'Laster opp...' : '+ Last opp'}
+                </label>
+                <input
+                  id="logo-pack-upload"
+                  type="file"
+                  disabled={uploadingLogoFile}
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleUploadLogoFile(file)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+              {logoFiles.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {logoFiles.map((file) => {
+                    const supabase = createClient()
+                    const fileUrl = supabase.storage.from('assets').getPublicUrl(file.file_path).data.publicUrl
+                    return (
+                      <div
+                        key={file.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                      >
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text, textDecoration: 'underline', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                          {file.file_name}
+                        </a>
+                        {file.file_size != null && (
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>
+                            {formatFileSize(file.file_size)}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleDeleteLogoFile(file)}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500, padding: '4px 10px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                        >
+                          Slett
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, fontStyle: 'italic' }}>
+                  Ingen filer lastet opp ennå.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

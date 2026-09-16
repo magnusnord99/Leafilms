@@ -24,9 +24,11 @@ export type ProjectForTransfer = {
   title: string
   language: 'no' | 'en'
   customer: {
+    id: string
     name: string
     company: string | null
     email: string | null
+    logo_path: string | null
   } | null
   deliverables: Array<{
     name?: string
@@ -46,7 +48,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     .from('projects')
     .select(`
       id, title, language, deliverables,
-      customers (id, name, company, email)
+      customers (id, name, company, email, logo_path)
     `)
     .eq('id', projectId)
     .single()
@@ -64,9 +66,11 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     title: project.title,
     language: (project as { language?: string }).language === 'en' ? 'en' : 'no',
     customer: customer ? {
+      id: customer.id,
       name: customer.name,
       company: customer.company ?? null,
       email: customer.email ?? null,
+      logo_path: customer.logo_path ?? null,
     } : null,
     deliverables,
   }
@@ -87,10 +91,13 @@ export type Transfer = {
   download_count: number
   status: 'active' | 'expired' | 'deleted'
   language: 'no' | 'en'
+  customer_id: string | null
+  background_image_path: string | null
   created_at: string
   updated_at: string
   // joined
   links?: TransferLink[]
+  customer?: { logo_path: string | null } | null
 }
 
 export type TransferLink = {
@@ -119,6 +126,10 @@ export type CreateTransferInput = {
   language?: 'no' | 'en'
   // Må være satt til en fullført R2-nøkkel fra completeUpload() før kall
   r2_key?: string
+  customer_id?: string
+  // Sti i "assets"-bucketen (ikke R2) — kundelogo/leveransebilde er ikke
+  // like sensitivt som selve leveransefilen og trenger ikke presigned URL
+  background_image_path?: string
 }
 
 // Henter alle leveranser for admin-oversikten
@@ -156,7 +167,7 @@ export async function getTransferByToken(token: string): Promise<{
 
   const { data: link, error: linkError } = await supabase
     .from('transfer_links')
-    .select('*, transfer:transfers(*)')
+    .select('*, transfer:transfers(*, customer:customers(logo_path))')
     .eq('token', token)
     .single()
 
@@ -292,6 +303,8 @@ export async function createTransfer(input: CreateTransferInput): Promise<{
       expires_at: expiresAt,
       max_downloads: input.max_downloads ?? null,
       language: input.language ?? 'no',
+      customer_id: input.customer_id ?? null,
+      background_image_path: input.background_image_path ?? null,
     })
     .select()
     .single()

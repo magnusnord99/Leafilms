@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import { getTransferByToken } from '@/lib/actions/transfers'
+import { createClient } from '@/lib/supabase-server'
 import DownloadClient from './DownloadClient'
 import { S } from '@/lib/client-theme'
 
@@ -71,6 +72,14 @@ export default async function DownloadPage({ params }: Props) {
 
   const { transfer } = result
 
+  const supabase = await createClient()
+  const logoUrl = transfer.customer?.logo_path
+    ? supabase.storage.from('assets').getPublicUrl(transfer.customer.logo_path).data.publicUrl
+    : null
+  const backgroundUrl = transfer.background_image_path
+    ? supabase.storage.from('assets').getPublicUrl(transfer.background_image_path).data.publicUrl
+    : null
+
   return (
     <DownloadClient
       filename={transfer.filename}
@@ -80,6 +89,8 @@ export default async function DownloadPage({ params }: Props) {
       hasPassword={!!transfer.password_hash}
       token={token}
       language={transfer.language === 'en' ? 'en' : 'no'}
+      logoUrl={logoUrl}
+      backgroundUrl={backgroundUrl}
     />
   )
 }

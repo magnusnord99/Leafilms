@@ -55,6 +55,7 @@ export type Customer = {
   invoice_reference: string | null
   invoice_info_skipped: boolean
   invoice_info_confirmed_at: string | null
+  logo_path: string | null
   created_at: string
   updated_at: string
 }
@@ -340,6 +341,17 @@ export type Contract = {
 export type ProjectDocument = {
   id: string
   project_id: string
+  uploaded_by: string | null
+  file_name: string
+  file_path: string
+  file_type: string | null
+  file_size: number | null
+  created_at: string
+}
+
+export type CustomerLogoFile = {
+  id: string
+  customer_id: string
   uploaded_by: string | null
   file_name: string
   file_path: string

@@ -14,6 +14,8 @@ type Props = {
   token: string
   senderName?: string
   language?: 'no' | 'en'
+  logoUrl?: string | null
+  backgroundUrl?: string | null
 }
 
 const DL_STRINGS = {
@@ -78,6 +80,7 @@ function ExpiryNotice({ expiresAt, t }: { expiresAt: string; t: DlStrings }) {
 
 export default function DownloadClient({
   filename, filesize, message, expiresAt, hasPassword, token, senderName, language = 'no',
+  logoUrl, backgroundUrl,
 }: Props) {
   const t = DL_STRINGS[language]
   const [passwordInput, setPasswordInput] = useState('')
@@ -106,7 +109,12 @@ export default function DownloadClient({
   return (
     <div style={{
       minHeight: '100dvh',
-      background: S.bg,
+      backgroundColor: S.bg,
+      backgroundImage: backgroundUrl
+        ? `linear-gradient(180deg, rgba(12,11,9,0.6), rgba(12,11,9,0.88)), url(${backgroundUrl})`
+        : undefined,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -164,11 +172,16 @@ export default function DownloadClient({
         }}>
           <div style={{
             width: 68, height: 68, borderRadius: '50%',
-            background: S.goldBg,
+            background: logoUrl ? '#fff' : S.goldBg,
             border: `1.5px solid ${S.goldBorder}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
           }}>
-            <FileIcon filename={filename} />
+            {logoUrl ? (
+              <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 10, boxSizing: 'border-box' }} />
+            ) : (
+              <FileIcon filename={filename} />
+            )}
           </div>
 
           <div>

@@ -65,11 +65,11 @@ export default function LeadsPage() {
   }
 
   return (
-    <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 48px' }}>
+    <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px clamp(16px, 4vw, 32px) 48px' }}>
       <div style={{ maxWidth: 920, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.5rem', fontWeight: 600, color: C.text, lineHeight: 1.2, marginBottom: 4 }}>
               Leads
@@ -85,8 +85,9 @@ export default function LeadsPage() {
           </Link>
         </div>
 
-        {/* Status filter */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${C.border}`, paddingBottom: 0 }}>
+        {/* Status filter — seks filtre er bredere enn en mobilskjerm, så raden
+            scroller horisontalt i stedet for å dytte hele siden ut i bredden */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${C.border}`, paddingBottom: 0, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
           {([
             { value: 'all', label: 'Alle', count: leads.length },
             ...Object.entries(STATUS_CONFIG).map(([v, c]) => ({ value: v, label: c.label, count: counts[v] ?? 0 })),
@@ -103,6 +104,7 @@ export default function LeadsPage() {
                   color: isActive ? C.text : C.text3,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
                   marginBottom: -1, transition: 'color 0.1s',
+                  flexShrink: 0, whiteSpace: 'nowrap',
                 }}
               >
                 {f.label}
@@ -151,8 +153,8 @@ export default function LeadsPage() {
                   <Link href={href} style={{ textDecoration: 'none', display: 'block' }}>
                     <div
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 16,
-                        padding: '14px 20px', paddingRight: 56,
+                        display: 'flex', alignItems: 'center', gap: 16, rowGap: 6, flexWrap: 'wrap',
+                        padding: '14px clamp(14px, 3vw, 20px)', paddingRight: 56,
                         background: C.surface,
                         transition: 'background 0.1s',
                       }}
@@ -166,21 +168,22 @@ export default function LeadsPage() {
                         </span>
                       </div>
 
-                      {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {/* Info — flex-basis holder navn/kontaktinfo på samme linje som
+                          avataren på mobil, mens merkelappene under wrapper ned */}
+                      <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2, minWidth: 0 }}>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                             {lead.company || lead.name}
                           </p>
                           {lead.company && lead.name !== lead.company && (
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                               {lead.name}
                             </span>
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                           {lead.email && (
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>{lead.email}</span>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email}</span>
                           )}
                           {lead.phone && (
                             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>{lead.phone}</span>

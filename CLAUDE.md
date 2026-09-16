@@ -39,6 +39,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 - `supabase/migrations/146_quote_created_by.sql` (legger til created_by-kolonne på quotes — "Opprettet av X"-teksten ved siden av versjonsvelgeren på tilbudssiden vises ikke før denne er kjørt, se feedback ec244372)
 - `supabase/migrations/151_email_discussion_chat.sql` (legger til email_discussion_project_id på conversations — e-postdiskusjon-chatten på e-post-siden i pipeline feiler stille inntil denne er kjørt, se feedback e9431fb7)
+- `supabase/migrations/152_harden_profile_role.sql` (nye auth-brukere får role=customer i stedet for admin (var 'admin' som DEFAULT!); trigger blokkerer ikke-admin fra å PATCH-e sin egen role — hastet fra en cursor-bugbot-branch fra august som aldri ble merget, opprinnelig nummerert 143 men det var tatt av project_documents da den ble gjenopplivet 2026-09-16)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).

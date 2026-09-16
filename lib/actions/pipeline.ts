@@ -963,6 +963,8 @@ export async function getProjectHub(projectId: string): Promise<{
           id,
           name,
           company,
+          email,
+          phone,
           org_nummer,
           address,
           invoice_email,

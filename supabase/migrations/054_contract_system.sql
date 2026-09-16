@@ -116,16 +116,27 @@ Magnus Nordmo                            {{kunde_kontakt}}
 LEAFILMS                                {{bedrift}}$$);
 
 -- 4. RLS på contract_templates
+-- Staff-only: customer JWTs must not overwrite legal contract templates
+-- via PostgREST. 054 runs before is_staff() (097), so the role check is inline.
 ALTER TABLE contract_templates ENABLE ROW LEVEL SECURITY;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'contract_templates' AND policyname = 'Auth users manage templates'
-  ) THEN
-    EXECUTE 'CREATE POLICY "Auth users manage templates" ON contract_templates FOR ALL TO authenticated USING (true) WITH CHECK (true)';
-  END IF;
-END$$;
+
+DROP POLICY IF EXISTS "Auth users manage templates" ON contract_templates;
+
+CREATE POLICY "Auth users manage templates"
+  ON contract_templates FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 -- 5. RLS på contracts — policy for anon INSERT (signering)
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;

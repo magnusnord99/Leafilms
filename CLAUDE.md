@@ -38,12 +38,6 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 - `supabase/migrations/146_quote_created_by.sql` (legger til created_by-kolonne på quotes — "Opprettet av X"-teksten ved siden av versjonsvelgeren på tilbudssiden vises ikke før denne er kjørt, se feedback ec244372)
-- `supabase/migrations/151_email_discussion_chat.sql` (legger til email_discussion_project_id på conversations — e-postdiskusjon-chatten på e-post-siden i pipeline feiler stille inntil denne er kjørt, se feedback e9431fb7)
-- `supabase/migrations/152_harden_profile_role.sql` (nye auth-brukere får role=customer i stedet for admin (var 'admin' som DEFAULT!); trigger blokkerer ikke-admin fra å PATCH-e sin egen role — hastet fra en cursor-bugbot-branch fra august som aldri ble merget, opprinnelig nummerert 143 men det var tatt av project_documents da den ble gjenopplivet 2026-09-16)
-- `supabase/migrations/153_harden_tasks_rls.sql` (staff-only RLS på tasks/task_templates/task_assignees — customer JWT kan slette hele produksjonspipelinen inntil den er kjørt. Samme august-bugbot-batch som 152, opprinnelig nummerert 144)
-- `supabase/migrations/154_harden_leads_rls.sql` (staff-only RLS på leads/email_log — customer JWT kan lese/slette hele CRM-en og e-postarkivet inntil den er kjørt. Samme batch, opprinnelig nummerert 145)
-- `supabase/migrations/155_harden_pricing_rls.sql` (staff-only RLS på price_catalog/discount_factors/contract_templates — customer JWT kan lese/slette priskatalogen, rabatttabellen og kontraktmalene inntil den er kjørt. Samme batch, opprinnelig nummerert 146)
-- `supabase/migrations/156_harden_messages_reviews_rls.sql` (staff-only RLS på project/task/quote-chat og reviews — customer JWT kan lese/injisere intern chat og forfalske publish-godkjenning inntil den er kjørt. Samme batch, opprinnelig nummerert 147 — siste av de 5 hastet inn 2026-09-16 fra august-bugbot-branchene)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).
@@ -51,6 +45,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 **Kjørt 2026-09-10:** `143_project_documents.sql` er nå anvendt mot Supabase (tabellen fantes delvis fra før, men RLS-policyen manglet — "Filer"-widgeten (ProjectDocuments) er nå også koblet på postprod- og preprod-siden, se feedback 8578db28). NB: transaction pooler-porten (6432) i DATABASE_URL var stengt (connection refused) da dette ble kjørt — session pooler-porten (5432) fungerte. Bytt port hvis migrasjonsscript feiler på samme måte igjen.
 
 **Kjørt 2026-09-16:** `149_customer_logos.sql` og `150_transfer_branding.sql` er anvendt mot Supabase (kundelogo + valgfritt bakgrunnsbilde på leveransesiden /d/[token], se feedback-tråden om å erstatte Filemail). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143).
+
+**Kjørt 2026-09-16:** `151_email_discussion_chat.sql` (egen e-postdiskusjon-chat på e-post-siden, feedback e9431fb7), `152_harden_profile_role.sql` til `156_harden_messages_reviews_rls.sql` (5 kritiske RLS/privilege-escalation-fikser hastet inn fra aldri-mergede cursor-bugbot-branches fra august — se git-loggen for detaljer per fiks), og `157_conversation_message_mentions.sql` (mentions-kolonne + egen varseltype for @tagging i produksjonschat/lead-chat/e-postdiskusjon) er alle anvendt mot Supabase.
 
 ## Utviklingsfilosofi
 

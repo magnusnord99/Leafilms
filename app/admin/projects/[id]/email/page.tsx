@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, generateEmailDraft, updatePipelineStage } from '@/lib/actions/pipeline'
+import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
+import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
+import type { ConversationParticipant } from '@/lib/actions/messages'
+import { ProductionChat } from '@/components/production/ProductionChat'
 import type { PipelineStage } from '@/lib/types'
 
 const C = {
@@ -69,6 +72,10 @@ export default function EmailPage() {
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null)
+  const [chatMembers, setChatMembers] = useState<ConversationParticipant[]>([])
+  const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
+  const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
 
   useEffect(() => {
     if (!projectId) return
@@ -108,6 +115,22 @@ export default function EmailPage() {
   }
 
   useEffect(() => { fetchEmailLogs() }, [projectId])
+
+  useEffect(() => {
+    if (!projectId) return
+    Promise.all([
+      getOrCreateEmailDiscussionConversation(projectId),
+      getCurrentUserProfile(),
+      getAllProfiles(),
+    ]).then(([chat, user, profiles]) => {
+      if (chat) {
+        setChatConversationId(chat.conversationId)
+        setChatMembers(chat.members)
+      }
+      setChatCurrentUser(user)
+      setChatAllProfiles(profiles)
+    })
+  }, [projectId])
 
   async function loadDraft() {
     if (!hubData) return
@@ -291,6 +314,21 @@ export default function EmailPage() {
               {EMAIL_TYPE_CONTEXT[emailType]}
             </p>
           </div>
+
+          {/* E-postdiskusjon — egen tråd for å snakke om e-poster som skal
+              sendes ut, adskilt fra produksjonschatten (feedback e9431fb7) */}
+          {chatConversationId && chatCurrentUser && (
+            <div style={{ height: 360 }}>
+              <ProductionChat
+                conversationId={chatConversationId}
+                currentUser={chatCurrentUser}
+                initialMembers={chatMembers}
+                allProfiles={chatAllProfiles.filter(p => p.id !== chatCurrentUser.id)}
+                title="E-postdiskusjon"
+                placeholder="Skriv en melding om denne e-posten..."
+              />
+            </div>
+          )}
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px' }}>
             <FieldLabel>Vedlegg / Lenker</FieldLabel>

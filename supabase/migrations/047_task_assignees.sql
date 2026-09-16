@@ -24,10 +24,28 @@ ON CONFLICT DO NOTHING;
 ALTER TABLE task_assignees ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Authenticated users can read task_assignees"
-  ON task_assignees FOR SELECT TO authenticated USING (true);
+  ON task_assignees FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "Authenticated users can insert task_assignees"
-  ON task_assignees FOR INSERT TO authenticated WITH CHECK (true);
+  ON task_assignees FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );
 
 CREATE POLICY "Authenticated users can delete task_assignees"
-  ON task_assignees FOR DELETE TO authenticated USING (true);
+  ON task_assignees FOR DELETE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'sales', 'production')
+    )
+  );

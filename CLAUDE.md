@@ -43,6 +43,7 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/153_harden_tasks_rls.sql` (staff-only RLS på tasks/task_templates/task_assignees — customer JWT kan slette hele produksjonspipelinen inntil den er kjørt. Samme august-bugbot-batch som 152, opprinnelig nummerert 144)
 - `supabase/migrations/154_harden_leads_rls.sql` (staff-only RLS på leads/email_log — customer JWT kan lese/slette hele CRM-en og e-postarkivet inntil den er kjørt. Samme batch, opprinnelig nummerert 145)
 - `supabase/migrations/155_harden_pricing_rls.sql` (staff-only RLS på price_catalog/discount_factors/contract_templates — customer JWT kan lese/slette priskatalogen, rabatttabellen og kontraktmalene inntil den er kjørt. Samme batch, opprinnelig nummerert 146)
+- `supabase/migrations/156_harden_messages_reviews_rls.sql` (staff-only RLS på project/task/quote-chat og reviews — customer JWT kan lese/injisere intern chat og forfalske publish-godkjenning inntil den er kjørt. Samme batch, opprinnelig nummerert 147 — siste av de 5 hastet inn 2026-09-16 fra august-bugbot-branchene)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).

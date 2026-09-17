@@ -102,6 +102,16 @@ export default function CalendarPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth()) // 0-indexed
 
+  // Kompakt Apple Kalender-stil på mobilskjermer — prikker i stedet for tekstchips,
+  // ingen horisontal scroll. Bryter ved 640 px (tilsvarer Tailwind sm:).
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   // Ikke-admin ser alltid kun sitt eget filter; admin styrer via selectedPersonId (null = alle)
   const effectiveFilterId = isAdmin ? selectedPersonId : (profile?.id ?? null)
 
@@ -349,16 +359,17 @@ export default function CalendarPage() {
           </div>
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-            {/* Scroller — på mobil crusher et fast 7-kolonners rutenett til uleselige striper,
-                så vi lar det heller beholde en lesbar min-bredde og scrolle horisontalt der. */}
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ minWidth: 630 }}>
+            {/* På desktop: min-bredde + horisontal scroll så cellene ikke krymper.
+                På mobil: fyller skjermbredden og viser kompakte prikk-indikatorer
+                (Apple Kalender-inspirert) — ingen horisontal scroll. */}
+            <div style={{ overflowX: isMobile ? 'visible' : 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: isMobile ? undefined : 630 }}>
             {/* Day headers */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${C.border}` }}>
               {DAYS_NO.map(d => (
-                <div key={d} style={{ padding: '10px 8px', textAlign: 'center' }}>
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-                    {d}
+                <div key={d} style={{ padding: isMobile ? '5px 2px' : '10px 8px', textAlign: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: isMobile ? '0.55rem' : '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
+                    {isMobile ? d[0] : d}
                   </span>
                 </div>
               ))}
@@ -390,9 +401,10 @@ export default function CalendarPage() {
                       // noe som gjorde kalenderen rotete å bla i (feedback a52d40ce). Høyden
                       // er satt til å romme datotall + MAX_VISIBLE (3) hendelser + "+N til" —
                       // lange navn trunkeres heller med ellipsis (allerede på plass under).
-                      height: 134,
+                      // På mobil bruker vi kompakte prikker (Apple Kalender-stil) og halverer høyden.
+                      height: isMobile ? 54 : 134,
                       overflow: 'hidden',
-                      padding: '6px 6px 8px',
+                      padding: isMobile ? '4px 2px 3px' : '6px 6px 8px',
                       borderRight: (i + 1) % 7 !== 0 ? `1px solid ${C.border}` : 'none',
                       borderBottom: i < totalCells - 7 ? `1px solid ${C.border}` : 'none',
                       background: isToday ? C.today : isWeekend && isCurrentMonth ? 'rgba(255,255,255,0.01)' : 'transparent',
@@ -404,9 +416,9 @@ export default function CalendarPage() {
                     {isCurrentMonth && (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
                         <span style={{
-                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: isToday ? 700 : 400,
+                          fontFamily: 'var(--font-dm-sans)', fontSize: isMobile ? '0.6rem' : '0.72rem', fontWeight: isToday ? 700 : 400,
                           color: isToday ? C.accent : C.text3,
-                          width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           borderRadius: '50%',
                           background: isToday ? C.accentBg : 'transparent',
                         }}>
@@ -415,74 +427,88 @@ export default function CalendarPage() {
                       </div>
                     )}
 
-                    {/* Events */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {visible.map(ev => {
-                        const chip = (
+                    {/* Events — mobil: fargeprikker (Apple Kalender-stil), desktop: tekstchips */}
+                    {isMobile ? (
+                      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
+                        {events.slice(0, 4).map(ev => (
                           <div
-                            title={`${ev.label}${ev.sublabel ? ` — ${ev.sublabel}` : ''}`}
-                            style={{
-                              background: ev.bgColor,
-                              border: ev.dashed && ev.type === 'shooting'
-                                ? `1px dashed ${ev.color}`
-                                : ev.dashed && ev.type === 'meeting'
-                                ? `1px dashed ${ev.color}`
-                                : `1px solid ${ev.color}30`,
-                              borderRadius: 4,
-                              padding: '4px 6px',
-                              display: 'flex', alignItems: 'center', gap: 4,
-                              cursor: 'pointer',
-                              transition: 'opacity 0.1s',
-                              opacity: (ev.type === 'task' && ev.dashed) || (ev.type === 'meeting' && ev.dashed) ? 0.5 : 1,
-                            }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = '0.75' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = ((ev.type === 'task' || ev.type === 'meeting') && ev.dashed) ? '0.5' : '1' }}
-                          >
-                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
-                            <span style={{
-                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
-                              color: ev.color,
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              maxWidth: '100%',
-                            }}>
-                              {ev.label}
-                            </span>
-                          </div>
-                        )
-                        if (ev.type === 'meeting') {
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={(e) => { e.stopPropagation(); setDetailMeeting(ev.meeting!) }}
-                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                            key={ev.id}
+                            style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }}
+                          />
+                        ))}
+                        {events.length > 4 && (
+                          <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.text3, flexShrink: 0 }} />
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {visible.map(ev => {
+                          const chip = (
+                            <div
+                              title={`${ev.label}${ev.sublabel ? ` — ${ev.sublabel}` : ''}`}
+                              style={{
+                                background: ev.bgColor,
+                                border: ev.dashed && ev.type === 'shooting'
+                                  ? `1px dashed ${ev.color}`
+                                  : ev.dashed && ev.type === 'meeting'
+                                  ? `1px dashed ${ev.color}`
+                                  : `1px solid ${ev.color}30`,
+                                borderRadius: 4,
+                                padding: '4px 6px',
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                cursor: 'pointer',
+                                transition: 'opacity 0.1s',
+                                opacity: (ev.type === 'task' && ev.dashed) || (ev.type === 'meeting' && ev.dashed) ? 0.5 : 1,
+                              }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = '0.75' }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = ((ev.type === 'task' || ev.type === 'meeting') && ev.dashed) ? '0.5' : '1' }}
                             >
-                              {chip}
-                            </button>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                              <span style={{
+                                fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
+                                color: ev.color,
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                maxWidth: '100%',
+                              }}>
+                                {ev.label}
+                              </span>
+                            </div>
                           )
-                        }
-                        if (ev.type === 'unavailable') {
+                          if (ev.type === 'meeting') {
+                            return (
+                              <button
+                                key={ev.id}
+                                onClick={(e) => { e.stopPropagation(); setDetailMeeting(ev.meeting!) }}
+                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                              >
+                                {chip}
+                              </button>
+                            )
+                          }
+                          if (ev.type === 'unavailable') {
+                            return (
+                              <button
+                                key={ev.id}
+                                onClick={(e) => { e.stopPropagation(); setDetailUnavail(ev.unavail!) }}
+                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                              >
+                                {chip}
+                              </button>
+                            )
+                          }
                           return (
-                            <button
-                              key={ev.id}
-                              onClick={(e) => { e.stopPropagation(); setDetailUnavail(ev.unavail!) }}
-                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
-                            >
+                            <Link key={ev.id} href={ev.href!} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none' }}>
                               {chip}
-                            </button>
+                            </Link>
                           )
-                        }
-                        return (
-                          <Link key={ev.id} href={ev.href!} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none' }}>
-                            {chip}
-                          </Link>
-                        )
-                      })}
-                      {overflow > 0 && (
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', color: C.text3, paddingLeft: 4 }}>
-                          +{overflow} til
-                        </span>
-                      )}
-                    </div>
+                        })}
+                        {overflow > 0 && (
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', color: C.text3, paddingLeft: 4 }}>
+                            +{overflow} til
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

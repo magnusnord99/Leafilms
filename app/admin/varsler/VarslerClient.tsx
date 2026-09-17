@@ -97,6 +97,15 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   const [respondingId, setRespondingId] = useState<string | null>(null)
   const replyRef = useRef<HTMLTextAreaElement>(null)
 
+  // Responsiv layout: stack header-elementer vertikalt under 640px (Tailwind sm:)
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   useEffect(() => {
     setNotifications(initialNotifications)
   }, [initialNotifications])
@@ -343,11 +352,18 @@ export default function VarslerClient({ notifications: initialNotifications }: {
   }
 
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', padding: '32px 32px 48px' }}>
+    <div style={{ background: C.bg, minHeight: '100vh', padding: isMobile ? '20px 16px 48px' : '32px 32px 48px' }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+        {/* Header — på mobil stackes tittel og kontroller vertikalt */}
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          marginBottom: isMobile ? 16 : 28,
+          gap: 12,
+        }}>
           <div>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.text3, marginBottom: 4 }}>
               Administrasjon
@@ -356,9 +372,23 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               Varsler
             </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            gap: isMobile ? 10 : 12,
+            width: isMobile ? '100%' : 'auto',
+          }}>
             <PushNotificationToggle />
-            <div style={{ display: 'flex', gap: 4, background: C.surface2, borderRadius: 7, padding: 3 }}>
+            {/* Filter-segment: scrollbar på mobil hvis knappene er brede */}
+            <div style={{
+              display: 'flex', gap: 4, background: C.surface2, borderRadius: 7, padding: 3,
+              overflowX: isMobile ? 'auto' : 'visible',
+              scrollbarWidth: 'none',
+              WebkitOverflowScrolling: 'touch',
+              flexShrink: 0,
+              maxWidth: isMobile ? '100%' : 'none',
+            }}>
               {([
                 ['all', 'Alle'],
                 ['unread', `Ulest${unreadCount > 0 ? ` (${unreadCount})` : ''}`],
@@ -372,13 +402,14 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                     color: filter === key ? C.text : C.text3,
                     background: filter === key ? C.surface : 'none',
                     border: 'none', padding: '6px 10px', borderRadius: 5, cursor: 'pointer',
+                    flexShrink: 0, whiteSpace: 'nowrap',
                   }}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 onClick={toggleGroupByProject}
                 style={{
@@ -387,6 +418,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                   background: groupByProject ? C.accentBg : 'none',
                   border: `1px solid ${groupByProject ? 'rgba(124,92,252,0.25)' : C.border}`,
                   padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 Gruppér etter prosjekt
@@ -394,7 +426,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               {readCount > 0 && (
                 <button
                   onClick={handleDeleteRead}
-                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   Fjern alle leste
                 </button>
@@ -402,7 +434,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAll}
-                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, background: 'none', border: `1px solid ${C.border}`, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   Merk alle som lest
                 </button>

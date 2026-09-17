@@ -26,6 +26,12 @@ const SOURCE_LABELS: Record<string, string> = {
   annet: 'Annet',
 }
 
+const TEMPERATURE_CONFIG: Record<'cold' | 'lukewarm' | 'warm', { label: string; color: string }> = {
+  cold:     { label: 'Kald',   color: '#5B9BD5' },
+  lukewarm: { label: 'Lunken', color: '#F0A500' },
+  warm:     { label: 'Varm',   color: '#E05555' },
+}
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<LeadListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -246,6 +252,38 @@ export default function LeadsPage() {
                         {!isMobile && (lead.sales_points ?? []).length > 0 && (
                           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
                             {(lead.sales_points ?? []).length} salgspunkt{(lead.sales_points ?? []).length !== 1 ? 'er' : ''}
+                          </span>
+                        )}
+
+                        {/* Kontaktfrist — kun overtidde/nære frister vises for å spare plass */}
+                        {lead.contact_deadline && (() => {
+                          const deadline = new Date(lead.contact_deadline)
+                          const today = new Date(new Date().toDateString())
+                          const overdue = deadline < today
+                          const dueSoon = !overdue && deadline.getTime() - today.getTime() <= 2 * 86400000
+                          if (!overdue && !dueSoon) return null
+                          return (
+                            <span style={{
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                              color: overdue ? C.danger : warning, flexShrink: 0,
+                              display: 'flex', alignItems: 'center', gap: 3,
+                            }}>
+                              {overdue ? '⚠' : '⏱'} {deadline.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                            </span>
+                          )
+                        })()}
+
+                        {/* Temperatur */}
+                        {lead.temperature && (
+                          <span style={{
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                            letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
+                            color: TEMPERATURE_CONFIG[lead.temperature].color,
+                            background: `${TEMPERATURE_CONFIG[lead.temperature].color}14`,
+                            border: `1px solid ${TEMPERATURE_CONFIG[lead.temperature].color}28`,
+                            padding: '3px 9px', borderRadius: 5,
+                          }}>
+                            {TEMPERATURE_CONFIG[lead.temperature].label}
                           </span>
                         )}
 

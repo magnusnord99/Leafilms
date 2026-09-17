@@ -25,15 +25,13 @@ const C = {
   danger:   '#E05555',
 }
 
-const SOURCE_OPTIONS = [
-  { value: '',                label: 'Velg kilde...' },
-  { value: 'market_analysis', label: 'Markedsanalyse' },
-  { value: 'instagram',       label: 'Instagram' },
-  { value: 'linkedin',        label: 'LinkedIn' },
-  { value: 'nettside',        label: 'Nettside' },
-  { value: 'referanse',       label: 'Referanse' },
-  { value: 'telefon',         label: 'Telefon' },
-  { value: 'annet',           label: 'Annet' },
+const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
+
+const TEMPERATURE_OPTIONS: { value: '' | 'cold' | 'lukewarm' | 'warm'; label: string; color: string }[] = [
+  { value: '',         label: 'Ikke satt', color: '#8484A0' },
+  { value: 'cold',     label: 'Kald',      color: '#5B9BD5' },
+  { value: 'lukewarm', label: 'Lunken',    color: '#F0A500' },
+  { value: 'warm',     label: 'Varm',      color: '#E05555' },
 ]
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -64,6 +62,8 @@ export default function NewLeadPage() {
   const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
   const [source, setSource] = useState('')
+  const [temperature, setTemperature] = useState<'' | 'cold' | 'lukewarm' | 'warm'>('')
+  const [contactDeadline, setContactDeadline] = useState('')
   const [reason, setReason] = useState('')
   const [salesPoints, setSalesPoints] = useState<string[]>(['', '', ''])
   const [coldEmail, setColdEmail] = useState('')
@@ -123,6 +123,8 @@ export default function NewLeadPage() {
       sales_points: salesPoints.filter(s => s.trim()),
       notes,
       quote_assignee_id: quoteAssigneeId || undefined,
+      temperature: temperature || undefined,
+      contact_deadline: contactDeadline || undefined,
     })
 
     if (!result) {
@@ -220,17 +222,43 @@ export default function NewLeadPage() {
                 </div>
                 <div>
                   <Label>Kilde</Label>
-                  <select
+                  <input
+                    list="source-suggestions"
                     value={source}
                     onChange={e => setSource(e.target.value)}
+                    placeholder="Hvor kom leaden fra?"
+                    style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  />
+                  <datalist id="source-suggestions">
+                    {SOURCE_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label>Temperatur</Label>
+                  <select
+                    value={temperature}
+                    onChange={e => setTemperature(e.target.value as typeof temperature)}
                     style={{ ...inputStyle, cursor: 'pointer' }}
                     onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                     onBlur={e => { e.currentTarget.style.borderColor = C.border }}
                   >
-                    {SOURCE_OPTIONS.map(o => (
+                    {TEMPERATURE_OPTIONS.map(o => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <Label>Kontakt innen</Label>
+                  <input
+                    type="date"
+                    value={contactDeadline}
+                    onChange={e => setContactDeadline(e.target.value)}
+                    style={{ ...inputStyle, cursor: 'pointer' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  />
                 </div>
               </div>
             </div>

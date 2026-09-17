@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase-client'
 import { Badge } from '@/components/ui'
 import { Project, Customer, MarketAnalysis, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { getCalendarEvents } from '@/lib/actions/calendar'
+import { getMeetingsForCalendar } from '@/lib/actions/meetings'
 
 const WEEKDAY_LABELS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn']
 const MONTH_LABELS = [
@@ -96,13 +97,14 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult, calendarResult] = await Promise.all([
+      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult, calendarResult, meetings] = await Promise.all([
         supabase.from('projects').select('*', { count: 'exact', head: true }),
         supabase.from('projects').select('id, title, status, pipeline_stage, client_name, updated_at, parent_project_id, version_number').order('updated_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id, name, company, email, phone, customer_number').order('name', { ascending: true }),
         supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead'),
         supabase.from('email_log').select('project_id, sent_at').order('sent_at', { ascending: true }),
         getCalendarEvents(),
+        getMeetingsForCalendar(null),
       ])
 
       const eventDates = new Set<string>()
@@ -114,6 +116,7 @@ export default function AdminDashboard() {
         }
       }
       for (const t of calendarResult.tasks) eventDates.add(t.dueDate)
+      for (const m of meetings) eventDates.add(m.startsAt.split('T')[0])
       setCalendarDates(eventDates)
 
       setTotalProjects(totalResult.count ?? 0)

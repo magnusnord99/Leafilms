@@ -4,18 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { TeamMember } from '@/lib/types'
-
-const C = {
-  bg:      '#181920',
-  surface: '#21212D',
-  surface2:'#2A2A38',
-  border:  '#3C3C52',
-  text:    '#EEEEF2',
-  text2:   '#B4B4CC',
-  text3:   '#8484A0',
-  accent:  '#7C5CFC',
-  danger:  '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 export default function TeamPage() {
   const [loading, setLoading] = useState(true)

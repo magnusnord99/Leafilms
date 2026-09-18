@@ -6,17 +6,7 @@ import {
   ProjectEquipmentUnit,
 } from '@/lib/actions/equipment'
 import { EQUIPMENT_CATEGORY_LABELS } from '@/lib/equipment-constants'
-
-const C = {
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 export default function EquipmentPickerPanel({
   projectId, onChange, refreshSignal,

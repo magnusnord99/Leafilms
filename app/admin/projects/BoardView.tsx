@@ -383,7 +383,7 @@ function MiniAssigneePicker({ task, profiles, onToggle }: {
                   background: isAssigned ? C.accentBg : 'none',
                   border: 'none', cursor: 'pointer', textAlign: 'left',
                 }}
-                onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'var(--admin-overlay-04)' }}
                 onMouseLeave={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
               >
                 <span style={{
@@ -489,7 +489,7 @@ function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
             <button
               onClick={() => select(null)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--admin-overlay-04)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
             >
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Fjern tildeling</span>
@@ -503,7 +503,7 @@ function QuoteAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
                 key={p.id}
                 onClick={() => select(p)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: isSelected ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'var(--admin-overlay-04)' }}
                 onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
               >
                 <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? getAvatarColor(p) : C.surface, border: `1px solid ${isSelected ? getAvatarColor(p) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>

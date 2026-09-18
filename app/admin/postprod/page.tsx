@@ -4,20 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getPostProdProjects, getPostProdAssignedTasks } from '@/lib/actions/pipeline'
 import { TASK_STATUS_LABELS, type ProjectWithPipeline, type Task } from '@/lib/types'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-}
+import { C } from '@/lib/admin-theme'
 
 type PostProdProject = ProjectWithPipeline & { task_count: number; done_count: number }
 
@@ -50,7 +37,7 @@ function ProjectCard({ project }: { project: PostProdProject }) {
     <Link href={`/admin/postprod/${project.id}`} style={{ textDecoration: 'none' }}>
       <div
         style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.12s', display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}
-        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>

@@ -11,6 +11,7 @@ import { AIChatButton } from '@/components/ai/AIChatButton'
 import { C } from '@/lib/admin-theme'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { isPathAllowedForRole, isStaffRole } from '@/lib/permissions'
+import { AdminThemeProvider, AdminThemeToggle } from '@/lib/admin-theme-provider'
 
 type NavItem = { href: string; label: string; exact?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }
@@ -30,6 +31,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Salg & CRM',
     items: [
+      { href: '/admin/retning',   label: 'Vår retning' },
       { href: '/admin/leads',     label: 'Leads' },
       { href: '/admin/pitches',   label: 'Pitcher' },
       { href: '/admin/quotes',    label: 'Tilbud' },
@@ -70,6 +72,14 @@ const navGroups: NavGroup[] = [
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminThemeProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminThemeProvider>
+  )
+}
+
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, isStaff, logout } = useAuth()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -155,7 +165,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           onMouseEnter={e => {
             if (!active) {
               (e.currentTarget as HTMLDivElement).style.color = C.text2
-              ;(e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'
+              ;(e.currentTarget as HTMLDivElement).style.background = 'var(--admin-overlay-03)'
             }
           }}
           onMouseLeave={e => {
@@ -243,6 +253,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <AdminThemeToggle />
           <NotificationBell />
           {profile && (
             <Link

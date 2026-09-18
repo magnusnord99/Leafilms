@@ -6,23 +6,10 @@ import Link from 'next/link'
 import { createLead, analyzeLeadNotes } from '@/lib/actions/leads'
 import { getAllProfiles } from '@/lib/actions/pipeline'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { C } from '@/lib/admin-theme'
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  danger:   '#E05555',
 }
 
 const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']

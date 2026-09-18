@@ -4,14 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { getTaskLibrary, deleteTaskLibraryItem, type PostProdLibraryItem } from '@/lib/actions/pipeline'
-
-const C = {
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text3:    '#8484A0',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 /** Bibliotekselementers dra-id-er er prefikset "lib:" slik at onDragEnd i
  *  PostProdBoard kan skille dem fra ekte task-id-er. */

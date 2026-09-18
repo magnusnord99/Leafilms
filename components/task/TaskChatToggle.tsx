@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { TaskChat } from './TaskChat'
 import type { MentionableProfile } from '@/lib/mentions'
-
-const C = {
-  border:  '#3C3C52',
-  text3:   '#8484A0',
-  accent:  '#7C5CFC',
-}
+import { C } from '@/lib/admin-theme'
 
 type Props = {
   taskId: string

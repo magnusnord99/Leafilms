@@ -126,7 +126,7 @@ export default function LeadsPage() {
               >
                 {f.label}
                 {f.count > 0 && (
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, padding: '0 5px', borderRadius: 8, background: isActive ? C.accentBg : 'rgba(255,255,255,0.04)', color: isActive ? C.accent : C.text3, border: `1px solid ${isActive ? 'rgba(124,92,252,0.25)' : C.border}` }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, padding: '0 5px', borderRadius: 8, background: isActive ? C.accentBg : 'var(--admin-overlay-04)', color: isActive ? C.accent : C.text3, border: `1px solid ${isActive ? 'rgba(124,92,252,0.25)' : C.border}` }}>
                     {f.count}
                   </span>
                 )}

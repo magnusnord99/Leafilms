@@ -6,20 +6,7 @@ import { updateTaskDueDate } from '@/lib/actions/calendar'
 import { TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task, type PipelineStage } from '@/lib/types'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
 import { getAvatarColor } from '@/lib/avatar-colors'
-
-const C = {
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function Avatar({ id, name, color, size = 26 }: { id: string; name: string | null; color?: string | null; size?: number }) {
   const initials = (name ?? 'U').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()

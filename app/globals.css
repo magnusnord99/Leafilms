@@ -145,6 +145,63 @@ body.admin-page {
   background: #181920;
 }
 
+/* ═══════════════════════════════════════════════════
+   ADMIN LIGHT/DARK MODE — isolert fra kundevendte sider.
+   Alle admin-farger går gjennom lib/admin-theme.ts sin C,
+   som peker på disse variablene. data-theme settes av
+   AdminThemeProvider (lib/admin-theme-provider.tsx).
+   ═══════════════════════════════════════════════════ */
+
+.admin-theme-root {
+  --admin-bg: #181920;
+  --admin-sidebar: #111116;
+  --admin-surface: #21212D;
+  --admin-surface2: #2A2A38;
+  --admin-border: #3C3C52;
+  --admin-text: #EEEEF2;
+  --admin-text2: #B4B4CC;
+  --admin-text3: #8484A0;
+  --admin-accent: #7C5CFC;
+  --admin-accent-bg: rgba(124, 92, 252, 0.10);
+  --admin-danger: #E05555;
+  --admin-success: #4CAF7D;
+  --admin-warning: #D4863A;
+  --admin-hover-border: #3D3D4E;
+
+  /* Subtile hover/overlay-tinter — hvit tint på mørk bakgrunn */
+  --admin-overlay-01: rgba(255, 255, 255, 0.01);
+  --admin-overlay-02: rgba(255, 255, 255, 0.02);
+  --admin-overlay-03: rgba(255, 255, 255, 0.03);
+  --admin-overlay-04: rgba(255, 255, 255, 0.04);
+  --admin-overlay-05: rgba(255, 255, 255, 0.05);
+  --admin-overlay-06: rgba(255, 255, 255, 0.06);
+}
+
+.admin-theme-root[data-theme='light'] {
+  --admin-bg: #F1F1F5;
+  --admin-sidebar: #FFFFFF;
+  --admin-surface: #FFFFFF;
+  --admin-surface2: #F5F5FA;
+  --admin-border: #E1E1EA;
+  --admin-text: #1D1D26;
+  --admin-text2: #55556B;
+  --admin-text3: #74748C;
+  --admin-accent: #7C5CFC;
+  --admin-accent-bg: rgba(124, 92, 252, 0.08);
+  --admin-danger: #C93E3E;
+  --admin-success: #2F8F5B;
+  --admin-warning: #B4691E;
+  --admin-hover-border: #D5D5E0;
+
+  /* Samme overlay-tinter, men mørk tint på lys bakgrunn */
+  --admin-overlay-01: rgba(0, 0, 0, 0.04);
+  --admin-overlay-02: rgba(0, 0, 0, 0.05);
+  --admin-overlay-03: rgba(0, 0, 0, 0.05);
+  --admin-overlay-04: rgba(0, 0, 0, 0.06);
+  --admin-overlay-05: rgba(0, 0, 0, 0.07);
+  --admin-overlay-06: rgba(0, 0, 0, 0.08);
+}
+
 /* Selection */
 ::selection {
   background: rgba(196, 148, 52, 0.3);
@@ -439,3 +496,20 @@ video::-webkit-media-controls {
   height: 0;
   pointer-events: none;
 }
+
+/* Variant for lange dokumenter (f.eks. /admin/retning) — samme editor,
+   men med synlig seksjonshierarki i stedet for notat-kompakt typografi. */
+.retning-doc .rich-notes-editor .ProseMirror { font-size: 0.85rem; }
+.retning-doc .rich-notes-editor .ProseMirror h2 {
+  font-size: 1.2em; color: #7C5CFC; margin: 30px 0 10px; padding-top: 22px;
+  border-top: 1px solid #3C3C52;
+}
+.retning-doc .rich-notes-editor .ProseMirror h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.retning-doc .rich-notes-editor .ProseMirror h3 {
+  font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: #8484A0; margin: 16px 0 8px;
+}
+.retning-doc .rich-notes-editor .ProseMirror p { color: #B4B4CC; }
+.retning-doc .rich-notes-editor .ProseMirror strong { color: #EEEEF2; }
+.retning-doc .rich-notes-editor .ProseMirror ol { margin: 0 0 8px; padding-left: 20px; color: #B4B4CC; }
+.retning-doc .rich-notes-editor .ProseMirror ol li { margin-bottom: 2px; }

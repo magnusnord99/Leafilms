@@ -3,14 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { PIPELINE_STAGES, type PipelineStage } from '@/lib/types'
-
-const C = {
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.12)',
-}
+import { C } from '@/lib/admin-theme'
 
 // Snarveier fra stepperen til stadier med egen side, slik at man kan hoppe rett
 // til f.eks. postprod uten å måtte finne prosjektet igjen via sidemenyen (feedback e5ecec91).
@@ -102,7 +95,7 @@ export function PipelineProgress({
                 onClick={() => onGoToTab?.('kontrakt')}
                 title={`Gå til ${stage.label}`}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                onMouseEnter={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseEnter={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'var(--admin-overlay-06)' }}
                 onMouseLeave={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'transparent' }}
               >
                 {dot}
@@ -112,7 +105,7 @@ export function PipelineProgress({
                 href={href}
                 title={`Gå til ${stage.label}`}
                 style={{ textDecoration: 'none', cursor: 'pointer', display: 'inline-block' }}
-                onMouseEnter={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseEnter={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'var(--admin-overlay-06)' }}
                 onMouseLeave={e => { if (!isViewing) (e.currentTarget.firstChild as HTMLDivElement).style.background = 'transparent' }}
               >
                 {dot}

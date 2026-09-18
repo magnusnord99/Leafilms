@@ -13,6 +13,7 @@ import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import type { PipelineStage } from '@/lib/types'
+import { C } from '@/lib/admin-theme'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
 // som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
@@ -20,21 +21,6 @@ function notesToHtml(raw: string): string {
   if (!raw) return ''
   if (/<[a-z][\s\S]*>/i.test(raw)) return raw
   return raw.split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('')
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
 }
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }> = {
@@ -316,7 +302,7 @@ export default function ProjectContactPage() {
                     onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.text2}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round">
                         <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
                         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -462,7 +448,7 @@ export default function ProjectContactPage() {
             {/* Snarvei til prosjektsiden */}
             <Link href={`/admin/projects/${projectId}`} style={{ textDecoration: 'none' }}>
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'border-color 0.12s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
               >
                 <div>

@@ -11,23 +11,13 @@ import {
   getUnavailability, createUnavailability, deleteUnavailability, UnavailabilityBlock,
 } from '@/lib/actions/unavailability'
 import { useAuth } from '@/hooks/useAuth'
+import { C as CBase } from '@/lib/admin-theme'
 
 const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.12)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
-  meeting:  '#3B82F6',
-  unavail:  '#E05555',
-  today:    'rgba(124,92,252,0.18)',
+  ...CBase,
+  meeting: '#3B82F6',
+  unavail: '#E05555',
+  today: 'rgba(124,92,252,0.18)',
 }
 
 const DAYS_NO = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn']
@@ -407,7 +397,7 @@ export default function CalendarPage() {
                       padding: isMobile ? '4px 2px 3px' : '6px 6px 8px',
                       borderRight: (i + 1) % 7 !== 0 ? `1px solid ${C.border}` : 'none',
                       borderBottom: i < totalCells - 7 ? `1px solid ${C.border}` : 'none',
-                      background: isToday ? C.today : isWeekend && isCurrentMonth ? 'rgba(255,255,255,0.01)' : 'transparent',
+                      background: isToday ? C.today : isWeekend && isCurrentMonth ? 'var(--admin-overlay-01)' : 'transparent',
                       position: 'relative',
                       cursor: isCurrentMonth ? 'pointer' : 'default',
                     }}

@@ -3,11 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { getProjectForTransfer } from '@/lib/actions/transfers'
 import TransferUploadClient from './TransferUploadClient'
-
-const C = {
-  bg: '#181920', surface: '#21212D',
-  border: '#3C3C52', text: '#EEEEF2', text2: '#B4B4CC', text3: '#8484A0',
-}
+import { C } from '@/lib/admin-theme'
 
 type Props = {
   searchParams: Promise<{ projectId?: string; type?: string }>

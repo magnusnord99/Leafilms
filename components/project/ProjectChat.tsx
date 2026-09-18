@@ -8,17 +8,7 @@ import { MentionTextInput } from '@/components/shared/MentionTextInput'
 import { MessageReactions } from '@/components/shared/MessageReactions'
 import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import type { ProjectMessage } from '@/lib/types'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-}
+import { C } from '@/lib/admin-theme'
 
 type Props = {
   projectId: string

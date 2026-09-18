@@ -5,19 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { useAuth } from '@/hooks/useAuth'
 import { ROLE_LABELS, STAFF_ROLES, type StaffRole } from '@/lib/permissions'
-
-const C = {
-  bg:      '#181920',
-  surface: '#21212D',
-  surface2:'#2A2A38',
-  border:  '#3C3C52',
-  text:    '#EEEEF2',
-  text2:   '#B4B4CC',
-  text3:   '#8484A0',
-  accent:  '#7C5CFC',
-  success: '#4CAF7D',
-  danger:  '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 interface UserProfile {
   id: string

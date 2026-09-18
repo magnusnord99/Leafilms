@@ -29,22 +29,7 @@ import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
-
-const C = {
-  bg:       '#181920',
-  sidebar:  '#111116',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 type PostProdProject = ProjectWithPipeline & { task_count: number; done_count: number }
 
@@ -99,7 +84,7 @@ function SidebarProject({ project, isActive }: { project: PostProdProject; isAct
           cursor: 'pointer',
           transition: 'background 0.1s',
         }}
-        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)' }}
+        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'var(--admin-overlay-02)' }}
         onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
       >
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: isActive ? 600 : 400, color: isActive ? C.text : C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
@@ -1191,7 +1176,7 @@ export default function PostProdDetailPage() {
                       <span style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
                         padding: '1px 6px', borderRadius: 10,
-                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'rgba(255,255,255,0.05)',
+                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'var(--admin-overlay-05)',
                         color: tabComplete ? C.success : isActive ? C.accent : C.text3,
                         border: `1px solid ${tabComplete ? 'rgba(76,175,125,0.25)' : isActive ? 'rgba(124,92,252,0.25)' : C.border}`,
                       }}>
@@ -1235,7 +1220,7 @@ export default function PostProdDetailPage() {
                       <span style={{
                         fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
                         padding: '1px 6px', borderRadius: 10,
-                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'rgba(255,255,255,0.05)',
+                        background: tabComplete ? 'rgba(76,175,125,0.15)' : isActive ? C.accentBg : 'var(--admin-overlay-05)',
                         color: tabComplete ? C.success : isActive ? C.accent : C.text3,
                         border: `1px solid ${tabComplete ? 'rgba(76,175,125,0.25)' : isActive ? 'rgba(124,92,252,0.25)' : C.border}`,
                       }}>
@@ -1439,7 +1424,7 @@ export default function PostProdDetailPage() {
                   </span>
                 )}
                 {isSelectedLocked && (
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4 }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4 }}>
                     Venter
                   </span>
                 )}
@@ -1813,7 +1798,7 @@ export default function PostProdDetailPage() {
                               width: '100%', padding: '8px 14px', background: isAssigned ? C.accentBg : 'none',
                               border: 'none', cursor: 'pointer', textAlign: 'left',
                             }}
-                            onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                            onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'var(--admin-overlay-04)' }}
                             onMouseLeave={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
                           >
                             <span style={{

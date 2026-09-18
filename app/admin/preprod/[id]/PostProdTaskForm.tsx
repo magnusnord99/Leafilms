@@ -4,16 +4,7 @@
 import { useState } from 'react'
 import { addPostProdBoardTask, type PostProdDestination } from '@/lib/actions/pipeline'
 import type { PostProdBoardLane, VideoDeliverableTab } from '@/lib/actions/pipeline'
-
-const C = {
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-}
+import { C } from '@/lib/admin-theme'
 
 type DestinationOption = { key: string; label: string; destination: PostProdDestination }
 

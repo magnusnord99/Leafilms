@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { getAllGalleriesOverview, getHiddenGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
 import CreateStandaloneGalleryButton from './CreateStandaloneGalleryButton'
+import { C } from '@/lib/admin-theme'
 
 export default async function SelectionsOverviewPage({
   searchParams,
@@ -20,12 +21,6 @@ export default async function SelectionsOverviewPage({
     showHidden ? getHiddenGalleriesOverview() : getAllGalleriesOverview(),
     getStandaloneGalleries(),
   ])
-
-  const C = {
-    bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
-    border: '#3C3C52', text: '#EEEEF2', text2: '#B4B4CC', text3: '#8484A0',
-    accent: '#7C5CFC', accentBg: 'rgba(124,92,252,0.10)',
-  }
 
   const galleryStatusMap: Record<string, { label: string; color: string }> = {
     open:      { label: 'Åpen',     color: '#4CAF7D' },

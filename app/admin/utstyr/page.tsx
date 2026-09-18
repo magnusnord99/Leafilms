@@ -5,19 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getRooms, createRoom, getPreprodProjects, EquipmentRoom } from '@/lib/actions/equipment'
 import EquipmentPickerPanel from '@/components/admin/EquipmentPickerPanel'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function RoomCard({ room, projectId }: { room: EquipmentRoom; projectId: string }) {
   const href = projectId ? `/admin/utstyr/${room.id}?project=${projectId}` : `/admin/utstyr/${room.id}`
@@ -25,7 +13,7 @@ function RoomCard({ room, projectId }: { room: EquipmentRoom; projectId: string 
     <Link href={href} style={{ textDecoration: 'none' }}>
       <div
         style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.12s' }}
-        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
       >
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>

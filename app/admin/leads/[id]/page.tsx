@@ -10,6 +10,7 @@ import { getOrCreateLeadConversation } from '@/lib/actions/lead-chat'
 import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
+import { C } from '@/lib/admin-theme'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
 // som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
@@ -17,21 +18,6 @@ function notesToHtml(raw: string): string {
   if (!raw) return ''
   if (/<[a-z][\s\S]*>/i.test(raw)) return raw
   return raw.split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('')
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
 }
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }> = {
@@ -588,7 +574,7 @@ export default function LeadDetailPage() {
                     onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.text2}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="2" y1="12" x2="22" y2="12" />

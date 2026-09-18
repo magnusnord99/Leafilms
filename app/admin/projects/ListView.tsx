@@ -242,6 +242,19 @@ export function ProjectsListView({ view, onViewChange }: {
   [cards])
 
   async function handleDelete(card: ProjectCard) {
+    // En lead kobles til prosjektet sitt ved opprettelse (converted_to_project_id) og forblir
+    // synlig i pipeline via det — men koblingen har ON DELETE SET NULL, så en sletting herfra
+    // ville stille foreldreløsgjøre leaden (usynlig i pipeline, ingen vei tilbake i UI-et).
+    // Blokker i stedet og pek til /admin/leads, som sletter lead+prosjekt sammen konsistent.
+    const { data: linkedLeads } = await supabase
+      .from('leads')
+      .select('id, name, company')
+      .in('converted_to_project_id', card.allIds)
+    if (linkedLeads && linkedLeads.length > 0) {
+      const names = linkedLeads.map(l => l.company || l.name).join(', ')
+      alert(`Kan ikke slette — leaden "${names}" er koblet til dette prosjektet. Slett leaden fra Leads-siden i stedet, så følger prosjektet med.`)
+      return
+    }
     const versionNote = card.versionCount > 1 ? ` og alle ${card.versionCount} pitch-versjoner` : ''
     if (!confirm(`Slett prosjektet "${card.title}"${versionNote}? Dette kan ikke angres.`)) return
     try {

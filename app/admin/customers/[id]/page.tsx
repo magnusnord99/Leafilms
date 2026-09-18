@@ -349,11 +349,22 @@ export default function CustomerDetailPage() {
   }
 
   async function handleDeleteProject(project: ProjectWithDetails) {
+    const supabase = createClient()
+    // Se ListView.tsx handleDelete for hvorfor: en lead koblet til prosjektet blir stille
+    // foreldreløs (ON DELETE SET NULL) og usynlig i pipeline hvis vi sletter herfra.
+    const { data: linkedLeads } = await supabase
+      .from('leads')
+      .select('id, name, company')
+      .eq('converted_to_project_id', project.id)
+    if (linkedLeads && linkedLeads.length > 0) {
+      const names = linkedLeads.map(l => l.company || l.name).join(', ')
+      alert(`Kan ikke slette — leaden "${names}" er koblet til dette prosjektet. Slett leaden fra Leads-siden i stedet, så følger prosjektet med.`)
+      return
+    }
     const extra = project.quotes.length > 0 || project.contracts.length > 0
       ? ` (inkl. ${project.quotes.length} tilbud og ${project.contracts.length} kontrakt${project.contracts.length === 1 ? '' : 'er'})`
       : ''
     if (!confirm(`Slett prosjektet "${project.title}"${extra}? Dette kan ikke angres.`)) return
-    const supabase = createClient()
     const { error } = await supabase.from('projects').delete().eq('id', project.id)
     if (error) { alert('Kunne ikke slette prosjektet.'); return }
     setProjects(prev => prev.filter(p => p.id !== project.id))

@@ -188,7 +188,7 @@ export default function FakturaPage() {
               onClick={handleMarkDone}
               disabled={readOnly || access !== 'current' || marking}
               style={{
-                width: 26, height: 26, borderRadius: 6, flexShrink: 0, cursor: taskDone ? 'default' : 'pointer',
+                width: 36, height: 36, borderRadius: 6, flexShrink: 0, cursor: taskDone ? 'default' : 'pointer',
                 background: taskDone ? C.success : 'transparent',
                 border: `2px solid ${taskDone ? C.success : C.border}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -196,7 +196,7 @@ export default function FakturaPage() {
               }}
             >
               {taskDone && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
                   <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}

@@ -105,7 +105,7 @@ function MoodboardCard({
           checked={done}
           onChange={toggleDone}
           disabled={readOnly}
-          style={{ width: 14, height: 14, accentColor: C.success, cursor: 'pointer' }}
+          style={{ width: 22, height: 22, accentColor: C.success, cursor: 'pointer' }}
         />
         Moodboard/planlegging ferdig
       </label>
@@ -438,7 +438,7 @@ function PackingSection({
               type="checkbox"
               checked={onlyMine}
               onChange={e => setOnlyMine(e.target.checked)}
-              style={{ width: 12, height: 12, accentColor: C.accent, cursor: 'pointer' }}
+              style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
             />
             Vis bare mine
           </label>
@@ -514,7 +514,7 @@ function PackingSection({
             placeholder="Legg til utstyr..."
             disabled={readOnly}
             style={{
-              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
               color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
               borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
             }}

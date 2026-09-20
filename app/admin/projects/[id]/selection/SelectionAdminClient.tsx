@@ -1005,7 +1005,7 @@ function AlbumDetailPanel({
               value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenameValue(album.name); setRenaming(false) } }}
-              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 8px', outline: 'none', width: 180 }}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 600, color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 5, padding: '3px 8px', outline: 'none', width: 180 }}
             />
             <button onClick={handleRename} style={{ background: C.accent, border: 'none', borderRadius: 5, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', padding: '4px 8px', cursor: 'pointer' }}>Lagre</button>
             <button onClick={() => { setRenameValue(album.name); setRenaming(false) }} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', padding: '4px 8px', cursor: 'pointer' }}>Avbryt</button>
@@ -1103,7 +1103,7 @@ function AlbumDetailPanel({
                   checked={useGalleryPin}
                   onChange={e => handleToggleGalleryPin(e.target.checked)}
                   disabled={sharingLoading}
-                  style={{ accentColor: '#64A0DC', width: 11, height: 11, cursor: 'pointer' }}
+                  style={{ accentColor: '#64A0DC', width: 22, height: 22, cursor: 'pointer' }}
                 />
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, whiteSpace: 'nowrap' }}>Felles PIN</span>
               </label>

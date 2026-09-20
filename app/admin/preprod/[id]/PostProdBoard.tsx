@@ -419,7 +419,7 @@ export function PostProdBoard({
           onChange={e => setNewLaneName(e.target.value)}
           placeholder="Ny lane, f.eks. Animasjon"
           disabled={readOnly}
-          style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
+          style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
         />
         <button
           onClick={handleCreateLane}

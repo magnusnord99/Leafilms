@@ -347,7 +347,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
           <div>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.text3, marginBottom: 4 }}>
               Administrasjon
@@ -356,7 +356,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
               Varsler
             </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <PushNotificationToggle />
             <div style={{ display: 'flex', gap: 4, background: C.surface2, borderRadius: 7, padding: 3 }}>
               {([

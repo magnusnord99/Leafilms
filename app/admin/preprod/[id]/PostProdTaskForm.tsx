@@ -100,13 +100,13 @@ export function PostProdTaskForm({
         value={title}
         onChange={e => setTitle(e.target.value)}
         placeholder="Navn på oppgave, f.eks. VFX"
-        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
       />
       <input
         value={description}
         onChange={e => setDescription(e.target.value)}
         placeholder="Beskrivelse (valgfritt)"
-        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text2, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
       />
 
       <select

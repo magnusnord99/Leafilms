@@ -130,7 +130,7 @@ export default function AlbumCard({
             onChange={e => setNameInput(e.target.value)}
             onBlur={saveName}
             onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false) }}
-            style={{ flex: 1, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', outline: 'none' }}
+            style={{ flex: 1, background: 'none', border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
           />
         ) : (
           <span

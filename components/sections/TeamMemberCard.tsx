@@ -297,7 +297,7 @@ export function TeamMemberCard({
                           type="checkbox"
                           checked={selectedRoles.has(role)}
                           onChange={() => toggleRole(role)}
-                          className="w-3 h-3"
+                          className="w-6 h-6"
                           style={{ accentColor: '#C49434' }}
                         />
                         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem' }}>

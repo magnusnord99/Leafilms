@@ -171,7 +171,7 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
                 flex: 1, resize: 'none', boxSizing: 'border-box',
                 background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8,
                 padding: '8px 10px', outline: 'none',
-                fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, lineHeight: 1.5,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, lineHeight: 1.5,
               }}
             />
             <button

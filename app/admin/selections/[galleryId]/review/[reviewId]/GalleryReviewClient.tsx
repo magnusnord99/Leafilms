@@ -184,7 +184,7 @@ export default function GalleryReviewClient({
                         onBlur={e => saveNote(img.id, e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                         placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
-                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', outline: 'none' }}
+                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
                       />
                     </div>
                   </div>
@@ -261,7 +261,7 @@ export default function GalleryReviewClient({
               onBlur={e => saveNote(lightboxImage.id, e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
               placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
-              style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none' }}
+              style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
             />
             <button
               onClick={() => lightboxNoteRef.current?.blur()}
@@ -283,7 +283,7 @@ export default function GalleryReviewClient({
           onChange={e => setComment(e.target.value)}
           placeholder="Overordnet kommentar (påkrevd ved «Be om endringer»)..."
           rows={2}
-          style={{ flex: 1, maxWidth: 480, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', outline: 'none', resize: 'none' }}
+          style={{ flex: 1, maxWidth: 480, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', resize: 'none' }}
         />
         {/* På leveringsreview styres hvilken knapp som vises av bildemerkingene —
             enten alt er godkjent (kun "Godkjenn"), eller noe trenger endring

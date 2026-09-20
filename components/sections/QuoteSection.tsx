@@ -621,7 +621,7 @@ export function QuoteSection({
                         checked={checked}
                         disabled={isContractSigned}
                         onChange={() => { if (!isContractSigned) onToggleAddon(addon.id) }}
-                        style={{ accentColor: '#C49434', width: 18, height: 18, flexShrink: 0, cursor: isContractSigned ? 'default' : 'pointer' }}
+                        style={{ accentColor: '#C49434', width: 24, height: 24, flexShrink: 0, cursor: isContractSigned ? 'default' : 'pointer' }}
                       />
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 500, color: checked ? '#E8E1D5' : '#9E9287' }}>
                         {addon.description}

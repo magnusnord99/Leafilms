@@ -528,7 +528,7 @@ export default function ContractSigningSection({
                     type="checkbox"
                     checked={noInvoiceInfo}
                     onChange={(e) => setNoInvoiceInfo(e.target.checked)}
-                    style={{ marginTop: '0.2rem', accentColor: '#C49434', width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }}
+                    style={{ marginTop: '0.2rem', accentColor: '#C49434', width: 24, height: 24, flexShrink: 0, cursor: 'pointer' }}
                   />
                   {t.noInvoiceInfo}
                 </label>
@@ -555,8 +555,8 @@ export default function ContractSigningSection({
                   style={{
                     marginTop: '0.2rem',
                     accentColor: '#C49434',
-                    width: 16,
-                    height: 16,
+                    width: 24,
+                    height: 24,
                     flexShrink: 0,
                     cursor: 'pointer',
                   }}

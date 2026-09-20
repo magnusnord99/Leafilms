@@ -923,7 +923,7 @@ function Field({ label, children, style }: { label: string; children: React.Reac
 }
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
   padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
 }
 

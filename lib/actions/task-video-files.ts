@@ -7,6 +7,7 @@ import { r2, R2_BUCKET } from '@/lib/r2'
 import { CreateMultipartUploadCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { completeUpload } from '@/lib/actions/transfers'
+import { createVideoReview } from '@/lib/actions/video-reviews'
 
 // Samme delstørrelse som transfers.ts — se begrunnelse der. Ikke eksportert
 // ("use server"-filer kan kun eksportere async-funksjoner); klienten får
@@ -141,4 +142,60 @@ export async function getTaskVideoFileSignedUrl(fileId: string): Promise<string 
     console.error('[getTaskVideoFileSignedUrl]', err)
     return null
   }
+}
+
+// Sender en opplastet fil til kunden for tidsankret kommentering på /v/[token] —
+// gjenbruker video-review-systemet, bare med R2 som lagringskilde (spec
+// §Send til kunde). Helt uavhengig av sendTaskFileToColleague under.
+export async function sendTaskFileToCustomer(input: {
+  fileId: string
+  projectId: string
+  title: string
+}): Promise<{ ok: true; token: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  const { data: file, error } = await supabase
+    .from('task_video_files')
+    .select('id, r2_key')
+    .eq('id', input.fileId)
+    .single()
+
+  if (error || !file) return { error: 'Fant ikke filen' }
+
+  try {
+    const review = await createVideoReview({
+      projectId: input.projectId,
+      title: input.title,
+      storageProvider: 'r2',
+      r2Key: file.r2_key,
+      taskVideoFileId: file.id,
+    })
+    return { ok: true, token: review.token }
+  } catch (err) {
+    console.error('[sendTaskFileToCustomer]', err)
+    return { error: 'Kunne ikke sende filen til kunden' }
+  }
+}
+
+export async function getLatestVideoReviewForFile(fileId: string): Promise<{
+  id: string
+  token: string
+  status: 'open' | 'submitted'
+} | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('video_reviews')
+    .select('id, token, status')
+    .eq('task_video_file_id', fileId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getLatestVideoReviewForFile]', error)
+    return null
+  }
+  return data
 }

@@ -190,10 +190,14 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       router.push(`/admin/preprod/${n.project_id}?chat=1`)
     } else if (n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded') {
       router.push(`/admin/projects/${n.project_id}?tab=pitch`)
-    } else if (n.type === 'gallery_review_requested') {
-      router.push(`/admin/selections/${n.gallery_id}/review/${n.gallery_review_id}`)
-    } else if (n.type === 'gallery_review_responded') {
-      router.push(`/admin/selections/${n.gallery_id}`)
+    } else if (n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded') {
+      if (n.gallery_id) {
+        router.push(n.type === 'gallery_review_requested'
+          ? `/admin/selections/${n.gallery_id}/review/${n.gallery_review_id}`
+          : `/admin/selections/${n.gallery_id}`)
+      } else if (n.gallery_review_id) {
+        router.push(`/admin/reviews/${n.gallery_review_id}`)
+      }
     } else if (n.type === 'invoice_assigned') {
       router.push(`/admin/faktura/${n.project_id}`)
     } else if (n.type === 'resale_assigned') {

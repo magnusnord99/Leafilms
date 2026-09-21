@@ -6,10 +6,12 @@ import Link from 'next/link'
 import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
 import { getOrCreateLeadConversation } from '@/lib/actions/lead-chat'
 import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
+import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
 import { C } from '@/lib/admin-theme'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
@@ -38,19 +40,6 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
-
-const TEMPERATURE_CONFIG: Record<'cold' | 'lukewarm' | 'warm', { label: string; color: string }> = {
-  cold:     { label: 'Kald',   color: '#5B9BD5' },
-  lukewarm: { label: 'Lunken', color: '#F0A500' },
-  warm:     { label: 'Varm',   color: '#E05555' },
-}
-
-const TEMPERATURE_OPTIONS: { value: '' | 'cold' | 'lukewarm' | 'warm'; label: string }[] = [
-  { value: '',         label: 'Ikke satt' },
-  { value: 'cold',     label: 'Kald' },
-  { value: 'lukewarm', label: 'Lunken' },
-  { value: 'warm',     label: 'Varm' },
-]
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -323,17 +312,11 @@ export default function LeadDetailPage() {
                   </div>
                   <div>
                     <Label>Temperatur</Label>
-                    <select
+                    <TemperatureSlider
                       value={editForm.temperature}
-                      onChange={e => setEditForm(prev => ({ ...prev, temperature: e.target.value as EditForm['temperature'] }))}
-                      style={{ ...editInputStyle, cursor: 'pointer' }}
-                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                    >
-                      {TEMPERATURE_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                      onChange={t => setEditForm(prev => ({ ...prev, temperature: t }))}
+                      onClear={() => setEditForm(prev => ({ ...prev, temperature: '' }))}
+                    />
                   </div>
                   <div>
                     <Label>Kontakt innen</Label>
@@ -370,12 +353,12 @@ export default function LeadDetailPage() {
                     <span style={{
                       fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
                       letterSpacing: '0.06em', textTransform: 'uppercase',
-                      color: TEMPERATURE_CONFIG[lead.temperature].color,
-                      background: `${TEMPERATURE_CONFIG[lead.temperature].color}18`,
-                      border: `1px solid ${TEMPERATURE_CONFIG[lead.temperature].color}30`,
+                      color: LEAD_TEMPERATURE_CONFIG[lead.temperature].color,
+                      background: `${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}18`,
+                      border: `1px solid ${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}30`,
                       padding: '3px 9px', borderRadius: 5,
                     }}>
-                      {TEMPERATURE_CONFIG[lead.temperature].label}
+                      {LEAD_TEMPERATURE_CONFIG[lead.temperature].label}
                     </span>
                   )}
                 </div>

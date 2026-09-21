@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createLead, analyzeLeadNotes } from '@/lib/actions/leads'
 import { getAllProfiles } from '@/lib/actions/pipeline'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
 import { C } from '@/lib/admin-theme'
 
 function stripHtml(html: string): string {
@@ -13,13 +14,6 @@ function stripHtml(html: string): string {
 }
 
 const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
-
-const TEMPERATURE_OPTIONS: { value: '' | 'cold' | 'lukewarm' | 'warm'; label: string; color: string }[] = [
-  { value: '',         label: 'Ikke satt', color: '#8484A0' },
-  { value: 'cold',     label: 'Kald',      color: '#5B9BD5' },
-  { value: 'lukewarm', label: 'Lunken',    color: '#F0A500' },
-  { value: 'warm',     label: 'Varm',      color: '#E05555' },
-]
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -224,17 +218,11 @@ export default function NewLeadPage() {
                 </div>
                 <div>
                   <Label>Temperatur</Label>
-                  <select
+                  <TemperatureSlider
                     value={temperature}
-                    onChange={e => setTemperature(e.target.value as typeof temperature)}
-                    style={{ ...inputStyle, cursor: 'pointer' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                  >
-                    {TEMPERATURE_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                    onChange={setTemperature}
+                    onClear={() => setTemperature('')}
+                  />
                 </div>
                 <div>
                   <Label>Kontakt innen</Label>

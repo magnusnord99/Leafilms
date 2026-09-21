@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getLeadsWithMeta, deleteLead, LeadListItem, LeadStatus } from '@/lib/actions/leads'
+import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
 import { C } from '@/lib/admin-theme'
 
 const success = '#4CAF7D'
@@ -24,12 +25,6 @@ const SOURCE_LABELS: Record<string, string> = {
   referanse: 'Referanse',
   telefon: 'Telefon',
   annet: 'Annet',
-}
-
-const TEMPERATURE_CONFIG: Record<'cold' | 'lukewarm' | 'warm', { label: string; color: string }> = {
-  cold:     { label: 'Kald',   color: '#5B9BD5' },
-  lukewarm: { label: 'Lunken', color: '#F0A500' },
-  warm:     { label: 'Varm',   color: '#E05555' },
 }
 
 export default function LeadsPage() {
@@ -278,12 +273,12 @@ export default function LeadsPage() {
                           <span style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
                             letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
-                            color: TEMPERATURE_CONFIG[lead.temperature].color,
-                            background: `${TEMPERATURE_CONFIG[lead.temperature].color}14`,
-                            border: `1px solid ${TEMPERATURE_CONFIG[lead.temperature].color}28`,
+                            color: LEAD_TEMPERATURE_CONFIG[lead.temperature].color,
+                            background: `${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}14`,
+                            border: `1px solid ${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}28`,
                             padding: '3px 9px', borderRadius: 5,
                           }}>
-                            {TEMPERATURE_CONFIG[lead.temperature].label}
+                            {LEAD_TEMPERATURE_CONFIG[lead.temperature].label}
                           </span>
                         )}
 

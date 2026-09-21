@@ -97,6 +97,7 @@ export function TaskVideoFiles({
       })
 
       if ('error' in result) {
+        abortUpload({ key: initResult.key, uploadId: initResult.uploadId }).catch(() => {})
         setUploadState({ phase: 'error', message: result.error })
         return
       }

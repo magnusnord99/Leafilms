@@ -411,26 +411,26 @@ export async function getLatestTaskFileReview(fileId: string): Promise<TaskFileR
   return data as TaskFileReview | null
 }
 
-// For /admin/task-file-reviews/[reviewId] — henter alt reviewsiden trenger i ett kall.
-export async function getTaskFileForInternalReview(reviewId: string): Promise<{
-  review: TaskFileReview
-  file: TaskVideoFile
-  taskTitle: string
-  projectTitle: string | null
-  signedUrl: string
+// For varsel-resolveren (/admin/reviews/[reviewId]) — finner riktig postprod-
+// dyplenke (prosjekt/steg/fil) for en fil-basert review, slik at kollega-
+// reviewen skjer inline i selve post-prod-steget i stedet for på en egen side.
+export async function getPostprodLinkForFileReview(reviewId: string): Promise<{
+  projectId: string
+  taskId: string
+  fileId: string
 } | null> {
   const supabase = await createClient()
-  const { data: reviewRow, error } = await supabase
+  const { data: reviewRow } = await supabase
     .from('gallery_reviews')
-    .select('id, status, comment, reviewer_id, requested_by, created_at, task_video_file_id')
+    .select('task_video_file_id')
     .eq('id', reviewId)
     .maybeSingle()
 
-  if (error || !reviewRow || !reviewRow.task_video_file_id) return null
+  if (!reviewRow?.task_video_file_id) return null
 
   const { data: file } = await supabase
     .from('task_video_files')
-    .select('*')
+    .select('task_id')
     .eq('id', reviewRow.task_video_file_id)
     .maybeSingle()
 
@@ -438,24 +438,81 @@ export async function getTaskFileForInternalReview(reviewId: string): Promise<{
 
   const { data: task } = await supabase
     .from('tasks')
-    .select('title, project_id')
+    .select('project_id')
     .eq('id', file.task_id)
     .maybeSingle()
 
-  let projectTitle: string | null = null
-  if (task?.project_id) {
-    const { data: project } = await supabase.from('projects').select('title').eq('id', task.project_id).maybeSingle()
-    projectTitle = project?.title ?? null
+  if (!task) return null
+
+  return { projectId: task.project_id, taskId: file.task_id, fileId: reviewRow.task_video_file_id }
+}
+
+// ── Tidsankrede kommentarer på en opplastet fil ──────────────────────────────
+// Speiler video_comments-mønsteret (lib/actions/video-reviews.ts), men internt/
+// autentisert (ekte author_id fremfor fritekst-navn), for kollega-review inline
+// i post-prod-steget.
+
+export type TaskFileComment = {
+  id: string
+  file_id: string
+  author_id: string | null
+  timestamp_seconds: number | null
+  text: string
+  resolved: boolean
+  created_at: string
+  author: { id: string; name: string | null; email: string } | null
+}
+
+export async function getTaskFileComments(fileId: string): Promise<TaskFileComment[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('task_video_file_comments')
+    .select('id, file_id, author_id, timestamp_seconds, text, resolved, created_at')
+    .eq('file_id', fileId)
+    .order('timestamp_seconds', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('[getTaskFileComments]', error)
+    return []
   }
 
-  const signedUrl = await getTaskVideoFileSignedUrl(file.id)
-  if (!signedUrl) return null
+  const rows = data ?? []
+  if (rows.length === 0) return []
 
-  return {
-    review: reviewRow as TaskFileReview,
-    file: file as TaskVideoFile,
-    taskTitle: task?.title ?? '',
-    projectTitle,
-    signedUrl,
+  const authorIds = [...new Set(rows.map(r => r.author_id).filter((id): id is string => !!id))]
+  const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', authorIds)
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+
+  return rows.map(r => ({ ...r, author: r.author_id ? profileMap[r.author_id] ?? null : null }))
+}
+
+export async function addTaskFileComment(
+  fileId: string,
+  text: string,
+  timestampSeconds: number | null,
+): Promise<{ comment: TaskFileComment } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  const { data, error } = await supabase
+    .from('task_video_file_comments')
+    .insert({ file_id: fileId, author_id: user.id, text: text.trim(), timestamp_seconds: timestampSeconds })
+    .select('id, file_id, author_id, timestamp_seconds, text, resolved, created_at')
+    .single()
+
+  if (error || !data) {
+    console.error('[addTaskFileComment]', error)
+    return { error: 'Kunne ikke legge til kommentar' }
   }
+
+  const { data: profile } = await supabase.from('profiles').select('id, name, email').eq('id', user.id).maybeSingle()
+  return { comment: { ...data, author: profile ?? null } }
+}
+
+export async function resolveTaskFileComment(commentId: string, resolved: boolean): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('task_video_file_comments').update({ resolved }).eq('id', commentId)
+  if (error) console.error('[resolveTaskFileComment]', error)
 }

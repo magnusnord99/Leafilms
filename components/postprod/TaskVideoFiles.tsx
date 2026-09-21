@@ -4,14 +4,14 @@ import { useEffect, useState, useRef } from 'react'
 import {
   initiateTaskFileUpload, completeTaskFileUpload, listTaskVideoFiles,
   sendTaskFileToCustomer, getLatestVideoReviewForFile,
-  requestTaskFileReview, getLatestTaskFileReview,
+  requestTaskFileReview, respondToTaskFileReview, getLatestTaskFileReview,
 } from '@/lib/actions/task-video-files'
 import type { TaskVideoFile, TaskFileReview } from '@/lib/actions/task-video-files'
 import { abortUpload } from '@/lib/actions/transfers'
 import { uploadFileToR2 } from '@/lib/r2-upload-client'
-import { getAllProfiles } from '@/lib/actions/pipeline'
+import { getAllProfiles, getCurrentUserProfile } from '@/lib/actions/pipeline'
 import { formatFileSize } from '@/lib/utils/file-size'
-import { TaskVideoFilePreview } from './TaskVideoFilePreview'
+import { TaskFileReviewPlayer } from './TaskFileReviewPlayer'
 import { C } from '@/lib/admin-theme'
 
 type Profile = { id: string; name: string | null; email: string; color: string | null; phone: string | null }
@@ -44,19 +44,23 @@ function buildChains(files: TaskVideoFile[]): TaskVideoFile[][] {
 }
 
 export function TaskVideoFiles({
-  taskId, projectId, taskTitle, readOnly,
+  taskId, projectId, taskTitle, readOnly, deepLinkFileId,
 }: {
   taskId: string
   projectId: string
   taskTitle: string
   readOnly: boolean
+  // Fra varsel-resolveren (/admin/reviews/[reviewId] → ?file=) — åpner riktig
+  // fil automatisk når en kollega klikker seg inn fra et review-varsel.
+  deepLinkFileId?: string | null
 }) {
   const [files, setFiles] = useState<TaskVideoFile[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadState, setUploadState] = useState<UploadState>({ phase: 'idle' })
   const [replacesFileId, setReplacesFileId] = useState<string | null>(null)
-  const [expandedFileId, setExpandedFileId] = useState<string | null>(null)
+  const [expandedFileId, setExpandedFileId] = useState<string | null>(deepLinkFileId ?? null)
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function refresh() {
@@ -65,6 +69,7 @@ export function TaskVideoFiles({
   }
 
   useEffect(() => { refresh() }, [taskId])
+  useEffect(() => { getCurrentUserProfile().then(p => setCurrentUserId(p?.id ?? null)) }, [])
 
   async function handleFileSelected(file: File, asReplacesId: string | null) {
     setUploadState({ phase: 'uploading', filename: file.name, progress: 0 })
@@ -182,6 +187,7 @@ export function TaskVideoFiles({
             projectId={projectId}
             taskTitle={taskTitle}
             readOnly={readOnly}
+            currentUserId={currentUserId}
             expanded={expandedFileId === latest.id}
             onToggleExpand={() => setExpandedFileId(id => id === latest.id ? null : latest.id)}
             showHistory={showHistoryFor === latest.id}
@@ -195,7 +201,7 @@ export function TaskVideoFiles({
 }
 
 function TaskFileRow({
-  file, olderVersions, projectId, taskTitle, readOnly,
+  file, olderVersions, projectId, taskTitle, readOnly, currentUserId,
   expanded, onToggleExpand, showHistory, onToggleHistory, onUploadNewVersion,
 }: {
   file: TaskVideoFile
@@ -203,6 +209,7 @@ function TaskFileRow({
   projectId: string
   taskTitle: string
   readOnly: boolean
+  currentUserId: string | null
   expanded: boolean
   onToggleExpand: () => void
   showHistory: boolean
@@ -215,6 +222,8 @@ function TaskFileRow({
   const [pickingReviewer, setPickingReviewer] = useState(false)
   const [reviewerId, setReviewerId] = useState('')
   const [sending, setSending] = useState(false)
+  const [respondComment, setRespondComment] = useState('')
+  const [responding, setResponding] = useState<'approved' | 'changes_requested' | null>(null)
 
   useEffect(() => {
     getLatestVideoReviewForFile(file.id).then(setCustomerReview)
@@ -244,6 +253,22 @@ function TaskFileRow({
     if (profiles.length === 0) getAllProfiles().then(setProfiles)
     setPickingReviewer(true)
   }
+
+  async function handleRespond(decision: 'approved' | 'changes_requested') {
+    if (!colleagueReview) return
+    if (decision === 'changes_requested' && !respondComment.trim()) {
+      alert('Skriv en kommentar før du ber om endringer')
+      return
+    }
+    setResponding(decision)
+    const result = await respondToTaskFileReview(colleagueReview.id, decision, respondComment)
+    setResponding(null)
+    if (!result.ok) { alert(result.error ?? 'Noe gikk galt'); return }
+    setColleagueReview(await getLatestTaskFileReview(file.id))
+    setRespondComment('')
+  }
+
+  const isAssignedReviewer = !!currentUserId && colleagueReview?.reviewer_id === currentUserId && colleagueReview.status === 'pending'
 
   const colleagueStatusLabel = colleagueReview
     ? colleagueReview.status === 'pending' ? 'Venter på kollega-godkjenning'
@@ -289,7 +314,38 @@ function TaskFileRow({
 
       {expanded && (
         <div style={{ padding: '0 14px 14px' }}>
-          <TaskVideoFilePreview fileId={file.id} />
+          <TaskFileReviewPlayer fileId={file.id} />
+
+          {isAssignedReviewer && (
+            <div style={{ marginTop: 10, padding: '10px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, marginBottom: 6 }}>
+                Du er satt som reviewer for denne filen
+              </p>
+              <textarea
+                value={respondComment}
+                onChange={e => setRespondComment(e.target.value)}
+                placeholder="Kommentar (påkrevd hvis du ber om endringer)"
+                rows={2}
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', outline: 'none', resize: 'vertical', marginBottom: 8 }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => handleRespond('approved')}
+                  disabled={responding !== null}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: responding ? 'default' : 'pointer', background: C.accent, color: '#fff', border: 'none' }}
+                >
+                  {responding === 'approved' ? 'Sender...' : 'Godkjenn'}
+                </button>
+                <button
+                  onClick={() => handleRespond('changes_requested')}
+                  disabled={responding !== null}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: responding ? 'default' : 'pointer', background: 'none', color: '#D4645A', border: `1px solid ${C.border}` }}
+                >
+                  {responding === 'changes_requested' ? 'Sender...' : 'Be om endringer'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {!readOnly && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>

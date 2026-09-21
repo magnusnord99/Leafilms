@@ -38,9 +38,6 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 - `supabase/migrations/146_quote_created_by.sql` (legger til created_by-kolonne på quotes — "Opprettet av X"-teksten ved siden av versjonsvelgeren på tilbudssiden vises ikke før denne er kjørt, se feedback ec244372)
-- `supabase/migrations/160_task_video_files.sql` (ny tabell for filer lastet opp på postprod-steg — "Filer i dette steget"-seksjonen på Grovklipp/Farger/Lyd/Klipp viser ingen filer og opplasting feiler før denne er kjørt)
-- `supabase/migrations/161_video_reviews_r2_support.sql` (legger til R2-støtte på video_reviews — VIKTIG: createVideoReview() setter nå alltid storage_provider/r2_key/task_video_file_id i insert-kallet, så ALL oppretting av video-reviews feiler før denne er kjørt, ikke bare "Send til kunde" for postprod-filer — også de eksisterende video-fanene i /admin/projects/[id]/video og seleksjonsgalleriet rammes)
-- `supabase/migrations/162_gallery_reviews_task_file_support.sql` (gjør gallery_id valgfri + legger til task_video_file_id på gallery_reviews — "Send til kollega" på en opplastet postprod-fil feiler før denne er kjørt; krever i tillegg 139_task_waiting_review.sql for at waiting_review-status faktisk settes på steget)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).
@@ -52,6 +49,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 **Kjørt 2026-09-16:** `151_email_discussion_chat.sql` (egen e-postdiskusjon-chat på e-post-siden, feedback e9431fb7), `152_harden_profile_role.sql` til `156_harden_messages_reviews_rls.sql` (5 kritiske RLS/privilege-escalation-fikser hastet inn fra aldri-mergede cursor-bugbot-branches fra august — se git-loggen for detaljer per fiks), og `157_conversation_message_mentions.sql` (mentions-kolonne + egen varseltype for @tagging i produksjonschat/lead-chat/e-postdiskusjon) er alle anvendt mot Supabase.
 
 **Kjørt 2026-09-17:** `159_lead_temperature_deadline.sql` er anvendt mot Supabase (temperatur kald/lunken/varm + kontaktfrist på leads, feedback bb6b3251/71f1caec/4820c6a6). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150).
+
+**Kjørt 2026-09-21:** `160_task_video_files.sql`, `161_video_reviews_r2_support.sql`, `162_gallery_reviews_task_file_support.sql` og `163_task_video_file_comments.sql` er anvendt mot Supabase (filopplasting på postprod video-steg — Grovklipp/Farger/Lyd/Klipp — med versjonering, send til kunde/kollega, og tidsankrede kommentarer for kollega-review inline i post-prod-steget). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150/159). NB: R2-bucketens CORS-policy mangler foreløpig en GET-regel — opplastede filer kan ikke spilles av før dette er lagt til i Cloudflare-dashbordet (se lib/r2.ts-kommentaren).
 
 ## Utviklingsfilosofi
 

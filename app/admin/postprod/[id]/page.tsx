@@ -1581,6 +1581,7 @@ export default function PostProdDetailPage() {
                   projectId={projectId}
                   taskTitle={selectedTask.title}
                   readOnly={readOnly}
+                  deepLinkFileId={searchParams?.get('file') ?? null}
                 />
               ) : selectedTask.title === 'Logging' ? (
                 <div style={{ marginBottom: 24, padding: '12px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>

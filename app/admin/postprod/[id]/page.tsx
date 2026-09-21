@@ -29,6 +29,7 @@ import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { TaskVideoFiles } from '@/components/postprod/TaskVideoFiles'
 import { C } from '@/lib/admin-theme'
 
 type PostProdProject = ProjectWithPipeline & { task_count: number; done_count: number }
@@ -52,6 +53,11 @@ const TASK_LINK_FIELDS: Record<string, { key: string; label: string }[]> = {
     { key: 'sounds_link', label: 'Link til lyder' },
   ],
 }
+
+// Stegene som fikk filopplasting i stedet for lim-inn-lenke (spec §Omfang).
+// Selektering/Redigering (bilder) og Logging (bruker Filer-widgeten på
+// prosjektsiden i stedet, se rendering under) er bevisst IKKE med her.
+const VIDEO_FILE_STEPS = ['Grovklipp', 'Farger', 'Lyd', 'Klipp']
 
 function getExtraLinks(data: Record<string, string>): string[] {
   try {
@@ -1569,72 +1575,58 @@ export default function PostProdDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2" style={{ columnGap: 32 }}>
               <div>
 
-              {/* Task links (kun stegets egne redigerbare lenker — lenker fra tidligere
-                  steg vises i referansepanelet til venstre, se priorStages) */}
+              {/* Filer i steget (video) / arkiverte lenker — erstatter de gamle
+                  redigerbare lenkefeltene for Grovklipp/Farger/Lyd/Klipp
+                  (spec docs/superpowers/specs/2026-09-21-postprod-video-file-upload-design.md).
+                  TASK_LINK_FIELDS/getExtraLinks lever videre uendret for
+                  priorStages-referansepanelet og for andre steger. */}
+              {VIDEO_FILE_STEPS.includes(selectedTask.title) ? (
+                <TaskVideoFiles
+                  taskId={selectedTask.id}
+                  projectId={projectId}
+                  taskTitle={selectedTask.title}
+                  readOnly={readOnly}
+                />
+              ) : selectedTask.title === 'Logging' ? (
+                <div style={{ marginBottom: 24, padding: '12px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                    Last opp loggede prosjektfiler via «Filer»-seksjonen øverst på siden — de tilhører prosjektet, ikke selve steget.
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Arkiverte lenker fra før filopplasting ble innført — kun visning,
+                  ikke lenger redigerbare, for å unngå datatap på pågående prosjekter. */}
               {(() => {
                 const linkFields = TASK_LINK_FIELDS[selectedTask.title] ?? []
-                if (linkFields.length === 0) return null
                 const currentData = taskData[selectedTask.id] ?? {}
+                const archivedLinks = linkFields.filter(f => currentData[f.key]).map(f => ({ label: f.label, value: currentData[f.key] }))
+                const archivedExtra = getExtraLinks(currentData)
+                if (archivedLinks.length === 0 && archivedExtra.length === 0) return null
                 return (
                   <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Links
-                      </label>
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: taskDataSaved ? C.success : C.text3, transition: 'color 0.2s' }}>
-                        {taskDataSaving ? 'Lagrer...' : taskDataSaved ? 'Lagret ✓' : ''}
-                      </span>
-                    </div>
-                    {linkFields.map(field => {
-                      const val = currentData[field.key] ?? ''
-                      return (
-                        <div key={field.key} style={{ marginBottom: 10 }}>
-                          <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500, color: C.text3, marginBottom: 5 }}>
-                            {field.label}
-                          </label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input
-                              type="text"
-                              value={val}
-                              onChange={e => handleLinkChange(selectedTask.id, field.key, e.target.value)}
-                              placeholder="https://..."
-                              style={{
-                                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
-                                color: C.text, background: C.surface,
-                                border: `1px solid ${C.border}`, borderRadius: 7,
-                                padding: '8px 12px', outline: 'none',
-                                transition: 'border-color 0.15s',
-                              }}
-                              onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                              onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                            />
-                            {val && (
-                              <a
-                                href={val}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                                  color: C.accent, textDecoration: 'none',
-                                  padding: '7px 11px', borderRadius: 6, flexShrink: 0,
-                                  background: C.accentBg, border: `1px solid rgba(124,92,252,0.25)`,
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Åpne ↗
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Arkiverte lenker
+                    </label>
+                    {archivedLinks.map(l => (
+                      <div key={l.label} style={{ marginBottom: 6 }}>
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>{l.label}: </span>
+                        <a href={l.value} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.accent }}>{l.value}</a>
+                      </div>
+                    ))}
+                    {archivedExtra.map((val, i) => (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <a href={val} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.accent }}>{val}</a>
+                      </div>
+                    ))}
                   </div>
                 )
               })()}
 
-              {/* Ekstra lenker — fritekst-lenker i tillegg til de faste feltene over,
-                  siden behovet for lenker varierer fra prosjekt til prosjekt (feedback d369f2ca) */}
-              {(() => {
+              {/* Ekstra lenker — uendret for alle steg UTENOM de fire video-filstegene,
+                  som nå bruker filopplasting i stedet (feedback d369f2ca for opprinnelig
+                  begrunnelse; se spec for hvorfor video-stegene ble unntatt). */}
+              {!VIDEO_FILE_STEPS.includes(selectedTask.title) && (() => {
                 const currentData = taskData[selectedTask.id] ?? {}
                 const extraLinks = getExtraLinks(currentData)
                 return (

@@ -10,6 +10,7 @@ import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
+import { C as CBase } from '@/lib/admin-theme'
 
 // Laster filen opp til R2 som en multipart-opplasting, rett fra nettleseren
 // (filbitene går aldri innom Next.js-serveren — nødvendig for filer i
@@ -62,10 +63,9 @@ async function uploadFileToR2(
 }
 
 const C = {
-  bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
-  border: '#3C3C52', text: '#EEEEF2', text2: '#B4B4CC', text3: '#8484A0',
-  accent: '#7C5CFC', accentBg: 'rgba(124,92,252,0.10)', accentBorder: 'rgba(124,92,252,0.35)',
-  danger: '#E05555', success: '#4CAF7D', gold: '#C49434',
+  ...CBase,
+  accentBorder: 'rgba(124,92,252,0.35)',
+  gold: '#C49434',
 }
 
 type Props = {

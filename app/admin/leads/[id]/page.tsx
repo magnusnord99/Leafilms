@@ -6,10 +6,13 @@ import Link from 'next/link'
 import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
 import { getOrCreateLeadConversation } from '@/lib/actions/lead-chat'
 import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
+import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
+import { C } from '@/lib/admin-theme'
 
 // Eldre notater lagret som ren tekst (før rik tekst-editoren) — bevar linjeskift
 // som avsnitt/<br> når de lastes inn i TipTap-editoren første gang.
@@ -17,21 +20,6 @@ function notesToHtml(raw: string): string {
   if (!raw) return ''
   if (/<[a-z][\s\S]*>/i.test(raw)) return raw
   return raw.split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('')
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
 }
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }> = {
@@ -51,16 +39,7 @@ const SOURCE_LABELS: Record<string, string> = {
   telefon:         'Telefon',
 }
 
-const SOURCE_OPTIONS = [
-  { value: '',                label: 'Velg kilde...' },
-  { value: 'market_analysis', label: 'Markedsanalyse' },
-  { value: 'instagram',       label: 'Instagram' },
-  { value: 'linkedin',        label: 'LinkedIn' },
-  { value: 'nettside',        label: 'Nettside' },
-  { value: 'referanse',       label: 'Referanse' },
-  { value: 'telefon',         label: 'Telefon' },
-  { value: 'annet',           label: 'Annet' },
-]
+const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -88,6 +67,8 @@ type EditForm = {
   source: string
   reason: string
   salesPoints: string[]
+  temperature: '' | 'cold' | 'lukewarm' | 'warm'
+  contactDeadline: string
 }
 
 export default function LeadDetailPage() {
@@ -112,6 +93,7 @@ export default function LeadDetailPage() {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<EditForm>({
     name: '', company: '', email: '', phone: '', website: '', source: '', reason: '', salesPoints: [''],
+    temperature: '', contactDeadline: '',
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
@@ -169,6 +151,8 @@ export default function LeadDetailPage() {
       source: lead.source ?? '',
       reason: lead.reason ?? '',
       salesPoints: (lead.sales_points ?? []).length > 0 ? lead.sales_points : [''],
+      temperature: lead.temperature ?? '',
+      contactDeadline: lead.contact_deadline ?? '',
     })
     setEditError(null)
     setEditing(true)
@@ -209,6 +193,8 @@ export default function LeadDetailPage() {
       source: editForm.source,
       reason: editForm.reason,
       sales_points: editForm.salesPoints,
+      temperature: editForm.temperature || undefined,
+      contact_deadline: editForm.contactDeadline || undefined,
     })
     if (ok) {
       setLead(prev => prev ? {
@@ -221,6 +207,8 @@ export default function LeadDetailPage() {
         source: editForm.source || null,
         reason: editForm.reason.trim() || null,
         sales_points: editForm.salesPoints.filter(s => s.trim()),
+        temperature: editForm.temperature || null,
+        contact_deadline: editForm.contactDeadline || null,
       } : prev)
       setEditing(false)
     } else {
@@ -306,19 +294,41 @@ export default function LeadDetailPage() {
                     />
                   </div>
                 </div>
-                <div style={{ maxWidth: 220 }}>
-                  <Label>Kilde</Label>
-                  <select
-                    value={editForm.source}
-                    onChange={e => setEditForm(prev => ({ ...prev, source: e.target.value }))}
-                    style={{ ...editInputStyle, cursor: 'pointer' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                  >
-                    {SOURCE_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12, maxWidth: 480 }}>
+                  <div>
+                    <Label>Kilde</Label>
+                    <input
+                      list="source-suggestions"
+                      value={editForm.source}
+                      onChange={e => setEditForm(prev => ({ ...prev, source: e.target.value }))}
+                      placeholder="Hvor kom leaden fra?"
+                      style={editInputStyle}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                    <datalist id="source-suggestions">
+                      {SOURCE_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <Label>Temperatur</Label>
+                    <TemperatureSlider
+                      value={editForm.temperature}
+                      onChange={t => setEditForm(prev => ({ ...prev, temperature: t }))}
+                      onClear={() => setEditForm(prev => ({ ...prev, temperature: '' }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Kontakt innen</Label>
+                    <input
+                      type="date"
+                      value={editForm.contactDeadline}
+                      onChange={e => setEditForm(prev => ({ ...prev, contactDeadline: e.target.value }))}
+                      style={{ ...editInputStyle, cursor: 'pointer' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                    />
+                  </div>
                 </div>
                 {editError && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger, marginTop: 10 }}>{editError}</p>
@@ -339,6 +349,18 @@ export default function LeadDetailPage() {
                   }}>
                     {status.label}
                   </span>
+                  {lead.temperature && (
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: LEAD_TEMPERATURE_CONFIG[lead.temperature].color,
+                      background: `${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}18`,
+                      border: `1px solid ${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}30`,
+                      padding: '3px 9px', borderRadius: 5,
+                    }}>
+                      {LEAD_TEMPERATURE_CONFIG[lead.temperature].label}
+                    </span>
+                  )}
                 </div>
                 {lead.company && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', color: C.text2, marginBottom: 2 }}>
@@ -350,6 +372,15 @@ export default function LeadDetailPage() {
                     Kilde: {SOURCE_LABELS[lead.source] ?? lead.source}
                   </p>
                 )}
+                {lead.contact_deadline && (() => {
+                  const overdue = new Date(lead.contact_deadline) < new Date(new Date().toDateString())
+                  return (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: overdue ? C.danger : C.text3, marginTop: 2, fontWeight: overdue ? 600 : 400 }}>
+                      {overdue ? '⚠ Skulle vært kontaktet innen ' : 'Kontakt innen '}
+                      {new Date(lead.contact_deadline).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                    </p>
+                  )
+                })()}
               </div>
             )}
 
@@ -526,7 +557,7 @@ export default function LeadDetailPage() {
                     onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.text2}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="2" y1="12" x2="22" y2="12" />

@@ -9,24 +9,11 @@ import {
 } from '@/lib/actions/equipment'
 import { EQUIPMENT_CATEGORY_LABELS } from '@/lib/equipment-constants'
 import EquipmentPickerPanel from '@/components/admin/EquipmentPickerPanel'
+import { C } from '@/lib/admin-theme'
 
 function formatDate(isoDate: string) {
   const [y, m, d] = isoDate.split('-')
   return `${d}.${m}.${y}`
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  danger:   '#E05555',
 }
 
 function UnitRow({

@@ -18,18 +18,7 @@ import { getAvatarColor } from '@/lib/avatar-colors'
 import { PostProdTaskForm } from './PostProdTaskForm'
 import { PostProdLibraryPanel } from './PostProdLibraryPanel'
 import { TaskChatToggle } from '@/components/task/TaskChatToggle'
-
-const C = {
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function SortableCard({ card, children }: { card: PostProdBoardCard; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id })

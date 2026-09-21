@@ -23,20 +23,7 @@ import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { isStageAllowed, isStaffRole } from '@/lib/permissions'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
 type ActiveTab = 'oversikt' | 'pitch' | 'kontrakt'
@@ -130,7 +117,7 @@ function AssigneePicker({
                   background: isAssigned ? C.accentBg : 'none',
                   border: 'none', cursor: 'pointer', textAlign: 'left',
                 }}
-                onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseEnter={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'var(--admin-overlay-04)' }}
                 onMouseLeave={e => { if (!isAssigned) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
               >
                 <span style={{
@@ -270,8 +257,6 @@ function TilbudStepper({
     ? `/admin/projects/${projectId}?tab=kontrakt`
     : `/admin/projects/${projectId}/quote`
   const step2BtnLabel = step2Done ? 'Rediger →' : step2QuoteDone ? 'Åpne kontrakt →' : 'Åpne tilbud →'
-
-
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -568,7 +553,6 @@ function TaskChecklist({
     </div>
   )
 }
-
 
 export default function ProjectHubPage() {
   const params = useParams()
@@ -2461,7 +2445,7 @@ export default function ProjectHubPage() {
             {/* E-post shortcut */}
             <Link href={`/admin/projects/${projectId}/email`} style={{ textDecoration: 'none' }}>
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'border-color 0.12s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
               >
                 <div>

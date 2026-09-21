@@ -12,21 +12,7 @@ import {
   getDailyPlanItems, addTaskToPlan, addCustomPlanItem, toggleCustomPlanItem, removePlanItem, reorderPlanItems,
 } from '@/lib/actions/daily-plan'
 import { PIPELINE_STAGE_LABELS_SHORT, TASK_STATUS_LABELS, TASK_STATUS_CYCLE, type Task, type TaskStatus, type AdminTask, type DailyPlanItem } from '@/lib/types'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 type TaskWithProject = Task & {
   project: {
@@ -224,7 +210,7 @@ function TaskRow({ item, onToggle }: {
           {locked && (
             <span style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
-              color: C.text3, background: 'rgba(255,255,255,0.04)',
+              color: C.text3, background: 'var(--admin-overlay-04)',
               border: `1px solid ${C.border}`,
               padding: '1px 6px', borderRadius: 4, flexShrink: 0,
               letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -408,7 +394,7 @@ function PlanRow({ item, onToggle, onRemove }: {
       {locked && (
         <span style={{
           fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
-          color: C.text3, background: 'rgba(255,255,255,0.04)',
+          color: C.text3, background: 'var(--admin-overlay-04)',
           border: `1px solid ${C.border}`,
           padding: '1px 6px', borderRadius: 4, flexShrink: 0,
           letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -478,7 +464,7 @@ function TaskPicker({ candidates, onPick, onClose }: {
             {t.locked && (
               <span style={{
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.58rem', fontWeight: 600,
-                color: C.text3, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
+                color: C.text3, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`,
                 padding: '0px 5px', borderRadius: 4, letterSpacing: '0.04em', textTransform: 'uppercase',
               }}>
                 Venter
@@ -814,7 +800,7 @@ export default function MyTasksPage() {
                 <span style={{
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700,
                   padding: '0px 5px', borderRadius: 8,
-                  background: isActive ? C.accentBg : 'rgba(255,255,255,0.06)',
+                  background: isActive ? C.accentBg : 'var(--admin-overlay-06)',
                   color: isActive ? C.accent : C.text3,
                   border: `1px solid ${isActive ? 'rgba(124,92,252,0.25)' : C.border}`,
                 }}>

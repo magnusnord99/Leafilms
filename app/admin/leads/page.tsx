@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getLeadsWithMeta, deleteLead, LeadListItem, LeadStatus } from '@/lib/actions/leads'
+import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
 import { C } from '@/lib/admin-theme'
 
 const success = '#4CAF7D'
@@ -32,6 +33,17 @@ export default function LeadsPage() {
   const [filter, setFilter] = useState<LeadStatus | 'all'>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+
+  // Metadata-elementene (oppgaver, salgspunkter, dato, status osv.) er ~340px
+  // bredt inline — på mobil (~305px disponibelt) flyter de ut av skjermen.
+  // Under 640px wrappas de til en egen rad under navn/kontakt-blokken.
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   useEffect(() => {
     getLeadsWithMeta().then(data => {
@@ -109,7 +121,7 @@ export default function LeadsPage() {
               >
                 {f.label}
                 {f.count > 0 && (
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, padding: '0 5px', borderRadius: 8, background: isActive ? C.accentBg : 'rgba(255,255,255,0.04)', color: isActive ? C.accent : C.text3, border: `1px solid ${isActive ? 'rgba(124,92,252,0.25)' : C.border}` }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, padding: '0 5px', borderRadius: 8, background: isActive ? C.accentBg : 'var(--admin-overlay-04)', color: isActive ? C.accent : C.text3, border: `1px solid ${isActive ? 'rgba(124,92,252,0.25)' : C.border}` }}>
                     {f.count}
                   </span>
                 )}
@@ -196,52 +208,100 @@ export default function LeadsPage() {
                         </div>
                       </div>
 
-                      {/* Ansvarlig + åpne oppgaver */}
-                      {lead.assigned_profile && (
-                        <span
-                          title={`Ansvarlig: ${lead.assigned_profile.name ?? lead.assigned_profile.email}`}
-                          style={{
-                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                            background: C.accent, color: '#fff',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700,
-                          }}
-                        >
-                          {(lead.assigned_profile.name ?? lead.assigned_profile.email)[0].toUpperCase()}
-                        </span>
-                      )}
-                      {lead.open_tasks > 0 && (
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
-                          {lead.open_tasks} oppgave{lead.open_tasks !== 1 ? 'r' : ''}
-                        </span>
-                      )}
-
-                      {/* Sales points count */}
-                      {(lead.sales_points ?? []).length > 0 && (
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
-                          {(lead.sales_points ?? []).length} salgspunkt{(lead.sales_points ?? []).length !== 1 ? 'er' : ''}
-                        </span>
-                      )}
-
-                      {/* Date */}
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, flexShrink: 0 }}>
-                        {new Date(lead.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
-                      </span>
-
-                      {/* Status */}
-                      <span style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
-                        letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
-                        color: status.color, background: `${status.color}14`,
-                        border: `1px solid ${status.color}28`,
-                        padding: '3px 9px', borderRadius: 5,
+                      {/* Metadata: ansvarlig, oppgaver, salgspunkter, dato, status, pil.
+                          På mobil wrappas dette til en egen rad (flex: 0 0 100%) under
+                          navn/kontakt-blokken for å unngå horisontal overflow. */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center',
+                        gap: isMobile ? 8 : 16,
+                        flexShrink: 0,
+                        ...(isMobile ? {
+                          flex: '0 0 100%',
+                          marginLeft: 52, // avatar (36) + gap (16)
+                          marginTop: -4,
+                        } : {}),
                       }}>
-                        {status.label}
-                      </span>
+                        {/* Ansvarlig avatar */}
+                        {lead.assigned_profile && (
+                          <span
+                            title={`Ansvarlig: ${lead.assigned_profile.name ?? lead.assigned_profile.email}`}
+                            style={{
+                              width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                              background: C.accent, color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700,
+                            }}
+                          >
+                            {(lead.assigned_profile.name ?? lead.assigned_profile.email)[0].toUpperCase()}
+                          </span>
+                        )}
 
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-                        <path d="M5 3l4 4-4 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                        {/* Åpne oppgaver — skjules på mobil (dato+status er nok) */}
+                        {!isMobile && lead.open_tasks > 0 && (
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
+                            {lead.open_tasks} oppgave{lead.open_tasks !== 1 ? 'r' : ''}
+                          </span>
+                        )}
+
+                        {/* Salgspunkter — skjules på mobil */}
+                        {!isMobile && (lead.sales_points ?? []).length > 0 && (
+                          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
+                            {(lead.sales_points ?? []).length} salgspunkt{(lead.sales_points ?? []).length !== 1 ? 'er' : ''}
+                          </span>
+                        )}
+
+                        {/* Kontaktfrist — kun overtidde/nære frister vises for å spare plass */}
+                        {lead.contact_deadline && (() => {
+                          const deadline = new Date(lead.contact_deadline)
+                          const today = new Date(new Date().toDateString())
+                          const overdue = deadline < today
+                          const dueSoon = !overdue && deadline.getTime() - today.getTime() <= 2 * 86400000
+                          if (!overdue && !dueSoon) return null
+                          return (
+                            <span style={{
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                              color: overdue ? C.danger : warning, flexShrink: 0,
+                              display: 'flex', alignItems: 'center', gap: 3,
+                            }}>
+                              {overdue ? '⚠' : '⏱'} {deadline.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                            </span>
+                          )
+                        })()}
+
+                        {/* Temperatur */}
+                        {lead.temperature && (
+                          <span style={{
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                            letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
+                            color: LEAD_TEMPERATURE_CONFIG[lead.temperature].color,
+                            background: `${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}14`,
+                            border: `1px solid ${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}28`,
+                            padding: '3px 9px', borderRadius: 5,
+                          }}>
+                            {LEAD_TEMPERATURE_CONFIG[lead.temperature].label}
+                          </span>
+                        )}
+
+                        {/* Dato */}
+                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, flexShrink: 0 }}>
+                          {new Date(lead.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                        </span>
+
+                        {/* Status */}
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                          letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
+                          color: status.color, background: `${status.color}14`,
+                          border: `1px solid ${status.color}28`,
+                          padding: '3px 9px', borderRadius: 5,
+                        }}>
+                          {status.label}
+                        </span>
+
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                          <path d="M5 3l4 4-4 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
                     </div>
                   </Link>
 

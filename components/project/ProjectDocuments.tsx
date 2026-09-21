@@ -3,15 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import type { ProjectDocument } from '@/lib/types'
-
-const C = {
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  danger:   '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 function formatFileSize(bytes: number | null): string {
   if (!bytes) return ''

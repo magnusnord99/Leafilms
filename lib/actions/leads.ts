@@ -24,6 +24,8 @@ export async function createLead(data: {
   sales_points: string[]
   notes: string
   quote_assignee_id?: string
+  temperature?: LeadTemperature | ''
+  contact_deadline?: string
 }): Promise<{ leadId: string; projectId: string } | null> {
   try {
     const supabase = await createClient()
@@ -75,13 +77,15 @@ export async function createLead(data: {
       return null
     }
 
-    // 3. Prøv å oppdatere med berikede felter (krever migration 048)
+    // 3. Prøv å oppdatere med berikede felter (krever migration 048/159)
     //    Feiler stille hvis kolonnene ikke eksisterer ennå
     const enriched: Record<string, unknown> = {}
     if (data.website.trim()) enriched.website = data.website.trim()
     if (data.reason.trim()) enriched.reason = data.reason.trim()
     const points = data.sales_points.filter(s => s.trim())
     if (points.length > 0) enriched.sales_points = points
+    if (data.temperature) enriched.temperature = data.temperature
+    if (data.contact_deadline) enriched.contact_deadline = data.contact_deadline
 
     if (Object.keys(enriched).length > 0) {
       await supabase.from('leads').update(enriched).eq('id', lead.id)
@@ -183,6 +187,7 @@ export async function analyzeLeadNotes(
 }
 
 export type LeadStatus = 'new' | 'contacted' | 'meeting_booked' | 'converted' | 'lost'
+export type LeadTemperature = 'cold' | 'lukewarm' | 'warm'
 
 export type LeadRecord = {
   id: string
@@ -199,6 +204,8 @@ export type LeadRecord = {
   notes: string | null
   assigned_to: string | null
   converted_to_project_id: string | null
+  temperature: LeadTemperature | null
+  contact_deadline: string | null
   created_at: string
   updated_at: string
 }
@@ -272,6 +279,8 @@ export async function updateLead(leadId: string, data: {
   source: string
   reason: string
   sales_points: string[]
+  temperature?: LeadTemperature | ''
+  contact_deadline?: string
 }): Promise<boolean> {
   try {
     const supabase = await createClient()
@@ -290,6 +299,20 @@ export async function updateLead(leadId: string, data: {
       })
       .eq('id', leadId)
     if (error) { console.error('updateLead:', error); return false }
+
+    // Prøv å oppdatere temperatur/kontaktfrist separat (krever migration 159)
+    // Feiler stille hvis kolonnene ikke eksisterer ennå, uten å blokkere resten av lagringen.
+    if (data.temperature !== undefined || data.contact_deadline !== undefined) {
+      const { error: enrichError } = await supabase
+        .from('leads')
+        .update({
+          temperature: data.temperature || null,
+          contact_deadline: data.contact_deadline || null,
+        })
+        .eq('id', leadId)
+      if (enrichError) console.warn('updateLead temperature/contact_deadline skipped (run migration 159):', enrichError.message)
+    }
+
     revalidatePath('/admin/leads')
     revalidatePath(`/admin/leads/${leadId}`)
     return true

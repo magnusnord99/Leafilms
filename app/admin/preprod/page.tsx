@@ -3,20 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getPreprodProjects, PreprodProject } from '@/lib/actions/preprod'
+import { C as CBase } from '@/lib/admin-theme'
 
 const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  warning:  '#F0A500',
-  blue:     '#4A9EFF',
+  ...CBase,
+  blue: '#4A9EFF',
 }
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -39,7 +30,7 @@ function ProjectCard({ project }: { project: PreprodProject }) {
     <Link href={`/admin/preprod/${project.id}`} style={{ textDecoration: 'none' }}>
       <div
         style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', cursor: 'pointer', transition: 'border-color 0.12s', display: 'flex', flexDirection: 'column', gap: 14 }}
-        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -97,7 +88,7 @@ function StatusPill({ done, label }: { done: boolean; label: string }) {
       fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500,
       padding: '2px 8px', borderRadius: 10,
       color: done ? C.success : C.text3,
-      background: done ? 'rgba(76,175,125,0.1)' : 'rgba(255,255,255,0.04)',
+      background: done ? 'rgba(76,175,125,0.1)' : 'var(--admin-overlay-04)',
       border: `1px solid ${done ? 'rgba(76,175,125,0.25)' : C.border}`,
     }}>
       {done ? '✓ ' : ''}{label}

@@ -8,18 +8,7 @@ import { MessageReactions } from '@/components/shared/MessageReactions'
 import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
 import { supabase } from '@/lib/supabase-client'
 import type { TaskMessage } from '@/lib/types'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-}
+import { C } from '@/lib/admin-theme'
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr)

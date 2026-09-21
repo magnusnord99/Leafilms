@@ -48,6 +48,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-16:** `151_email_discussion_chat.sql` (egen e-postdiskusjon-chat på e-post-siden, feedback e9431fb7), `152_harden_profile_role.sql` til `156_harden_messages_reviews_rls.sql` (5 kritiske RLS/privilege-escalation-fikser hastet inn fra aldri-mergede cursor-bugbot-branches fra august — se git-loggen for detaljer per fiks), og `157_conversation_message_mentions.sql` (mentions-kolonne + egen varseltype for @tagging i produksjonschat/lead-chat/e-postdiskusjon) er alle anvendt mot Supabase.
 
+**Kjørt 2026-09-17:** `159_lead_temperature_deadline.sql` er anvendt mot Supabase (temperatur kald/lunken/varm + kontaktfrist på leads, feedback bb6b3251/71f1caec/4820c6a6). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150).
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

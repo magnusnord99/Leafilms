@@ -6,35 +6,14 @@ import Link from 'next/link'
 import { createLead, analyzeLeadNotes } from '@/lib/actions/leads'
 import { getAllProfiles } from '@/lib/actions/pipeline'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
+import { C } from '@/lib/admin-theme'
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  accentBg: 'rgba(124,92,252,0.08)',
-  success:  '#4CAF7D',
-  danger:   '#E05555',
-}
-
-const SOURCE_OPTIONS = [
-  { value: '',                label: 'Velg kilde...' },
-  { value: 'market_analysis', label: 'Markedsanalyse' },
-  { value: 'instagram',       label: 'Instagram' },
-  { value: 'linkedin',        label: 'LinkedIn' },
-  { value: 'nettside',        label: 'Nettside' },
-  { value: 'referanse',       label: 'Referanse' },
-  { value: 'telefon',         label: 'Telefon' },
-  { value: 'annet',           label: 'Annet' },
-]
+const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -64,6 +43,8 @@ export default function NewLeadPage() {
   const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
   const [source, setSource] = useState('')
+  const [temperature, setTemperature] = useState<'' | 'cold' | 'lukewarm' | 'warm'>('')
+  const [contactDeadline, setContactDeadline] = useState('')
   const [reason, setReason] = useState('')
   const [salesPoints, setSalesPoints] = useState<string[]>(['', '', ''])
   const [coldEmail, setColdEmail] = useState('')
@@ -123,6 +104,8 @@ export default function NewLeadPage() {
       sales_points: salesPoints.filter(s => s.trim()),
       notes,
       quote_assignee_id: quoteAssigneeId || undefined,
+      temperature: temperature || undefined,
+      contact_deadline: contactDeadline || undefined,
     })
 
     if (!result) {
@@ -220,17 +203,37 @@ export default function NewLeadPage() {
                 </div>
                 <div>
                   <Label>Kilde</Label>
-                  <select
+                  <input
+                    list="source-suggestions"
                     value={source}
                     onChange={e => setSource(e.target.value)}
+                    placeholder="Hvor kom leaden fra?"
+                    style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  />
+                  <datalist id="source-suggestions">
+                    {SOURCE_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label>Temperatur</Label>
+                  <TemperatureSlider
+                    value={temperature}
+                    onChange={setTemperature}
+                    onClear={() => setTemperature('')}
+                  />
+                </div>
+                <div>
+                  <Label>Kontakt innen</Label>
+                  <input
+                    type="date"
+                    value={contactDeadline}
+                    onChange={e => setContactDeadline(e.target.value)}
                     style={{ ...inputStyle, cursor: 'pointer' }}
                     onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                     onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                  >
-                    {SOURCE_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
             </div>

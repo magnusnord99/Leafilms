@@ -4,17 +4,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { updateProjectDeliverables } from '@/lib/actions/pipeline'
 import type { DeliverableItem } from '@/lib/types'
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-}
+import { C } from '@/lib/admin-theme'
 
 // En video kan leveres i flere formater samtidig (f.eks. reel til Instagram
 // i 9:16 og samme klipp i 16:9 til YouTube) — lagres som kommaseparert

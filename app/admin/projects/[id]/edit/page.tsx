@@ -372,9 +372,9 @@ export default function EditProject({ params }: Props) {
       <div style={{ padding: '16px 24px 0' }}>
         <Link href={`/admin/projects/${id}${searchParams?.get('from') ? `?from=${searchParams.get('from')}` : ''}`} style={{ textDecoration: 'none' }}>
           <span
-            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: '#8484A0', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = '#B4B4CC' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = '#8484A0' }}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text2 }}
+            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = C.text3 }}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2L4 6l3.5 4" />

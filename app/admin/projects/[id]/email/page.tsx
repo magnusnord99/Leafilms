@@ -8,19 +8,7 @@ import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-disc
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
 import type { PipelineStage } from '@/lib/types'
-
-const C = {
-  bg:      '#181920',
-  surface: '#21212D',
-  surface2:'#2A2A38',
-  border:  '#3C3C52',
-  text:    '#EEEEF2',
-  text2:   '#B4B4CC',
-  text3:   '#8484A0',
-  accent:  '#7C5CFC',
-  success: '#4CAF7D',
-  danger:  '#E05555',
-}
+import { C } from '@/lib/admin-theme'
 
 type EmailType = 'meeting' | 'pitch' | 'follow_up' | 'general'
 type EmailLog = { id: string; project_id: string; type: string; to_email: string; subject: string; sent_at: string }

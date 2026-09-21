@@ -2,12 +2,7 @@
 
 import { useState } from 'react'
 import { updateFeedbackStatus, deleteFeedback, replyToFeedback, type FeedbackItem } from '@/lib/actions/feedback'
-
-const C = {
-  bg: '#181920', surface: '#21212D', surface2: '#2A2A38',
-  border: '#3C3C52', text: '#EEEEF2', text2: '#B4B4CC', text3: '#8484A0',
-  accent: '#7C5CFC',
-}
+import { C } from '@/lib/admin-theme'
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'Høy', 2: 'Medium', 3: 'Lav' }
 const PRIORITY_COLOR: Record<number, string> = { 1: '#C05050', 2: '#C49434', 3: C.text3 }

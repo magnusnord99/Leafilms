@@ -3,10 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createGallery } from '@/lib/actions/selections'
-
-const C = {
-  accent: '#7C5CFC',
-}
+import { C } from '@/lib/admin-theme'
 
 export default function CreateStandaloneGalleryButton() {
   const router = useRouter()

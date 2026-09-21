@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase-client'
 import { Badge } from '@/components/ui'
 import { Project, Customer, MarketAnalysis, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { getCalendarEvents } from '@/lib/actions/calendar'
+import { getMeetingsForCalendar } from '@/lib/actions/meetings'
+import { C } from '@/lib/admin-theme'
 
 const WEEKDAY_LABELS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn']
 const MONTH_LABELS = [
@@ -15,19 +17,6 @@ const MONTH_LABELS = [
 
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-const C = {
-  bg:       '#181920',
-  surface:  '#21212D',
-  surface2: '#2A2A38',
-  border:   '#3C3C52',
-  text:     '#EEEEF2',
-  text2:    '#B4B4CC',
-  text3:    '#8484A0',
-  accent:   '#7C5CFC',
-  success:  '#4CAF7D',
-  danger:   '#E05555',
 }
 
 function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
@@ -96,13 +85,14 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     try {
-      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult, calendarResult] = await Promise.all([
+      const [totalResult, projectsResult, customersResult, pipelineResult, emailLogsResult, calendarResult, meetings] = await Promise.all([
         supabase.from('projects').select('*', { count: 'exact', head: true }),
         supabase.from('projects').select('id, title, status, pipeline_stage, client_name, updated_at, parent_project_id, version_number').order('updated_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id, name, company, email, phone, customer_number').order('name', { ascending: true }),
         supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead'),
         supabase.from('email_log').select('project_id, sent_at').order('sent_at', { ascending: true }),
         getCalendarEvents(),
+        getMeetingsForCalendar(null),
       ])
 
       const eventDates = new Set<string>()
@@ -114,6 +104,7 @@ export default function AdminDashboard() {
         }
       }
       for (const t of calendarResult.tasks) eventDates.add(t.dueDate)
+      for (const m of meetings) eventDates.add(m.startsAt.split('T')[0])
       setCalendarDates(eventDates)
 
       setTotalProjects(totalResult.count ?? 0)
@@ -177,6 +168,17 @@ export default function AdminDashboard() {
   }
 
   async function handleDelete(projectId: string, projectTitle: string) {
+    // Se ListView.tsx handleDelete for hvorfor: en lead koblet til prosjektet blir stille
+    // foreldreløs (ON DELETE SET NULL) og usynlig i pipeline hvis vi sletter herfra.
+    const { data: linkedLeads } = await supabase
+      .from('leads')
+      .select('id, name, company')
+      .eq('converted_to_project_id', projectId)
+    if (linkedLeads && linkedLeads.length > 0) {
+      const names = linkedLeads.map(l => l.company || l.name).join(', ')
+      alert(`Kan ikke slette — leaden "${names}" er koblet til dette prosjektet. Slett leaden fra Leads-siden i stedet, så følger prosjektet med.`)
+      return
+    }
     if (!confirm(`Slett "${projectTitle}"? Dette kan ikke angres.`)) return
     try {
       await supabase.from('projects').delete().eq('id', projectId)
@@ -227,7 +229,7 @@ export default function AdminDashboard() {
             <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
               <div
                 style={{ background: C.surface, border: `1px solid ${'highlight' in s && s.highlight ? 'rgba(124,92,252,0.4)' : C.border}`, borderRadius: 8, padding: '16px 20px', cursor: 'pointer', transition: 'border-color 0.12s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = ('highlight' in s && s.highlight ? 'rgba(124,92,252,0.4)' : C.border)}
               >
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 600, color: 'highlight' in s && s.highlight ? C.accent : C.text, lineHeight: 1, marginBottom: 4 }}>{s.value}</p>
@@ -260,7 +262,7 @@ export default function AdminDashboard() {
                     cursor: 'pointer',
                     transition: 'border-color 0.12s',
                   }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
                     <span style={{
@@ -454,7 +456,7 @@ export default function AdminDashboard() {
                 <Link key={customer.id} href={`/admin/customers/${customer.id}`} style={{ textDecoration: 'none' }}>
                   <div
                     style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#3D3D4E'}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

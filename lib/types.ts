@@ -187,7 +187,7 @@ export type GalleryReviewStatus = 'pending' | 'approved' | 'changes_requested'
 
 export type GalleryReview = {
   id: string
-  gallery_id: string
+  gallery_id: string | null
   status: GalleryReviewStatus
   requested_by: string
   reviewer_id: string
@@ -197,6 +197,7 @@ export type GalleryReview = {
   created_at: string
   admin_task_id: string | null
   task_id: string | null
+  task_video_file_id: string | null
   requester: { id: string; name: string | null; email: string } | null
   reviewer: { id: string; name: string | null; email: string } | null
 }

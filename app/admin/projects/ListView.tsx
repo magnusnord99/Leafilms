@@ -46,6 +46,7 @@ type ProjectRow = {
   shoot_end: string | null
   customer_name: string | null
   customer_company: string | null
+  project_lead_name: string | null
 }
 
 type TaskRow = { project_id: string; pipeline_stage: string; status: string }
@@ -70,6 +71,7 @@ type ProjectCard = {
   editId: string
   shareLink: string | null
   allIds: string[]
+  projectLead: string | null
 }
 
 // ─── Side ─────────────────────────────────────────────────────────────────────
@@ -102,7 +104,8 @@ export function ProjectsListView({ view, onViewChange }: {
           .select(`
             id, title, status, client_name, updated_at, parent_project_id,
             version_number, pipeline_stage, project_type, shoot_start, shoot_end,
-            customers(name, company)
+            customers(name, company),
+            project_lead:profiles!project_lead_id(name, email)
           `)
           .neq('status', 'lost')
           .order('updated_at', { ascending: false }),
@@ -115,8 +118,9 @@ export function ProjectsListView({ view, onViewChange }: {
 
       if (projectsRes.error) throw projectsRes.error
 
-      type RawProject = Omit<ProjectRow, 'customer_name' | 'customer_company'> & {
+      type RawProject = Omit<ProjectRow, 'customer_name' | 'customer_company' | 'project_lead_name'> & {
         customers: { name: string | null; company: string | null } | null
+        project_lead: { name: string | null; email: string } | null
       }
       const rawProjects = (projectsRes.data ?? []) as unknown as RawProject[]
 
@@ -125,6 +129,8 @@ export function ProjectsListView({ view, onViewChange }: {
         customers: undefined,
         customer_name: p.customers?.name ?? null,
         customer_company: p.customers?.company ?? null,
+        project_lead: undefined,
+        project_lead_name: p.project_lead ? (p.project_lead.name ?? p.project_lead.email) : null,
       })))
 
       setTasks((tasksRes.data ?? []) as TaskRow[])
@@ -213,6 +219,7 @@ export function ProjectsListView({ view, onViewChange }: {
         editId: newest.id,
         shareLink: sharedVersion ? shareLinks[sharedVersion.id] : null,
         allIds,
+        projectLead: rep.project_lead_name,
       }
     })
       .filter(card => isStageAllowed(role, card.stage))
@@ -470,6 +477,11 @@ export function ProjectsListView({ view, onViewChange }: {
                   {/* Nøkkelinfo */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 14, flex: 1 }}>
                     {[
+                      (card.stage === 'lead' || card.stage === 'levering') && {
+                        label: 'Ansvarlig',
+                        value: card.projectLead ?? 'Ikke tildelt',
+                        color: card.projectLead ? C.text2 : C.text3,
+                      },
                       {
                         label: 'Opptak',
                         value: card.shootStart

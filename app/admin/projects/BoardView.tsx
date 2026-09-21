@@ -19,7 +19,7 @@ import {
   getProjectsForPipeline, updatePipelineStage, setProjectType,
   getTasksForProjects, getAllProfiles, toggleTaskAssignee, updateTaskStatus,
   advanceFromKontraktUnsigned, assignQuoteAndMove, setQuoteAssignee, setInvoiceAssignee,
-  assignResaleAndMove, setResaleAssignee,
+  assignResaleAndMove, setResaleAssignee, setProjectLead,
 } from '@/lib/actions/pipeline'
 import { PIPELINE_STAGES, PipelineStage, ProjectType, ProjectWithPipeline, Task } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -714,6 +714,100 @@ function ResaleAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
   )
 }
 
+// ─── ProjectLeadAssigneePicker — prosjektleder-ansvarlig (lead + levering) ───
+
+function ProjectLeadAssigneePicker({ projectId, assignee, profiles, onAssigned }: {
+  projectId: string
+  assignee: Profile | null
+  profiles: Profile[]
+  onAssigned: (profile: Profile | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  async function select(profile: Profile | null) {
+    setSaving(true)
+    setOpen(false)
+    await setProjectLead(projectId, profile?.id ?? null)
+    onAssigned(profile)
+    setSaving(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        title={assignee ? `Ansvarlig: ${assignee.name ?? assignee.email}` : 'Tildel ansvarlig'}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '3px 7px 3px 5px', borderRadius: 20, cursor: saving ? 'wait' : 'pointer',
+          background: open ? C.accentBg : assignee ? 'rgba(124,92,252,0.12)' : C.surface2,
+          border: `1px solid ${open ? accentBorder : assignee ? 'rgba(124,92,252,0.4)' : C.border}`,
+          transition: 'all 0.12s',
+          opacity: saving ? 0.6 : 1,
+        }}
+      >
+        {assignee ? (
+          <span style={{ width: 18, height: 18, borderRadius: '50%', background: getAvatarColor(assignee), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.52rem', fontWeight: 700, flexShrink: 0 }}>
+            {(assignee.name ?? assignee.email)[0].toUpperCase()}
+          </span>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.text3} strokeWidth="2" strokeLinecap="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+          </svg>
+        )}
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: assignee ? getAvatarColor(assignee) : C.text3, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {assignee ? (assignee.name ?? assignee.email).split(' ')[0] : 'Tildel'}
+        </span>
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 2L3.5 5L6 2" stroke={C.text3} strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', minWidth: 180, padding: '3px 0' }}>
+          {assignee && (
+            <>
+              <button onClick={() => select(null)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Fjern tildeling</span>
+              </button>
+              <div style={{ height: 1, background: C.border, margin: '2px 0' }} />
+            </>
+          )}
+          {profiles.map(p => {
+            const isSelected = p.id === assignee?.id
+            return (
+              <button key={p.id} onClick={() => select(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px', background: isSelected ? C.accentBg : 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: isSelected ? getAvatarColor(p) : C.surface, border: `1px solid ${isSelected ? getAvatarColor(p) : C.border}`, color: isSelected ? '#fff' : C.text2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                  {(p.name ?? p.email)[0].toUpperCase()}
+                </span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: isSelected ? getAvatarColor(p) : C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.name ?? p.email}
+                </span>
+                {isSelected && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke={getAvatarColor(p)} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── DraggableCard ────────────────────────────────────────────────────────────
 
 function DraggableCard({
@@ -726,6 +820,7 @@ function DraggableCard({
   onQuoteAssigned,
   onInvoiceAssigned,
   onResaleAssigned,
+  onProjectLeadAssigned,
   advancing,
   isDragOverlay = false,
   role = 'admin',
@@ -739,6 +834,7 @@ function DraggableCard({
   onQuoteAssigned: (projectId: string, profile: Profile | null) => void
   onInvoiceAssigned: (projectId: string, profile: Profile | null) => void
   onResaleAssigned: (projectId: string, profile: Profile | null) => void
+  onProjectLeadAssigned: (projectId: string, profile: Profile | null) => void
   advancing: boolean
   isDragOverlay?: boolean
   role?: StaffRole
@@ -784,6 +880,10 @@ function DraggableCard({
 
   const resaleAssignee = project.resale_assignee_id
     ? profiles.find(p => p.id === project.resale_assignee_id) ?? null
+    : null
+
+  const projectLeadAssignee = project.project_lead_id
+    ? profiles.find(p => p.id === project.project_lead_id) ?? null
     : null
 
   // Kort-tittelen skal alltid gå til prosjektets oversiktsside, uansett steg — i motsetning
@@ -944,7 +1044,7 @@ function DraggableCard({
       )}
 
       {/* Footer — leveranse + assignees */}
-      {!isDragOverlay && (combinedDeliveryText(project) || stage === 'tilbud_sendt' || stage === 'fakturert' || stage === 'videresalg' || allAssignees.length > 0) && (
+      {!isDragOverlay && (combinedDeliveryText(project) || stage === 'tilbud_sendt' || stage === 'fakturert' || stage === 'videresalg' || stage === 'lead' || stage === 'levering' || allAssignees.length > 0) && (
         <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
           {combinedDeliveryText(project) && (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -981,6 +1081,17 @@ function DraggableCard({
                 assignee={resaleAssignee}
                 profiles={profiles}
                 onAssigned={profile => onResaleAssigned(project.id, profile)}
+              />
+            </div>
+          )}
+          {(stage === 'lead' || stage === 'levering') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>Ansvarlig:</span>
+              <ProjectLeadAssigneePicker
+                projectId={project.id}
+                assignee={projectLeadAssignee}
+                profiles={profiles}
+                onAssigned={profile => onProjectLeadAssigned(project.id, profile)}
               />
             </div>
           )}
@@ -1074,6 +1185,7 @@ function DroppableColumn({
   onQuoteAssigned,
   onInvoiceAssigned,
   onResaleAssigned,
+  onProjectLeadAssigned,
   isOver,
   role = 'admin',
 }: {
@@ -1088,6 +1200,7 @@ function DroppableColumn({
   onQuoteAssigned: (projectId: string, profile: Profile | null) => void
   onInvoiceAssigned: (projectId: string, profile: Profile | null) => void
   onResaleAssigned: (projectId: string, profile: Profile | null) => void
+  onProjectLeadAssigned: (projectId: string, profile: Profile | null) => void
   isOver: boolean
 }) {
   const { setNodeRef } = useDroppable({ id: stage.value })
@@ -1132,6 +1245,7 @@ function DroppableColumn({
             onQuoteAssigned={onQuoteAssigned}
             onInvoiceAssigned={onInvoiceAssigned}
             onResaleAssigned={onResaleAssigned}
+            onProjectLeadAssigned={onProjectLeadAssigned}
             advancing={false}
             role={role}
           />
@@ -1326,6 +1440,12 @@ export function ProjectsBoardView({ view, onViewChange }: {
     ))
   }
 
+  function handleProjectLeadAssigned(projectId: string, profile: Profile | null) {
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, project_lead_id: profile?.id ?? null } : p
+    ))
+  }
+
   async function handleTaskStatusToggle(taskId: string, currentStatus: Task['status']) {
     const nextStatus: Task['status'] = currentStatus === 'done' ? 'todo' : 'done'
     setTasksByProject(prev => {
@@ -1447,6 +1567,7 @@ export function ProjectsBoardView({ view, onViewChange }: {
                   onQuoteAssigned={handleQuoteAssigned}
                   onInvoiceAssigned={handleInvoiceAssigned}
                   onResaleAssigned={handleResaleAssigned}
+                  onProjectLeadAssigned={handleProjectLeadAssigned}
                   isOver={overStageId === stage.value}
                   role={role}
                 />
@@ -1467,6 +1588,7 @@ export function ProjectsBoardView({ view, onViewChange }: {
               onQuoteAssigned={() => {}}
               onInvoiceAssigned={() => {}}
               onResaleAssigned={() => {}}
+              onProjectLeadAssigned={() => {}}
               advancing={false}
               isDragOverlay
             />

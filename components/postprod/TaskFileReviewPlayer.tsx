@@ -70,6 +70,24 @@ export function TaskFileReviewPlayer({ fileId }: { fileId: string }) {
     vid.play()
   }
 
+  // Klikk på selve videobildet (ikke kontrollbaren nederst) spiller av/pauser
+  // — i tillegg til de native kontrollene, siden play-knappen i den native
+  // kontrollbaren ikke alltid registrerer klikk pålitelig i alle nettlesere/
+  // oppsett (observert 2026-09-21: video lastet og var klar til avspilling,
+  // men klikk på den native play-knappen gjorde ingenting — .play() fra
+  // konsollen virket derimot fint). Ignorerer klikk i de nederste ~40px der
+  // kontrollbaren selv ligger, for ikke å dobbelt-trigge når den native
+  // knappen faktisk fungerer.
+  function handleVideoClick(e: React.MouseEvent<HTMLVideoElement>) {
+    const vid = videoRef.current
+    if (!vid) return
+    const rect = vid.getBoundingClientRect()
+    const clickedInControlBar = e.clientY - rect.top > rect.height - 40
+    if (clickedInControlBar) return
+    if (vid.paused) vid.play()
+    else vid.pause()
+  }
+
   if (error) {
     return (
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger, padding: '10px 0' }}>
@@ -88,7 +106,14 @@ export function TaskFileReviewPlayer({ fileId }: { fileId: string }) {
 
   return (
     <div>
-      <video ref={videoRef} controls src={url} style={{ width: '100%', borderRadius: 8, background: '#000', maxHeight: 420, display: 'block' }} />
+      <video
+        ref={videoRef}
+        controls
+        preload="auto"
+        src={url}
+        onClick={handleVideoClick}
+        style={{ width: '100%', minHeight: 200, borderRadius: 8, background: '#000', maxHeight: 420, display: 'block', cursor: 'pointer' }}
+      />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
         <label style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>

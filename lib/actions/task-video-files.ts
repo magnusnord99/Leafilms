@@ -8,6 +8,7 @@ import { CreateMultipartUploadCommand, GetObjectCommand } from '@aws-sdk/client-
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { completeUpload } from '@/lib/actions/transfers'
 import { createVideoReview } from '@/lib/actions/video-reviews'
+import { notifyAssignment } from '@/lib/notify-assignment'
 
 // Samme delstørrelse som transfers.ts — se begrunnelse der. Ikke eksportert
 // ("use server"-filer kan kun eksportere async-funksjoner); klienten får
@@ -198,4 +199,262 @@ export async function getLatestVideoReviewForFile(fileId: string): Promise<{
     return null
   }
   return data
+}
+
+export type TaskFileReview = {
+  id: string
+  status: 'pending' | 'approved' | 'changes_requested'
+  comment: string | null
+  reviewer_id: string
+  requested_by: string
+  created_at: string
+}
+
+// Intern kollega-godkjenning av en opplastet fil — samme mekanikk som
+// requestGalleryReview() i lib/actions/gallery-reviews.ts (admin_tasks +
+// waiting_review-status), men trigget fra task_video_files i stedet for et
+// galleri. Skrevet som en egen funksjon fremfor å gjøre om den eksisterende,
+// for å ikke røre den fungerende galleri-reviewflyten (spec §Send til kollega).
+export async function requestTaskFileReview(
+  fileId: string,
+  reviewerId: string,
+  dueDate?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: file, error: fileError } = await supabase
+      .from('task_video_files')
+      .select('id, task_id, filename')
+      .eq('id', fileId)
+      .single()
+
+    if (fileError || !file) return { ok: false, error: 'Fant ikke filen' }
+
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('id, project_id, title')
+      .eq('id', file.task_id)
+      .single()
+
+    let projectTitle: string | null = null
+    if (task?.project_id) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', task.project_id)
+        .maybeSingle()
+      projectTitle = project?.title ?? null
+    }
+
+    if (task) {
+      await supabase
+        .from('tasks')
+        .update({ status: 'waiting_review', updated_at: new Date().toISOString() })
+        .eq('id', task.id)
+    }
+
+    const { data: maxOrder } = await supabase
+      .from('admin_tasks')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1)
+
+    const { data: adminTask, error: adminTaskError } = await supabase
+      .from('admin_tasks')
+      .insert({
+        title: projectTitle ? `Gjennomgå ${file.filename} — ${projectTitle}` : `Gjennomgå ${file.filename}`,
+        description: `Intern review av opplastet fil på steget "${task?.title ?? ''}". Åpne fra varselet i /admin/varsler.`,
+        assignee_id: reviewerId,
+        due_date: dueDate || null,
+        sort_order: (maxOrder && maxOrder.length > 0 ? maxOrder[0].sort_order : 0) + 1,
+        created_by: user.id,
+        project_id: task?.project_id ?? null,
+      })
+      .select('id')
+      .single()
+
+    if (adminTaskError) console.error('requestTaskFileReview admin_task insert error:', adminTaskError)
+
+    const { data: review, error: insertError } = await supabase
+      .from('gallery_reviews')
+      .insert({
+        gallery_id: null,
+        task_video_file_id: fileId,
+        status: 'pending',
+        requested_by: user.id,
+        reviewer_id: reviewerId,
+        admin_task_id: adminTask?.id ?? null,
+        task_id: task?.id ?? null,
+      })
+      .select('id')
+      .single()
+
+    if (insertError || !review) {
+      console.error('requestTaskFileReview insert error:', insertError)
+      return { ok: false, error: 'Kunne ikke sende til review' }
+    }
+
+    await notifyAssignment({
+      recipientId: reviewerId,
+      type: 'gallery_review_requested',
+      projectId: task?.project_id ?? null,
+      galleryReviewId: review.id,
+      preview: projectTitle
+        ? `Ber deg gjennomgå "${file.filename}" for "${projectTitle}"`
+        : `Ber deg gjennomgå "${file.filename}"`,
+    })
+
+    revalidatePath('/admin/internal')
+    if (task?.project_id) revalidatePath(`/admin/postprod/${task.project_id}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('requestTaskFileReview unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function respondToTaskFileReview(
+  reviewId: string,
+  decision: 'approved' | 'changes_requested',
+  comment?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: review, error: fetchError } = await supabase
+      .from('gallery_reviews')
+      .select('id, task_video_file_id, requested_by, reviewer_id, admin_task_id, task_id')
+      .eq('id', reviewId)
+      .single()
+
+    if (fetchError || !review || !review.task_video_file_id) return { ok: false, error: 'Fant ikke review-forespørselen' }
+
+    if (user.id !== review.reviewer_id) {
+      return { ok: false, error: 'Du er ikke satt som reviewer for denne forespørselen' }
+    }
+
+    if (decision === 'changes_requested' && !comment?.trim()) {
+      return { ok: false, error: 'Kommentar er påkrevd når du ber om endringer' }
+    }
+
+    const { error: updateError } = await supabase
+      .from('gallery_reviews')
+      .update({ status: decision, comment: comment?.trim() || null, responded_at: new Date().toISOString() })
+      .eq('id', reviewId)
+
+    if (updateError) {
+      console.error('respondToTaskFileReview update error:', updateError)
+      return { ok: false, error: 'Kunne ikke lagre svaret' }
+    }
+
+    if (review.admin_task_id) {
+      await supabase.from('admin_tasks').update({ status: 'done', updated_at: new Date().toISOString() }).eq('id', review.admin_task_id)
+    }
+
+    if (review.task_id) {
+      await supabase.from('tasks').update({ status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', review.task_id)
+    }
+
+    const { data: file } = await supabase
+      .from('task_video_files')
+      .select('task_id')
+      .eq('id', review.task_video_file_id)
+      .maybeSingle()
+
+    let projectId: string | null = null
+    if (file?.task_id) {
+      const { data: task } = await supabase.from('tasks').select('project_id').eq('id', file.task_id).maybeSingle()
+      projectId = task?.project_id ?? null
+    }
+
+    const preview = decision === 'approved'
+      ? 'Godkjente filen'
+      : `Ba om endringer på filen${comment ? `: ${comment}` : ''}`
+
+    await notifyAssignment({
+      recipientId: review.requested_by,
+      type: 'gallery_review_responded',
+      projectId,
+      galleryReviewId: reviewId,
+      preview,
+    })
+
+    revalidatePath('/admin/internal')
+    if (projectId) revalidatePath(`/admin/postprod/${projectId}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('respondToTaskFileReview unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function getLatestTaskFileReview(fileId: string): Promise<TaskFileReview | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('gallery_reviews')
+    .select('id, status, comment, reviewer_id, requested_by, created_at')
+    .eq('task_video_file_id', fileId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getLatestTaskFileReview]', error)
+    return null
+  }
+  return data as TaskFileReview | null
+}
+
+// For /admin/task-file-reviews/[reviewId] — henter alt reviewsiden trenger i ett kall.
+export async function getTaskFileForInternalReview(reviewId: string): Promise<{
+  review: TaskFileReview
+  file: TaskVideoFile
+  taskTitle: string
+  projectTitle: string | null
+  signedUrl: string
+} | null> {
+  const supabase = await createClient()
+  const { data: reviewRow, error } = await supabase
+    .from('gallery_reviews')
+    .select('id, status, comment, reviewer_id, requested_by, created_at, task_video_file_id')
+    .eq('id', reviewId)
+    .maybeSingle()
+
+  if (error || !reviewRow || !reviewRow.task_video_file_id) return null
+
+  const { data: file } = await supabase
+    .from('task_video_files')
+    .select('*')
+    .eq('id', reviewRow.task_video_file_id)
+    .maybeSingle()
+
+  if (!file) return null
+
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('title, project_id')
+    .eq('id', file.task_id)
+    .maybeSingle()
+
+  let projectTitle: string | null = null
+  if (task?.project_id) {
+    const { data: project } = await supabase.from('projects').select('title').eq('id', task.project_id).maybeSingle()
+    projectTitle = project?.title ?? null
+  }
+
+  const signedUrl = await getTaskVideoFileSignedUrl(file.id)
+  if (!signedUrl) return null
+
+  return {
+    review: reviewRow as TaskFileReview,
+    file: file as TaskVideoFile,
+    taskTitle: task?.title ?? '',
+    projectTitle,
+    signedUrl,
+  }
 }

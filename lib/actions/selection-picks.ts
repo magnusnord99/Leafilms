@@ -152,7 +152,7 @@ export async function getAlbumForCustomer(
   const [{ data: videoCommentCounts }, { data: videoSignedUrlData }] = albumVideos.length > 0
     ? await Promise.all([
         service.from('video_comments').select('review_id').in('review_id', albumVideos.map(v => v.id)),
-        service.storage.from('videos').createSignedUrls(albumVideos.map(v => v.storage_path), SIGNED_URL_EXPIRY),
+        service.storage.from('videos').createSignedUrls(albumVideos.filter(v => v.storage_path).map(v => v.storage_path as string), SIGNED_URL_EXPIRY),
       ])
     : [{ data: [] as { review_id: string }[] }, { data: [] as { signedUrl: string; path: string }[] }]
   const videoCountMap: Record<string, number> = {}
@@ -166,7 +166,7 @@ export async function getAlbumForCustomer(
     title: v.title,
     status: v.status,
     comment_count: videoCountMap[v.id] ?? 0,
-    signedUrl: videoSignedUrlMap[v.storage_path] ?? '',
+    signedUrl: v.storage_path ? (videoSignedUrlMap[v.storage_path] ?? '') : '',
   }))
 
   return {

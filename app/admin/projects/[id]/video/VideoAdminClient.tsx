@@ -444,12 +444,13 @@ export default function VideoAdminClient({
         .from('videos')
         .upload(path, file, { contentType: file.type, upsert: false })
       if (uploadErr) throw uploadErr
-      const review = await createVideoReview(
+      const review = await createVideoReview({
         projectId,
-        newTitle.trim(),
-        path,
-        addToGallery && galleryId ? galleryId : undefined
-      )
+        title: newTitle.trim(),
+        storageProvider: 'supabase',
+        storagePath: path,
+        galleryId: addToGallery && galleryId ? galleryId : undefined,
+      })
       setReviews(prev => [review, ...prev])
       setNewTitle('')
       setFile(null)
@@ -462,7 +463,7 @@ export default function VideoAdminClient({
 
   // ── Delete review ─────────────────────────────────────────────────────────
   async function handleDeleteReview(review: VideoReview) {
-    await deleteVideoReview(review.id, review.storage_path)
+    await deleteVideoReview(review.id, review.storage_path ?? '')
     setReviews(prev => prev.filter(r => r.id !== review.id))
     if (expandedId === review.id) setExpandedId(null)
   }

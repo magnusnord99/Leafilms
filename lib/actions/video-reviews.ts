@@ -2,6 +2,9 @@
 
 import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase-server'
+import { r2, R2_BUCKET } from '@/lib/r2'
+import { GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 // ── Konstanter ────────────────────────────────────────────────────────────────
 
@@ -16,7 +19,10 @@ export type VideoReview = {
   gallery_id: string | null
   album_id: string | null
   title: string
-  storage_path: string
+  storage_provider: 'supabase' | 'r2'
+  storage_path: string | null
+  r2_key: string | null
+  task_video_file_id: string | null
   duration_seconds: number | null
   token: string
   pin_code: string
@@ -49,25 +55,54 @@ function cookieKey(token: string): string {
   return `vr_${token.slice(0, 16)}`
 }
 
+// Genererer en spillbar signert URL for en video review, uansett lagringskilde.
+// R2-filer (postprod-opplastinger) og Supabase Storage-filer (eldre/andre
+// video-reviews) bruker samme VideoReview-rad, kun storage_provider skiller dem.
+async function getSignedUrlForReview(
+  service: ReturnType<typeof createServiceClient>,
+  review: VideoReview,
+): Promise<string | null> {
+  if (review.storage_provider === 'r2') {
+    if (!review.r2_key) return null
+    try {
+      return await getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: review.r2_key }), { expiresIn: SIGNED_URL_EXPIRY })
+    } catch (err) {
+      console.error('[getSignedUrlForReview r2]', err)
+      return null
+    }
+  }
+  if (!review.storage_path) return null
+  const { data, error } = await service.storage.from('videos').createSignedUrl(review.storage_path, SIGNED_URL_EXPIRY)
+  if (error || !data?.signedUrl) return null
+  return data.signedUrl
+}
+
 // ── Admin-funksjoner ──────────────────────────────────────────────────────────
 
-export async function createVideoReview(
-  projectId: string | null,
-  title: string,
-  storagePath: string,
-  galleryId?: string,
-  albumId?: string,
-): Promise<VideoReview> {
+export async function createVideoReview(input: {
+  projectId: string | null
+  title: string
+  galleryId?: string
+  albumId?: string
+  storageProvider?: 'supabase' | 'r2'
+  storagePath?: string
+  r2Key?: string
+  taskVideoFileId?: string
+}): Promise<VideoReview> {
   const service = createServiceClient()
+  const provider = input.storageProvider ?? 'supabase'
 
   const { data, error } = await service
     .from('video_reviews')
     .insert({
-      project_id: projectId,
-      gallery_id: galleryId ?? null,
-      album_id: albumId ?? null,
-      title,
-      storage_path: storagePath,
+      project_id: input.projectId,
+      gallery_id: input.galleryId ?? null,
+      album_id: input.albumId ?? null,
+      title: input.title,
+      storage_provider: provider,
+      storage_path: provider === 'supabase' ? (input.storagePath ?? null) : null,
+      r2_key: provider === 'r2' ? (input.r2Key ?? null) : null,
+      task_video_file_id: input.taskVideoFileId ?? null,
       token: generateToken(),
       pin_code: generatePin(),
     })
@@ -109,24 +144,22 @@ async function loadReviewWithCommentsAndUrl(
   service: ReturnType<typeof createServiceClient>,
   review: VideoReview,
 ): Promise<{ review: VideoReview; comments: VideoComment[]; signedUrl: string } | null> {
-  const [commentsResult, signedUrlResult] = await Promise.all([
+  const [commentsResult, signedUrl] = await Promise.all([
     service
       .from('video_comments')
       .select('*')
       .eq('review_id', review.id)
       .order('timestamp_seconds', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true }),
-    service.storage
-      .from('videos')
-      .createSignedUrl(review.storage_path, SIGNED_URL_EXPIRY),
+    getSignedUrlForReview(service, review),
   ])
 
-  if (!signedUrlResult.data?.signedUrl) return null
+  if (!signedUrl) return null
 
   return {
     review,
     comments: (commentsResult.data ?? []) as VideoComment[],
-    signedUrl: signedUrlResult.data.signedUrl,
+    signedUrl,
   }
 }
 
@@ -399,24 +432,22 @@ export async function getVideoForCustomer(token: string): Promise<{
 
   if (!review) return null
 
-  const [commentsResult, signedUrlResult] = await Promise.all([
+  const [commentsResult, signedUrl] = await Promise.all([
     service
       .from('video_comments')
       .select('*')
       .eq('review_id', reviewId)
       .order('timestamp_seconds', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true }),
-    service.storage
-      .from('videos')
-      .createSignedUrl((review as VideoReview).storage_path, SIGNED_URL_EXPIRY),
+    getSignedUrlForReview(service, review as VideoReview),
   ])
 
-  if (signedUrlResult.error || !signedUrlResult.data?.signedUrl) return null
+  if (!signedUrl) return null
 
   return {
     review: review as VideoReview,
     comments: (commentsResult.data ?? []) as VideoComment[],
-    signedUrl: signedUrlResult.data.signedUrl,
+    signedUrl,
   }
 }
 

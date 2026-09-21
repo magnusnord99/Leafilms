@@ -199,7 +199,7 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
   // Signerte URL-er for videoenes forsidebilde (nettleseren rendrer selv første frame av
   // <video preload="metadata">, samme mønster som signedUrl for bilder over) — uten dette
   // vises kun et generisk avspillingsikon i stedet for en faktisk miniatyr av opptaket.
-  const videoPaths = videoList.filter(v => v.storage_path).map(v => v.storage_path)
+  const videoPaths = videoList.filter(v => v.storage_path).map(v => v.storage_path as string)
   const videoSignedUrlMap: Record<string, string> = {}
   if (videoPaths.length > 0) {
     const { data: videoUrlData } = await service.storage
@@ -211,7 +211,7 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
   }
   const videoListWithUrl = videoList.map(v => ({
     ...v,
-    signedUrl: videoSignedUrlMap[v.storage_path] ?? '',
+    signedUrl: v.storage_path ? (videoSignedUrlMap[v.storage_path] ?? '') : '',
   }))
 
   const rawImgs = (allImages ?? []) as {

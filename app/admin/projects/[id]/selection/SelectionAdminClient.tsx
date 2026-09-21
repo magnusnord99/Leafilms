@@ -911,7 +911,14 @@ function AlbumDetailPanel({
         return
       }
       const title = file.name.replace(/\.[^.]+$/, '')
-      await createVideoReview(linkedProjectId, title, path, galleryId, album.id)
+      await createVideoReview({
+        projectId: linkedProjectId,
+        title,
+        storageProvider: 'supabase',
+        storagePath: path,
+        galleryId,
+        albumId: album.id,
+      })
       await onRefresh()
     } finally {
       setUploadingVideo(false)

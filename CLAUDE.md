@@ -38,6 +38,9 @@ Leafilms er en norsk filmproduksjonsbedrift. Vi bygger deres interne business-pl
 - `supabase/migrations/141_ai_schema_introspection.sql` (legger til get_schema_context()-funksjon + noen COMMENT-er — intern AI-bot (lib/ai/chat.ts) bruker en statisk skjemabeskrivelse som fallback inntil denne er kjørt, se STATIC_SCHEMA_FALLBACK i lib/ai/schema-context.ts)
 - `supabase/migrations/142_delivery_field_comments.sql` (dokumenterer delivery_video/delivery_photo for AI-boten, samme mønster som 141)
 - `supabase/migrations/146_quote_created_by.sql` (legger til created_by-kolonne på quotes — "Opprettet av X"-teksten ved siden av versjonsvelgeren på tilbudssiden vises ikke før denne er kjørt, se feedback ec244372)
+- `supabase/migrations/160_task_video_files.sql` (ny tabell for filer lastet opp på postprod-steg — "Filer i dette steget"-seksjonen på Grovklipp/Farger/Lyd/Klipp viser ingen filer og opplasting feiler før denne er kjørt)
+- `supabase/migrations/161_video_reviews_r2_support.sql` (legger til R2-støtte på video_reviews — "Send til kunde" på en opplastet postprod-fil feiler før denne er kjørt)
+- `supabase/migrations/162_gallery_reviews_task_file_support.sql` (gjør gallery_id valgfri + legger til task_video_file_id på gallery_reviews — "Send til kollega" på en opplastet postprod-fil feiler før denne er kjørt)
 Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-02:** `144_resale_visible_at.sql` er nå anvendt mot Supabase (fikset feil der `getProjectsForPipeline()` sitt `.or(...resale_visible_at...)`-filter feilet stille pga. manglende kolonne, som tømte hele pipeline-tavlen for prosjekter).

@@ -42,6 +42,11 @@ ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED 1
 
+# Trengs av lib/actions/task-video-files.ts for å remukse opplastede
+# postprod-videofiler til nettleser-kompatibelt mp4/AAC (mange eksporter har
+# lydkodeker Chrome ikke støtter, f.eks. ukomprimert PCM).
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 

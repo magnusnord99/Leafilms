@@ -2,9 +2,13 @@
 
 import { randomBytes } from 'crypto'
 import { revalidatePath } from 'next/cache'
+import { spawn } from 'child_process'
+import { mkdtemp, readFile, writeFile, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import path from 'path'
 import { createClient } from '@/lib/supabase-server'
 import { r2, R2_BUCKET } from '@/lib/r2'
-import { CreateMultipartUploadCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { CreateMultipartUploadCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { completeUpload } from '@/lib/actions/transfers'
 import { createVideoReview } from '@/lib/actions/video-reviews'
@@ -57,6 +61,52 @@ export async function initiateTaskFileUpload(input: {
   }
 }
 
+// Remuxer den opplastede filen til nettleser-kompatibel mp4: video-sporet
+// kopieres uendret (ingen kvalitetstap, ingen re-encoding — rask operasjon),
+// lyd transkodes til AAC. Nødvendig fordi mange eksporter (rå kamerafiler,
+// enkelte NLE-presets) bruker ukomprimert PCM-lyd, som Chrome ikke kan spille
+// av — spilleren henger seg da fast på HAVE_NOTHING uten noen feilmelding,
+// i stedet for å faktisk feile synlig. Bekreftet med ffprobe på en reell
+// opplastet fil 2026-09-21 (video: h264/avc1 — støttes fint; lyd: pcm_s24le/
+// lpcm — støttes ikke). Returnerer null (og lar originalfilen stå urørt) hvis
+// ffmpeg feiler — bedre å beholde en nedlastbar fil enn å blokkere hele
+// opplastingen. Krever ffmpeg installert i kjøretidsmiljøet (se Dockerfile).
+async function remuxForBrowserPlayback(r2Key: string): Promise<{ key: string; sizeBytes: number } | null> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'postprod-remux-'))
+  const inputPath = path.join(dir, 'input')
+  const outputPath = path.join(dir, 'output.mp4')
+
+  try {
+    const obj = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
+    if (!obj.Body) return null
+    await writeFile(inputPath, await obj.Body.transformToByteArray())
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('ffmpeg', [
+        '-y', '-i', inputPath,
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-movflags', '+faststart',
+        outputPath,
+      ])
+      let stderr = ''
+      proc.stderr.on('data', d => { stderr += d })
+      proc.on('error', reject)
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg avsluttet med kode ${code}: ${stderr.slice(-500)}`)))
+    })
+
+    const outputBuffer = await readFile(outputPath)
+    const newKey = `${r2Key.replace(/\.[^./]+$/, '')}-web.mp4`
+    await r2.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: newKey, Body: outputBuffer, ContentType: 'video/mp4' }))
+    return { key: newKey, sizeBytes: outputBuffer.length }
+  } catch (err) {
+    console.error('[remuxForBrowserPlayback]', err)
+    return null
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 // Fullfører opplastingen (via transfers.ts sin generiske completeUpload) og
 // registrerer filen i task_video_files. Hvis replacesFileId er satt, kjeder
 // den nye raden bakover til forrige versjon (formell versjonskjede, spec §Datamodell).
@@ -105,8 +155,22 @@ export async function completeTaskFileUpload(input: {
     return { error: 'Kunne ikke lagre filen' }
   }
 
+  let finalFile = data as TaskVideoFile
+  const remuxed = await remuxForBrowserPlayback(input.key)
+  if (remuxed) {
+    const newFilename = input.filename.replace(/\.[^./]+$/, '') + '.mp4'
+    const { data: updated, error: updateError } = await supabase
+      .from('task_video_files')
+      .update({ r2_key: remuxed.key, content_type: 'video/mp4', size_bytes: remuxed.sizeBytes, filename: newFilename })
+      .eq('id', data.id)
+      .select()
+      .single()
+    if (updateError) console.error('[completeTaskFileUpload] kunne ikke oppdatere til remukset fil:', updateError)
+    else finalFile = updated as TaskVideoFile
+  }
+
   revalidatePath(`/admin/postprod/${input.projectId}`)
-  return { file: data as TaskVideoFile }
+  return { file: finalFile }
 }
 
 export async function listTaskVideoFiles(taskId: string): Promise<TaskVideoFile[]> {

@@ -6,20 +6,23 @@ import {
   getLatestTaskFileReview, respondToTaskFileReview,
 } from '@/lib/actions/task-video-files'
 import type { TaskFileComment, TaskFileReview } from '@/lib/actions/task-video-files'
+import { C } from '@/lib/admin-theme'
 
-// Samme mørke fargepalett som kunde-video-reviewen (app/v/[token]/VideoReviewClient.tsx)
-// — denne overlayen speiler bevisst den samme opplevelsen internt (scrubber
-// med kommentarmarkører, hover-forhåndsvisning, sidepanel), per Magnus' ønske
-// 2026-09-21 om samme spiller i postprod som i gallerier.
+// Samme layout/interaksjonsmønster som kunde-video-reviewen (app/v/[token]/
+// VideoReviewClient.tsx) — scrubber med kommentarmarkører, hover-
+// forhåndsvisning, sidepanel — men med admin-appens eget fargetema (C) i
+// stedet for galleriets kinematiske gull/mørke-palett, siden dette er en
+// intern visning og skal se ut som resten av verktøyet (inkl. lys/mørk
+// modus), ikke som kunde-siden. Presisert av Magnus 2026-09-21.
 const S = {
-  bg:      '#0C0B09',
-  surface: '#131210',
-  surface2:'#1A1916',
-  border:  '#2A2820',
-  gold:    '#C49434',
-  text:    '#E8E0D0',
-  text2:   '#8A8070',
-  text3:   '#5A5448',
+  bg:      C.bg,
+  surface: C.surface,
+  surface2:C.surface2,
+  border:  C.border,
+  accent:  C.accent,
+  text:    C.text,
+  text2:   C.text2,
+  text3:   C.text3,
 }
 
 function formatTs(secs: number): string {
@@ -181,7 +184,11 @@ export function TaskFileReviewOverlay({
     }
     vid.addEventListener('seeked', onSeeked)
     return () => vid.removeEventListener('seeked', onSeeked)
-  }, [scrubbing])
+    // `url` må med her — video-elementene rendres først når den signerte URL-en
+    // er hentet (async), så uten `url` i avhengighetslisten kjører denne
+    // effekten ferdig med tomme refs FØR <video>-taggene i det hele tatt
+    // finnes i DOM-en, og fanger dermed aldri opp de faktiske elementene.
+  }, [scrubbing, url])
 
   useEffect(() => {
     const vid = previewVideoRef.current
@@ -193,7 +200,7 @@ export function TaskFileReviewOverlay({
     }
     vid.addEventListener('seeked', onSeeked)
     return () => vid.removeEventListener('seeked', onSeeked)
-  }, [scrubbing])
+  }, [scrubbing, url])
 
   function toggleMute() {
     const vid = videoRef.current
@@ -407,7 +414,7 @@ export function TaskFileReviewOverlay({
                       onClick={() => jumpToComment(c.timestamp_seconds)}
                       style={{
                         display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                        background: 'rgba(196,148,52,0.1)', color: S.gold,
+                        background: C.accentBg, color: S.accent,
                         fontSize: '0.66rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                         letterSpacing: '0.04em', cursor: 'pointer',
                       }}
@@ -420,7 +427,7 @@ export function TaskFileReviewOverlay({
                     onClick={() => toggleResolved(c)}
                     title={c.resolved ? 'Merk som uløst' : 'Merk som løst'}
                     style={{
-                      fontSize: '0.62rem', color: c.resolved ? '#4CAF7D' : S.text3,
+                      fontSize: '0.62rem', color: c.resolved ? C.success : S.text3,
                       background: 'none', border: `1px solid ${S.border}`, borderRadius: 4,
                       padding: '1px 6px', cursor: 'pointer',
                     }}
@@ -461,7 +468,7 @@ export function TaskFileReviewOverlay({
                   disabled={responding !== null}
                   style={{
                     flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${S.border}`,
-                    background: 'none', color: '#D4645A', fontSize: '0.78rem', fontWeight: 600,
+                    background: 'none', color: C.danger, fontSize: '0.78rem', fontWeight: 600,
                     cursor: responding ? 'default' : 'pointer',
                   }}
                 >
@@ -472,7 +479,7 @@ export function TaskFileReviewOverlay({
                   disabled={responding !== null}
                   style={{
                     flex: 1, padding: '9px', borderRadius: 8, border: 'none',
-                    background: S.gold, color: '#0C0B09', fontSize: '0.78rem', fontWeight: 700,
+                    background: S.accent, color: '#fff', fontSize: '0.78rem', fontWeight: 700,
                     cursor: responding ? 'default' : 'pointer',
                   }}
                 >
@@ -511,7 +518,7 @@ export function TaskFileReviewOverlay({
               </div>
             )}
             <div ref={progressBarRef} style={{ position: 'relative', height: 4, background: S.surface2, borderRadius: 2, pointerEvents: 'none' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progressRatio * 100}%`, background: S.gold, borderRadius: 2, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progressRatio * 100}%`, background: S.accent, borderRadius: 2, pointerEvents: 'none' }} />
               {duration > 0 && sortedComments
                 .filter(c => c.timestamp_seconds !== null)
                 .map(c => (
@@ -520,14 +527,14 @@ export function TaskFileReviewOverlay({
                     style={{
                       position: 'absolute', top: '50%', left: `${((c.timestamp_seconds ?? 0) / duration) * 100}%`,
                       transform: 'translate(-50%, -50%)', width: 8, height: 8, borderRadius: '50%',
-                      background: S.gold, border: `2px solid ${S.bg}`, pointerEvents: 'none', zIndex: 1,
+                      background: S.accent, border: `2px solid ${S.bg}`, pointerEvents: 'none', zIndex: 1,
                     }}
                   />
                 ))}
               <div style={{
                 position: 'absolute', top: '50%', left: `${progressRatio * 100}%`,
                 transform: `translate(-50%, -50%) scale(${scrubbing ? 1.3 : 1})`,
-                width: 13, height: 13, borderRadius: '50%', background: S.text, border: `2px solid ${S.gold}`,
+                width: 13, height: 13, borderRadius: '50%', background: S.text, border: `2px solid ${S.accent}`,
                 pointerEvents: 'none', zIndex: 2, transition: 'transform 0.1s',
               }} />
             </div>
@@ -572,7 +579,7 @@ export function TaskFileReviewOverlay({
         >
           <div onClick={e => e.stopPropagation()} style={{ background: S.surface, border: `1px solid ${S.border}`, borderRadius: 12, padding: 24, width: '100%', maxWidth: 440 }}>
             <div style={{ marginBottom: 14 }}>
-              <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 5, background: 'rgba(196,148,52,0.1)', color: S.gold, fontSize: '0.78rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em' }}>
+              <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 5, background: C.accentBg, color: S.accent, fontSize: '0.78rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em' }}>
                 @ {formatTs(commentTimestamp)}
               </span>
             </div>
@@ -600,8 +607,8 @@ export function TaskFileReviewOverlay({
                 disabled={!commentText.trim() || addingComment}
                 style={{
                   padding: '9px 20px', borderRadius: 7, border: 'none',
-                  background: commentText.trim() && !addingComment ? S.gold : S.surface2,
-                  color: commentText.trim() && !addingComment ? '#0C0B09' : S.text3,
+                  background: commentText.trim() && !addingComment ? S.accent : S.surface2,
+                  color: commentText.trim() && !addingComment ? '#fff' : S.text3,
                   fontSize: '0.82rem', fontWeight: 700, cursor: commentText.trim() && !addingComment ? 'pointer' : 'default',
                 }}
               >

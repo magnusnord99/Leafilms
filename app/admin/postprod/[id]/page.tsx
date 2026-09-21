@@ -502,11 +502,6 @@ export default function PostProdDetailPage() {
     }, 800)
   }
 
-  function handleLinkChange(taskId: string, key: string, value: string) {
-    if (readOnly) return
-    commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), [key]: value })
-  }
-
   function handleCustomerFeedbackChange(taskId: string, value: string) {
     if (readOnly) return
     commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), customer_feedback: value })
@@ -1601,7 +1596,7 @@ export default function PostProdDetailPage() {
                 const linkFields = TASK_LINK_FIELDS[selectedTask.title] ?? []
                 const currentData = taskData[selectedTask.id] ?? {}
                 const archivedLinks = linkFields.filter(f => currentData[f.key]).map(f => ({ label: f.label, value: currentData[f.key] }))
-                const archivedExtra = getExtraLinks(currentData)
+                const archivedExtra = VIDEO_FILE_STEPS.includes(selectedTask.title) ? getExtraLinks(currentData) : []
                 if (archivedLinks.length === 0 && archivedExtra.length === 0) return null
                 return (
                   <div style={{ marginBottom: 24 }}>

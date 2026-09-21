@@ -209,7 +209,7 @@ function TaskFileRow({
   onToggleHistory: () => void
   onUploadNewVersion: () => void
 }) {
-  const [customerReview, setCustomerReview] = useState<{ id: string; token: string; status: 'open' | 'submitted' } | null>(null)
+  const [customerReview, setCustomerReview] = useState<{ id: string; token: string; pin_code: string; status: 'open' | 'submitted' } | null>(null)
   const [colleagueReview, setColleagueReview] = useState<TaskFileReview | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [pickingReviewer, setPickingReviewer] = useState(false)
@@ -226,7 +226,7 @@ function TaskFileRow({
     const result = await sendTaskFileToCustomer({ fileId: file.id, projectId, title: `${taskTitle} — ${file.filename}` })
     setSending(false)
     if ('error' in result) { alert(result.error); return }
-    setCustomerReview({ id: '', token: result.token, status: 'open' })
+    setCustomerReview({ id: '', token: result.token, pin_code: result.pinCode, status: 'open' })
   }
 
   async function handleSendToColleague() {
@@ -319,9 +319,14 @@ function TaskFileRow({
           )}
 
           {customerReview?.token && (
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 8 }}>
-              Kundelenke: {typeof window !== 'undefined' ? `${window.location.origin}/v/${customerReview.token}` : `/v/${customerReview.token}`}
-            </p>
+            <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 8 }}>
+              <p style={{ margin: 0 }}>
+                Kundelenke: {typeof window !== 'undefined' ? `${window.location.origin}/v/${customerReview.token}` : `/v/${customerReview.token}`}
+              </p>
+              <p style={{ margin: '2px 0 0' }}>
+                PIN: <strong style={{ color: C.text, letterSpacing: '0.1em' }}>{customerReview.pin_code}</strong>
+              </p>
+            </div>
           )}
 
           {pickingReviewer && (

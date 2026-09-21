@@ -152,7 +152,7 @@ export async function sendTaskFileToCustomer(input: {
   fileId: string
   projectId: string
   title: string
-}): Promise<{ ok: true; token: string } | { error: string }> {
+}): Promise<{ ok: true; token: string; pinCode: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Ikke autentisert' }
@@ -173,7 +173,7 @@ export async function sendTaskFileToCustomer(input: {
       r2Key: file.r2_key,
       taskVideoFileId: file.id,
     })
-    return { ok: true, token: review.token }
+    return { ok: true, token: review.token, pinCode: review.pin_code }
   } catch (err) {
     console.error('[sendTaskFileToCustomer]', err)
     return { error: 'Kunne ikke sende filen til kunden' }
@@ -183,12 +183,13 @@ export async function sendTaskFileToCustomer(input: {
 export async function getLatestVideoReviewForFile(fileId: string): Promise<{
   id: string
   token: string
+  pin_code: string
   status: 'open' | 'submitted'
 } | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('video_reviews')
-    .select('id, token, status')
+    .select('id, token, pin_code, status')
     .eq('task_video_file_id', fileId)
     .order('created_at', { ascending: false })
     .limit(1)

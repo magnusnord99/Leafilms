@@ -65,7 +65,7 @@ const CASES: Case[] = [
     tag: 'Commercial · Technology',
   },
   {
-    title: 'CCM x Torsov',
+    title: 'CCM x Torshov',
     description: 'Lansering av ny skøyte for CCM.',
     thumbnail:
       'https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/qxvhmdhk8l9.png',
@@ -80,7 +80,7 @@ const CASES: Case[] = [
   },
   {
     title: 'Statkraft',
-    description: 'Ullaførre er Norges største vannkraftområde.',
+    description: 'Ulla-Førre er Norges største vannkraftområde.',
     thumbnail:
       'https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/bh01qupcagl.jpg',
     vimeoUrl: 'https://vimeo.com/1067543661',
@@ -135,7 +135,7 @@ const CASES: Case[] = [
   },
   {
     title: 'Aker Brygge',
-    description: 'Aker Brygge klare for en ny sommersesong.',
+    description: 'Aker Brygge er klare for en ny sommersesong.',
     thumbnail:
       'https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/7wpnooqzh5b.jpg',
     vimeoUrl: 'https://vimeo.com/1069414695',

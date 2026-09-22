@@ -78,7 +78,7 @@ export default function EnergiPage() {
           </div>
           <div className="mt-5 max-w-2xl">
             <h2 className="text-3xl font-bold sm:text-4xl">Statkraft</h2>
-            <p className="mt-2 text-lg text-[#6B675E]">Ullaførre er Norges største vannkraftområde.</p>
+            <p className="mt-2 text-lg text-[#6B675E]">Ulla-Førre er Norges største vannkraftområde.</p>
           </div>
         </a>
 

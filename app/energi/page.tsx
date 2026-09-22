@@ -1,3 +1,5 @@
+import { HeroVideo } from './HeroVideo'
+
 const HERO_VIDEO_URL = '/energi/hero.mp4'
 
 const italicSerif = { fontFamily: 'var(--font-newsreader)', fontStyle: 'italic' as const }
@@ -8,14 +10,7 @@ export default function EnergiPage() {
       {/* Hero */}
       <section className="relative h-screen min-h-[640px] w-full bg-[#ffffff] px-6 md:px-12">
         <div className="relative h-full w-full overflow-hidden bg-[#16140F]">
-          <video
-            className="absolute inset-0 h-full w-full object-cover"
-            src={HERO_VIDEO_URL}
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
+          <HeroVideo src={HERO_VIDEO_URL} poster="/energi/hero-poster.jpg" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent" />
 
           <div className="relative z-10 flex h-full flex-col justify-between px-6 py-8 md:px-8 md:py-10">

@@ -2,6 +2,12 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Tidligere arbeid — Leafilms',
+  description: 'Utvalgt arbeid fra Leafilms — film og foto for merkevarer, arrangementer og industri.',
+  openGraph: {
+    title: 'Tidligere arbeid — Leafilms',
+    description: 'Utvalgt arbeid fra Leafilms — film og foto for merkevarer, arrangementer og industri.',
+    url: '/energi/arbeid',
+  },
 }
 
 type Case = {

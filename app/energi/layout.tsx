@@ -18,10 +18,29 @@ const newsreader = Newsreader({
   display: 'swap',
 })
 
+const title = 'Leafilms for energibransjen'
+const description = 'Film og foto for norske energiselskaper, fra Leafilms.'
+
 export const metadata: Metadata = {
-  title: 'Leafilms for energibransjen',
-  description: 'Film og foto for norske energiselskaper, fra Leafilms.',
+  metadataBase: new URL('https://app.leafilms.no'),
+  title,
+  description,
   robots: { index: false, follow: false },
+  openGraph: {
+    title,
+    description,
+    url: '/energi',
+    siteName: 'Leafilms',
+    images: [{ url: '/energi/hero-og.jpg', width: 1200, height: 630 }],
+    locale: 'nb_NO',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title,
+    description,
+    images: ['/energi/hero-og.jpg'],
+  },
 }
 
 export default function EnergiLayout({ children }: { children: React.ReactNode }) {

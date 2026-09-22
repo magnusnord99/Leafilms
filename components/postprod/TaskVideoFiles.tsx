@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import {
-  initiateTaskFileUpload, completeTaskFileUpload, listTaskVideoFiles,
+  initiateTaskFileUpload, completeTaskFileUpload, listTaskVideoFiles, deleteTaskVideoFile,
   sendTaskFileToCustomer, getLatestVideoReviewForFile,
   requestTaskFileReview, getLatestTaskFileReview,
 } from '@/lib/actions/task-video-files'
@@ -208,6 +208,7 @@ export function TaskVideoFiles({
             onToggleHistory={() => setShowHistoryFor(id => id === latest.id ? null : latest.id)}
             onUploadNewVersion={() => openFilePicker(latest.id)}
             onOpenReview={() => setReviewOverlayFile({ id: latest.id, filename: latest.filename })}
+            onDeleted={refresh}
           />
         )
       })}
@@ -226,7 +227,7 @@ export function TaskVideoFiles({
 
 function TaskFileRow({
   file, olderVersions, projectId, taskTitle, readOnly, currentUserId,
-  expanded, onToggleExpand, showHistory, onToggleHistory, onUploadNewVersion, onOpenReview,
+  expanded, onToggleExpand, showHistory, onToggleHistory, onUploadNewVersion, onOpenReview, onDeleted,
 }: {
   file: TaskVideoFile
   olderVersions: TaskVideoFile[]
@@ -240,6 +241,7 @@ function TaskFileRow({
   onToggleHistory: () => void
   onUploadNewVersion: () => void
   onOpenReview: () => void
+  onDeleted: () => void
 }) {
   const [customerReview, setCustomerReview] = useState<{ id: string; token: string; pin_code: string; status: 'open' | 'submitted' } | null>(null)
   const [colleagueReview, setColleagueReview] = useState<TaskFileReview | null>(null)
@@ -247,6 +249,7 @@ function TaskFileRow({
   const [pickingReviewer, setPickingReviewer] = useState(false)
   const [reviewerId, setReviewerId] = useState('')
   const [sending, setSending] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     getLatestVideoReviewForFile(file.id).then(setCustomerReview)
@@ -270,6 +273,15 @@ function TaskFileRow({
     setColleagueReview(await getLatestTaskFileReview(file.id))
     setPickingReviewer(false)
     setReviewerId('')
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Slette «${file.filename}»? Dette kan ikke angres.`)) return
+    setDeleting(true)
+    const result = await deleteTaskVideoFile(file.id, projectId)
+    setDeleting(false)
+    if ('error' in result) { alert(result.error); return }
+    onDeleted()
   }
 
   function openReviewerPicker() {
@@ -356,6 +368,14 @@ function TaskFileRow({
                   Send til kollega
                 </button>
               ) : null}
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: deleting ? 'default' : 'pointer', background: 'transparent', color: C.danger, border: `1px solid ${C.border}`, opacity: deleting ? 0.6 : 1 }}
+              >
+                {deleting ? 'Sletter...' : 'Slett'}
+              </button>
             </div>
           )}
 

@@ -188,6 +188,37 @@ export async function listTaskVideoFiles(taskId: string): Promise<TaskVideoFile[
   return (data ?? []) as TaskVideoFile[]
 }
 
+// Sletter en opplastet fil. Kun siste versjon i en kjede kan slettes (samme
+// regel som send-til-kunde/kollega) — en eldre versjon er referert av den
+// nyere via replaces_file_id og kan derfor ikke slettes uten først å fjerne
+// eller omkjede den nyere. R2-objektet slettes bevisst IKKE her: hvis filen
+// allerede er sendt til en kunde har video_reviews sin egen kopi av
+// r2_key (ikke en levende referanse), så en R2-sletting her ville brutt en
+// allerede delt kundelenke. Matcher det kjente, bevisste gapet rundt
+// R2-opprydding andre steder i koden (se f.eks. deleteVideoReview).
+export async function deleteTaskVideoFile(fileId: string, projectId: string): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke autentisert' }
+
+  const { data: replacedBy } = await supabase
+    .from('task_video_files')
+    .select('id')
+    .eq('replaces_file_id', fileId)
+    .maybeSingle()
+
+  if (replacedBy) return { error: 'Kan ikke slette en eldre versjon — bare siste versjon i en fil-kjede kan slettes' }
+
+  const { error } = await supabase.from('task_video_files').delete().eq('id', fileId)
+  if (error) {
+    console.error('[deleteTaskVideoFile]', error)
+    return { error: 'Kunne ikke slette filen' }
+  }
+
+  revalidatePath(`/admin/postprod/${projectId}`)
+  return { ok: true }
+}
+
 // Presignet GET-URL for forhåndsvisning i selve steget — internt, admin-only,
 // generalisert fra recordDownload()-mønsteret i transfers.ts til å ikke kreve
 // en transfers-rad (tar r2_key direkte via task_video_files).

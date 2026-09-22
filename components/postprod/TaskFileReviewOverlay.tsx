@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   getTaskVideoFileSignedUrl, getTaskFileComments, addTaskFileComment, resolveTaskFileComment,
-  getLatestTaskFileReview, respondToTaskFileReview,
+  getLatestTaskFileReview, respondToTaskFileReview, getLatestVideoReviewForFile,
 } from '@/lib/actions/task-video-files'
 import type { TaskFileComment, TaskFileReview } from '@/lib/actions/task-video-files'
+import { getAdminVideoComments, resolveVideoComment } from '@/lib/actions/video-reviews'
+import type { VideoComment } from '@/lib/actions/video-reviews'
 import { C } from '@/lib/admin-theme'
 
 // Samme layout/interaksjonsmønster som kunde-video-reviewen (app/v/[token]/
@@ -73,11 +75,14 @@ function IconClose() {
 }
 
 export function TaskFileReviewOverlay({
-  fileId, filename, currentUserId, onClose,
+  fileId, filename, currentUserId, startAt, onClose,
 }: {
   fileId: string
   filename: string
   currentUserId: string | null
+  // Fra kommentar-sjekklisten i raden (TaskVideoFiles) — trykker man på selve
+  // kommentaren (ikke avhukingsboksen) skal videoen åpne seg på det tidspunktet.
+  startAt?: number
   onClose: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -97,6 +102,7 @@ export function TaskFileReviewOverlay({
   const wasPlayingRef = useRef(false)
 
   const [comments, setComments] = useState<TaskFileComment[]>([])
+  const [customerComments, setCustomerComments] = useState<VideoComment[]>([])
   const [showCommentForm, setShowCommentForm] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [commentTimestamp, setCommentTimestamp] = useState(0)
@@ -106,11 +112,31 @@ export function TaskFileReviewOverlay({
   const [respondComment, setRespondComment] = useState('')
   const [responding, setResponding] = useState<'approved' | 'changes_requested' | null>(null)
 
-  const sortedComments = [...comments].sort((a, b) => {
-    const ta = a.timestamp_seconds ?? Infinity
-    const tb = b.timestamp_seconds ?? Infinity
-    return ta - tb
-  })
+  // Slår sammen interne teamkommentarer (task_video_file_comments) og
+  // kundens tidsankrede tilbakemeldinger (video_comments) til én tidslinje —
+  // samme sjekkliste som vises i raden (TaskVideoFiles), bare her inline i
+  // reviewoverlayen slik at man kan trykke seg rett til tidspunktet.
+  type UnifiedComment = {
+    id: string
+    timestamp_seconds: number | null
+    text: string
+    authorLabel: string
+    resolved: boolean
+    source: 'internal' | 'customer'
+  }
+
+  const sortedComments: UnifiedComment[] = [
+    ...comments.map(c => ({
+      id: c.id, timestamp_seconds: c.timestamp_seconds, text: c.text,
+      authorLabel: c.author?.name ?? c.author?.email ?? 'Ukjent',
+      resolved: c.resolved, source: 'internal' as const,
+    })),
+    ...customerComments.map(c => ({
+      id: c.id, timestamp_seconds: c.timestamp_seconds, text: c.text,
+      authorLabel: c.author_name ? `${c.author_name} (kunde)` : 'Kunde',
+      resolved: c.resolved, source: 'customer' as const,
+    })),
+  ].sort((a, b) => (a.timestamp_seconds ?? Infinity) - (b.timestamp_seconds ?? Infinity))
 
   useEffect(() => {
     let cancelled = false
@@ -121,8 +147,29 @@ export function TaskFileReviewOverlay({
     })
     getTaskFileComments(fileId).then(c => { if (!cancelled) setComments(c) })
     getLatestTaskFileReview(fileId).then(r => { if (!cancelled) setColleagueReview(r) })
+    getLatestVideoReviewForFile(fileId).then(review => {
+      if (cancelled || !review) return
+      getAdminVideoComments(review.id).then(cc => { if (!cancelled) setCustomerComments(cc) })
+    })
     return () => { cancelled = true }
   }, [fileId])
+
+  // Hopper til startAt (fra klikk på en kommentar i sjekklisten i raden) når
+  // videoen har fått metadata — venter på loadedmetadata siden currentTime
+  // ikke kan settes pålitelig før duration er kjent.
+  const seekedToStartRef = useRef(false)
+  useEffect(() => {
+    const target = startAt
+    if (!url || target === undefined || seekedToStartRef.current) return
+    const vid = videoRef.current
+    if (!vid) return
+    function onLoaded() {
+      vid!.currentTime = target!
+      seekedToStartRef.current = true
+    }
+    vid.addEventListener('loadedmetadata', onLoaded, { once: true })
+    return () => vid.removeEventListener('loadedmetadata', onLoaded)
+  }, [url, startAt])
 
   useEffect(() => {
     const vid = videoRef.current
@@ -299,6 +346,16 @@ export function TaskFileReviewOverlay({
     await resolveTaskFileComment(comment.id, !comment.resolved)
   }
 
+  async function toggleResolvedUnified(comment: { id: string; resolved: boolean; source: 'internal' | 'customer' }) {
+    if (comment.source === 'internal') {
+      const original = comments.find(c => c.id === comment.id)
+      if (original) await toggleResolved(original)
+    } else {
+      setCustomerComments(prev => prev.map(c => c.id === comment.id ? { ...c, resolved: !c.resolved } : c))
+      await resolveVideoComment(comment.id, !comment.resolved)
+    }
+  }
+
   async function handleRespond(decision: 'approved' | 'changes_requested') {
     if (!colleagueReview) return
     if (decision === 'changes_requested' && !respondComment.trim()) {
@@ -384,8 +441,8 @@ export function TaskFileReviewOverlay({
             <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: S.text3, fontWeight: 700 }}>
               Kommentarer
             </span>
-            {comments.length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: '0.62rem', color: S.text3 }}>({comments.length})</span>
+            {sortedComments.length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: '0.62rem', color: S.text3 }}>({sortedComments.length})</span>
             )}
           </div>
 
@@ -422,9 +479,17 @@ export function TaskFileReviewOverlay({
                       {formatTs(c.timestamp_seconds)}
                     </span>
                   )}
+                  {c.source === 'customer' && (
+                    <span style={{
+                      fontSize: '0.6rem', fontWeight: 700, color: '#C49434',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}>
+                      Kunde
+                    </span>
+                  )}
                   <div style={{ flex: 1 }} />
                   <button
-                    onClick={() => toggleResolved(c)}
+                    onClick={() => toggleResolvedUnified(c)}
                     title={c.resolved ? 'Merk som uløst' : 'Merk som løst'}
                     style={{
                       fontSize: '0.62rem', color: c.resolved ? C.success : S.text3,
@@ -439,7 +504,7 @@ export function TaskFileReviewOverlay({
                   {c.text}
                 </p>
                 <p style={{ fontSize: '0.68rem', color: S.text3, marginTop: 3 }}>
-                  — {c.author?.name ?? c.author?.email ?? 'Ukjent'}
+                  — {c.authorLabel}
                 </p>
               </div>
             ))}

@@ -67,7 +67,7 @@ export function TaskVideoFiles({
   // video-reviewen (app/v/[token]), bare internt og uten PIN. Eies her (ikke
   // per rad) så den kan åpnes direkte via deepLinkFileId uten å vente på at
   // riktig rad først rendres.
-  const [reviewOverlayFile, setReviewOverlayFile] = useState<{ id: string; filename: string } | null>(null)
+  const [reviewOverlayFile, setReviewOverlayFile] = useState<{ id: string; filename: string; startAt?: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function refresh() {
@@ -209,7 +209,7 @@ export function TaskVideoFiles({
             showHistory={showHistoryFor === latest.id}
             onToggleHistory={() => setShowHistoryFor(id => id === latest.id ? null : latest.id)}
             onUploadNewVersion={() => openFilePicker(latest.id)}
-            onOpenReview={() => setReviewOverlayFile({ id: latest.id, filename: latest.filename })}
+            onOpenReview={(startAt) => setReviewOverlayFile({ id: latest.id, filename: latest.filename, startAt })}
             onDeleted={refresh}
           />
         )
@@ -220,6 +220,7 @@ export function TaskVideoFiles({
           fileId={reviewOverlayFile.id}
           filename={reviewOverlayFile.filename}
           currentUserId={currentUserId}
+          startAt={reviewOverlayFile.startAt}
           onClose={() => setReviewOverlayFile(null)}
         />
       )}
@@ -242,7 +243,7 @@ function TaskFileRow({
   showHistory: boolean
   onToggleHistory: () => void
   onUploadNewVersion: () => void
-  onOpenReview: () => void
+  onOpenReview: (startAt?: number) => void
   onDeleted: () => void
 }) {
   const [customerReview, setCustomerReview] = useState<{ id: string; token: string; pin_code: string; status: 'open' | 'submitted' } | null>(null)
@@ -355,7 +356,7 @@ function TaskFileRow({
       {expanded && (
         <div style={{ padding: '0 14px 14px' }}>
           <button
-            onClick={onOpenReview}
+            onClick={() => onOpenReview()}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               padding: '14px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2,
@@ -420,9 +421,9 @@ function TaskFileRow({
                 Kundens tilbakemeldinger ({customerComments.filter(c => c.resolved).length}/{customerComments.length} sjekket)
               </p>
               {customerComments.map(c => (
-                <label
+                <div
                   key={c.id}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', cursor: 'pointer', opacity: c.resolved ? 0.55 : 1 }}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', opacity: c.resolved ? 0.55 : 1 }}
                 >
                   <input
                     type="checkbox"
@@ -430,7 +431,11 @@ function TaskFileRow({
                     onChange={() => toggleCustomerCommentResolved(c)}
                     style={{ marginTop: 3, flexShrink: 0, cursor: 'pointer' }}
                   />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    onClick={() => onOpenReview(c.timestamp_seconds ?? undefined)}
+                    title="Åpne video på dette tidspunktet"
+                  >
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, textDecoration: c.resolved ? 'line-through' : 'none' }}>
                       {c.timestamp_seconds !== null && (
                         <strong style={{ color: '#C49434', fontVariantNumeric: 'tabular-nums', marginRight: 6 }}>
@@ -445,7 +450,7 @@ function TaskFileRow({
                       </p>
                     )}
                   </div>
-                </label>
+                </div>
               ))}
             </div>
           )}

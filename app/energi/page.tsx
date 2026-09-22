@@ -45,6 +45,8 @@ export default function EnergiPage() {
             <img
               src="https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/9canbsqkrr7.jpg"
               alt="Corvus Energy"
+              loading="eager"
+              fetchPriority="high"
               className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
             />
           </div>
@@ -70,6 +72,7 @@ export default function EnergiPage() {
             <img
               src="https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/bh01qupcagl.jpg"
               alt="Statkraft"
+              loading="lazy"
               className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
             />
           </div>

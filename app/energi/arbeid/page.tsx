@@ -146,7 +146,7 @@ const CASES: Case[] = [
 const LEFT = CASES.filter((_, i) => i % 2 === 0)
 const RIGHT = CASES.filter((_, i) => i % 2 === 1)
 
-function CaseCard({ c }: { c: Case }) {
+function CaseCard({ c, priority = false }: { c: Case; priority?: boolean }) {
   return (
     <a
       href={c.vimeoUrl}
@@ -159,6 +159,9 @@ function CaseCard({ c }: { c: Case }) {
         <img
           src={c.thumbnail}
           alt={c.title}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
+          decoding={priority ? 'sync' : 'async'}
           className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]"
         />
       </div>
@@ -184,13 +187,13 @@ export default function EnergiArbeidPage() {
       <section className="px-6 py-12 md:px-12 md:py-16">
         <div className="grid gap-16 md:grid-cols-2 md:gap-10">
           <div>
-            {LEFT.map((c) => (
-              <CaseCard key={c.title} c={c} />
+            {LEFT.map((c, i) => (
+              <CaseCard key={c.title} c={c} priority={i === 0} />
             ))}
           </div>
           <div className="md:mt-28">
-            {RIGHT.map((c) => (
-              <CaseCard key={c.title} c={c} />
+            {RIGHT.map((c, i) => (
+              <CaseCard key={c.title} c={c} priority={i === 0} />
             ))}
           </div>
         </div>

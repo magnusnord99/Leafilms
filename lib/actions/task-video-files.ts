@@ -6,7 +6,7 @@ import { spawn } from 'child_process'
 import { mkdtemp, readFile, writeFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
-import { createClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { r2, R2_BUCKET } from '@/lib/r2'
 import { CreateMultipartUploadCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -260,6 +260,9 @@ export async function sendTaskFileToCustomer(input: {
 
   if (error || !file) return { error: 'Fant ikke filen' }
 
+  const existing = await getLatestVideoReviewForFile(file.id)
+  if (existing) return { ok: true, token: existing.token, pinCode: existing.pin_code }
+
   try {
     const review = await createVideoReview({
       projectId: input.projectId,
@@ -281,8 +284,10 @@ export async function getLatestVideoReviewForFile(fileId: string): Promise<{
   pin_code: string
   status: 'open' | 'submitted'
 } | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  // video_reviews har kun én RLS-policy (service_role) — den vanlige
+  // brukerklienten ser aldri disse radene, bare tomt resultat uten feil.
+  const service = createServiceClient()
+  const { data, error } = await service
     .from('video_reviews')
     .select('id, token, pin_code, status')
     .eq('task_video_file_id', fileId)

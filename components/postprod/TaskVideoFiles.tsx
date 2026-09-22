@@ -7,6 +7,8 @@ import {
   requestTaskFileReview, getLatestTaskFileReview,
 } from '@/lib/actions/task-video-files'
 import type { TaskVideoFile, TaskFileReview } from '@/lib/actions/task-video-files'
+import { getAdminVideoComments, resolveVideoComment } from '@/lib/actions/video-reviews'
+import type { VideoComment } from '@/lib/actions/video-reviews'
 import { abortUpload } from '@/lib/actions/transfers'
 import { uploadFileToR2 } from '@/lib/r2-upload-client'
 import { getAllProfiles, getCurrentUserProfile } from '@/lib/actions/pipeline'
@@ -244,6 +246,7 @@ function TaskFileRow({
   onDeleted: () => void
 }) {
   const [customerReview, setCustomerReview] = useState<{ id: string; token: string; pin_code: string; status: 'open' | 'submitted' } | null>(null)
+  const [customerComments, setCustomerComments] = useState<VideoComment[]>([])
   const [colleagueReview, setColleagueReview] = useState<TaskFileReview | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [pickingReviewer, setPickingReviewer] = useState(false)
@@ -256,12 +259,30 @@ function TaskFileRow({
     getLatestTaskFileReview(file.id).then(setColleagueReview)
   }, [file.id])
 
+  // Kundens tidsankrede kommentarer fra /v/[token] — vises som en avhukbar
+  // gjøremålsliste her i steget, slik at teamet kan gå gjennom hver
+  // tilbakemelding uten å måtte åpne kundelenken selv. Egen kommentartråd
+  // fra de interne (task_video_file_comments, se reviewoverlayen) — de to
+  // blandes bevisst ikke sammen.
+  useEffect(() => {
+    if (!customerReview?.id) { setCustomerComments([]); return }
+    getAdminVideoComments(customerReview.id).then(setCustomerComments)
+  }, [customerReview?.id])
+
+  async function toggleCustomerCommentResolved(comment: VideoComment) {
+    setCustomerComments(prev => prev.map(c => c.id === comment.id ? { ...c, resolved: !c.resolved } : c))
+    await resolveVideoComment(comment.id, !comment.resolved)
+  }
+
   async function handleSendToCustomer() {
     setSending(true)
     const result = await sendTaskFileToCustomer({ fileId: file.id, projectId, title: `${taskTitle} — ${file.filename}` })
     setSending(false)
     if ('error' in result) { alert(result.error); return }
-    setCustomerReview({ id: '', token: result.token, pin_code: result.pinCode, status: 'open' })
+    // Henter den faktiske reviewen (med ekte id) i stedet for å bygge et
+    // optimistisk objekt selv — kommentarsjekklisten under trenger et ekte
+    // review_id å hente kommentarer fra.
+    setCustomerReview(await getLatestVideoReviewForFile(file.id))
   }
 
   async function handleSendToColleague() {
@@ -387,6 +408,45 @@ function TaskFileRow({
               <p style={{ margin: '2px 0 0' }}>
                 PIN: <strong style={{ color: C.text, letterSpacing: '0.1em' }}>{customerReview.pin_code}</strong>
               </p>
+            </div>
+          )}
+
+          {/* Kundens tilbakemeldinger som avhukbar gjøremålsliste — egen tråd
+              fra de interne kommentarene i reviewoverlayen (spec: to atskilte
+              kommentarspor, kunde vs. internt). */}
+          {customerReview && customerComments.length > 0 && (
+            <div style={{ marginTop: 10, padding: '10px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                Kundens tilbakemeldinger ({customerComments.filter(c => c.resolved).length}/{customerComments.length} sjekket)
+              </p>
+              {customerComments.map(c => (
+                <label
+                  key={c.id}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', cursor: 'pointer', opacity: c.resolved ? 0.55 : 1 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={c.resolved}
+                    onChange={() => toggleCustomerCommentResolved(c)}
+                    style={{ marginTop: 3, flexShrink: 0, cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, textDecoration: c.resolved ? 'line-through' : 'none' }}>
+                      {c.timestamp_seconds !== null && (
+                        <strong style={{ color: '#C49434', fontVariantNumeric: 'tabular-nums', marginRight: 6 }}>
+                          {Math.floor(c.timestamp_seconds / 60)}:{String(Math.floor(c.timestamp_seconds % 60)).padStart(2, '0')}
+                        </strong>
+                      )}
+                      {c.text}
+                    </span>
+                    {c.author_name && (
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.64rem', color: C.text3, margin: '2px 0 0' }}>
+                        — {c.author_name}
+                      </p>
+                    )}
+                  </div>
+                </label>
+              ))}
             </div>
           )}
 

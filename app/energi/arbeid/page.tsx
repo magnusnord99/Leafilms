@@ -178,9 +178,12 @@ export default function EnergiArbeidPage() {
   return (
     <main className="bg-[#ffffff] text-[#1A1812]">
       <header className="px-6 pt-8 md:px-12 md:pt-10">
-        <a href="/energi" className="text-sm text-[#6B675E] hover:text-[#1A1812]">
-          Leafilms for energibransjen
-        </a>
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-semibold tracking-[0.08em] text-[#1A1812]">LEAFILMS</p>
+          <a href="/energi" className="text-sm text-[#6B675E] hover:text-[#1A1812]">
+            Tilbake
+          </a>
+        </div>
         <p className="mt-10 text-sm text-[#6B675E]">Utvalgt arbeid · {CASES.length} filmer</p>
       </header>
 

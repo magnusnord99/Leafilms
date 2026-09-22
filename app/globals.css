@@ -145,6 +145,14 @@ body.admin-page {
   background: #181920;
 }
 
+/* Energi-outreach-siden — egen identitet, ingen grain eller cinematic-bakgrunn */
+body.energi-page {
+  background: #ffffff;
+}
+body.energi-page::after {
+  display: none;
+}
+
 /* ═══════════════════════════════════════════════════
    ADMIN LIGHT/DARK MODE — isolert fra kundevendte sider.
    Alle admin-farger går gjennom lib/admin-theme.ts sin C,

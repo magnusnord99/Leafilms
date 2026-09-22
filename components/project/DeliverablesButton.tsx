@@ -47,7 +47,13 @@ export function DeliverablesButton({
   projectId: string
   items: DeliverableItem[]
   onSaved: (items: DeliverableItem[]) => void
-  variant?: 'block' | 'toolbar'
+  // 'block': full bredde, egen topplinje (standard, brukt alene i en kolonne).
+  // 'toolbar': kompakt, dyttes til høyre i en flex-rad (marginLeft: auto) —
+  // for verktøylinjer der den skal stå ytterst.
+  // 'inline': samme kompakte knapp som 'toolbar', men uten auto-margin, slik
+  // at plasseringen styres av forelderen — for å stå side om side med et
+  // annet element uten at layouten "hopper" til høyre kant.
+  variant?: 'block' | 'toolbar' | 'inline'
   readOnly?: boolean
 }) {
   const [showModal, setShowModal] = useState(false)
@@ -88,9 +94,10 @@ export function DeliverablesButton({
     }
   }
 
-  const buttonStyle = variant === 'toolbar'
+  const compact = variant === 'toolbar' || variant === 'inline'
+  const buttonStyle = compact
     ? {
-        marginLeft: 'auto' as const, marginRight: 12,
+        ...(variant === 'toolbar' ? { marginLeft: 'auto' as const, marginRight: 12 } : {}),
         fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
         display: 'flex', alignItems: 'center', gap: 5,
         color: items.length > 0 ? C.text2 : C.text3,
@@ -107,7 +114,7 @@ export function DeliverablesButton({
 
   const trigger = (
     <button onClick={openModal} style={buttonStyle}>
-      <svg width={variant === 'toolbar' ? 10 : 12} height={variant === 'toolbar' ? 10 : 12} viewBox="0 0 12 12" fill="none">
+      <svg width={compact ? 10 : 12} height={compact ? 10 : 12} viewBox="0 0 12 12" fill="none">
         <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
         <path d="M3.5 4.5h5M3.5 6h5M3.5 7.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
       </svg>
@@ -120,7 +127,7 @@ export function DeliverablesButton({
 
   return (
     <>
-      {variant === 'toolbar' ? trigger : (
+      {compact ? trigger : (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
           {trigger}
         </div>

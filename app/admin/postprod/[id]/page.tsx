@@ -1137,15 +1137,15 @@ export default function PostProdDetailPage() {
               </div>
             )}
 
-            {/* Info om levering-knapp — delt komponent med prosjektoversikten, se DeliverablesButton */}
-            <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} readOnly={readOnly} />
-
-            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
-                prosjektoversikten (feedback 8578db28). Starter kollapset her —
-                sammen med leveranser og egendefinerte oppgaver tok headeren for
-                mye plass fra selve steg-innholdet under (feedback 214db97b). */}
-            <div style={{ marginTop: 10, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <ProjectDocuments projectId={projectId} defaultCollapsed />
+            {/* Info om levering + Filer side om side (ikke stablet) for å spare
+                vertikal plass — sammen med egendefinerte oppgaver tok disse
+                for mye høyde fra selve steg-innholdet under før (feedback
+                214db97b, presisert videre av Magnus 2026-09-22). */}
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="inline" readOnly={readOnly} />
+              <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <ProjectDocuments projectId={projectId} defaultCollapsed />
+              </div>
             </div>
           </div>
 

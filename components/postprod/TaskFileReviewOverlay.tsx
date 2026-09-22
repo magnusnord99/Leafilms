@@ -502,21 +502,26 @@ export function TaskFileReviewOverlay({
             onPointerLeave={handleProgressPointerLeave}
             style={{ position: 'relative', padding: '8px 0', margin: '-8px 0 2px', cursor: 'pointer', touchAction: 'none' }}
           >
-            {previewRatio !== null && (
-              <div style={{
-                position: 'absolute', bottom: '100%', left: `${previewRatio * 100}%`,
-                transform: 'translateX(-50%)', marginBottom: 10, pointerEvents: 'none', zIndex: 3,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              }}>
-                <canvas
-                  ref={previewCanvasRef}
-                  style={{ display: 'block', width: 140, height: 'auto', borderRadius: 6, border: `1px solid ${S.border}`, background: '#000', boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
-                />
-                <span style={{ padding: '2px 7px', borderRadius: 4, background: S.surface, border: `1px solid ${S.border}`, color: S.text, fontSize: '0.68rem', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                  {formatTs(previewRatio * duration)}
-                </span>
-              </div>
-            )}
+            {/* Alltid montert (ikke betinget på previewRatio !== null) — en
+                betinget <canvas> ville blitt av- og re-montert for hvert
+                hover inn/ut, og de to seeked-lytter-effektene under (som kun
+                kjører på nytt ved endring i scrubbing/url) ville da mistet
+                referansen til den nye canvas-noden og aldri tegnet noe.
+                Synlighet styres i stedet med opacity. */}
+            <div style={{
+              position: 'absolute', bottom: '100%', left: `${(previewRatio ?? 0) * 100}%`,
+              transform: 'translateX(-50%)', marginBottom: 10, pointerEvents: 'none', zIndex: 3,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              opacity: previewRatio !== null ? 1 : 0,
+            }}>
+              <canvas
+                ref={previewCanvasRef}
+                style={{ display: 'block', width: 140, height: 'auto', borderRadius: 6, border: `1px solid ${S.border}`, background: '#000', boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+              />
+              <span style={{ padding: '2px 7px', borderRadius: 4, background: S.surface, border: `1px solid ${S.border}`, color: S.text, fontSize: '0.68rem', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                {formatTs((previewRatio ?? 0) * duration)}
+              </span>
+            </div>
             <div ref={progressBarRef} style={{ position: 'relative', height: 4, background: S.surface2, borderRadius: 2, pointerEvents: 'none' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progressRatio * 100}%`, background: S.accent, borderRadius: 2, pointerEvents: 'none' }} />
               {duration > 0 && sortedComments

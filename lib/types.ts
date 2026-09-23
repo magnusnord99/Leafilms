@@ -358,6 +358,8 @@ export type CustomerLogoFile = {
   file_path: string
   file_type: string | null
   file_size: number | null
+  folder_name: string | null
+  batch_id: string | null
   created_at: string
 }
 

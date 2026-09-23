@@ -126,6 +126,8 @@ export default function CustomerDetailPage() {
   const [logoFiles, setLogoFiles] = useState<CustomerLogoFile[]>([])
   const [uploadingMainLogo, setUploadingMainLogo] = useState(false)
   const [uploadingLogoFile, setUploadingLogoFile] = useState(false)
+  const [expandedLogoFolders, setExpandedLogoFolders] = useState<Set<string>>(new Set())
+  const [downloadingFolder, setDownloadingFolder] = useState<string | null>(null)
   const [documents, setDocuments] = useState<CustomerDocument[]>([])
   const [uploadingDocument, setUploadingDocument] = useState(false)
 
@@ -141,7 +143,7 @@ export default function CustomerDetailPage() {
       getCustomerContacts(customerId),
       supabase
         .from('customer_logo_files')
-        .select('id, customer_id, uploaded_by, file_name, file_path, file_type, file_size, created_at')
+        .select('id, customer_id, uploaded_by, file_name, file_path, file_type, file_size, folder_name, batch_id, created_at')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false }),
       supabase
@@ -312,14 +314,18 @@ export default function CustomerDetailPage() {
     setCustomer(prev => prev ? { ...prev, logo_path: null } : prev)
   }
 
-  // Tar imot både enkeltfiler og en hel mappe (webkitdirectory) — filsystemets
-  // mappestruktur beholdes ikke, alt havner flatt i logo-pakken siden det er
-  // slik den vises og brukes. Skjulte OS-filer (.DS_Store fra mappevalg på Mac)
-  // filtreres bort.
-  async function handleUploadLogoFiles(fileList: FileList | File[]) {
+  // Tar imot både enkeltfiler ("+ Legg til filer") og en hel mappe
+  // ("+ Legg til mappe", webkitdirectory). Ved mappevalg deler alle filene
+  // et batch_id og mappenavnet (fra webkitRelativePath) slik at de vises
+  // samlet som mappen de kom fra i stedet for en flat filliste (feedback:
+  // "de vises som mappen man lastet opp med mulighet for å klikke seg inn i
+  // den eller laste den ned"). Skjulte OS-filer (.DS_Store) filtreres bort.
+  async function handleUploadLogoFiles(fileList: FileList | File[], asFolder: boolean) {
     if (!customer) return
-    const files = Array.from(fileList).filter(f => !f.name.startsWith('.'))
+    const files = Array.from(fileList).filter(f => !f.name.startsWith('.') && !f.webkitRelativePath?.split('/').pop()?.startsWith('.'))
     if (files.length === 0) return
+    const batchId = asFolder ? crypto.randomUUID() : null
+    const folderName = asFolder ? (files[0].webkitRelativePath?.split('/')[0] || 'Mappe') : null
     setUploadingLogoFile(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -339,6 +345,8 @@ export default function CustomerDetailPage() {
           file_path: path,
           file_type: file.type || null,
           file_size: file.size,
+          folder_name: folderName,
+          batch_id: batchId,
         })
         .select()
         .single()
@@ -360,6 +368,46 @@ export default function CustomerDetailPage() {
       return
     }
     setLogoFiles(prev => prev.filter(f => f.id !== file.id))
+  }
+
+  async function handleDeleteLogoFolder(folderName: string, files: CustomerLogoFile[]) {
+    if (!confirm(`Slette mappen «${folderName}» (${files.length} fil${files.length === 1 ? '' : 'er'})? Dette kan ikke angres.`)) return
+    const supabase = createClient()
+    await supabase.storage.from('assets').remove(files.map(f => f.file_path))
+    const { error } = await supabase.from('customer_logo_files').delete().in('id', files.map(f => f.id))
+    if (error) {
+      alert('Kunne ikke slette mappen. Prøv igjen.')
+      return
+    }
+    const ids = new Set(files.map(f => f.id))
+    setLogoFiles(prev => prev.filter(f => !ids.has(f.id)))
+  }
+
+  async function handleDownloadLogoFolder(folderName: string, files: CustomerLogoFile[]) {
+    setDownloadingFolder(folderName)
+    try {
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+      const supabase = createClient()
+      await Promise.all(files.map(async (file) => {
+        const url = supabase.storage.from('assets').getPublicUrl(file.file_path).data.publicUrl
+        const res = await fetch(url)
+        const blob = await res.blob()
+        zip.file(file.file_name, blob)
+      }))
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const objectUrl = URL.createObjectURL(zipBlob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = `${folderName}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch {
+      alert('Kunne ikke laste ned mappen. Prøv igjen.')
+    }
+    setDownloadingFolder(null)
   }
 
   async function handleUploadCustomerDocument(file: File) {
@@ -507,6 +555,23 @@ export default function CustomerDetailPage() {
 
   const avgAmount = amounts.length > 0 ? amounts.reduce((sum, a) => sum + a, 0) / amounts.length : null
   const totalAmount = amounts.length > 0 ? amounts.reduce((sum, a) => sum + a, 0) : null
+
+  // Filer fra en mappeopplasting deler batch_id — grupper dem slik at de vises
+  // samlet som mappen de kom fra i stedet for en flat liste av enkeltfiler.
+  const standaloneLogoFiles = logoFiles.filter(f => !f.batch_id)
+  const logoFolderGroups: { batchId: string; folderName: string; files: CustomerLogoFile[] }[] = []
+  {
+    const byBatch = new Map<string, CustomerLogoFile[]>()
+    for (const f of logoFiles) {
+      if (!f.batch_id) continue
+      const list = byBatch.get(f.batch_id) ?? []
+      list.push(f)
+      byBatch.set(f.batch_id, list)
+    }
+    for (const [batchId, files] of byBatch) {
+      logoFolderGroups.push({ batchId, folderName: files[0].folder_name || 'Mappe', files })
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
@@ -717,7 +782,7 @@ export default function CustomerDetailPage() {
                   disabled={uploadingLogoFile}
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files)
+                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files, false)
                     e.target.value = ''
                   }}
                 />
@@ -729,14 +794,88 @@ export default function CustomerDetailPage() {
                   style={{ display: 'none' }}
                   {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={(e) => {
-                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files)
+                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files, true)
                     e.target.value = ''
                   }}
                 />
               </div>
-              {logoFiles.length > 0 ? (
+              {logoFolderGroups.length > 0 || standaloneLogoFiles.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {logoFiles.map((file) => {
+                  {logoFolderGroups.map((group) => {
+                    const expanded = expandedLogoFolders.has(group.batchId)
+                    const totalSize = group.files.reduce((sum, f) => sum + (f.file_size ?? 0), 0)
+                    return (
+                      <div key={group.batchId}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                          <button
+                            onClick={() => setExpandedLogoFolders(prev => {
+                              const next = new Set(prev)
+                              if (next.has(group.batchId)) next.delete(group.batchId); else next.add(group.batchId)
+                              return next
+                            })}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: expanded ? 'rotate(90deg)' : 'none', color: C.text3, fontSize: '0.6rem', flexShrink: 0 }}>▸</span>
+                            <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📁</span>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {group.folderName}
+                            </span>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>
+                              {group.files.length} fil{group.files.length === 1 ? '' : 'er'}{totalSize > 0 ? ` · ${formatFileSize(totalSize)}` : ''}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleDownloadLogoFolder(group.folderName, group.files)}
+                            disabled={downloadingFolder === group.folderName}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500, padding: '4px 10px', borderRadius: 3, cursor: downloadingFolder === group.folderName ? 'default' : 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)', flexShrink: 0, opacity: downloadingFolder === group.folderName ? 0.6 : 1 }}
+                          >
+                            {downloadingFolder === group.folderName ? 'Pakker...' : 'Last ned'}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLogoFolder(group.folderName, group.files)}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500, padding: '4px 10px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                          >
+                            Slett
+                          </button>
+                        </div>
+                        {expanded && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4, marginLeft: 22 }}>
+                            {group.files.map((file) => {
+                              const supabase = createClient()
+                              const fileUrl = supabase.storage.from('assets').getPublicUrl(file.file_path).data.publicUrl
+                              return (
+                                <div
+                                  key={file.id}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                                >
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text, textDecoration: 'underline', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                  >
+                                    {file.file_name}
+                                  </a>
+                                  {file.file_size != null && (
+                                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, flexShrink: 0 }}>
+                                      {formatFileSize(file.file_size)}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteLogoFile(file)}
+                                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 500, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                                  >
+                                    Slett
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {standaloneLogoFiles.map((file) => {
                     const supabase = createClient()
                     const fileUrl = supabase.storage.from('assets').getPublicUrl(file.file_path).data.publicUrl
                     return (

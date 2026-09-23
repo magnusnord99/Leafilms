@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { C } from '@/lib/admin-theme'
-import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData, ProjectDocument, CustomerLogoFile } from '@/lib/types'
+import { Customer, CustomerContact, Project, Quote, Contract, QuoteBuilderData, ProjectDocument, CustomerLogoFile, CustomerDocument } from '@/lib/types'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { updateCustomerInvoiceInfo } from '@/lib/actions/customers'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
@@ -126,6 +126,8 @@ export default function CustomerDetailPage() {
   const [logoFiles, setLogoFiles] = useState<CustomerLogoFile[]>([])
   const [uploadingMainLogo, setUploadingMainLogo] = useState(false)
   const [uploadingLogoFile, setUploadingLogoFile] = useState(false)
+  const [documents, setDocuments] = useState<CustomerDocument[]>([])
+  const [uploadingDocument, setUploadingDocument] = useState(false)
 
   const [invoiceEdit, setInvoiceEdit] = useState(false)
   const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ company: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
@@ -134,11 +136,16 @@ export default function CustomerDetailPage() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [{ data: customerData, error: customerError }, contactsData, { data: logoFilesData }] = await Promise.all([
+    const [{ data: customerData, error: customerError }, contactsData, { data: logoFilesData }, { data: documentsData }] = await Promise.all([
       supabase.from('customers').select('*').eq('id', customerId).single(),
       getCustomerContacts(customerId),
       supabase
         .from('customer_logo_files')
+        .select('id, customer_id, uploaded_by, file_name, file_path, file_type, file_size, created_at')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('customer_documents')
         .select('id, customer_id, uploaded_by, file_name, file_path, file_type, file_size, created_at')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false }),
@@ -153,6 +160,7 @@ export default function CustomerDetailPage() {
     setCustomer(customerData as Customer)
     setContacts(contactsData)
     setLogoFiles((logoFilesData ?? []) as CustomerLogoFile[])
+    setDocuments((documentsData ?? []) as CustomerDocument[])
 
     const { data: projectsData, error: projectsError } = await supabase
       .from('projects')
@@ -346,6 +354,50 @@ export default function CustomerDetailPage() {
       return
     }
     setLogoFiles(prev => prev.filter(f => f.id !== file.id))
+  }
+
+  async function handleUploadCustomerDocument(file: File) {
+    if (!customer) return
+    setUploadingDocument(true)
+    const supabase = createClient()
+    const path = `customer-documents/${customer.id}/${Date.now()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
+    if (uploadError) {
+      alert('Kunne ikke laste opp filen: ' + uploadError.message)
+      setUploadingDocument(false)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: inserted, error: insertError } = await supabase
+      .from('customer_documents')
+      .insert({
+        customer_id: customer.id,
+        uploaded_by: user?.id ?? null,
+        file_name: file.name,
+        file_path: path,
+        file_type: file.type || null,
+        file_size: file.size,
+      })
+      .select()
+      .single()
+    setUploadingDocument(false)
+    if (insertError || !inserted) {
+      alert('Filen ble lastet opp, men kunne ikke lagres. Prøv igjen.')
+      return
+    }
+    setDocuments(prev => [inserted as CustomerDocument, ...prev])
+  }
+
+  async function handleDeleteCustomerDocument(doc: CustomerDocument) {
+    if (!confirm(`Slette «${doc.file_name}»?`)) return
+    const supabase = createClient()
+    await supabase.storage.from('assets').remove([doc.file_path])
+    const { error } = await supabase.from('customer_documents').delete().eq('id', doc.id)
+    if (error) {
+      alert('Kunne ikke slette filen. Prøv igjen.')
+      return
+    }
+    setDocuments(prev => prev.filter(d => d.id !== doc.id))
   }
 
   async function handleDeleteProject(project: ProjectWithDetails) {
@@ -696,6 +748,75 @@ export default function CustomerDetailPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Filer — generelle kundedokumenter som ikke hører til ett bestemt prosjekt
+            (profilhåndbok, avtaler, osv.), se 164_customer_documents.sql. Prosjekt-spesifikke
+            filer ligger fortsatt under hvert prosjekt lenger ned på siden. */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 22px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, margin: 0 }}>
+              Filer <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 'normal' }}>— profilhåndbok, avtaler og annet knyttet til kunden</span>
+            </p>
+            <label
+              htmlFor="customer-document-upload"
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingDocument ? 'default' : 'pointer', opacity: uploadingDocument ? 0.6 : 1, flexShrink: 0 }}
+            >
+              {uploadingDocument ? 'Laster opp...' : '+ Last opp'}
+            </label>
+            <input
+              id="customer-document-upload"
+              type="file"
+              disabled={uploadingDocument}
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleUploadCustomerDocument(file)
+                e.target.value = ''
+              }}
+            />
+          </div>
+          {documents.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {documents.map((doc) => {
+                const supabase = createClient()
+                const docUrl = supabase.storage.from('assets').getPublicUrl(doc.file_path).data.publicUrl
+                return (
+                  <div
+                    key={doc.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 4 }}
+                  >
+                    <a
+                      href={docUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, textDecoration: 'underline', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {doc.file_name}
+                    </a>
+                    {doc.file_size != null && (
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
+                        {formatFileSize(doc.file_size)}
+                      </span>
+                    )}
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
+                      {new Date(doc.created_at).toLocaleDateString('nb-NO')}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteCustomerDocument(doc)}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}
+                    >
+                      Slett
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, fontStyle: 'italic' }}>
+              Ingen filer lastet opp ennå.
+            </p>
+          )}
         </div>
 
         {/* Fakturainformasjon — samme felt som samles inn ved signering (app/api/contracts/sign),

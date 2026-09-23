@@ -361,6 +361,17 @@ export type CustomerLogoFile = {
   created_at: string
 }
 
+export type CustomerDocument = {
+  id: string
+  customer_id: string
+  uploaded_by: string | null
+  file_name: string
+  file_path: string
+  file_type: string | null
+  file_size: number | null
+  created_at: string
+}
+
 export type ContractFormFields = {
   orgNummerOverride?: string
   produksjonsPeriode?: string

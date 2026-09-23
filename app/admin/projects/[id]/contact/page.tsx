@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub } from '@/lib/actions/pipeline'
-import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, updateLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
+import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, updateLead, LeadRecord, LeadStatus, LeadTemperature } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { ColdEmailCard } from '@/components/admin/ColdEmailCard'
+import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
+import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
 import { ProjectMessage } from '@/lib/types'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
@@ -32,6 +34,17 @@ const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }> = {
   lost:           { label: 'Tapt',        color: C.danger  },
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  market_analysis: 'Markedsanalyse',
+  instagram:       'Instagram',
+  linkedin:        'LinkedIn',
+  nettside:        'Nettside',
+  referanse:       'Referanse',
+  telefon:         'Telefon',
+}
+
+const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside', 'Referanse', 'Telefon']
+
 const editInputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
   fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
@@ -48,12 +61,17 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-type ContactEditForm = {
+type LeadEditForm = {
   name: string
   company: string
   email: string
   phone: string
   website: string
+  source: string
+  reason: string
+  salesPoints: string[]
+  temperature: '' | LeadTemperature
+  contactDeadline: string
 }
 
 export default function ProjectContactPage() {
@@ -71,10 +89,13 @@ export default function ProjectContactPage() {
   const [notesSaved, setNotesSaved] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [editingContact, setEditingContact] = useState(false)
-  const [contactForm, setContactForm] = useState<ContactEditForm>({ name: '', company: '', email: '', phone: '', website: '' })
-  const [savingContact, setSavingContact] = useState(false)
-  const [contactError, setContactError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<LeadEditForm>({
+    name: '', company: '', email: '', phone: '', website: '', source: '', reason: '', salesPoints: [''],
+    temperature: '', contactDeadline: '',
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const [messages, setMessages] = useState<ProjectMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -135,59 +156,81 @@ export default function ProjectContactPage() {
     await updateLeadStatus(lead.id, status)
   }
 
-  function startEditContact() {
+  function startEdit() {
     if (!lead) return
-    setContactForm({
+    setEditForm({
       name: lead.name,
       company: lead.company ?? '',
       email: lead.email ?? '',
       phone: lead.phone ?? '',
       website: lead.website ?? '',
-    })
-    setContactError(null)
-    setEditingContact(true)
-  }
-
-  function cancelEditContact() {
-    setEditingContact(false)
-    setContactError(null)
-  }
-
-  async function handleSaveContact() {
-    if (!lead) return
-    if (!contactForm.name.trim() && !contactForm.company.trim()) {
-      setContactError('Fyll inn navn eller bedrift')
-      return
-    }
-    setSavingContact(true)
-    setContactError(null)
-    const finalName = contactForm.name.trim() || contactForm.company.trim()
-    const ok = await updateLead(lead.id, {
-      name: finalName,
-      company: contactForm.company,
-      email: contactForm.email,
-      phone: contactForm.phone,
-      website: contactForm.website,
       source: lead.source ?? '',
       reason: lead.reason ?? '',
-      sales_points: lead.sales_points ?? [],
-      temperature: lead.temperature ?? undefined,
-      contact_deadline: lead.contact_deadline ?? undefined,
+      salesPoints: (lead.sales_points ?? []).length > 0 ? lead.sales_points : [''],
+      temperature: lead.temperature ?? '',
+      contactDeadline: lead.contact_deadline ?? '',
+    })
+    setEditError(null)
+    setEditing(true)
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+    setEditError(null)
+  }
+
+  function updateEditSalesPoint(i: number, val: string) {
+    setEditForm(prev => ({ ...prev, salesPoints: prev.salesPoints.map((p, idx) => idx === i ? val : p) }))
+  }
+
+  function addEditSalesPoint() {
+    setEditForm(prev => ({ ...prev, salesPoints: [...prev.salesPoints, ''] }))
+  }
+
+  function removeEditSalesPoint(i: number) {
+    setEditForm(prev => ({ ...prev, salesPoints: prev.salesPoints.filter((_, idx) => idx !== i) }))
+  }
+
+  async function handleSaveEdit() {
+    if (!lead) return
+    if (!editForm.name.trim() && !editForm.company.trim()) {
+      setEditError('Fyll inn navn eller bedrift')
+      return
+    }
+    setSavingEdit(true)
+    setEditError(null)
+    const finalName = editForm.name.trim() || editForm.company.trim()
+    const ok = await updateLead(lead.id, {
+      name: finalName,
+      company: editForm.company,
+      email: editForm.email,
+      phone: editForm.phone,
+      website: editForm.website,
+      source: editForm.source,
+      reason: editForm.reason,
+      sales_points: editForm.salesPoints,
+      temperature: editForm.temperature || undefined,
+      contact_deadline: editForm.contactDeadline || undefined,
     })
     if (ok) {
       setLead(prev => prev ? {
         ...prev,
         name: finalName,
-        company: contactForm.company.trim() || null,
-        email: contactForm.email.trim() || null,
-        phone: contactForm.phone.trim() || null,
-        website: contactForm.website.trim() || null,
+        company: editForm.company.trim() || null,
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        website: editForm.website.trim() || null,
+        source: editForm.source || null,
+        reason: editForm.reason.trim() || null,
+        sales_points: editForm.salesPoints.filter(s => s.trim()),
+        temperature: editForm.temperature || null,
+        contact_deadline: editForm.contactDeadline || null,
       } : prev)
-      setEditingContact(false)
+      setEditing(false)
     } else {
-      setContactError('Noe gikk galt. Prøv igjen.')
+      setEditError('Noe gikk galt. Prøv igjen.')
     }
-    setSavingContact(false)
+    setSavingEdit(false)
   }
 
   function handleNotesChange(value: string) {
@@ -276,48 +319,174 @@ export default function ProjectContactPage() {
         {/* Header */}
         <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-                  {name}
-                </h1>
-                {status && (
-                  <span style={{
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
-                    letterSpacing: '0.06em', textTransform: 'uppercase',
-                    color: status.color, background: `${status.color}18`,
-                    border: `1px solid ${status.color}30`,
-                    padding: '3px 9px', borderRadius: 5,
-                  }}>
-                    {status.label}
-                  </span>
+            {editing ? (
+              <div style={{ flex: 1, maxWidth: 480 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <FieldLabel>Navn</FieldLabel>
+                    <input
+                      value={editForm.name}
+                      onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      style={editInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Bedrift</FieldLabel>
+                    <input
+                      value={editForm.company}
+                      onChange={e => setEditForm(prev => ({ ...prev, company: e.target.value }))}
+                      style={editInputStyle}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12, maxWidth: 480 }}>
+                  <div>
+                    <FieldLabel>Kilde</FieldLabel>
+                    <input
+                      list="source-suggestions"
+                      value={editForm.source}
+                      onChange={e => setEditForm(prev => ({ ...prev, source: e.target.value }))}
+                      placeholder="Hvor kom leaden fra?"
+                      style={editInputStyle}
+                    />
+                    <datalist id="source-suggestions">
+                      {SOURCE_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <FieldLabel>Temperatur</FieldLabel>
+                    <TemperatureSlider
+                      value={editForm.temperature}
+                      onChange={t => setEditForm(prev => ({ ...prev, temperature: t }))}
+                      onClear={() => setEditForm(prev => ({ ...prev, temperature: '' }))}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Kontakt innen</FieldLabel>
+                    <input
+                      type="date"
+                      value={editForm.contactDeadline}
+                      onChange={e => setEditForm(prev => ({ ...prev, contactDeadline: e.target.value }))}
+                      style={{ ...editInputStyle, cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+                {editError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger, marginTop: 10 }}>{editError}</p>
                 )}
               </div>
-              {company && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', color: C.text2 }}>{company}</p>
-              )}
-            </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.6rem', fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
+                    {name}
+                  </h1>
+                  {status && (
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: status.color, background: `${status.color}18`,
+                      border: `1px solid ${status.color}30`,
+                      padding: '3px 9px', borderRadius: 5,
+                    }}>
+                      {status.label}
+                    </span>
+                  )}
+                  {lead?.temperature && (
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: LEAD_TEMPERATURE_CONFIG[lead.temperature].color,
+                      background: `${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}18`,
+                      border: `1px solid ${LEAD_TEMPERATURE_CONFIG[lead.temperature].color}30`,
+                      padding: '3px 9px', borderRadius: 5,
+                    }}>
+                      {LEAD_TEMPERATURE_CONFIG[lead.temperature].label}
+                    </span>
+                  )}
+                </div>
+                {company && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', color: C.text2, marginBottom: 2 }}>{company}</p>
+                )}
+                {lead?.source && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                    Kilde: {SOURCE_LABELS[lead.source] ?? lead.source}
+                  </p>
+                )}
+                {lead?.contact_deadline && (() => {
+                  const overdue = new Date(lead.contact_deadline) < new Date(new Date().toDateString())
+                  return (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: overdue ? C.danger : C.text3, marginTop: 2, fontWeight: overdue ? 600 : 400 }}>
+                      {overdue ? '⚠ Skulle vært kontaktet innen ' : 'Kontakt innen '}
+                      {new Date(lead.contact_deadline).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                    </p>
+                  )
+                })()}
+              </div>
+            )}
 
-            {/* Status-oppdatering hvis lead finnes */}
+            {/* Status-oppdatering + rediger */}
             {lead && (
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).map(([val, conf]) => (
-                  <button
-                    key={val}
-                    onClick={() => handleStatusChange(val)}
-                    disabled={readOnly}
-                    style={{
-                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
-                      padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                      background: lead.status === val ? `${conf.color}18` : 'transparent',
-                      color: lead.status === val ? conf.color : C.text3,
-                      border: `1px solid ${lead.status === val ? `${conf.color}40` : C.border}`,
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    {conf.label}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).map(([val, conf]) => (
+                    <button
+                      key={val}
+                      onClick={() => handleStatusChange(val)}
+                      disabled={readOnly}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 500,
+                        padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                        background: lead.status === val ? `${conf.color}18` : 'transparent',
+                        color: lead.status === val ? conf.color : C.text3,
+                        border: `1px solid ${lead.status === val ? `${conf.color}40` : C.border}`,
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      {conf.label}
+                    </button>
+                  ))}
+                </div>
+                {!readOnly && (
+                  editing ? (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={savingEdit}
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                          padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
+                          background: 'transparent', color: C.text3, border: `1px solid ${C.border}`,
+                        }}
+                      >
+                        Avbryt
+                      </button>
+                      <button
+                        onClick={handleSaveEdit}
+                        disabled={savingEdit}
+                        style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
+                          padding: '5px 12px', borderRadius: 5, cursor: savingEdit ? 'default' : 'pointer',
+                          background: C.accent, color: '#fff', border: 'none',
+                          opacity: savingEdit ? 0.6 : 1,
+                        }}
+                      >
+                        {savingEdit ? 'Lagrer...' : 'Lagre'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={startEdit}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                        padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
+                        background: 'transparent', color: C.text2, border: `1px solid ${C.border}`,
+                      }}
+                    >
+                      Rediger
+                    </button>
+                  )
+                )}
               </div>
             )}
           </div>
@@ -330,49 +499,17 @@ export default function ProjectContactPage() {
 
             {/* Kontakt-knapper */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-                  Kontakt
-                </p>
-                {lead && !readOnly && !editingContact && (
-                  <button
-                    onClick={startEditContact}
-                    style={{
-                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                      padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                      background: C.surface2, color: C.text2, border: `1px solid ${C.border}`,
-                    }}
-                  >
-                    Rediger
-                  </button>
-                )}
-              </div>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
+                Kontakt
+              </p>
 
-              {editingContact ? (
+              {editing ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <div style={{ flex: 1 }}>
-                      <FieldLabel>Navn</FieldLabel>
-                      <input
-                        value={contactForm.name}
-                        onChange={e => setContactForm(prev => ({ ...prev, name: e.target.value }))}
-                        style={editInputStyle}
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <FieldLabel>Bedrift</FieldLabel>
-                      <input
-                        value={contactForm.company}
-                        onChange={e => setContactForm(prev => ({ ...prev, company: e.target.value }))}
-                        style={editInputStyle}
-                      />
-                    </div>
-                  </div>
                   <div>
                     <FieldLabel>Telefon</FieldLabel>
                     <input
-                      value={contactForm.phone}
-                      onChange={e => setContactForm(prev => ({ ...prev, phone: e.target.value }))}
+                      value={editForm.phone}
+                      onChange={e => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
                       style={editInputStyle}
                     />
                   </div>
@@ -380,126 +517,108 @@ export default function ProjectContactPage() {
                     <FieldLabel>E-post</FieldLabel>
                     <input
                       type="email"
-                      value={contactForm.email}
-                      onChange={e => setContactForm(prev => ({ ...prev, email: e.target.value }))}
+                      value={editForm.email}
+                      onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
                       style={editInputStyle}
                     />
                   </div>
                   <div>
                     <FieldLabel>Nettside</FieldLabel>
                     <input
-                      value={contactForm.website}
-                      onChange={e => setContactForm(prev => ({ ...prev, website: e.target.value }))}
+                      value={editForm.website}
+                      onChange={e => setEditForm(prev => ({ ...prev, website: e.target.value }))}
                       style={editInputStyle}
                     />
-                  </div>
-                  {contactError && (
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger }}>{contactError}</p>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={cancelEditContact}
-                      disabled={savingContact}
-                      style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500,
-                        padding: '6px 14px', borderRadius: 6, cursor: savingContact ? 'default' : 'pointer',
-                        background: 'transparent', color: C.text2, border: `1px solid ${C.border}`,
-                      }}
-                    >
-                      Avbryt
-                    </button>
-                    <button
-                      onClick={handleSaveContact}
-                      disabled={savingContact}
-                      style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
-                        padding: '6px 14px', borderRadius: 6, cursor: savingContact ? 'default' : 'pointer',
-                        background: C.accent, color: '#fff', border: 'none',
-                        opacity: savingContact ? 0.6 : 1,
-                      }}
-                    >
-                      {savingContact ? 'Lagrer...' : 'Lagre'}
-                    </button>
                   </div>
                 </div>
               ) : (
                 <>
-              {phone && (
-                <a href={`tel:${phone}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.success}
-                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(76,175,125,0.12)', border: '1px solid rgba(76,175,125,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2" strokeLinecap="round">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 9.69 19.79 19.79 0 0 1 1.61 1.1 2 2 0 0 1 3.61 0h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 7.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.success }}>{phone}</p>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Trykk for å ringe</p>
-                    </div>
-                  </div>
-                </a>
-              )}
+                  {phone && (
+                    <a href={`tel:${phone}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.success}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(76,175,125,0.12)', border: '1px solid rgba(76,175,125,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2" strokeLinecap="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 9.69 19.79 19.79 0 0 1 1.61 1.1 2 2 0 0 1 3.61 0h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 7.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.success }}>{phone}</p>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Trykk for å ringe</p>
+                        </div>
+                      </div>
+                    </a>
+                  )}
 
-              {email && (
-                <a href={`mailto:${email}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.accent}
-                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                        <polyline points="22,6 12,13 2,6" />
-                      </svg>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</p>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Åpne e-postklient</p>
-                    </div>
-                  </div>
-                </a>
-              )}
+                  {email && (
+                    <a href={`mailto:${email}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.accent}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                          </svg>
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</p>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>Åpne e-postklient</p>
+                        </div>
+                      </div>
+                    </a>
+                  )}
 
-              {website && (
-                <a href={`https://${website.replace(/^https?:\/\//, '')}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.text2}
-                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round">
-                        <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
-                    </div>
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2 }}>
-                      {website.replace(/^https?:\/\//, '')} ↗
+                  {website && (
+                    <a href={`https://${website.replace(/^https?:\/\//, '')}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.text2}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round">
+                            <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                          </svg>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2 }}>
+                          {website.replace(/^https?:\/\//, '')} ↗
+                        </p>
+                      </div>
+                    </a>
+                  )}
+
+                  {!phone && !email && !website && (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
+                      Ingen kontaktinfo registrert
                     </p>
-                  </div>
-                </a>
-              )}
-
-              {!phone && !email && !website && (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, fontStyle: 'italic' }}>
-                  Ingen kontaktinfo registrert
-                </p>
-              )}
+                  )}
                 </>
               )}
             </div>
 
             {/* Hvorfor passer dette */}
-            {lead?.reason && (
+            {(editing || lead?.reason) && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 12 }}>
                   Hvorfor passer dette for oss
                 </p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2, lineHeight: 1.65 }}>
-                  {lead.reason}
-                </p>
+                {editing ? (
+                  <textarea
+                    value={editForm.reason}
+                    onChange={e => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Beskriv kort hvorfor denne leaden er interessant for Leafilms..."
+                    rows={3}
+                    style={{ ...editInputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                  />
+                ) : (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2, lineHeight: 1.65 }}>
+                    {lead?.reason}
+                  </p>
+                )}
               </div>
             )}
 
@@ -528,23 +647,63 @@ export default function ProjectContactPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Salgspunkter */}
-            {lead && (lead.sales_points ?? []).length > 0 && (
+            {lead && (editing || (lead.sales_points ?? []).length > 0) && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
                   Salgspunkter
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(lead.sales_points ?? []).map((point, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: 5, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                          <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                {editing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {editForm.salesPoints.map((point, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                          background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                            <path d="M1 4L3 6.5L7 1.5" stroke={C.accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <input
+                          value={point}
+                          onChange={e => updateEditSalesPoint(i, e.target.value)}
+                          placeholder={`Salgspunkt ${i + 1}`}
+                          style={{ ...editInputStyle, flex: 1 }}
+                        />
+                        {editForm.salesPoints.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEditSalesPoint(i)}
+                            style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', padding: '0 4px', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.5 }}>{point}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addEditSalesPoint}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.accent, background: C.accentBg, border: '1px dashed rgba(124,92,252,0.3)', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', alignSelf: 'flex-start', marginTop: 3 }}
+                    >
+                      + Legg til salgspunkt
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(lead.sales_points ?? []).map((point, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: C.accentBg, border: '1px solid rgba(124,92,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                            <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke={C.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.5 }}>{point}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub } from '@/lib/actions/pipeline'
-import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, LeadRecord, LeadStatus } from '@/lib/actions/leads'
+import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, updateLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
+import { ColdEmailCard } from '@/components/admin/ColdEmailCard'
 import { ProjectMessage } from '@/lib/types'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
@@ -31,6 +32,30 @@ const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }> = {
   lost:           { label: 'Tapt',        color: C.danger  },
 }
 
+const editInputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box',
+  fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
+  color: C.text, background: C.surface2,
+  border: `1px solid ${C.border}`, borderRadius: 7,
+  padding: '9px 12px', outline: 'none',
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.text3, marginBottom: 5 }}>
+      {children}
+    </label>
+  )
+}
+
+type ContactEditForm = {
+  name: string
+  company: string
+  email: string
+  phone: string
+  website: string
+}
+
 export default function ProjectContactPage() {
   const params = useParams()
   const projectId = params.id as string
@@ -44,8 +69,12 @@ export default function ProjectContactPage() {
   const [notes, setNotes] = useState('')
   const [notesSaving, setNotesSaving] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
-  const [copied, setCopied] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [editingContact, setEditingContact] = useState(false)
+  const [contactForm, setContactForm] = useState<ContactEditForm>({ name: '', company: '', email: '', phone: '', website: '' })
+  const [savingContact, setSavingContact] = useState(false)
+  const [contactError, setContactError] = useState<string | null>(null)
 
   const [messages, setMessages] = useState<ProjectMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -106,6 +135,61 @@ export default function ProjectContactPage() {
     await updateLeadStatus(lead.id, status)
   }
 
+  function startEditContact() {
+    if (!lead) return
+    setContactForm({
+      name: lead.name,
+      company: lead.company ?? '',
+      email: lead.email ?? '',
+      phone: lead.phone ?? '',
+      website: lead.website ?? '',
+    })
+    setContactError(null)
+    setEditingContact(true)
+  }
+
+  function cancelEditContact() {
+    setEditingContact(false)
+    setContactError(null)
+  }
+
+  async function handleSaveContact() {
+    if (!lead) return
+    if (!contactForm.name.trim() && !contactForm.company.trim()) {
+      setContactError('Fyll inn navn eller bedrift')
+      return
+    }
+    setSavingContact(true)
+    setContactError(null)
+    const finalName = contactForm.name.trim() || contactForm.company.trim()
+    const ok = await updateLead(lead.id, {
+      name: finalName,
+      company: contactForm.company,
+      email: contactForm.email,
+      phone: contactForm.phone,
+      website: contactForm.website,
+      source: lead.source ?? '',
+      reason: lead.reason ?? '',
+      sales_points: lead.sales_points ?? [],
+      temperature: lead.temperature ?? undefined,
+      contact_deadline: lead.contact_deadline ?? undefined,
+    })
+    if (ok) {
+      setLead(prev => prev ? {
+        ...prev,
+        name: finalName,
+        company: contactForm.company.trim() || null,
+        email: contactForm.email.trim() || null,
+        phone: contactForm.phone.trim() || null,
+        website: contactForm.website.trim() || null,
+      } : prev)
+      setEditingContact(false)
+    } else {
+      setContactError('Noe gikk galt. Prøv igjen.')
+    }
+    setSavingContact(false)
+  }
+
   function handleNotesChange(value: string) {
     setNotes(value)
     setNotesSaving(true)
@@ -118,13 +202,6 @@ export default function ProjectContactPage() {
       setNotesSaved(true)
       setTimeout(() => setNotesSaved(false), 2000)
     }, 800)
-  }
-
-  async function handleCopyEmail() {
-    if (!lead?.cold_email) return
-    await navigator.clipboard.writeText(lead.cold_email)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   if (loading) {
@@ -253,10 +330,100 @@ export default function ProjectContactPage() {
 
             {/* Kontakt-knapper */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
-                Kontakt
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
+                  Kontakt
+                </p>
+                {lead && !readOnly && !editingContact && (
+                  <button
+                    onClick={startEditContact}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                      background: C.surface2, color: C.text2, border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    Rediger
+                  </button>
+                )}
+              </div>
 
+              {editingContact ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <FieldLabel>Navn</FieldLabel>
+                      <input
+                        value={contactForm.name}
+                        onChange={e => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+                        style={editInputStyle}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <FieldLabel>Bedrift</FieldLabel>
+                      <input
+                        value={contactForm.company}
+                        onChange={e => setContactForm(prev => ({ ...prev, company: e.target.value }))}
+                        style={editInputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <FieldLabel>Telefon</FieldLabel>
+                    <input
+                      value={contactForm.phone}
+                      onChange={e => setContactForm(prev => ({ ...prev, phone: e.target.value }))}
+                      style={editInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>E-post</FieldLabel>
+                    <input
+                      type="email"
+                      value={contactForm.email}
+                      onChange={e => setContactForm(prev => ({ ...prev, email: e.target.value }))}
+                      style={editInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Nettside</FieldLabel>
+                    <input
+                      value={contactForm.website}
+                      onChange={e => setContactForm(prev => ({ ...prev, website: e.target.value }))}
+                      style={editInputStyle}
+                    />
+                  </div>
+                  {contactError && (
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.danger }}>{contactError}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={cancelEditContact}
+                      disabled={savingContact}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500,
+                        padding: '6px 14px', borderRadius: 6, cursor: savingContact ? 'default' : 'pointer',
+                        background: 'transparent', color: C.text2, border: `1px solid ${C.border}`,
+                      }}
+                    >
+                      Avbryt
+                    </button>
+                    <button
+                      onClick={handleSaveContact}
+                      disabled={savingContact}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                        padding: '6px 14px', borderRadius: 6, cursor: savingContact ? 'default' : 'pointer',
+                        background: C.accent, color: '#fff', border: 'none',
+                        opacity: savingContact ? 0.6 : 1,
+                      }}
+                    >
+                      {savingContact ? 'Lagrer...' : 'Lagre'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
               {phone && (
                 <a href={`tel:${phone}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
@@ -320,6 +487,8 @@ export default function ProjectContactPage() {
                   Ingen kontaktinfo registrert
                 </p>
               )}
+                </>
+              )}
             </div>
 
             {/* Hvorfor passer dette */}
@@ -381,45 +550,7 @@ export default function ProjectContactPage() {
 
             {/* Kald e-post */}
             {lead?.cold_email && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-                    Kald e-post
-                  </p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={handleCopyEmail}
-                      style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                        padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                        background: copied ? 'rgba(76,175,125,0.12)' : C.surface2,
-                        color: copied ? C.success : C.text2,
-                        border: `1px solid ${copied ? 'rgba(76,175,125,0.3)' : C.border}`,
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {copied ? '✓ Kopiert' : 'Kopier'}
-                    </button>
-                    {email && (
-                      <a href={`mailto:${email}?body=${encodeURIComponent(lead.cold_email)}`} style={{ textDecoration: 'none' }}>
-                        <button style={{
-                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                          padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                          background: C.accentBg, color: C.accent,
-                          border: '1px solid rgba(124,92,252,0.25)',
-                        }}>
-                          Send →
-                        </button>
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {lead.cold_email}
-                  </p>
-                </div>
-              </div>
+              <ColdEmailCard leadId={lead.id} coldEmail={lead.cold_email} initialTo={email} />
             )}
 
             {/* Fallback: ingen lead-data */}

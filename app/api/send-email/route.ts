@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
     const { user } = staff
 
-    const { projectId, emailType, to, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
+    const { projectId, leadId, emailType, to, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
 
     if (!to || !subject || !body) {
       return Response.json({ error: 'Manglende felt: to, subject, body' }, { status: 400 })
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
     const serviceClient = createServiceClient()
     const { error: logError } = await serviceClient.from('email_log').insert({
       project_id: projectId ?? null,
+      lead_id: leadId ?? null,
       to_email: to,
       subject,
       body_html: body,

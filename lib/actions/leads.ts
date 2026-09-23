@@ -322,6 +322,19 @@ export async function updateLead(leadId: string, data: {
   }
 }
 
+export async function updateLeadEmail(leadId: string, email: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('leads')
+      .update({ email: email.trim() || null, updated_at: new Date().toISOString() })
+      .eq('id', leadId)
+    revalidatePath('/admin/leads')
+  } catch (err) {
+    console.error('updateLeadEmail unexpected:', err)
+  }
+}
+
 export async function updateLeadNotes(leadId: string, notes: string): Promise<void> {
   try {
     const supabase = await createClient()

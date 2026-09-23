@@ -7,6 +7,7 @@ import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead,
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
+import { ColdEmailCard } from '@/components/admin/ColdEmailCard'
 import { getOrCreateLeadConversation } from '@/lib/actions/lead-chat'
 import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
 import type { ConversationParticipant } from '@/lib/actions/messages'
@@ -85,7 +86,6 @@ export default function LeadDetailPage() {
   const [notes, setNotes] = useState('')
   const [notesSaving, setNotesSaving] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -222,13 +222,6 @@ export default function LeadDetailPage() {
     setDeleting(true)
     await deleteLead(leadId)
     router.push('/admin/leads')
-  }
-
-  async function handleCopyEmail() {
-    if (!lead?.cold_email) return
-    await navigator.clipboard.writeText(lead.cold_email)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   if (loading) {
@@ -715,51 +708,7 @@ export default function LeadDetailPage() {
 
             {/* Kald e-post */}
             {lead.cold_email && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-                    Kald e-post
-                  </p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={handleCopyEmail}
-                      style={{
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                        padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                        background: copied ? 'rgba(76,175,125,0.12)' : C.surface2,
-                        color: copied ? C.success : C.text2,
-                        border: `1px solid ${copied ? 'rgba(76,175,125,0.3)' : C.border}`,
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {copied ? '✓ Kopiert' : 'Kopier'}
-                    </button>
-                    {lead.email && (
-                      <a
-                        href={`mailto:${lead.email}?body=${encodeURIComponent(lead.cold_email)}`}
-                        style={{ textDecoration: 'none' }}
-                      >
-                        <button style={{
-                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-                          padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                          background: C.accentBg, color: C.accent,
-                          border: '1px solid rgba(124,92,252,0.25)',
-                        }}>
-                          Send →
-                        </button>
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
-                  <p style={{
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
-                    color: C.text2, lineHeight: 1.7, whiteSpace: 'pre-wrap',
-                  }}>
-                    {lead.cold_email}
-                  </p>
-                </div>
-              </div>
+              <ColdEmailCard leadId={lead.id} coldEmail={lead.cold_email} initialTo={lead.email} />
             )}
 
           </div>

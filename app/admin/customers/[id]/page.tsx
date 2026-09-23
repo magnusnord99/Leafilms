@@ -312,36 +312,42 @@ export default function CustomerDetailPage() {
     setCustomer(prev => prev ? { ...prev, logo_path: null } : prev)
   }
 
-  async function handleUploadLogoFile(file: File) {
+  // Tar imot både enkeltfiler og en hel mappe (webkitdirectory) — filsystemets
+  // mappestruktur beholdes ikke, alt havner flatt i logo-pakken siden det er
+  // slik den vises og brukes. Skjulte OS-filer (.DS_Store fra mappevalg på Mac)
+  // filtreres bort.
+  async function handleUploadLogoFiles(fileList: FileList | File[]) {
     if (!customer) return
+    const files = Array.from(fileList).filter(f => !f.name.startsWith('.'))
+    if (files.length === 0) return
     setUploadingLogoFile(true)
     const supabase = createClient()
-    const path = `customer-logos/${customer.id}/pack/${Date.now()}-${file.name}`
-    const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
-    if (uploadError) {
-      alert('Kunne ikke laste opp filen: ' + uploadError.message)
-      setUploadingLogoFile(false)
-      return
-    }
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: inserted, error: insertError } = await supabase
-      .from('customer_logo_files')
-      .insert({
-        customer_id: customer.id,
-        uploaded_by: user?.id ?? null,
-        file_name: file.name,
-        file_path: path,
-        file_type: file.type || null,
-        file_size: file.size,
-      })
-      .select()
-      .single()
-    setUploadingLogoFile(false)
-    if (insertError || !inserted) {
-      alert('Filen ble lastet opp, men kunne ikke lagres. Prøv igjen.')
-      return
+    const inserted: CustomerLogoFile[] = []
+    const failed: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const path = `customer-logos/${customer.id}/pack/${Date.now()}-${i}-${file.name}`
+      const { error: uploadError } = await supabase.storage.from('assets').upload(path, file)
+      if (uploadError) { failed.push(file.name); continue }
+      const { data: row, error: insertError } = await supabase
+        .from('customer_logo_files')
+        .insert({
+          customer_id: customer.id,
+          uploaded_by: user?.id ?? null,
+          file_name: file.name,
+          file_path: path,
+          file_type: file.type || null,
+          file_size: file.size,
+        })
+        .select()
+        .single()
+      if (insertError || !row) { failed.push(file.name); continue }
+      inserted.push(row as CustomerLogoFile)
     }
-    setLogoFiles(prev => [inserted as CustomerLogoFile, ...prev])
+    setUploadingLogoFile(false)
+    if (inserted.length > 0) setLogoFiles(prev => [...inserted, ...prev])
+    if (failed.length > 0) alert(`Kunne ikke laste opp: ${failed.join(', ')}`)
   }
 
   async function handleDeleteLogoFile(file: CustomerLogoFile) {
@@ -686,24 +692,44 @@ export default function CustomerDetailPage() {
 
             {/* Logo-pakke */}
             <div style={{ flex: '2 1 320px', minWidth: 280 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2 }}>
                   Logo-pakke <span style={{ fontWeight: 400, color: C.text3 }}>— brukes ved redigering</span>
                 </p>
-                <label
-                  htmlFor="logo-pack-upload"
-                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingLogoFile ? 'default' : 'pointer', opacity: uploadingLogoFile ? 0.6 : 1 }}
-                >
-                  {uploadingLogoFile ? 'Laster opp...' : '+ Last opp'}
-                </label>
+                <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                  <label
+                    htmlFor="logo-pack-upload"
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingLogoFile ? 'default' : 'pointer', opacity: uploadingLogoFile ? 0.6 : 1 }}
+                  >
+                    {uploadingLogoFile ? 'Laster opp...' : '+ Legg til filer'}
+                  </label>
+                  <label
+                    htmlFor="logo-pack-upload-folder"
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.accent, textDecoration: 'underline', cursor: uploadingLogoFile ? 'default' : 'pointer', opacity: uploadingLogoFile ? 0.6 : 1 }}
+                  >
+                    + Legg til mappe
+                  </label>
+                </div>
                 <input
                   id="logo-pack-upload"
                   type="file"
+                  multiple
                   disabled={uploadingLogoFile}
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleUploadLogoFile(file)
+                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+                <input
+                  id="logo-pack-upload-folder"
+                  type="file"
+                  multiple
+                  disabled={uploadingLogoFile}
+                  style={{ display: 'none' }}
+                  {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                  onChange={(e) => {
+                    if (e.target.files?.length) handleUploadLogoFiles(e.target.files)
                     e.target.value = ''
                   }}
                 />

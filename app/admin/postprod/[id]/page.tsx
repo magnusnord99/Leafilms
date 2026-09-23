@@ -70,6 +70,13 @@ function getExtraLinks(data: Record<string, string>): string[] {
   }
 }
 
+const SIDEBAR_COLLAPSED_KEY = 'postprod-sidebar-collapsed'
+
+function getInitialSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+}
+
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   video: { label: 'Video', color: '#7C5CFC' },
   photo: { label: 'Foto',  color: '#4A9AC4' },
@@ -209,6 +216,13 @@ export default function PostProdDetailPage() {
   const [unlocked, setUnlocked] = useState(false)
   // Egendefinerte oppgaver starter kollapset — se feedback 214db97b/02003de2.
   const [showCustomTasks, setShowCustomTasks] = useState(false)
+  // Info om levering + Filer starter kollapset av samme grunn — presisert av
+  // Magnus 2026-09-23 (tok en hel rad selv om innholdet sjelden trengs mens
+  // man jobber i et steg). Egen chevron, samme mønster som over.
+  const [showDeliveryInfo, setShowDeliveryInfo] = useState(false)
+  // Prosjektlisten i sidebaren kan skjules for å gi mer plass til selve
+  // steg-innholdet — husket per nettleser (feedback 2026-09-23).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed)
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -281,6 +295,14 @@ export default function PostProdDetailPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [leadDropdownOpen])
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0')
+      return next
+    })
+  }
 
   async function handleSetLead(profileId: string | null) {
     if (readOnly) return
@@ -871,21 +893,37 @@ export default function PostProdDetailPage() {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 48px)', overflow: 'hidden', background: C.bg }}>
 
-      {/* Sidebar — kun prosjekt-bytter; "Alle →"-lenken gir samme lav-risiko tilgang på mobil */}
-      <aside className="hidden md:flex" style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.sidebar, flexDirection: 'column', overflowY: 'auto' }}>
-        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Post-prod
-          </span>
-          <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textDecoration: 'none' }}>
-            Alle →
-          </Link>
+      {/* Sidebar — kun prosjekt-bytter; "Alle →"-lenken gir samme lav-risiko tilgang på mobil.
+          Kollapsbar til en smal stripe for å gi mer plass til steg-innholdet (feedback 2026-09-23). */}
+      <aside className="hidden md:flex" style={{ width: sidebarCollapsed ? 40 : 220, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.sidebar, flexDirection: 'column', overflowY: 'auto', transition: 'width 0.15s' }}>
+        <div style={{ padding: sidebarCollapsed ? '12px 0' : '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'space-between', flexShrink: 0 }}>
+          {!sidebarCollapsed && (
+            <>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Post-prod
+              </span>
+              <Link href="/admin/postprod" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textDecoration: 'none', marginRight: 6 }}>
+                Alle →
+              </Link>
+            </>
+          )}
+          <button
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Vis prosjektliste' : 'Skjul prosjektliste'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, padding: 2, lineHeight: 0, flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'none' }}>
+              <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {projects.map(p => (
-            <SidebarProject key={p.id} project={p} isActive={p.id === projectId} />
-          ))}
-        </div>
+        {!sidebarCollapsed && (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {projects.map(p => (
+              <SidebarProject key={p.id} project={p} isActive={p.id === projectId} />
+            ))}
+          </div>
+        )}
       </aside>
 
       {/* Main */}
@@ -1137,15 +1175,28 @@ export default function PostProdDetailPage() {
               </div>
             )}
 
-            {/* Info om levering + Filer side om side (ikke stablet) for å spare
-                vertikal plass — sammen med egendefinerte oppgaver tok disse
-                for mye høyde fra selve steg-innholdet under før (feedback
-                214db97b, presisert videre av Magnus 2026-09-22). */}
-            <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="inline" readOnly={readOnly} />
-              <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                <ProjectDocuments projectId={projectId} defaultCollapsed />
-              </div>
+            {/* Info om levering + Filer — bak samme chevron-mønster som Egendefinerte
+                oppgaver under, kollapset som standard. Disse tok en hel rad selv når
+                tomme (feedback 214db97b, presisert videre av Magnus 2026-09-22/23). */}
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={() => setShowDeliveryInfo(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: showDeliveryInfo ? 'rotate(90deg)' : 'none', color: C.text3, fontSize: '0.7rem' }}>▸</span>
+                <span style={{ flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Leveranse og filer
+                </span>
+                <span style={{ fontSize: '0.9rem', color: C.text3, fontWeight: 600, lineHeight: 1 }}>{showDeliveryInfo ? '−' : '+'}</span>
+              </button>
+              {showDeliveryInfo && (
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="inline" readOnly={readOnly} />
+                  <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                    <ProjectDocuments projectId={projectId} defaultCollapsed />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1405,7 +1456,7 @@ export default function PostProdDetailPage() {
             )}
 
             {/* Right: task details + notes + action */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', minWidth: 0, maxWidth: 760, margin: '0 auto', width: '100%' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', minWidth: 0, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
 
               {/* Status badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>

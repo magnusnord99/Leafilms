@@ -2323,7 +2323,7 @@ export default function ProjectHubPage() {
                 checked={(project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false}
                 onChange={handleToggleRequestInvoiceInfo}
                 disabled={togglingRequestInvoiceInfo}
-                style={{ marginTop: 2, accentColor: C.accent, width: 16, height: 16, flexShrink: 0, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer' }}
+                style={{ marginTop: 2, accentColor: C.accent, width: 22, height: 22, flexShrink: 0, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer' }}
               />
               <div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, margin: 0 }}>
@@ -2376,7 +2376,7 @@ export default function ProjectHubPage() {
                         type="checkbox"
                         checked={invoiceForm.invoice_info_skipped}
                         onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
-                        style={{ accentColor: C.accent, width: 15, height: 15 }}
+                        style={{ accentColor: C.accent, width: 22, height: 22 }}
                       />
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
                         Marker som «ikke klart» (må følges opp manuelt før fakturering)

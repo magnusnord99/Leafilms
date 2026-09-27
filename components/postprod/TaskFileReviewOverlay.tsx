@@ -374,7 +374,16 @@ export function TaskFileReviewOverlay({
   const progressRatio = duration > 0 ? currentTime / duration : 0
 
   return (
-    <div style={{
+    <>
+      {/* Responsive overrides — kun for mobil, samme mønster som app/v/[token]/VideoReviewClient.tsx */}
+      <style>{`
+        @media (max-width: 768px) {
+          .tfr-body { grid-template-columns: 1fr !important; grid-template-rows: 60dvh 1fr !important; }
+          .tfr-sidebar { border-left: none !important; border-top: 1px solid ${S.border} !important; }
+        }
+      `}</style>
+
+      <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
       height: '100dvh',
       display: 'flex',
@@ -409,7 +418,7 @@ export function TaskFileReviewOverlay({
       </div>
 
       {/* Body: video + sidebar */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 }}>
+      <div className="tfr-body" style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 }}>
         <div style={{
           background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
           minHeight: 0, cursor: url ? 'pointer' : 'default', overflow: 'hidden',
@@ -436,7 +445,7 @@ export function TaskFileReviewOverlay({
         </div>
 
         {/* Sidebar */}
-        <div style={{ borderLeft: `1px solid ${S.border}`, background: S.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div className="tfr-sidebar" style={{ borderLeft: `1px solid ${S.border}`, background: S.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ padding: '13px 16px 10px', borderBottom: `1px solid ${S.border}`, flexShrink: 0 }}>
             <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: S.text3, fontWeight: 700 }}>
               Kommentarer
@@ -689,5 +698,6 @@ export function TaskFileReviewOverlay({
         </div>
       )}
     </div>
+    </>
   )
 }

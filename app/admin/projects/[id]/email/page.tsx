@@ -29,7 +29,7 @@ const EMAIL_TYPE_CONTEXT: Record<EmailType, string> = {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
   background: C.surface2, border: `1px solid ${C.border}`,
   color: C.text, padding: '10px 14px', borderRadius: 8,
   outline: 'none', boxSizing: 'border-box',
@@ -266,7 +266,7 @@ export default function EmailPage() {
                 type="checkbox"
                 checked={useLeafilmsAddress}
                 onChange={e => setUseLeafilmsAddress(e.target.checked)}
-                style={{ accentColor: C.accent, width: 14, height: 14, cursor: 'pointer' }}
+                style={{ accentColor: C.accent, width: 22, height: 22, cursor: 'pointer' }}
               />
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                 Send fra post@leafilms.no i stedet for min egen adresse

@@ -1026,7 +1026,7 @@ export default function CustomerDetailPage() {
                   type="checkbox"
                   checked={invoiceForm.invoice_info_skipped}
                   onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
-                  style={{ accentColor: C.accent, width: 15, height: 15 }}
+                  style={{ accentColor: C.accent, width: 22, height: 22 }}
                 />
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                   Marker som «ikke klart» (må følges opp manuelt før fakturering)

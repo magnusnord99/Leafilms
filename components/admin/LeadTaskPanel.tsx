@@ -391,7 +391,7 @@ export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate
                 onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
                 placeholder="Ny oppgave..."
                 style={{
-                  flex: 1, minWidth: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+                  flex: 1, minWidth: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                   color: C.text, background: C.surface2,
                   border: `1px solid ${C.border}`, borderRadius: 6,
                   padding: '7px 10px', outline: 'none',
@@ -405,7 +405,7 @@ export default function LeadTaskPanel({ projectId, leadId, assignedTo, canCreate
                 onChange={e => setNewDue(e.target.value)}
                 title="Frist"
                 style={{
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                   color: newDue ? C.text : C.text3, background: C.surface2,
                   border: `1px solid ${C.border}`, borderRadius: 6,
                   padding: '7px 8px', outline: 'none', colorScheme: 'dark',

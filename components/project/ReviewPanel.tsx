@@ -176,7 +176,7 @@ export default function ReviewPanel({
                 rows={2}
                 placeholder="Hva bør endres?"
                 style={{
-                  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
+                  width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                   padding: '6px 10px', borderRadius: 5, resize: 'vertical',
                   background: C.surface, border: `1px solid ${C.border}`, color: C.text, outline: 'none',
                 }}

@@ -173,7 +173,7 @@ export function TaskList({
                   disabled={readOnly}
                   title="Frist"
                   style={{
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: task.due_date ? C.text2 : C.text3, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 6,
                     padding: '3px 6px', outline: 'none', flexShrink: 0,
@@ -288,7 +288,7 @@ export function TaskList({
           placeholder="Legg til oppgave..."
           disabled={readOnly}
           style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
             color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
             borderRadius: 6, padding: '7px 10px', outline: 'none', transition: 'border-color 0.12s',
           }}

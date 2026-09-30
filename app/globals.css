@@ -175,6 +175,7 @@ body.energi-page::after {
   --admin-success: #4CAF7D;
   --admin-warning: #D4863A;
   --admin-hover-border: #3D3D4E;
+  --admin-sticky-header-bg: rgba(24, 25, 32, 0.97);
 
   /* Subtile hover/overlay-tinter — hvit tint på mørk bakgrunn */
   --admin-overlay-01: rgba(255, 255, 255, 0.01);
@@ -200,6 +201,7 @@ body.energi-page::after {
   --admin-success: #2F8F5B;
   --admin-warning: #B4691E;
   --admin-hover-border: #D5D5E0;
+  --admin-sticky-header-bg: rgba(241, 241, 245, 0.97);
 
   /* Samme overlay-tinter, men mørk tint på lys bakgrunn */
   --admin-overlay-01: rgba(0, 0, 0, 0.04);

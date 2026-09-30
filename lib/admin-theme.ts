@@ -13,4 +13,5 @@ export const C = {
   success:  'var(--admin-success)',
   warning:  'var(--admin-warning)',
   hoverBorder: 'var(--admin-hover-border)',
+  stickyHeaderBg: 'var(--admin-sticky-header-bg)',
 }

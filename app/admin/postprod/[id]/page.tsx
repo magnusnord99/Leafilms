@@ -939,7 +939,7 @@ export default function PostProdDetailPage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* Header */}
-        <div style={{ flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: 'rgba(24,25,32,0.97)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: C.stickyHeaderBg, backdropFilter: 'blur(8px)' }}>
           <div style={{ padding: '14px 24px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>

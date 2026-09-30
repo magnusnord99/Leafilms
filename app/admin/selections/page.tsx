@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { getAllGalleriesOverview, getHiddenGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
 import CreateStandaloneGalleryButton from './CreateStandaloneGalleryButton'
+import DeleteGalleryButton from './DeleteGalleryButton'
 import { C } from '@/lib/admin-theme'
 
 export default async function SelectionsOverviewPage({
@@ -146,7 +147,7 @@ export default async function SelectionsOverviewPage({
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    {['Galleri', 'Status', 'Album', 'Valgt', 'Opprettet'].map(h => (
+                    {['Galleri', 'Status', 'Album', 'Valgt', 'Opprettet', ''].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3, fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -173,6 +174,9 @@ export default async function SelectionsOverviewPage({
                         </td>
                         <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
                           {new Date(g.createdAt).toLocaleDateString('nb-NO')}
+                        </td>
+                        <td style={{ padding: '13px 16px', textAlign: 'right' }}>
+                          <DeleteGalleryButton galleryId={g.galleryId} />
                         </td>
                       </tr>
                     )

@@ -341,6 +341,33 @@ export async function purgeGalleryImages(galleryId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// ADMIN: Slett galleri permanent (bilder i storage + raden selv — resten
+// kaskaderer i DB: selection_images, gallery_reviews, notifications)
+// ---------------------------------------------------------------------------
+export async function deleteGallery(galleryId: string): Promise<void> {
+  const supabase = await createClient()
+  const service = createServiceClient()
+
+  const { data: images } = await supabase
+    .from('selection_images')
+    .select('storage_path')
+    .eq('gallery_id', galleryId)
+    .not('storage_path', 'is', null)
+
+  const paths = (images ?? []).map(i => i.storage_path).filter(Boolean) as string[]
+  if (paths.length > 0) {
+    const { error: storageError } = await service.storage.from('selections').remove(paths)
+    if (storageError) console.error('deleteGallery storage error:', storageError)
+  }
+
+  const { error } = await supabase.from('selection_galleries').delete().eq('id', galleryId)
+  if (error) {
+    console.error('deleteGallery error:', error)
+    throw new Error('Kunne ikke slette galleriet')
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ADMIN: Gjenåpne galleri
 // ---------------------------------------------------------------------------
 export async function reopenGallery(galleryId: string): Promise<void> {

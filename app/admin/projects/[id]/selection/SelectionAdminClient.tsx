@@ -9,7 +9,7 @@ import {
   moveImagesToAlbum, unhideImageFromClient,
 } from '@/lib/actions/selection-albums'
 import {
-  purgeGalleryImages, reopenGallery,
+  purgeGalleryImages, reopenGallery, deleteGallery,
   getSelectedFilenames, registerUploadedImages,
   linkGalleryToProject, unlinkGalleryFromProject, searchProjectsToLink,
   deleteImageComment,
@@ -45,6 +45,7 @@ export default function SelectionAdminClient({
   const [copiedFilelist, setCopiedFilelist] = useState(false)
   const [purging, setPurging] = useState(false)
   const [reopening, setReopening] = useState(false)
+  const [deletingGallery, setDeletingGallery] = useState(false)
   // Bilder uten album (f.eks. lastet opp før noe album ble opprettet) var usynlige
   // her tidligere — inkl. eventuelle kundekommentarer på dem (feedback b00bcddb).
   const [ungroupedLightboxIndex, setUngroupedLightboxIndex] = useState<number | null>(null)
@@ -87,6 +88,13 @@ export default function SelectionAdminClient({
     await purgeGalleryImages(data.gallery.id)
     await refresh()
     setPurging(false)
+  }
+
+  async function handleDeleteGallery() {
+    if (!data || !confirm('Slette hele galleriet permanent? Dette kan ikke angres.')) return
+    setDeletingGallery(true)
+    await deleteGallery(data.gallery.id)
+    router.push(backHref)
   }
 
   async function handleReopen() {
@@ -256,6 +264,7 @@ export default function SelectionAdminClient({
             {gallery.status !== 'purged' && (
               <button onClick={handlePurge} disabled={purging} style={btnDanger}>{purging ? 'Sletter...' : '⊗ Slett bildefiler'}</button>
             )}
+            <button onClick={handleDeleteGallery} disabled={deletingGallery} style={btnDanger}>{deletingGallery ? 'Sletter...' : '⊗ Slett galleri'}</button>
           </div>
         </div>
 

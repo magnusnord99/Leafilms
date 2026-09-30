@@ -40,6 +40,7 @@ export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
     deliveryDescription: '',
     deliverables: [],
     terms: DEFAULT_TERMS,
+    termsEn: EN_DEFAULT_TERMS,
     language: 'NO',
     startupCrew: [],
     shootDays: 1,
@@ -1304,17 +1305,7 @@ export function QuoteBuilder({
                 <select
                   style={fieldStyle}
                   value={data.language}
-                  onChange={e => {
-                    const nextLang = e.target.value as 'NO' | 'EN'
-                    // Bytt kun vilkårsteksten hvis den fortsatt er uendret standardtekst —
-                    // rører aldri egendefinert tekst admin selv har skrevet inn.
-                    setData(prev => {
-                      let terms = prev.terms
-                      if (nextLang === 'EN' && prev.terms === DEFAULT_TERMS) terms = EN_DEFAULT_TERMS
-                      if (nextLang === 'NO' && prev.terms === EN_DEFAULT_TERMS) terms = DEFAULT_TERMS
-                      return { ...prev, language: nextLang, terms }
-                    })
-                  }}
+                  onChange={e => set('language', e.target.value as 'NO' | 'EN')}
                 >
                   <option value="NO">Norsk</option>
                   <option value="EN">English</option>
@@ -1476,12 +1467,23 @@ export function QuoteBuilder({
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>
         {collapsibleHeader('Vilkår og betingelser', termsOpen, () => setTermsOpen(o => !o))}
         {termsOpen && (
-          <div style={{ padding: 16, background: C.bg }}>
-            <textarea
-              style={{ ...fieldStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.6 }}
-              value={data.terms}
-              onChange={e => set('terms', e.target.value)}
-            />
+          <div style={{ padding: 16, background: C.bg, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={labelStyle}>Vilkår (norsk)</label>
+              <textarea
+                style={{ ...fieldStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.6 }}
+                value={data.terms}
+                onChange={e => set('terms', e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Vilkår (engelsk) — brukes i PDF når tilbudsspråket er English</label>
+              <textarea
+                style={{ ...fieldStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.6 }}
+                value={data.termsEn ?? ''}
+                onChange={e => set('termsEn', e.target.value)}
+              />
+            </div>
           </div>
         )}
       </div>

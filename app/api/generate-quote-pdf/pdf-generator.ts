@@ -204,12 +204,13 @@ export async function generateQuotePDF(
     y = gridY + leftRows.length * LH + 22
 
     // ── TERMS ─────────────────────────────────────────────────────────────────
-    if (data.terms) {
+    const termsText = language === 'EN' ? (data.termsEn?.trim() || data.terms) : data.terms
+    if (termsText) {
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000000')
       doc.text(labels.termsHeader, ML, y)
       y += 16
 
-      const paragraphs = data.terms.split('\n').filter(p => p.trim())
+      const paragraphs = termsText.split('\n').filter(p => p.trim())
       doc.font('Helvetica').fontSize(8.5).fillColor('#000000')
 
       for (const para of paragraphs) {

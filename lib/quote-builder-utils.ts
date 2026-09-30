@@ -85,6 +85,7 @@ type QuoteData = {
   paymentInfo?: string
   deliveryDate?: string
   terms?: string
+  termsEn?: string
   lineItems?: QuoteLineItem[]
   subtotalExclVat?: number
   subtotalInclVat?: number
@@ -397,6 +398,7 @@ export function convertBuilderDataToQuoteData(data: QuoteBuilderData, selectedAd
     paymentInfo: data.paymentInfo,
     deliveryDate: data.deliveryDate,
     terms: data.terms,
+    termsEn: data.termsEn,
     lineItems,
     subtotalExclVat: totals.subtotal,
     subtotalInclVat: totals.subtotal + (data.includeVat ? totals.subtotal * (data.vatRate / 100) : 0),

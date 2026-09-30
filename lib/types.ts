@@ -265,6 +265,8 @@ export type QuoteBuilderData = {
   /** Strukturert leveranseliste, separat fra deliveryDescription-friteksten — fryses til contracts/projects.deliverables ved signering. */
   deliverables: DeliverableItem[]
   terms: string
+  /** Engelsk vilkårstekst — holdt separat fra `terms` (norsk) så den ikke overskrives ved å bytte språk. Se feedback b4e4e38a. */
+  termsEn?: string
   language: 'NO' | 'EN'
   startupCrew: CrewMember[]
   shootDays: number

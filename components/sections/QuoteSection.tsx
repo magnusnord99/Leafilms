@@ -27,6 +27,7 @@ type QuoteData = {
   paymentInfo?: string
   deliveryDate?: string
   terms?: string
+  termsEn?: string
   lineItems?: QuoteLineItem[]
   subtotalExclVat?: number
   subtotalInclVat?: number
@@ -215,6 +216,10 @@ export function QuoteSection({
     if (dbBuilderData) return convertBuilderDataToQuoteData(dbBuilderData, Array.from(selectedAddonIds))
     return dbQuoteData
   }, [dbBuilderData, dbQuoteData, selectedAddonIds])
+
+  // Engelsk vilkårstekst holdes i et eget felt (termsEn) fremfor å overskrive
+  // den norske — se feedback b4e4e38a.
+  const termsText = uiLang === 'en' ? (quoteData?.termsEn?.trim() || quoteData?.terms) : quoteData?.terms
 
   // Hvor mye av hver kategori-linje som kommer fra valgte tillegg — vises som liten gul
   // "+X"-tekst ved siden av linjen den endrer (samme kategori-oppdeling som PDF-en/kontrakten).
@@ -479,7 +484,7 @@ export function QuoteSection({
           </div>
 
           {/* Terms */}
-          {quoteData.terms && (
+          {termsText && (
             <div
               className="px-8 md:px-12 py-5"
               style={{ borderBottom: '1px solid #2A261F' }}
@@ -514,7 +519,7 @@ export function QuoteSection({
 
               {showTerms && (
                 <div className="space-y-3 mt-4">
-                  {quoteData.terms.split('\n').filter((p) => p.trim()).map((para, idx) => (
+                  {termsText.split('\n').filter((p) => p.trim()).map((para, idx) => (
                     <p key={idx} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: '#9E9287', lineHeight: 1.7 }}>
                       {para}
                     </p>

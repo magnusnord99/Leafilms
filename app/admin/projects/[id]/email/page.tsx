@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
@@ -51,6 +51,7 @@ export default function EmailPage() {
   const [hubData, setHubData] = useState<HubData>(null)
   const [loadingHub, setLoadingHub] = useState(true)
   const [toEmail, setToEmail] = useState('')
+  const [cc, setCc] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [meetingLink, setMeetingLink] = useState('')
@@ -64,6 +65,7 @@ export default function EmailPage() {
   const [chatMembers, setChatMembers] = useState<ConversationParticipant[]>([])
   const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
   const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (!projectId) return
@@ -141,7 +143,7 @@ export default function EmailPage() {
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, emailType, to: toEmail.trim(), subject: subject.trim(), body: body.trim(), meetingLink: meetingLink.trim() || undefined, useLeafilmsAddress }),
+        body: JSON.stringify({ projectId, emailType, to: toEmail.trim(), cc: cc.trim() || undefined, subject: subject.trim(), body: body.trim(), meetingLink: meetingLink.trim() || undefined, useLeafilmsAddress }),
       })
       if (res.ok) {
         if (emailType === 'pitch' && hubData?.project.pipeline_stage === 'tilbud_sendt') {
@@ -163,6 +165,25 @@ export default function EmailPage() {
   }
 
   const canSend = !sending && !generatingDraft && !!toEmail.trim() && !!subject.trim() && !!body.trim()
+
+  // Cmd/Ctrl+K — samme snarvei som i vanlige mailklienter — gjør markert tekst
+  // om til en ordentlig lenke ([visningstekst](url)) i stedet for en rå URL i
+  // meldingsteksten. Se feedback 4c2cadff.
+  function handleBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!(e.key === 'k' && (e.metaKey || e.ctrlKey))) return
+    e.preventDefault()
+    const el = bodyRef.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const selected = body.slice(start, end)
+    const url = window.prompt('Lenke (URL):', 'https://')
+    if (!url || !url.trim()) return
+    const label = selected || url.trim()
+    const next = body.slice(0, start) + `[${label}](${url.trim()})` + body.slice(end)
+    setBody(next)
+    requestAnimationFrame(() => el.focus())
+  }
 
   if (loadingHub) {
     return (
@@ -227,6 +248,13 @@ export default function EmailPage() {
             </div>
 
             <div>
+              <FieldLabel>Kopi (CC)</FieldLabel>
+              <input type="text" value={cc} onChange={e => setCc(e.target.value)} placeholder="valgfritt, kommaseparert" style={inputStyle}
+                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
+            </div>
+
+            <div>
               <FieldLabel>Emne</FieldLabel>
               <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Emnefelt..." style={inputStyle}
                 onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
@@ -236,17 +264,23 @@ export default function EmailPage() {
             <div>
               <FieldLabel>Melding</FieldLabel>
               <textarea
+                ref={bodyRef}
                 value={generatingDraft ? '' : body}
                 onChange={e => setBody(e.target.value)}
+                onKeyDown={handleBodyKeyDown}
                 placeholder={generatingDraft ? 'Genererer utkast...' : 'Skriv melding...'}
                 disabled={generatingDraft}
                 style={{ ...inputStyle, minHeight: 220, resize: 'vertical', lineHeight: 1.6, opacity: generatingDraft ? 0.5 : 1, transition: 'opacity 0.2s' }}
                 onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                 onBlur={e => { e.currentTarget.style.borderColor = C.border }}
               />
-              {generatingDraft && (
+              {generatingDraft ? (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 6, fontStyle: 'italic' }}>
                   Genererer utkast med AI...
+                </p>
+              ) : (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, marginTop: 6 }}>
+                  Marker tekst og trykk {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'} for å gjøre den om til en lenke.
                 </p>
               )}
             </div>

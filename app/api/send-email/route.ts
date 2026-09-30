@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { emailBodyToHtml, emailBodyToPlainText } from '@/lib/email-markup'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,11 +13,16 @@ export async function POST(req: NextRequest) {
     }
     const { user } = staff
 
-    const { projectId, leadId, emailType, to, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
+    const { projectId, leadId, emailType, to, cc, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
 
     if (!to || !subject || !body) {
       return Response.json({ error: 'Manglende felt: to, subject, body' }, { status: 400 })
     }
+
+    // cc kan komme som array eller en komma/semikolon-separert streng fra input-feltet.
+    const ccList: string[] = (Array.isArray(cc) ? cc : typeof cc === 'string' ? cc.split(/[,;]/) : [])
+      .map((s: string) => s.trim())
+      .filter(Boolean)
 
     let fromAddress = 'Leafilms <post@leafilms.no>'
 
@@ -36,7 +42,9 @@ export async function POST(req: NextRequest) {
     let resendMessageId: string | null = null
 
     if (process.env.RESEND_API_KEY) {
-      const emailText = meetingLink ? `${body}\n\nMøtelink: ${meetingLink}` : body
+      const bodyWithMeeting = meetingLink ? `${body}\n\nMøtelink: ${meetingLink}` : body
+      const emailText = emailBodyToPlainText(bodyWithMeeting)
+      const emailHtml = emailBodyToHtml(bodyWithMeeting)
 
       const resendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -47,8 +55,10 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           from: fromAddress,
           to: [to],
+          ...(ccList.length > 0 ? { cc: ccList } : {}),
           subject,
           text: emailText,
+          html: emailHtml,
         }),
       })
 

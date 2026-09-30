@@ -246,6 +246,12 @@ export default function SelectionAdminClient({
             <div style={{ marginBottom: 16 }}>
               <div style={labelStyle}>Hoved-gallerilenke</div>
               <GalleryLinkBox token={gallery.token} pinCode={gallery.pin_code} />
+              <SendGalleryEmailPanel
+                token={gallery.token}
+                pinCode={gallery.pin_code}
+                projectId={linkedProject?.id ?? null}
+                projectTitle={linkedProject?.title ?? null}
+              />
             </div>
           )}
 
@@ -522,6 +528,89 @@ function GalleryLinkBox({ token, pinCode }: { token: string; pinCode: string }) 
       <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
         <button onClick={() => copy(url, setCopiedLink)} style={copyBtnStyle}>{copiedLink ? '✓' : 'Kopier lenke'}</button>
         <button onClick={() => copy(pinCode, setCopiedPin)} style={copyBtnStyle}>{copiedPin ? '✓' : 'Kopier PIN'}</button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Send galleriet til kunden på e-post — bruker den eksisterende e-posttjenesten
+// (samme /api/send-email som prosjekt-e-postsiden), med lenke og PIN forhåndsutfylt
+// slik at vi slipper å bygge meldingen manuelt hver gang. Se feedback 285d1a61.
+// ---------------------------------------------------------------------------
+function SendGalleryEmailPanel({
+  token, pinCode, projectId, projectTitle,
+}: { token: string; pinCode: string; projectId: string | null; projectTitle: string | null }) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const url = `${origin}/s/${token}`
+
+  const [open, setOpen] = useState(false)
+  const [to, setTo] = useState('')
+  const [cc, setCc] = useState('')
+  const [subject, setSubject] = useState(`Bildevalg${projectTitle ? ` — ${projectTitle}` : ''}`)
+  const [body, setBody] = useState(
+    `Hei!\n\nHer er lenken til bildevalget:\n${url}\n\nPIN-kode: ${pinCode}\n\nMvh Leafilms`
+  )
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  async function handleSend() {
+    if (!to.trim()) return
+    setSending(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId, emailType: 'general',
+          to: to.trim(), cc: cc.trim() || undefined,
+          subject: subject.trim(), body: body.trim(),
+        }),
+      })
+      if (res.ok) {
+        setResult({ ok: true, message: 'E-post sendt.' })
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setResult({ ok: false, message: err.error ?? 'Sending feilet.' })
+      }
+    } catch {
+      setResult({ ok: false, message: 'Nettverksfeil — prøv igjen.' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+    background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
+    padding: '6px 9px', borderRadius: 6, outline: 'none', boxSizing: 'border-box',
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{ marginTop: 6, width: '100%', padding: '7px 10px', borderRadius: 7, border: `1px dashed ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', cursor: 'pointer' }}>
+        ✉ Send galleriet til kunde
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <input value={to} onChange={e => setTo(e.target.value)} placeholder="Til (e-post) *" type="email" style={fieldStyle} />
+      <input value={cc} onChange={e => setCc(e.target.value)} placeholder="Kopi (CC), kommaseparert" style={fieldStyle} />
+      <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Emne" style={fieldStyle} />
+      <textarea value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }} />
+      {result && (
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: result.ok ? C.success : C.danger }}>{result.message}</p>
+      )}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={handleSend} disabled={sending || !to.trim()} style={{ flex: 1, padding: '7px 10px', borderRadius: 6, border: 'none', background: !to.trim() ? C.surface2 : C.accent, color: !to.trim() ? C.text3 : '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: sending || !to.trim() ? 'default' : 'pointer' }}>
+          {sending ? 'Sender...' : 'Send'}
+        </button>
+        <button onClick={() => setOpen(false)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', cursor: 'pointer' }}>
+          Lukk
+        </button>
       </div>
     </div>
   )

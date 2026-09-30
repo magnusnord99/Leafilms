@@ -292,6 +292,18 @@ export function useSectionHandlers({
       }
 
       setShowTeamPicker(false)
+
+      // Nylig lagt til medlemmer har ingen oversettelse i teamSection.content ennå
+      // hvis "Oversett hele prosjektet" allerede er kjørt tidligere — oversett dem
+      // nå i stedet for at kortet stille faller tilbake til norsk (feedback f02401d6).
+      // Aldri blokkerende for selve lagringen.
+      if (project?.language === 'en' && selectedTeamMemberIds.length > 0) {
+        fetch('/api/translate-project/team-member', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sectionId: teamSection.id, teamMemberIds: selectedTeamMemberIds }),
+        }).catch(err => console.error('Kunne ikke oversette team-medlemmer:', err))
+      }
     } catch (error) {
       console.error('Error saving team members:', error)
       alert('❌ Kunne ikke lagre team-medlemmer')

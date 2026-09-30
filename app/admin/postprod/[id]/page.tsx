@@ -410,6 +410,15 @@ export default function PostProdDetailPage() {
     setLoading(false)
   }
 
+  // Etter lagring av leveranseliste (f.eks. ny video lagt til fra postprod-siden,
+  // feedback 7da0af8e) må hele siden hentes på nytt — nye video-faner og
+  // tilhørende steg-oppgaver seedes server-side i fetchAll/ensurePostProdVideoTasksSeeded,
+  // ikke bare lokal state.
+  async function handleDeliverablesSaved(items: SignedDeliverableItem[]) {
+    setDeliverableItems(items)
+    await fetchAll()
+  }
+
   function initNotes(taskList: Task[]) {
     const map: Record<string, string> = {}
     for (const t of taskList) map[t.id] = t.notes ?? ''
@@ -1191,7 +1200,7 @@ export default function PostProdDetailPage() {
               </button>
               {showDeliveryInfo && (
                 <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="inline" readOnly={readOnly} />
+                  <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={handleDeliverablesSaved} variant="inline" readOnly={readOnly} />
                   <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
                     <ProjectDocuments projectId={projectId} defaultCollapsed />
                   </div>
@@ -1238,7 +1247,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
-              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={setDeliverableItems} variant="toolbar" readOnly={readOnly} />
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={handleDeliverablesSaved} variant="toolbar" readOnly={readOnly} />
             </div>
           )}
 
@@ -1282,6 +1291,7 @@ export default function PostProdDetailPage() {
                   </button>
                 )
               })}
+              <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={handleDeliverablesSaved} variant="toolbar" readOnly={readOnly} />
             </div>
           )}
 

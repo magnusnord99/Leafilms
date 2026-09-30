@@ -28,6 +28,7 @@ export function ImagePickerModal({
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
   const [selectedIds, setSelectedIds] = useState<string[]>(selectedImageIds)
   const [limitWarning, setLimitWarning] = useState(false)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
   const categories = [
     { value: 'all', label: 'Alle' },
@@ -95,8 +96,8 @@ export function ImagePickerModal({
         query = query.eq('category', selectedCategory)
       }
 
-      if (searchQuery.trim()) {
-        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
+      if (debouncedSearchQuery.trim()) {
+        query = query.or(`title.ilike.%${debouncedSearchQuery}%,description.ilike.%${debouncedSearchQuery}%`)
       }
 
       const { data, error } = await query
@@ -111,11 +112,18 @@ export function ImagePickerModal({
     }
   }
 
+  // Debounce søket — uten dette gikk hver tastetrykk til et nytt uavgrenset
+  // søk over alle bilder, se feedback 211b4ee1.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
   useEffect(() => {
     if (isOpen) {
       fetchImages()
     }
-  }, [isOpen, selectedCategory, searchQuery])
+  }, [isOpen, selectedCategory, debouncedSearchQuery])
 
   function toggleSelection(imageId: string) {
     // Hvis maxSelection er 1, erstatt alltid det gamle bildet med det nye
@@ -234,6 +242,8 @@ export function ImagePickerModal({
                       <img
                         src={imageUrl.data.publicUrl}
                         alt={image.title || image.filename}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                       {isSelected && (

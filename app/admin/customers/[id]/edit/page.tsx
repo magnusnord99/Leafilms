@@ -62,6 +62,7 @@ export default function EditCustomer() {
   const [newContact, setNewContact] = useState({ name: '', role: '', email: '', phone: '' })
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ name: '', role: '', email: '', phone: '' })
+  const [contactError, setContactError] = useState<string | null>(null)
 
   useEffect(() => {
     if (customerId) {
@@ -76,6 +77,7 @@ export default function EditCustomer() {
 
   async function handleAddContact() {
     if (!newContact.name.trim()) return
+    setContactError(null)
     const created = await createCustomerContact({
       customer_id: customerId,
       name: newContact.name,
@@ -86,6 +88,8 @@ export default function EditCustomer() {
     if (created) {
       setContacts(prev => [...prev, created])
       setNewContact({ name: '', role: '', email: '', phone: '' })
+    } else {
+      setContactError('Kunne ikke legge til kontaktperson — prøv igjen.')
     }
   }
 
@@ -95,11 +99,14 @@ export default function EditCustomer() {
   }
 
   async function saveEditContact(id: string) {
+    setContactError(null)
     const patch = { name: editDraft.name, role: editDraft.role || null, email: editDraft.email || null, phone: editDraft.phone || null }
     const ok = await updateCustomerContact(id, patch)
     if (ok) {
       setContacts(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
       setEditingContactId(null)
+    } else {
+      setContactError('Kunne ikke lagre endringen — prøv igjen.')
     }
   }
 
@@ -385,6 +392,9 @@ export default function EditCustomer() {
 
           <div>
             {fieldLabel('Kontaktpersoner')}
+            {contactError && (
+              <p style={{ fontSize: '0.7rem', color: C.danger, marginBottom: 8 }}>{contactError}</p>
+            )}
             {contactsLoading ? (
               <p style={{ fontSize: '0.7rem', color: C.text3 }}>Laster...</p>
             ) : (

@@ -1,13 +1,31 @@
-// Mention-parsing: first-name-only, case-insensitive, whole-word matching.
-// Deliberate simplification for a small internal team — if two teammates
-// share a first name, mentioning either name notifies both. Multi-word
-// names are not supported as mention tokens.
+// Mention-parsing: first-name-only by default, case-insensitive, whole-word
+// matching. When two teammates share a first name, mentionToken disambiguates
+// by appending the last-name initial (or, if that still collides, the full
+// last name) — see feedback c1588b30.
 
 export type MentionableProfile = { id: string; name: string | null; email: string }
 
-export function mentionToken(profile: MentionableProfile): string {
-  const base = profile.name?.trim() || profile.email.split('@')[0]
-  return base.split(' ')[0]
+function nameParts(p: MentionableProfile): string[] {
+  return (p.name?.trim() || p.email.split('@')[0]).split(' ').filter(Boolean)
+}
+
+export function mentionToken(profile: MentionableProfile, allProfiles: MentionableProfile[] = []): string {
+  const parts = nameParts(profile)
+  const firstName = parts[0] ?? ''
+  const others = allProfiles.filter(p => p.id !== profile.id)
+
+  const sharesFirstName = others.some(p => (nameParts(p)[0] ?? '').toLowerCase() === firstName.toLowerCase())
+  if (!sharesFirstName) return firstName
+
+  const lastInitial = parts[1]?.[0] ?? ''
+  if (!lastInitial) return firstName
+  const withInitial = firstName + lastInitial
+
+  const sharesInitialToo = others.some(p => {
+    const op = nameParts(p)
+    return (op[0] ?? '').toLowerCase() === firstName.toLowerCase() && (op[1]?.[0] ?? '').toLowerCase() === lastInitial.toLowerCase()
+  })
+  return sharesInitialToo ? firstName + (parts[1] ?? '') : withInitial
 }
 
 function escapeRegExp(s: string): string {
@@ -17,7 +35,7 @@ function escapeRegExp(s: string): string {
 export function extractMentionIds(text: string, profiles: MentionableProfile[]): string[] {
   const ids = new Set<string>()
   for (const profile of profiles) {
-    const token = mentionToken(profile)
+    const token = mentionToken(profile, profiles)
     if (!token) continue
     const pattern = new RegExp(`@${escapeRegExp(token)}(?![\\wæøåÆØÅ])`, 'i')
     if (pattern.test(text)) ids.add(profile.id)
@@ -33,7 +51,7 @@ export function splitMentionSegments(
   profiles: MentionableProfile[]
 ): MentionSegment[] {
   const resolvedProfiles = profiles.filter(p => resolvedMentionIds.includes(p.id))
-  const tokens = resolvedProfiles.map(p => mentionToken(p)).filter(Boolean)
+  const tokens = resolvedProfiles.map(p => mentionToken(p, profiles)).filter(Boolean)
 
   if (tokens.length === 0) {
     return [{ text, isMention: false }]

@@ -39,7 +39,7 @@ export function MentionTextInput({
 
   const matches = query === null
     ? []
-    : profiles.filter(p => mentionToken(p).toLowerCase().startsWith(query.toLowerCase())).slice(0, 6)
+    : profiles.filter(p => mentionToken(p, profiles).toLowerCase().startsWith(query.toLowerCase())).slice(0, 6)
 
   // Grows the textarea to fit its content (up to a cap) instead of scrolling internally.
   useEffect(() => {
@@ -85,7 +85,7 @@ export function MentionTextInput({
   function selectMatch(profile: MentionableProfile) {
     if (query === null || !ref.current) return
     const caret = ref.current.selectionStart ?? value.length
-    const token = mentionToken(profile)
+    const token = mentionToken(profile, profiles)
     const next = value.slice(0, queryStart) + `@${token} ` + value.slice(caret)
     onChange(next)
     setQuery(null)
@@ -171,7 +171,8 @@ export function MentionTextInput({
                 cursor: 'pointer',
               }}
             >
-              @{mentionToken(p)}
+              @{mentionToken(p, profiles)}
+              {p.name && <span style={{ color: '#8484A0', marginLeft: 6 }}>{p.name}</span>}
             </button>
           ))}
         </div>

@@ -1016,7 +1016,7 @@ export default function CustomerDetailPage() {
                     <input
                       value={invoiceForm[key]}
                       onChange={e => setInvoiceForm(f => ({ ...f, [key]: e.target.value }))}
-                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
                     />
                   </div>
                 ))}

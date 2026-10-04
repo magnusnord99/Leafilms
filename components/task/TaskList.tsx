@@ -119,21 +119,23 @@ export function TaskList({
                 <button
                   onClick={() => onStatusChange(task.id, STATUS_CYCLE[task.status])}
                   disabled={readOnly}
-                  style={{
-                    flexShrink: 0, width: 20, height: 20, borderRadius: 5, cursor: 'pointer', padding: 0,
+                  style={{ flexShrink: 0, padding: 8, margin: -8, border: 'none', background: 'none', cursor: 'pointer' }}
+                >
+                  <span style={{
+                    width: 20, height: 20, borderRadius: 5,
                     background: task.status === 'done' ? 'rgba(76,175,125,0.18)' : task.status === 'in_progress' ? 'rgba(240,165,0,0.12)' : 'transparent',
                     border: `1.5px solid ${s.color}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s',
-                  }}
-                >
-                  {task.status === 'done' && (
-                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                      <path d="M2 5.5L4.5 8L9 3" stroke={C.success} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                  {task.status === 'in_progress' && (
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.warning }} />
-                  )}
+                  }}>
+                    {task.status === 'done' && (
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                        <path d="M2 5.5L4.5 8L9 3" stroke={C.success} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {task.status === 'in_progress' && (
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.warning }} />
+                    )}
+                  </span>
                 </button>
 
                 {/* Title */}

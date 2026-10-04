@@ -1622,7 +1622,7 @@ export default function ProjectHubPage() {
                   rows={6}
                   style={{
                     width: '100%', boxSizing: 'border-box', resize: 'vertical',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                     background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
                     padding: '10px 12px', outline: 'none', lineHeight: 1.6,
                   }}
@@ -1773,6 +1773,7 @@ export default function ProjectHubPage() {
                         type="checkbox"
                         checked={reviewSettings[row.enabledKey]}
                         onChange={e => handleReviewSettingChange({ [row.enabledKey]: e.target.checked })}
+                        style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
                       />
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>{row.label}</span>
                     </label>
@@ -2508,7 +2509,7 @@ export default function ProjectHubPage() {
                       type="checkbox"
                       checked={saveSignatureToProfile}
                       onChange={e => setSaveSignatureToProfile(e.target.checked)}
-                      style={{ accentColor: C.accent }}
+                      style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
                     />
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>Lagre til neste gang</span>
                   </label>
@@ -2602,7 +2603,7 @@ export default function ProjectHubPage() {
                 onChange={e => setLostNotes(e.target.value)}
                 placeholder="Hva vet vi om hvorfor dette ikke gikk gjennom?"
                 rows={3}
-                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', outline: 'none', resize: 'vertical', marginBottom: 20 }}
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', outline: 'none', resize: 'vertical', marginBottom: 20 }}
                 onFocus={e => { e.currentTarget.style.borderColor = C.danger }}
                 onBlur={e => { e.currentTarget.style.borderColor = C.border }}
               />

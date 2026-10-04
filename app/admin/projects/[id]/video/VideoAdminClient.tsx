@@ -619,6 +619,7 @@ export default function VideoAdminClient({
                 type="checkbox"
                 checked={addToGallery}
                 onChange={e => setAddToGallery(e.target.checked)}
+                style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
               />
               Vis i kundens seleksjonsgalleri (sammen med bildealbumene)
             </label>

@@ -211,7 +211,7 @@ export default function QuotesPage() {
                 style={{
                   width: '100%', padding: '8px 12px', marginBottom: 12,
                   background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
-                  color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', outline: 'none',
+                  color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none',
                 }}
               />
               <Link

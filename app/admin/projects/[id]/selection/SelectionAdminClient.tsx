@@ -251,6 +251,8 @@ export default function SelectionAdminClient({
                 pinCode={gallery.pin_code}
                 projectId={linkedProject?.id ?? null}
                 projectTitle={linkedProject?.title ?? null}
+                customerEmail={linkedProject?.customerEmail ?? null}
+                customerContacts={linkedProject?.customerContacts ?? []}
               />
             </div>
           )}
@@ -539,18 +541,29 @@ function GalleryLinkBox({ token, pinCode }: { token: string; pinCode: string }) 
 // slik at vi slipper å bygge meldingen manuelt hver gang. Se feedback 285d1a61.
 // ---------------------------------------------------------------------------
 function SendGalleryEmailPanel({
-  token, pinCode, projectId, projectTitle,
-}: { token: string; pinCode: string; projectId: string | null; projectTitle: string | null }) {
+  token, pinCode, projectId, projectTitle, customerEmail, customerContacts,
+}: {
+  token: string
+  pinCode: string
+  projectId: string | null
+  projectTitle: string | null
+  customerEmail: string | null
+  customerContacts: { name: string; email: string }[]
+}) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const url = `${origin}/s/${token}`
 
   const [open, setOpen] = useState(false)
-  const [to, setTo] = useState('')
+  const [to, setTo] = useState(customerEmail ?? '')
   const [cc, setCc] = useState('')
   const [subject, setSubject] = useState(`Bildevalg${projectTitle ? ` — ${projectTitle}` : ''}`)
   const [body, setBody] = useState(
-    `Hei!\n\nHer er lenken til bildevalget:\n${url}\n\nPIN-kode: ${pinCode}\n\nMvh Leafilms`
+    `Hei!\n\nHer er lenken til bildevalget: [Åpne bildevalget](${url})\n\nPIN-kode: ${pinCode}\n\nMvh Leafilms`
   )
+
+  // Andre e-poster knyttet til kunden (customer_contacts), unntatt den som allerede
+  // står forhåndsutfylt i Til-feltet — se feedback 657ad64a.
+  const alternateContacts = customerContacts.filter(c => c.email && c.email !== customerEmail)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -598,6 +611,20 @@ function SendGalleryEmailPanel({
   return (
     <div style={{ marginTop: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <input value={to} onChange={e => setTo(e.target.value)} placeholder="Til (e-post) *" type="email" style={fieldStyle} />
+      {alternateContacts.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {alternateContacts.map(c => (
+            <button
+              key={c.email}
+              onClick={() => setTo(c.email)}
+              title={c.email}
+              style={{ padding: '3px 7px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'none', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', cursor: 'pointer' }}
+            >
+              {c.name || c.email}
+            </button>
+          ))}
+        </div>
+      )}
       <input value={cc} onChange={e => setCc(e.target.value)} placeholder="Kopi (CC), kommaseparert" style={fieldStyle} />
       <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Emne" style={fieldStyle} />
       <textarea value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5 }} />

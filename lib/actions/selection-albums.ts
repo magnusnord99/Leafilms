@@ -51,7 +51,12 @@ export type AdminSelectionPageData = {
     submitted_at: string | null
     created_at: string
   }
-  linkedProject: { id: string; title: string } | null
+  linkedProject: {
+    id: string
+    title: string
+    customerEmail: string | null
+    customerContacts: { name: string; email: string }[]
+  } | null
   albums: AlbumWithImages[]
   ungroupedImages: {
     id: string
@@ -164,14 +169,31 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
 
   if (!gallery) return null
 
-  let linkedProject: { id: string; title: string } | null = null
+  let linkedProject: AdminSelectionPageData['linkedProject'] = null
   if (gallery.project_id) {
     const { data: proj } = await supabase
       .from('projects')
-      .select('id, title')
+      .select('id, title, customer_id, customers(email)')
       .eq('id', gallery.project_id)
       .maybeSingle()
-    linkedProject = proj ?? null
+
+    if (proj) {
+      let customerContacts: { name: string; email: string }[] = []
+      if (proj.customer_id) {
+        const { data: contacts } = await supabase
+          .from('customer_contacts')
+          .select('name, email')
+          .eq('customer_id', proj.customer_id)
+          .not('email', 'is', null)
+        customerContacts = (contacts ?? []) as { name: string; email: string }[]
+      }
+      linkedProject = {
+        id: proj.id,
+        title: proj.title,
+        customerEmail: (proj.customers as { email?: string | null } | null)?.email ?? null,
+        customerContacts,
+      }
+    }
   }
 
   const { data: albums } = await supabase

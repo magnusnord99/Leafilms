@@ -1217,6 +1217,12 @@ export default function ProjectHubPage() {
     const prev = projectLead
     const profile = profileId ? profiles.find(p => p.id === profileId) ?? null : null
     setProjectLead_(profile)
+    // Setter man en leder, blir personen automatisk med i teamet også (setProjectLead
+    // gjør dette server-side) — oppdater lokal state i tillegg så "Team"-telleren
+    // stemmer uten en full refetch.
+    if (profile && !teamMembers.some(m => m.id === profile.id)) {
+      setTeamMembers(prevTeam => [...prevTeam, profile])
+    }
     const result = await setProjectLead(projectId, profileId)
     if (!result.ok) setProjectLead_(prev)
   }

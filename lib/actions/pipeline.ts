@@ -2216,7 +2216,11 @@ export async function assignResaleAndMove(
 }
 
 /**
- * Setter eller fjerner prosjektleder for et prosjekt.
+ * Setter eller fjerner prosjektleder for et prosjekt. Setter man en leder,
+ * legges personen automatisk til i prosjektteamet også (Magnus: "trenger man
+ * ikke legge denne inn som team også?") — man skal ikke måtte gjøre det som to
+ * separate steg. Fjerner man lederen, rører vi ikke teammedlemskapet — personen
+ * kan fortsatt jobbe på prosjektet selv om de ikke er leder lenger.
  */
 export async function setProjectLead(
   projectId: string,
@@ -2229,6 +2233,13 @@ export async function setProjectLead(
       .update({ project_lead_id: profileId, updated_at: new Date().toISOString() })
       .eq('id', projectId)
     if (error) return { ok: false, error: error.message }
+
+    if (profileId) {
+      await supabase
+        .from('project_team_members')
+        .upsert({ project_id: projectId, profile_id: profileId }, { onConflict: 'project_id,profile_id', ignoreDuplicates: true })
+    }
+
     return { ok: true }
   } catch (err) {
     return { ok: false, error: String(err) }

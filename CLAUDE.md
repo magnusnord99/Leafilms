@@ -56,6 +56,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-10-08:** `167_team_member_profile_link.sql` er anvendt mot Supabase (ny team_members.profile_id — eksplisitt kobling mellom et team-medlem i pitch-biblioteket og en ekte Leafilms-konto, i stedet for implisitt e-post-matching. "Leafilms-konto"-felt på /admin/team (ny og rediger) + badge "Har konto"/"Ingen konto" der og i TeamPickerModal (pitch-editoren), se oppfølging av 706674ff. getPitchTeamAsProdCrew i lib/actions/preprod.ts bruker nå profile_id først, e-post som fallback. Backfill matchet kun 1 av 8 eksisterende rader automatisk — resten (inkl. Magnus' egen rad, som hadde en annen e-post enn noen av kontoene hans) må kobles manuelt i /admin/team.
 
+**Kjørt 2026-10-08:** `168_unavailability_update_policy.sql` er anvendt mot Supabase (la til UPDATE-RLS-policy på `unavailability` — tabellen hadde kun SELECT/INSERT/DELETE fra 133_unavailability.sql, så UPDATE var fullstendig blokkert av RLS. "Rediger"-knapp lagt til i UnavailabilityDetailModal i /admin/calendar slik at en "utilgjengelig"-markering kan endres i stedet for bare slettes+opprettes på nytt — Magnus hadde lagt inn "besøke Andrea" men kunne ikke gjøre den lengre).
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

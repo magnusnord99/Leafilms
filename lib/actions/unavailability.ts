@@ -96,6 +96,45 @@ export async function createUnavailability(input: {
   }
 }
 
+export async function updateUnavailability(
+  id: string,
+  input: {
+    date: string
+    endDate: string | null
+    startTime: string | null
+    endTime: string | null
+    note: string | null
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    if (!input.date) return { ok: false, error: 'Velg en dato' }
+    if (input.endDate && input.endDate < input.date) return { ok: false, error: '"Til og med"-dato kan ikke være før startdato' }
+
+    const supabase = await createClient()
+
+    // Fler-dagers rekkevidde er alltid hele dager — klokkeslett gir ikke mening der.
+    const isRange = !!input.endDate && input.endDate !== input.date
+
+    const { error } = await supabase
+      .from('unavailability')
+      .update({
+        date: input.date,
+        end_date: input.endDate || null,
+        start_time: isRange ? null : (input.startTime || null),
+        end_time: isRange ? null : (input.endTime || null),
+        note: input.note?.trim() || null,
+      })
+      .eq('id', id)
+    if (error) { console.error('updateUnavailability:', error); return { ok: false, error: 'Kunne ikke lagre' } }
+
+    revalidatePath('/admin/calendar')
+    return { ok: true }
+  } catch (err) {
+    console.error('updateUnavailability error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
 export async function deleteUnavailability(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()

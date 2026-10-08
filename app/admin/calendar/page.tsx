@@ -8,7 +8,7 @@ import {
   respondToMeetingInvite, MeetingEvent, Colleague,
 } from '@/lib/actions/meetings'
 import {
-  getUnavailability, createUnavailability, deleteUnavailability, UnavailabilityBlock,
+  getUnavailability, createUnavailability, updateUnavailability, deleteUnavailability, UnavailabilityBlock,
 } from '@/lib/actions/unavailability'
 import { useAuth } from '@/hooks/useAuth'
 import { C as CBase } from '@/lib/admin-theme'
@@ -549,7 +549,7 @@ export default function CalendarPage() {
           block={detailUnavail}
           currentUserId={profile?.id ?? null}
           onClose={() => setDetailUnavail(null)}
-          onDeleted={() => { setDetailUnavail(null); load() }}
+          onChanged={() => { setDetailUnavail(null); load() }}
         />
       )}
     </div>
@@ -877,21 +877,106 @@ function UnavailabilityModal({ initialDate, onClose, onCreated }: {
   )
 }
 
-function UnavailabilityDetailModal({ block, currentUserId, onClose, onDeleted }: {
+function UnavailabilityDetailModal({ block, currentUserId, onClose, onChanged }: {
   block: UnavailabilityBlock
   currentUserId: string | null
   onClose: () => void
-  onDeleted: () => void
+  onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const isMine = currentUserId === block.profileId
+  const [editing, setEditing] = useState(false)
+
+  const wasRange = !!block.endDate && block.endDate !== block.date
+  const [date, setDate] = useState(block.date)
+  const [wholeDay, setWholeDay] = useState(wasRange)
+  const [endDate, setEndDate] = useState(block.endDate ?? block.date)
+  const [startTime, setStartTime] = useState(block.startTime?.slice(0, 5) ?? '')
+  const [endTime, setEndTime] = useState(block.endTime?.slice(0, 5) ?? '')
+  const [note, setNote] = useState(block.note ?? '')
+  const [error, setError] = useState<string | null>(null)
 
   async function handleDelete() {
     if (!confirm('Fjerne denne utilgjengelig-markeringen?')) return
     setBusy(true)
     await deleteUnavailability(block.id)
     setBusy(false)
-    onDeleted()
+    onChanged()
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setBusy(true)
+    const result = await updateUnavailability(block.id, {
+      date,
+      endDate: wholeDay ? endDate : null,
+      startTime: wholeDay ? null : (startTime || null),
+      endTime: wholeDay ? null : (endTime || null),
+      note: note || null,
+    })
+    setBusy(false)
+    if (!result.ok) { setError(result.error ?? 'Kunne ikke lagre'); return }
+    onChanged()
+  }
+
+  if (editing) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+        <form
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={handleSave}
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: 'min(380px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
+          <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1.05rem', fontWeight: 600, color: C.text }}>Rediger utilgjengelig</h2>
+
+          <Field label={wholeDay ? 'Fra dato' : 'Dato'}>
+            <input
+              type="date"
+              value={date}
+              onChange={e => {
+                setDate(e.target.value)
+                if (e.target.value > endDate) setEndDate(e.target.value)
+              }}
+              style={inputStyle}
+            />
+          </Field>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} />
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>Hele dagen (evt. flere dager i strekk)</span>
+          </label>
+
+          {wholeDay ? (
+            <Field label="Til og med">
+              <input type="date" value={endDate} min={date} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+            </Field>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Field label="Start (valgfri)" style={{ flex: 1 }}>
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
+              </Field>
+              <Field label="Slutt (valgfri)" style={{ flex: 1 }}>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
+              </Field>
+            </div>
+          )}
+
+          <Field label="Notat (valgfri)">
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="F.eks. tannlege" style={inputStyle} />
+          </Field>
+
+          {error && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>{error}</p>}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+            <button type="button" onClick={() => setEditing(false)} style={buttonSecondary}>Avbryt</button>
+            <button type="submit" disabled={busy} style={{ ...buttonPrimary(C.unavail), opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Lagrer...' : 'Lagre'}
+            </button>
+          </div>
+        </form>
+      </div>
+    )
   }
 
   return (
@@ -915,11 +1000,16 @@ function UnavailabilityDetailModal({ block, currentUserId, onClose, onDeleted }:
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          <div>
+          <div style={{ display: 'flex', gap: 8 }}>
             {isMine && (
-              <button onClick={handleDelete} disabled={busy} style={{ ...buttonSecondary, color: C.danger, borderColor: C.danger }}>
-                Fjern
-              </button>
+              <>
+                <button onClick={() => setEditing(true)} disabled={busy} style={buttonSecondary}>
+                  Rediger
+                </button>
+                <button onClick={handleDelete} disabled={busy} style={{ ...buttonSecondary, color: C.danger, borderColor: C.danger }}>
+                  Fjern
+                </button>
+              </>
             )}
           </div>
           <button onClick={onClose} style={buttonSecondary}>Lukk</button>

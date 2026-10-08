@@ -103,9 +103,18 @@ export default function TeamPage() {
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 2 }}>
                       {member.name}
                     </p>
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.accent, marginBottom: 10 }}>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.accent, marginBottom: 6 }}>
                       {member.role}
                     </p>
+                    <span style={{
+                      display: 'inline-block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
+                      padding: '2px 8px', borderRadius: 4, marginBottom: 10,
+                      color: member.profile_id ? '#4CAF7D' : C.text3,
+                      background: member.profile_id ? 'rgba(76,175,125,0.1)' : C.surface2,
+                      border: `1px solid ${member.profile_id ? 'rgba(76,175,125,0.3)' : C.border}`,
+                    }}>
+                      {member.profile_id ? '✓ Har Leafilms-konto' : 'Ingen konto — kun i pitch'}
+                    </span>
 
                     {member.bio && (
                       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>

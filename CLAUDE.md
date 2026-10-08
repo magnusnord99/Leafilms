@@ -54,6 +54,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-10-08:** `166_project_team_members.sql` er anvendt mot Supabase (ny project_team_members-tabell — eksplisitt prosjektteam uavhengig av task_assignees/pipeline-steg, med "Team"-velger og "Hent fra pitch" på /admin/projects/[id], se feedback 706674ff. notify_project_message()/notify_preprod_message() faller nå tilbake på teamet i tillegg til project_lead_id når ingen mentions/task_assignees finnes). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150/159/160-163).
 
+**Kjørt 2026-10-08:** `167_team_member_profile_link.sql` er anvendt mot Supabase (ny team_members.profile_id — eksplisitt kobling mellom et team-medlem i pitch-biblioteket og en ekte Leafilms-konto, i stedet for implisitt e-post-matching. "Leafilms-konto"-felt på /admin/team (ny og rediger) + badge "Har konto"/"Ingen konto" der og i TeamPickerModal (pitch-editoren), se oppfølging av 706674ff. getPitchTeamAsProdCrew i lib/actions/preprod.ts bruker nå profile_id først, e-post som fallback. Backfill matchet kun 1 av 8 eksisterende rader automatisk — resten (inkl. Magnus' egen rad, som hadde en annen e-post enn noen av kontoene hans) må kobles manuelt i /admin/team.
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

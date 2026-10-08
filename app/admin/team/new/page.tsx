@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -46,10 +46,21 @@ export default function NewTeamMember() {
     email: '',
     phone: '',
     tags: '',
-    daily_rate: ''
+    daily_rate: '',
+    profile_id: ''
   })
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null)
+  const [staffProfiles, setStaffProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('id, name, email')
+      .in('role', ['admin', 'sales', 'production'])
+      .order('name', { ascending: true })
+      .then(({ data }) => setStaffProfiles(data ?? []))
+  }, [])
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -98,7 +109,8 @@ export default function NewTeamMember() {
           phone: formData.phone || null,
           profile_image_path: profileImagePath,
           tags: tagsArray,
-          daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null
+          daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null,
+          profile_id: formData.profile_id || null
         })
 
       if (error) throw error
@@ -239,6 +251,24 @@ export default function NewTeamMember() {
               placeholder="+47 123 45 678"
               style={inputStyle}
             />
+          </div>
+
+          <div>
+            {fieldLabel('Leafilms-konto')}
+            <select
+              value={formData.profile_id}
+              onChange={(e) => setFormData({ ...formData, profile_id: e.target.value })}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">— Ingen konto (frilanser/ekstern) —</option>
+              {staffProfiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+              ))}
+            </select>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
+              Kobler team-medlemmet til en ekte bruker i systemet. Uten dette vises personen kun i den
+              kundevendte pitchen — hen kan ikke legges i prosjektteamet eller få varsler.
+            </p>
           </div>
 
           {/* Profile Image */}

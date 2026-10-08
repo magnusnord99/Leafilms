@@ -87,6 +87,16 @@ export function TeamPickerModal({
                     <Text variant="small" className="text-gray-400">
                       {teamMember.role}
                     </Text>
+                    <span
+                      className="inline-block mt-1 text-[0.62rem] font-medium px-2 py-0.5 rounded"
+                      style={
+                        teamMember.profile_id
+                          ? { color: '#4CAF7D', background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)' }
+                          : { color: '#8484A0', background: 'rgba(132,132,160,0.08)', border: '1px solid rgba(132,132,160,0.2)' }
+                      }
+                    >
+                      {teamMember.profile_id ? '✓ Har konto — kan varsles' : 'Ingen konto — kun i pitch'}
+                    </span>
                     {teamMember.bio && (
                       <Text variant="small" className="line-clamp-2 text-xs mt-1 text-gray-500">
                         {teamMember.bio}

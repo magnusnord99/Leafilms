@@ -53,12 +53,14 @@ export default function EditTeamMember({ params }: Props) {
     email: '',
     phone: '',
     tags: '',
-    daily_rate: ''
+    daily_rate: '',
+    profile_id: ''
   })
   const initialDataRef = useRef<typeof formData | null>(null)
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null)
   const [existingProfileImage, setExistingProfileImage] = useState<string | null>(null)
+  const [staffProfiles, setStaffProfiles] = useState<{ id: string; name: string | null; email: string }[]>([])
 
   useEffect(() => {
     if (id) {
@@ -68,9 +70,19 @@ export default function EditTeamMember({ params }: Props) {
       setProfileImagePreview(null)
       setExistingProfileImage(null)
       fetchTeamMember()
+      fetchStaffProfiles()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  async function fetchStaffProfiles() {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .in('role', ['admin', 'sales', 'production'])
+      .order('name', { ascending: true })
+    setStaffProfiles(data ?? [])
+  }
 
   useEffect(() => {
     if (!initialDataRef.current) return
@@ -99,7 +111,8 @@ export default function EditTeamMember({ params }: Props) {
           email: teamMember.email || '',
           phone: teamMember.phone || '',
           tags: teamMember.tags?.join(', ') || '',
-          daily_rate: teamMember.daily_rate != null ? String(teamMember.daily_rate) : ''
+          daily_rate: teamMember.daily_rate != null ? String(teamMember.daily_rate) : '',
+          profile_id: teamMember.profile_id || ''
         }
         setFormData(loaded)
         initialDataRef.current = loaded
@@ -165,6 +178,7 @@ export default function EditTeamMember({ params }: Props) {
         phone: string | null
         tags: string[]
         daily_rate: number | null
+        profile_id: string | null
         profile_image_path?: string
       }
 
@@ -175,7 +189,8 @@ export default function EditTeamMember({ params }: Props) {
         email: formData.email || null,
         phone: formData.phone || null,
         tags: tagsArray,
-        daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null
+        daily_rate: formData.daily_rate ? Number(formData.daily_rate) : null,
+        profile_id: formData.profile_id || null
       }
 
       if (profileImagePath) {
@@ -363,6 +378,24 @@ export default function EditTeamMember({ params }: Props) {
               placeholder="+47 123 45 678"
               style={inputStyle}
             />
+          </div>
+
+          <div>
+            {fieldLabel('Leafilms-konto')}
+            <select
+              value={formData.profile_id}
+              onChange={(e) => setFormData({ ...formData, profile_id: e.target.value })}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">— Ingen konto (frilanser/ekstern) —</option>
+              {staffProfiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+              ))}
+            </select>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 6 }}>
+              Kobler team-medlemmet til en ekte bruker i systemet. Uten dette vises personen kun i den
+              kundevendte pitchen — hen kan ikke legges i prosjektteamet eller få varsler.
+            </p>
           </div>
 
           {/* Profile Image */}

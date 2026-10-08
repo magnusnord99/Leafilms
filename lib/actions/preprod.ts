@@ -261,16 +261,20 @@ export async function getPitchTeamAsProdCrew(
 
     const { data: members } = await supabase
       .from('team_members')
-      .select('id, name, role, email')
+      .select('id, name, role, email, profile_id')
       .in('id', memberIds)
 
     if (!members?.length) return []
 
-    // Hent alle profiles for å matche på email
+    // Hent alle profiles for å matche på id (eksplisitt kobling) eller email (fallback
+    // for team_members som aldri er koblet manuelt, se 167_team_member_profile_link.sql)
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, name, email')
 
+    const profileById = new Map(
+      (profiles ?? []).map((p: { id: string; name: string | null; email: string | null }) => [p.id, p])
+    )
     const profileByEmail = new Map(
       (profiles ?? [])
         .filter((p: { email: string | null }) => p.email)
@@ -285,10 +289,12 @@ export async function getPitchTeamAsProdCrew(
         // Prosjektspesifikk rolle overstyrer standardrollen
         const role = content?.teamMemberRoles?.[id] ?? member.role
 
-        // Match til profile via email
-        const profile = member.email
-          ? profileByEmail.get(member.email.toLowerCase())
-          : null
+        // Eksplisitt kobling (profile_id) vinner over e-post-matching
+        const profile = member.profile_id
+          ? profileById.get(member.profile_id)
+          : member.email
+            ? profileByEmail.get(member.email.toLowerCase())
+            : null
 
         return {
           profile_id: profile?.id ?? `tm_${id}`,

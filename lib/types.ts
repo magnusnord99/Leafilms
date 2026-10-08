@@ -646,6 +646,9 @@ export type TeamMember = {
   daily_rate: number | null
   created_at: string
   updated_at: string
+  // Eksplisitt kobling til en ekte Leafilms-konto — NULL betyr frilanser/ekstern
+  // uten innlogging. Se 167_team_member_profile_link.sql.
+  profile_id: string | null
 }
 
 // Bildesett-posisjoner for "Eksempelarbeid"-collagen

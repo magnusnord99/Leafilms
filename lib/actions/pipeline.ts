@@ -11,6 +11,7 @@ import { computeStepperLocks, computeLocksFromSiblings, type StepperTaskLite } f
 import { pickBestQuote } from '@/lib/quote-builder-utils'
 import { getRootBoardIdForProject } from '@/lib/actions/boards'
 import { getGalleryIdForProject } from '@/lib/actions/selections'
+import { getPitchTeamAsProdCrew } from '@/lib/actions/preprod'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
@@ -2231,6 +2232,117 @@ export async function setProjectLead(
     return { ok: true }
   } catch (err) {
     return { ok: false, error: String(err) }
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Henter prosjektteamet (project_team_members) — brukes til varsler uavhengig
+ * av task_assignees/pipeline-steg, se feedback 706674ff.
+ */
+export async function getProjectTeamMembers(
+  projectId: string
+): Promise<{ id: string; name: string | null; email: string; color: string | null }[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('project_team_members')
+      .select('profiles(id, name, email, color)')
+      .eq('project_id', projectId)
+
+    if (error) {
+      console.error('getProjectTeamMembers error:', error)
+      return []
+    }
+    type Row = { profiles: { id: string; name: string | null; email: string; color: string | null } | null }
+    return ((data ?? []) as unknown as Row[])
+      .map(r => r.profiles)
+      .filter((p): p is { id: string; name: string | null; email: string; color: string | null } => p !== null)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Legger til eller fjerner en bruker fra prosjektteamet (toggle).
+ */
+export async function toggleProjectTeamMember(
+  projectId: string,
+  profileId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: existing } = await supabase
+      .from('project_team_members')
+      .select('profile_id')
+      .eq('project_id', projectId)
+      .eq('profile_id', profileId)
+      .maybeSingle()
+
+    if (existing) {
+      const { error } = await supabase
+        .from('project_team_members')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('profile_id', profileId)
+      if (error) return { ok: false, error: error.message }
+    } else {
+      const { error } = await supabase
+        .from('project_team_members')
+        .insert({ project_id: projectId, profile_id: profileId })
+      if (error) return { ok: false, error: error.message }
+    }
+    revalidatePath(`/admin/projects/${projectId}`)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
+
+/**
+ * Henter teamet fra pitch-seksjonen (gjenbruker samme e-post-matching som
+ * produksjonschatten sås fra, se getPitchTeamAsProdCrew) og legger de som har
+ * en ekte profil-match til i prosjektteamet. Frilansere uten Leafilms-konto
+ * kan ikke varsles og hoppes derfor over — caller får antallet til UI-feedback.
+ */
+export async function importProjectTeamFromPitch(
+  projectId: string
+): Promise<{ ok: boolean; added: number; alreadyMember: number; unmatched: number; error?: string }> {
+  try {
+    const pitchTeam = await getPitchTeamAsProdCrew(projectId)
+    const matched = pitchTeam.filter(m => UUID_RE.test(m.profile_id))
+    const unmatched = pitchTeam.length - matched.length
+
+    if (matched.length === 0) {
+      return { ok: true, added: 0, alreadyMember: 0, unmatched }
+    }
+
+    const supabase = await createClient()
+    const { data: existingRows } = await supabase
+      .from('project_team_members')
+      .select('profile_id')
+      .eq('project_id', projectId)
+
+    const existingIds = new Set((existingRows ?? []).map(r => r.profile_id as string))
+    const toInsert = matched.filter(m => !existingIds.has(m.profile_id))
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase
+        .from('project_team_members')
+        .insert(toInsert.map(m => ({ project_id: projectId, profile_id: m.profile_id })))
+      if (error) return { ok: false, added: 0, alreadyMember: 0, unmatched, error: error.message }
+    }
+
+    revalidatePath(`/admin/projects/${projectId}`)
+    return {
+      ok: true,
+      added: toInsert.length,
+      alreadyMember: matched.length - toInsert.length,
+      unmatched,
+    }
+  } catch (err) {
+    return { ok: false, added: 0, alreadyMember: 0, unmatched: 0, error: String(err) }
   }
 }
 

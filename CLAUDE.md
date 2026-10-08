@@ -52,6 +52,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-09-21:** `160_task_video_files.sql`, `161_video_reviews_r2_support.sql`, `162_gallery_reviews_task_file_support.sql` og `163_task_video_file_comments.sql` er anvendt mot Supabase (filopplasting på postprod video-steg — Grovklipp/Farger/Lyd/Klipp — med versjonering, send til kunde/kollega, og tidsankrede kommentarer for kollega-review inline i post-prod-steget). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150/159). NB: R2-bucketens CORS-policy mangler foreløpig en GET-regel — opplastede filer kan ikke spilles av før dette er lagt til i Cloudflare-dashbordet (se lib/r2.ts-kommentaren).
 
+**Kjørt 2026-10-08:** `166_project_team_members.sql` er anvendt mot Supabase (ny project_team_members-tabell — eksplisitt prosjektteam uavhengig av task_assignees/pipeline-steg, med "Team"-velger og "Hent fra pitch" på /admin/projects/[id], se feedback 706674ff. notify_project_message()/notify_preprod_message() faller nå tilbake på teamet i tillegg til project_lead_id når ingen mentions/task_assignees finnes). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150/159/160-163).
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

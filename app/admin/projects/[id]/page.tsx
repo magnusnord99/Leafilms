@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList } from '@/lib/actions/pipeline'
+import { getProjectHub, updateTaskStatus, getAllProfiles, toggleTaskAssignee, saveProjectMeetingNotes, analyzeProjectNotes, getContractStatus, setProjectLead, getCurrentUserProfile, getTaskMessageCounts, updateProjectTitle, updateProjectCustomer, getCustomersList, getProjectTeamMembers, toggleProjectTeamMember, importProjectTeamFromPitch } from '@/lib/actions/pipeline'
 import { updateReviewSettings } from '@/lib/actions/reviews'
 import ReviewPanel from '@/components/project/ReviewPanel'
 import { getProjectContractData, publishContract, unpublishContract, unsignContract, generateContractText, setRequestInvoiceInfo, getAcceptedQuoteSummary, type AcceptedQuoteSummary, getAllContractVersions, duplicateContractVersion, setCurrentContractVersion, updateContractLabel, deleteContractVersion, type ContractVersion } from '@/lib/actions/contracts'
@@ -665,6 +665,11 @@ export default function ProjectHubPage() {
   const [projectLead, setProjectLead_] = useState<{ id: string; name: string | null; email: string; color: string | null } | null>(null)
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false)
   const leadDropdownRef = useRef<HTMLDivElement>(null)
+  const [teamMembers, setTeamMembers] = useState<Profile[]>([])
+  const [teamDropdownOpen, setTeamDropdownOpen] = useState(false)
+  const teamDropdownRef = useRef<HTMLDivElement>(null)
+  const [importingTeam, setImportingTeam] = useState(false)
+  const [teamImportMessage, setTeamImportMessage] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [reviewSettings, setReviewSettings] = useState({
     pitch_review_enabled: false,
@@ -680,11 +685,13 @@ export default function ProjectHubPage() {
   async function fetchHub() {
     setLoading(true)
     setError(null)
-    const [data, allProfiles, cs] = await Promise.all([
+    const [data, allProfiles, cs, team] = await Promise.all([
       getProjectHub(projectId),
       getAllProfiles(),
       getContractStatus(projectId),
+      getProjectTeamMembers(projectId),
     ])
+    setTeamMembers(team)
     if (!data) setError('Fant ikke prosjektet.')
     else {
       setHubData(data)
@@ -1185,6 +1192,17 @@ export default function ProjectHubPage() {
   }, [leadDropdownOpen])
 
   useEffect(() => {
+    if (!teamDropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (teamDropdownRef.current && !teamDropdownRef.current.contains(e.target as Node)) {
+        setTeamDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [teamDropdownOpen])
+
+  useEffect(() => {
     if (!customerPickerOpen) return
     function handleClick(e: MouseEvent) {
       if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
@@ -1201,6 +1219,36 @@ export default function ProjectHubPage() {
     setProjectLead_(profile)
     const result = await setProjectLead(projectId, profileId)
     if (!result.ok) setProjectLead_(prev)
+  }
+
+  async function handleToggleTeamMember(profileId: string) {
+    const prev = teamMembers
+    const isMember = teamMembers.some(m => m.id === profileId)
+    if (isMember) {
+      setTeamMembers(teamMembers.filter(m => m.id !== profileId))
+    } else {
+      const profile = profiles.find(p => p.id === profileId)
+      if (profile) setTeamMembers([...teamMembers, profile])
+    }
+    const result = await toggleProjectTeamMember(projectId, profileId)
+    if (!result.ok) setTeamMembers(prev)
+  }
+
+  async function handleImportTeamFromPitch() {
+    setImportingTeam(true)
+    setTeamImportMessage(null)
+    const result = await importProjectTeamFromPitch(projectId)
+    if (result.ok) {
+      setTeamMembers(await getProjectTeamMembers(projectId))
+      const parts: string[] = []
+      if (result.added > 0) parts.push(`${result.added} lagt til`)
+      if (result.alreadyMember > 0) parts.push(`${result.alreadyMember} var allerede med`)
+      if (result.unmatched > 0) parts.push(`${result.unmatched} uten Leafilms-konto (hoppet over)`)
+      setTeamImportMessage(parts.length > 0 ? parts.join(', ') : 'Fant ikke noe team i pitchen')
+    } else {
+      setTeamImportMessage('Noe gikk feil')
+    }
+    setImportingTeam(false)
   }
 
   async function handleReviewSettingChange(patch: Partial<typeof reviewSettings>) {
@@ -1421,6 +1469,103 @@ export default function ProjectHubPage() {
                           )}
                         </button>
                       ))}
+                    </div>
+                  )}
+                </div>
+                {/* Team — se feedback 706674ff: brukes til varsler uavhengig av task_assignees/pipeline-steg */}
+                <div style={{ position: 'relative', marginTop: 6 }} ref={teamDropdownRef}>
+                  <button
+                    onClick={() => setTeamDropdownOpen(v => !v)}
+                    style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+                      background: 'none', border: `1px solid ${C.border}`,
+                      color: teamMembers.length > 0 ? C.text2 : C.text3,
+                    }}
+                  >
+                    {teamMembers.length > 0 ? (
+                      <>
+                        <div style={{ display: 'flex' }}>
+                          {teamMembers.slice(0, 4).map((m, i) => (
+                            <span key={m.id} title={m.name ?? m.email} style={{
+                              width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                              background: getAvatarColor(m), color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.58rem', fontWeight: 700,
+                              marginLeft: i > 0 ? -5 : 0, border: `1.5px solid ${C.surface}`,
+                            }}>
+                              {(m.name ?? m.email)[0].toUpperCase()}
+                            </span>
+                          ))}
+                        </div>
+                        Team ({teamMembers.length})
+                      </>
+                    ) : (
+                      '+ Team'
+                    )}
+                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 4L6 8L10 4" stroke={C.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {teamDropdownOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 150,
+                      background: C.surface2, border: `1px solid ${C.border}`,
+                      borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                      minWidth: 220, maxHeight: 320, overflowY: 'auto', padding: '4px 0',
+                    }}>
+                      <button
+                        onClick={handleImportTeamFromPitch}
+                        disabled={importingTeam}
+                        style={{
+                          width: '100%', textAlign: 'left',
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
+                          color: C.accent, background: 'none', border: 'none',
+                          borderBottom: `1px solid ${C.border}`,
+                          padding: '8px 14px', cursor: importingTeam ? 'default' : 'pointer',
+                        }}
+                      >
+                        {importingTeam ? 'Henter fra pitch...' : '↓ Hent team fra pitch'}
+                      </button>
+                      {teamImportMessage && (
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, padding: '6px 14px', margin: 0, borderBottom: `1px solid ${C.border}` }}>
+                          {teamImportMessage}
+                        </p>
+                      )}
+                      {profiles.map(p => {
+                        const isMember = teamMembers.some(m => m.id === p.id)
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => handleToggleTeamMember(p.id)}
+                            style={{
+                              width: '100%', textAlign: 'left',
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.73rem',
+                              color: isMember ? C.accent : C.text,
+                              background: 'none', border: 'none',
+                              padding: '7px 14px', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 8,
+                            }}
+                            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
+                            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
+                          >
+                            <span style={{
+                              width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                              background: getAvatarColor(p), color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.65rem', fontWeight: 700,
+                            }}>
+                              {(p.name ?? p.email)[0].toUpperCase()}
+                            </span>
+                            {p.name ?? p.email}
+                            {isMember && (
+                              <span style={{ marginLeft: 'auto', color: C.accent, fontSize: '0.65rem' }}>✓</span>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

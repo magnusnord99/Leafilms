@@ -597,7 +597,7 @@ function LinkProjectPanel({
         value={query}
         onChange={e => handleSearch(e.target.value)}
         placeholder="Søk etter prosjekt..."
-        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', marginBottom: 6 }}
       />
       {results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 140, overflowY: 'auto' }}>
@@ -692,7 +692,7 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
           <select
             value={reviewerId}
             onChange={e => setReviewerId(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', marginBottom: 6 }}
           >
             <option value="">Velg reviewer...</option>
             {profiles.map(p => (
@@ -704,7 +704,7 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
             value={dueDate}
             onChange={e => setDueDate(e.target.value)}
             title="Ønsket frist for reviewen (valgfritt)"
-            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', outline: 'none', marginBottom: 6 }}
+            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', marginBottom: 6 }}
           />
           <div style={{ display: 'flex', gap: 5 }}>
             <button onClick={handleSend} disabled={sending || !reviewerId} style={{ flex: 1, padding: '6px', borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>

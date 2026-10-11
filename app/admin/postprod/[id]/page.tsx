@@ -1832,7 +1832,7 @@ export default function PostProdDetailPage() {
                   onChange={e => handleDueDateChange(selectedTask.id, e.target.value)}
                   style={{
                     width: 138, boxSizing: 'border-box',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: '8px 12px', outline: 'none',

@@ -66,7 +66,7 @@ export default function TodoNode({ id, data, selected }: NodeProps<CardNode>) {
             checked={item.checked}
             disabled={readOnly}
             onChange={() => persist(content.items.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i))}
-            style={{ accentColor: P.accent, cursor: 'pointer' }}
+            style={{ width: 22, height: 22, accentColor: P.accent, cursor: 'pointer' }}
           />
           <span style={{ flex: 1, fontSize: '0.78rem', color: item.checked ? P.text2 : P.text, textDecoration: item.checked ? 'line-through' : 'none' }}>
             {item.text}
@@ -92,7 +92,7 @@ export default function TodoNode({ id, data, selected }: NodeProps<CardNode>) {
               setNewText('')
             }
           }}
-          style={{ width: '100%', marginTop: 6, background: P.surface2, border: `1px solid ${P.border}`, borderRadius: 5, padding: '5px 8px', color: P.text, fontSize: '0.75rem', outline: 'none' }}
+          style={{ width: '100%', marginTop: 6, background: P.surface2, border: `1px solid ${P.border}`, borderRadius: 5, padding: '5px 8px', color: P.text, fontSize: '1rem', outline: 'none' }}
         />
       )}
     </CardShell>

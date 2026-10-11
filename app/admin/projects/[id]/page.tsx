@@ -1537,12 +1537,12 @@ export default function ProjectHubPage() {
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Fra</label>
                     <input autoFocus type="date" value={shootStart} onChange={e => setShootStart(e.target.value)}
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }} />
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }} />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Til</label>
                     <input type="date" value={shootEnd} onChange={e => setShootEnd(e.target.value)}
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
                       onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                       onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
                   </div>

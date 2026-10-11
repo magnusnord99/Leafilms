@@ -99,7 +99,7 @@ export default function CommentThread({ cardId, onClose }: { cardId: string; onC
           placeholder="Skriv en kommentar..."
           disabled={sending}
           style={{
-            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: P.text,
+            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: P.text,
             background: P.surface2, border: `1px solid ${P.border}`, borderRadius: 6,
             padding: '6px 8px', outline: 'none', resize: 'none', lineHeight: 1.4, width: '100%',
           }}

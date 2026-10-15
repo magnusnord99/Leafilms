@@ -58,6 +58,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-10-08:** `168_unavailability_update_policy.sql` er anvendt mot Supabase (la til UPDATE-RLS-policy på `unavailability` — tabellen hadde kun SELECT/INSERT/DELETE fra 133_unavailability.sql, så UPDATE var fullstendig blokkert av RLS. "Rediger"-knapp lagt til i UnavailabilityDetailModal i /admin/calendar slik at en "utilgjengelig"-markering kan endres i stedet for bare slettes+opprettes på nytt — Magnus hadde lagt inn "besøke Andrea" men kunne ikke gjøre den lengre).
 
+**Kjørt 2026-10-15:** `169_transfer_project_link.sql` er anvendt mot Supabase (la til nullable `project_id` + indeks på `transfers`-tabellen — tidligere var koblingen prosjekt↔leveranse kun et URL-query-param i UI, ikke lagret i databasen. Del av ny "send levering"-flyt på leveringssteget, se feedback om å kunne sende leveransefiler direkte fra /admin/projects/[id]/email i stedet for bare generisk e-post). Kjørt via port 5432 (samme 6432-vs-5432-situasjon som 143/149/150/159-168).
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

@@ -4,20 +4,35 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
+import { initiateUpload, completeUpload, abortUpload, createTransfer, getTransfersForProject } from '@/lib/actions/transfers'
+import type { TransferWithLink } from '@/lib/actions/transfers'
+import { uploadFileToR2 } from '@/lib/r2-upload-client'
+import { formatFileSize } from '@/lib/utils/file-size'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
 import type { PipelineStage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
-type EmailType = 'meeting' | 'pitch' | 'follow_up' | 'general'
+type EmailType = 'meeting' | 'pitch' | 'follow_up' | 'general' | 'delivery'
 type EmailLog = { id: string; project_id: string; type: string; to_email: string; subject: string; sent_at: string }
 type HubData = Awaited<ReturnType<typeof getProjectHub>>
+
+type DeliveryUpload = {
+  tempId: string
+  filename: string
+  filesize: number
+} & (
+  | { status: 'uploading'; progress: number }
+  | { status: 'done'; downloadUrl: string }
+  | { status: 'error'; error: string }
+)
 
 function resolveEmailType(stage: PipelineStage | undefined): EmailType {
   if (stage === 'møte') return 'meeting'
   if (stage === 'tilbud_sendt') return 'pitch'
   if (stage === 'videresalg') return 'follow_up'
+  if (stage === 'levering') return 'delivery'
   return 'general'
 }
 
@@ -26,6 +41,7 @@ const EMAIL_TYPE_CONTEXT: Record<EmailType, string> = {
   pitch:     'Sender prosjektbeskrivelse og tilbud til kunden for gjennomgang.',
   follow_up: 'Videresalgs-oppfølging til eksisterende kunde.',
   general:   'Generell kommunikasjon med kunden.',
+  delivery:  'Sender leveransen til kunden sammen med nedlastingslenke til ferdig materiale.',
 }
 
 const inputStyle: React.CSSProperties = {
@@ -65,7 +81,10 @@ export default function EmailPage() {
   const [chatMembers, setChatMembers] = useState<ConversationParticipant[]>([])
   const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
   const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
+  const [sessionUploads, setSessionUploads] = useState<DeliveryUpload[]>([])
+  const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const deliveryFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!projectId) return
@@ -122,17 +141,128 @@ export default function EmailPage() {
     })
   }, [projectId])
 
+  // Last inn tidligere leveranser knyttet til dette prosjektet (lesevisning)
+  useEffect(() => {
+    if (!projectId) return
+    getTransfersForProject(projectId)
+      .then(transfers => setExistingTransfers(transfers))
+      .catch(() => {})
+  }, [projectId])
+
   async function loadDraft() {
     if (!hubData) return
     setGeneratingDraft(true)
     try {
-      const extraContext = hubData.pitchToken
-        ? `Lenke til prosjektside (pitch, tilbud og signerbar kontrakt): ${window.location.origin}/p/${hubData.pitchToken}`
-        : undefined
+      let extraContext: string | undefined
+      if (emailType === 'delivery') {
+        // For leveranse-type: send deliverables-info, men IKKE noen nedlastingslenke
+        // (lenken finnes ikke før en fil er lastet opp — se handleDeliveryFileUpload)
+        const deliverables = (hubData.project as {
+          deliverables?: Array<{ name?: string; quantity?: number | null; format?: string }>
+        }).deliverables ?? []
+        const delivLines = deliverables
+          .filter(d => d.name)
+          .map(d => `• ${d.quantity ? `${d.quantity}× ` : ''}${d.name}${d.format ? ` (${d.format})` : ''}`)
+          .join('\n')
+        extraContext = delivLines ? `Leveransen inkluderer:\n${delivLines}` : undefined
+      } else {
+        extraContext = hubData.pitchToken
+          ? `Lenke til prosjektside (pitch, tilbud og signerbar kontrakt): ${window.location.origin}/p/${hubData.pitchToken}`
+          : undefined
+      }
       const draft = await generateEmailDraft(projectId, emailType, extraContext)
       if (draft) { setSubject(draft.subject ?? ''); setBody(draft.body ?? '') }
     } catch {}
     finally { setGeneratingDraft(false) }
+  }
+
+  async function handleDeliveryFileUpload(file: File) {
+    const tempId = `${Date.now()}-${Math.random()}`
+    setSessionUploads(prev => [
+      ...prev,
+      { tempId, filename: file.name, filesize: file.size, status: 'uploading', progress: 0 },
+    ])
+
+    let uploadKey: string | undefined
+    let uploadId: string | undefined
+
+    try {
+      const initResult = await initiateUpload({ filename: file.name, contentType: file.type || undefined })
+      if ('error' in initResult) {
+        setSessionUploads(prev => prev.map(u =>
+          u.tempId === tempId
+            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: initResult.error }
+            : u
+        ))
+        return
+      }
+      uploadKey = initResult.key
+      uploadId = initResult.uploadId
+
+      const parts = await uploadFileToR2(
+        file, initResult.key, initResult.uploadId, initResult.partSize,
+        (pct) => setSessionUploads(prev => prev.map(u =>
+          u.tempId === tempId
+            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'uploading' as const, progress: pct }
+            : u
+        ))
+      )
+
+      const completeResult = await completeUpload({ key: initResult.key, uploadId: initResult.uploadId, parts })
+      if ('error' in completeResult) {
+        setSessionUploads(prev => prev.map(u =>
+          u.tempId === tempId
+            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: completeResult.error }
+            : u
+        ))
+        return
+      }
+
+      const transferResult = await createTransfer({
+        filename: file.name,
+        filesize_bytes: file.size,
+        content_type: file.type || undefined,
+        r2_key: initResult.key,
+        project_id: projectId,
+        customer_id: (hubData?.project.customer as { id?: string } | null)?.id,
+        recipient_email: toEmail || undefined,
+        expires_in_days: 14,
+      })
+
+      if ('error' in transferResult) {
+        setSessionUploads(prev => prev.map(u =>
+          u.tempId === tempId
+            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: transferResult.error }
+            : u
+        ))
+        return
+      }
+
+      const newUrl = transferResult.downloadUrl
+      setSessionUploads(prev => prev.map(u =>
+        u.tempId === tempId
+          ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'done' as const, downloadUrl: newUrl }
+          : u
+      ))
+
+      // Sett inn nedlastingslenken i meldingsteksten — én samlet seksjon, unngå duplikat
+      setBody(prev => {
+        if (prev.includes(newUrl)) return prev
+        const MARKER = '\n\nLast ned her:\n'
+        return prev.includes(MARKER)
+          ? prev + newUrl + '\n'
+          : prev + MARKER + newUrl + '\n'
+      })
+
+    } catch (err) {
+      if (uploadKey && uploadId) abortUpload({ key: uploadKey, uploadId }).catch(() => {})
+      const msg = err instanceof Error ? err.message : String(err)
+      setSessionUploads(prev => prev.map(u =>
+        u.tempId === tempId
+          ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: msg }
+          : u
+      ))
+    }
   }
 
   async function handleSend() {
@@ -149,6 +279,9 @@ export default function EmailPage() {
         if (emailType === 'pitch' && hubData?.project.pipeline_stage === 'tilbud_sendt') {
           await updatePipelineStage(projectId, 'kontrakt')
           setSendResult({ ok: true, message: 'E-post sendt. Prosjekt flyttet til Kontrakt.' })
+        } else if (emailType === 'delivery' && sessionUploads.some(u => u.status === 'done')) {
+          await updatePipelineStage(projectId, 'fakturert')
+          setSendResult({ ok: true, message: 'E-post sendt. Prosjekt flyttet til Fakturert.' })
         } else {
           setSendResult({ ok: true, message: 'E-post sendt.' })
         }
@@ -354,6 +487,8 @@ export default function EmailPage() {
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px' }}>
             <FieldLabel>Vedlegg / Lenker</FieldLabel>
+
+            {/* Møtelink */}
             {emailType === 'meeting' && (
               <div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 8 }}>Møtelink</p>
@@ -362,7 +497,151 @@ export default function EmailPage() {
                   onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
               </div>
             )}
-            {emailType !== 'meeting' && hubData.pitchToken && (
+
+            {/* Leveranseopplasting — kun synlig for levering-steget */}
+            {emailType === 'delivery' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Skjult fil-input */}
+                <input
+                  ref={deliveryFileInputRef}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) { handleDeliveryFileUpload(file); e.target.value = '' }
+                  }}
+                />
+
+                {/* Kompakt opplastingsknapp */}
+                <button
+                  onClick={() => deliveryFileInputRef.current?.click()}
+                  disabled={sessionUploads.some(u => u.status === 'uploading')}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    border: `1px dashed ${C.border}`, borderRadius: 8,
+                    padding: '10px 14px', cursor: sessionUploads.some(u => u.status === 'uploading') ? 'default' : 'pointer',
+                    background: 'none', color: C.text3,
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
+                    width: '100%', boxSizing: 'border-box',
+                    opacity: sessionUploads.some(u => u.status === 'uploading') ? 0.5 : 1,
+                    transition: 'border-color 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    if (!sessionUploads.some(u => u.status === 'uploading')) {
+                      const btn = e.currentTarget as HTMLButtonElement
+                      btn.style.borderColor = C.accent
+                      btn.style.color = C.text
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    const btn = e.currentTarget as HTMLButtonElement
+                    btn.style.borderColor = C.border
+                    btn.style.color = C.text3
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 1v8M4 4l3-3 3 3M2 11h10" />
+                  </svg>
+                  Last opp leveransefil
+                </button>
+
+                {/* Filer lastet opp i denne økten */}
+                {sessionUploads.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {sessionUploads.map(u => (
+                      <div key={u.tempId} style={{
+                        background: C.surface2,
+                        border: `1px solid ${
+                          u.status === 'done'  ? 'rgba(76,175,125,0.3)' :
+                          u.status === 'error' ? 'rgba(224,85,85,0.3)' :
+                          C.border
+                        }`,
+                        borderRadius: 7, padding: '8px 10px',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {u.filename}
+                            </p>
+                            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                              {formatFileSize(u.filesize)}
+                            </p>
+                          </div>
+                          <span style={{
+                            fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
+                            letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0,
+                            color: u.status === 'done' ? C.success : u.status === 'error' ? C.danger : C.text3,
+                          }}>
+                            {u.status === 'done' ? '✓ Klar'
+                              : u.status === 'error' ? '✗ Feil'
+                              : `${Math.round(u.progress)}%`}
+                          </span>
+                        </div>
+
+                        {u.status === 'uploading' && (
+                          <div style={{ height: 2, background: C.border, borderRadius: 1, marginTop: 6, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: C.accent, borderRadius: 1, width: `${u.progress}%`, transition: 'width 0.2s ease' }} />
+                          </div>
+                        )}
+                        {u.status === 'done' && (
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.accent, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.downloadUrl}
+                          </p>
+                        )}
+                        {u.status === 'error' && (
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.danger, marginTop: 4 }}>
+                            {u.error}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Tidligere leveranser for dette prosjektet — lesevisning */}
+                {existingTransfers.length > 0 && (
+                  <div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+                      Tidligere sendt
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {existingTransfers.map(t => (
+                        <div key={t.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px' }}>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.filename}
+                          </p>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                              {formatFileSize(t.filesize_bytes)}
+                            </span>
+                            <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                              {new Date(t.created_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                            {t.primary_link && (
+                              <>
+                                <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                <a
+                                  href={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${t.primary_link.token}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.accent, textDecoration: 'none' }}
+                                >
+                                  Åpne ↗
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pitch/tilbud-lenke for andre typer enn møte og levering */}
+            {emailType !== 'meeting' && emailType !== 'delivery' && hubData.pitchToken && (
               <div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 6 }}>Pitch-, tilbud- og kontraktlenke</p>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.accent, wordBreak: 'break-all' }}>
@@ -370,7 +649,7 @@ export default function EmailPage() {
                 </p>
               </div>
             )}
-            {emailType !== 'meeting' && !hubData.pitchToken && (
+            {emailType !== 'meeting' && emailType !== 'delivery' && !hubData.pitchToken && (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, fontStyle: 'italic' }}>
                 Ingen vedlegg for denne e-posttypen.
               </p>
@@ -391,12 +670,14 @@ export default function EmailPage() {
                     meeting:    '#4A9AC4',
                     follow_up:  '#4CAF7D',
                     general:    '#B4B4CC',
+                    delivery:   '#C49434',
                   }
                   const typeLabel: Record<string, string> = {
                     pitch:      'Tilbud & pitch',
                     meeting:    'Møteinvitasjon',
                     follow_up:  'Videresalg',
                     general:    'Generell',
+                    delivery:   'Leveranse',
                   }
                   const dotColor = typeColor[log.type] ?? '#B4B4CC'
                   const isLast = idx === emailLogs.length - 1

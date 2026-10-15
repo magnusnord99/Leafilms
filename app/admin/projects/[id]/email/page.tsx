@@ -9,6 +9,7 @@ import type { TransferWithLink } from '@/lib/actions/transfers'
 import { uploadDeliveryItems } from '@/lib/delivery-upload-client'
 import type { DroppedItem } from '@/lib/delivery-upload-client'
 import { DeliveryDropzone } from '@/components/transfers/DeliveryDropzone'
+import type { SelectionMeta } from '@/components/transfers/DeliveryDropzone'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
@@ -84,6 +85,7 @@ export default function EmailPage() {
   const [chatCurrentUser, setChatCurrentUser] = useState<ConversationParticipant | null>(null)
   const [chatAllProfiles, setChatAllProfiles] = useState<ConversationParticipant[]>([])
   const [sessionUploads, setSessionUploads] = useState<DeliveryUpload[]>([])
+  const [pendingSelection, setPendingSelection] = useState<SelectionMeta | null>(null)
   const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
@@ -494,8 +496,30 @@ export default function EmailPage() {
                 <DeliveryDropzone
                   variant="compact"
                   disabled={sessionUploads.some(u => u.status === 'uploading')}
-                  onFilesSelected={meta => { handleDeliveryItemsUpload(meta.items) }}
+                  onFilesSelected={meta => setPendingSelection(meta)}
+                  onClear={() => setPendingSelection(null)}
                 />
+
+                {/* Bekreft-steg — opplasting starter ikke før dette trykkes */}
+                {pendingSelection && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = pendingSelection.items
+                        setPendingSelection(null)
+                        handleDeliveryItemsUpload(items)
+                      }}
+                      style={{
+                        flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+                        padding: '8px', borderRadius: 7, cursor: 'pointer',
+                        background: C.accent, color: '#fff', border: 'none',
+                      }}
+                    >
+                      ↑ Last opp{pendingSelection.willZip ? ' og zip' : ''}
+                    </button>
+                  </div>
+                )}
 
                 {/* Filer lastet opp i denne økten */}
                 {sessionUploads.length > 0 && (

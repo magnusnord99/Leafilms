@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTransfer, initiateUpload, completeUpload, abortUpload } from '@/lib/actions/transfers'
+import { createTransfer } from '@/lib/actions/transfers'
 import { createClient } from '@/lib/supabase-client'
 import { formatFileSize } from '@/lib/utils/file-size'
 import type { ProjectForTransfer } from '@/lib/actions/transfers'
@@ -12,7 +12,10 @@ import type { ConversationParticipant } from '@/lib/actions/messages'
 import { ProductionChat } from '@/components/production/ProductionChat'
 import { C as CBase } from '@/lib/admin-theme'
 
-import { uploadFileToR2 } from '@/lib/r2-upload-client'
+import { uploadDeliveryItems } from '@/lib/delivery-upload-client'
+import type { DroppedItem } from '@/lib/delivery-upload-client'
+import { DeliveryDropzone } from '@/components/transfers/DeliveryDropzone'
+import type { SelectionMeta } from '@/components/transfers/DeliveryDropzone'
 
 const C = {
   ...CBase,
@@ -28,11 +31,11 @@ type Props = {
 type UploadState =
   | { phase: 'idle' }
   | { phase: 'dragging' }
-  | { phase: 'selected'; file: File }
-  | { phase: 'uploading'; file: File; progress: number }
+  | { phase: 'selected'; items: DroppedItem[]; displayName: string; approxSize: number }
+  | { phase: 'uploading'; displayName: string; bytesUploaded: number; totalBytes: number }
   | { phase: 'sending-email' }
   | { phase: 'done'; downloadUrl: string; filename: string; emailSent: boolean }
-  | { phase: 'error'; message: string }
+  | { phase: 'error'; message: string; prevSelected?: { items: DroppedItem[]; displayName: string; approxSize: number } }
 
 function buildDefaultMessage(project: ProjectForTransfer | null | undefined, type: 'video' | 'photo' | null | undefined, language: 'no' | 'en' = 'no'): string {
   if (!project) return ''
@@ -159,7 +162,6 @@ function buildEmailHtml(params: {
 
 export default function TransferUploadClient({ initialProject, deliveryType }: Props) {
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<UploadState>({ phase: 'idle' })
 
   const [recipientEmail, setRecipientEmail] = useState(initialProject?.customer?.email ?? '')
@@ -218,26 +220,13 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
     })
   }, [initialProject?.id])
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) setState({ phase: 'selected', file })
-    else setState({ phase: 'idle' })
+  const onFilesSelected = useCallback((meta: SelectionMeta) => {
+    setState({ phase: 'selected', items: meta.items, displayName: meta.displayName, approxSize: meta.approxSize })
   }, [])
 
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setState(s => s.phase === 'selected' ? s : { phase: 'dragging' })
+  const onDropzoneClear = useCallback(() => {
+    setState({ phase: 'idle' })
   }, [])
-
-  const onDragLeave = useCallback(() => {
-    setState(s => s.phase === 'dragging' ? { phase: 'idle' } : s)
-  }, [])
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) setState({ phase: 'selected', file })
-  }
 
   const onBackgroundImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -257,61 +246,41 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
     })
   }
 
-  const removeFile = () => {
-    setState({ phase: 'idle' })
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
   const handleSubmit = async () => {
     if (state.phase !== 'selected') return
-    const file = state.file
+    const { items, displayName, approxSize } = state
 
-    setState({ phase: 'uploading', file, progress: 0 })
-
-    let uploadKey: string | undefined
-    let uploadId: string | undefined
+    setState({ phase: 'uploading', displayName, bytesUploaded: 0, totalBytes: approxSize })
 
     try {
-      const initResult = await initiateUpload({ filename: file.name, contentType: file.type || undefined })
-      if ('error' in initResult) {
-        setState({ phase: 'error', message: initResult.error })
-        return
-      }
-      uploadKey = initResult.key
-      uploadId = initResult.uploadId
+      const uploadResult = await uploadDeliveryItems(
+        items,
+        initialProject?.title ?? 'Leveranse',
+        (bytesUploaded, totalBytes) => {
+          setState({ phase: 'uploading', displayName, bytesUploaded, totalBytes })
+        }
+      )
 
-      const parts = await uploadFileToR2(file, initResult.key, initResult.uploadId, initResult.partSize, (pct) => {
-        setState({ phase: 'uploading', file, progress: pct })
-      })
+      setState({ phase: 'uploading', displayName, bytesUploaded: uploadResult.filesize, totalBytes: uploadResult.filesize })
 
-      const completeResult = await completeUpload({ key: initResult.key, uploadId: initResult.uploadId, parts })
-      if ('error' in completeResult) {
-        setState({ phase: 'error', message: completeResult.error })
-        return
-      }
-
-      setState({ phase: 'uploading', file, progress: 100 })
-
-      // Bakgrunnsbildet er dekorativt (ikke selve leveransefilen), så det går til det
-      // eksisterende offentlige "assets"-bucketet i stedet for R2 — enklere enn presigned
-      // URL-er, og trenger ingen utløp/tilgangskontroll utover selve /d/[token]-lenken.
+      // Bakgrunnsbildet er dekorativt — går til "assets"-bucketen, ikke R2
       let backgroundImagePath: string | undefined
       if (backgroundImage) {
         const supabase = createClient()
-        const path = `transfer-backgrounds/${initResult.key.split('/')[1]}/${Date.now()}-${backgroundImage.name}`
+        const path = `transfer-backgrounds/${uploadResult.r2Key.split('/')[1]}/${Date.now()}-${backgroundImage.name}`
         const { error: bgError } = await supabase.storage.from('assets').upload(path, backgroundImage)
         if (bgError) {
-          setState({ phase: 'error', message: 'Kunne ikke laste opp bakgrunnsbildet: ' + bgError.message })
+          setState({ phase: 'error', message: 'Kunne ikke laste opp bakgrunnsbildet: ' + bgError.message, prevSelected: { items, displayName, approxSize } })
           return
         }
         backgroundImagePath = path
       }
 
       const result = await createTransfer({
-        filename: file.name,
-        filesize_bytes: file.size,
-        content_type: file.type || undefined,
-        r2_key: initResult.key,
+        filename: uploadResult.filename,
+        filesize_bytes: uploadResult.filesize,
+        content_type: uploadResult.contentType,
+        r2_key: uploadResult.r2Key,
         message: message || undefined,
         expires_in_days: expiry === 'never' ? undefined : parseInt(expiry),
         recipient_email: recipientEmail || undefined,
@@ -327,7 +296,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
       })
 
       if ('error' in result) {
-        setState({ phase: 'error', message: result.error })
+        setState({ phase: 'error', message: result.error, prevSelected: { items, displayName, approxSize } })
         return
       }
 
@@ -340,8 +309,8 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
           ? `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Photos' : 'Files'} from Leafilms — ${projectTitle}`
           : `${deliveryType === 'video' ? 'Film' : deliveryType === 'photo' ? 'Bilder' : 'Filer'} fra Leafilms — ${projectTitle}`
         const htmlBody = buildEmailHtml({
-          filename: file.name,
-          filesize: file.size,
+          filename: uploadResult.filename,
+          filesize: uploadResult.filesize,
           downloadUrl: result.downloadUrl,
           message: message || (language === 'en'
             ? `Hi!\n\nHere is the delivery from ${projectTitle}.`
@@ -371,10 +340,9 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
         }
       }
 
-      setState({ phase: 'done', downloadUrl: result.downloadUrl, filename: file.name, emailSent })
+      setState({ phase: 'done', downloadUrl: result.downloadUrl, filename: uploadResult.filename, emailSent })
     } catch (err) {
-      if (uploadKey && uploadId) abortUpload({ key: uploadKey, uploadId }).catch(() => {})
-      setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
+      setState({ phase: 'error', message: err instanceof Error ? err.message : String(err), prevSelected: { items, displayName, approxSize } })
     }
   }
 
@@ -384,7 +352,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
     setTimeout(() => setCopied(false), 2500)
   }
 
-  const isSubmittable = state.phase === 'selected'
+  const isSubmittable = state.phase === 'selected' || (state.phase === 'error' && !!state.prevSelected)
 
   const inputStyle = {
     width: '100%', boxSizing: 'border-box' as const,
@@ -506,163 +474,99 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
 
       {/* Venstre: Upload-sone */}
       <div>
-        <div
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onClick={() => {
-            if (state.phase !== 'selected' && state.phase !== 'uploading' && state.phase !== 'sending-email') {
-              fileInputRef.current?.click()
-            }
-          }}
-          style={{
-            border: `2px dashed ${
-              state.phase === 'dragging' ? C.accent :
-              state.phase === 'selected' ? 'rgba(76,175,125,0.5)' :
-              state.phase === 'uploading' || state.phase === 'sending-email' ? C.accentBorder :
-              C.border
-            }`,
-            borderRadius: 14,
-            background: state.phase === 'dragging' ? C.accentBg : C.surface,
-            padding: '60px 32px',
-            textAlign: 'center',
-            cursor: state.phase === 'selected' || state.phase === 'uploading' || state.phase === 'sending-email' ? 'default' : 'pointer',
-            transition: 'border-color 0.2s, background 0.2s',
-            minHeight: 320,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            style={{ display: 'none' }}
-            onChange={onFileChange}
+        {/* Dropzone — alltid montert (display:none ved opplasting) for å bevare intern tilstand */}
+        <div style={{ display: state.phase === 'uploading' || state.phase === 'sending-email' ? 'none' : 'block' }}>
+          <DeliveryDropzone
+            variant="large"
+            deliveryType={deliveryType ?? undefined}
+            disabled={state.phase === 'uploading' || state.phase === 'sending-email'}
+            onFilesSelected={onFilesSelected}
+            onClear={onDropzoneClear}
           />
-
-          {(state.phase === 'idle' || state.phase === 'dragging') && (
-            <>
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: state.phase === 'dragging' ? C.accentBg : C.surface2,
-                border: `1px solid ${state.phase === 'dragging' ? C.accentBorder : C.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.4rem', transition: 'all 0.2s',
-              }}>
-                {state.phase === 'dragging' ? '↓' : '↑'}
-              </div>
-              <div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>
-                  {state.phase === 'dragging' ? 'Slipp filen her' : 'Dra og slipp filen her'}
-                </p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                  eller klikk for å velge — opptil 100 GB
-                </p>
-              </div>
-              {deliveryType && (
-                <div style={{
-                  marginTop: 4, padding: '4px 12px',
-                  background: deliveryType === 'video' ? 'rgba(124,92,252,0.08)' : 'rgba(74,154,196,0.08)',
-                  border: `1px solid ${deliveryType === 'video' ? 'rgba(124,92,252,0.25)' : 'rgba(74,154,196,0.25)'}`,
-                  borderRadius: 20,
-                }}>
-                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: deliveryType === 'video' ? C.accent : '#4A9AC4' }}>
-                    {deliveryType === 'video' ? '🎬 Film-leveranse' : '🖼️ Bilde-leveranse'}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-
-          {state.phase === 'selected' && (
-            <>
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: 'rgba(76,175,125,0.10)',
-                border: '1px solid rgba(76,175,125,0.4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.4rem',
-              }}>
-                📄
-              </div>
-              <div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', fontWeight: 600, color: C.text, marginBottom: 4 }}>
-                  {state.file.name}
-                </p>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                  {formatFileSize(state.file.size)}
-                </p>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); removeFile() }}
-                style={{
-                  marginTop: 4, background: 'none', border: 'none',
-                  cursor: 'pointer', fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.72rem', color: C.text3, textDecoration: 'underline',
-                }}
-              >
-                Fjern fil
-              </button>
-            </>
-          )}
-
-          {state.phase === 'uploading' && (
-            <>
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: C.accentBg, border: `1px solid ${C.accentBorder}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.4rem',
-              }}>
-                ⏫
-              </div>
-              <div style={{ width: '100%', maxWidth: 280 }}>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 10 }}>
-                  {state.file.name}
-                </p>
-                <div style={{ height: 4, background: C.surface2, borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
-                  <div style={{
-                    height: '100%', background: C.accent, borderRadius: 2,
-                    width: `${state.progress}%`, transition: 'width 0.2s ease',
-                  }} />
-                </div>
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-                  {Math.round(state.progress)}%
-                  {state.progress < 88 ? ' — laster opp...' : ' — fullfører...'}
-                </p>
-              </div>
-            </>
-          )}
-
-          {state.phase === 'sending-email' && (
-            <>
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: 'rgba(196,148,52,0.10)', border: '1px solid rgba(196,148,52,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.4rem',
-              }}>
-                ✉
-              </div>
-              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text }}>
-                Sender e-post til {recipientEmail}...
-              </p>
-            </>
-          )}
         </div>
+
+        {/* Fremdrift under opplasting */}
+        {state.phase === 'uploading' && (
+          <div style={{
+            border: `2px dashed ${C.accentBorder}`,
+            borderRadius: 14, background: C.surface,
+            padding: '60px 32px', textAlign: 'center',
+            minHeight: 320, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: C.accentBg, border: `1px solid ${C.accentBorder}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.4rem',
+            }}>⏫</div>
+            <div style={{ width: '100%', maxWidth: 280 }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text, marginBottom: 10 }}>
+                {state.displayName}
+              </p>
+              <div style={{ height: 4, background: C.surface2, borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+                <div style={{
+                  height: '100%', background: C.accent, borderRadius: 2,
+                  width: `${state.totalBytes > 0 ? Math.min(99, Math.round((state.bytesUploaded / state.totalBytes) * 100)) : 0}%`,
+                  transition: 'width 0.2s ease',
+                }} />
+              </div>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+                {state.totalBytes > 0 ? Math.min(99, Math.round((state.bytesUploaded / state.totalBytes) * 100)) : 0}%
+                {state.bytesUploaded < state.totalBytes * 0.88 ? ' — laster opp...' : ' — fullfører...'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Sender e-post */}
+        {state.phase === 'sending-email' && (
+          <div style={{
+            border: `2px dashed ${C.accentBorder}`,
+            borderRadius: 14, background: C.surface,
+            padding: '60px 32px', textAlign: 'center',
+            minHeight: 320, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'rgba(196,148,52,0.10)', border: '1px solid rgba(196,148,52,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.4rem',
+            }}>✉</div>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.88rem', fontWeight: 600, color: C.text }}>
+              Sender e-post til {recipientEmail}...
+            </p>
+          </div>
+        )}
 
         {state.phase === 'error' && (
           <div style={{
             marginTop: 12, background: 'rgba(224,85,85,0.08)',
             border: '1px solid rgba(224,85,85,0.3)', borderRadius: 8,
             padding: '10px 14px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
           }}>
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.danger }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.danger, flex: 1 }}>
               {state.message}
             </p>
+            {state.prevSelected && (
+              <button
+                onClick={() => {
+                  if (state.phase === 'error' && state.prevSelected) {
+                    setState({ phase: 'selected', ...state.prevSelected })
+                  }
+                }}
+                style={{
+                  background: 'none', border: `1px solid ${C.border}`,
+                  borderRadius: 6, padding: '5px 10px', cursor: 'pointer',
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3,
+                  flexShrink: 0,
+                }}
+              >
+                Prøv igjen
+              </button>
+            )}
           </div>
         )}
       </div>

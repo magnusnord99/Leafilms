@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
-import { initiateUpload, completeUpload, abortUpload, createTransfer, getTransfersForProject } from '@/lib/actions/transfers'
+import { createTransfer, getTransfersForProject } from '@/lib/actions/transfers'
 import type { TransferWithLink } from '@/lib/actions/transfers'
-import { uploadFileToR2 } from '@/lib/r2-upload-client'
+import { uploadDeliveryItems } from '@/lib/delivery-upload-client'
+import type { DroppedItem } from '@/lib/delivery-upload-client'
+import { DeliveryDropzone } from '@/components/transfers/DeliveryDropzone'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
@@ -84,7 +86,6 @@ export default function EmailPage() {
   const [sessionUploads, setSessionUploads] = useState<DeliveryUpload[]>([])
   const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
   const bodyRef = useRef<HTMLTextAreaElement>(null)
-  const deliveryFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!projectId) return
@@ -176,54 +177,41 @@ export default function EmailPage() {
     finally { setGeneratingDraft(false) }
   }
 
-  async function handleDeliveryFileUpload(file: File) {
+  async function handleDeliveryItemsUpload(items: DroppedItem[]) {
+    const willZip = items.length > 1
+    // Vis-navn og estimert størrelse for optimistisk UI under opplasting
+    const displayName = willZip
+      ? `${items.length} filer (zippes)`
+      : (items[0].relativePath.split('/').pop() ?? items[0].file.name)
+    const approxSize = items.reduce((s, { file }) => s + file.size, 0)
+
     const tempId = `${Date.now()}-${Math.random()}`
     setSessionUploads(prev => [
       ...prev,
-      { tempId, filename: file.name, filesize: file.size, status: 'uploading', progress: 0 },
+      { tempId, filename: displayName, filesize: approxSize, status: 'uploading', progress: 0 },
     ])
 
-    let uploadKey: string | undefined
-    let uploadId: string | undefined
-
     try {
-      const initResult = await initiateUpload({ filename: file.name, contentType: file.type || undefined })
-      if ('error' in initResult) {
-        setSessionUploads(prev => prev.map(u =>
-          u.tempId === tempId
-            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: initResult.error }
-            : u
-        ))
-        return
-      }
-      uploadKey = initResult.key
-      uploadId = initResult.uploadId
-
-      const parts = await uploadFileToR2(
-        file, initResult.key, initResult.uploadId, initResult.partSize,
-        (pct) => setSessionUploads(prev => prev.map(u =>
-          u.tempId === tempId
-            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'uploading' as const, progress: pct }
-            : u
-        ))
+      const uploadResult = await uploadDeliveryItems(
+        items,
+        (hubData?.project as { title?: string })?.title ?? 'Leveranse',
+        (bytesUploaded, totalBytes) => {
+          const progress = totalBytes > 0
+            ? Math.min(99, Math.round((bytesUploaded / totalBytes) * 100))
+            : 0
+          setSessionUploads(prev => prev.map(u =>
+            u.tempId === tempId
+              ? { tempId: u.tempId, filename: displayName, filesize: totalBytes, status: 'uploading' as const, progress }
+              : u
+          ))
+        }
       )
 
-      const completeResult = await completeUpload({ key: initResult.key, uploadId: initResult.uploadId, parts })
-      if ('error' in completeResult) {
-        abortUpload({ key: uploadKey, uploadId }).catch(() => {})
-        setSessionUploads(prev => prev.map(u =>
-          u.tempId === tempId
-            ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: completeResult.error }
-            : u
-        ))
-        return
-      }
-
       const transferResult = await createTransfer({
-        filename: file.name,
-        filesize_bytes: file.size,
-        content_type: file.type || undefined,
-        r2_key: initResult.key,
+        filename: uploadResult.filename,
+        filesize_bytes: uploadResult.filesize,
+        content_type: uploadResult.contentType,
+        r2_key: uploadResult.r2Key,
         project_id: projectId,
         customer_id: (hubData?.project.customer as { id?: string } | null)?.id,
         recipient_email: toEmail || undefined,
@@ -242,7 +230,7 @@ export default function EmailPage() {
       const newUrl = transferResult.downloadUrl
       setSessionUploads(prev => prev.map(u =>
         u.tempId === tempId
-          ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'done' as const, downloadUrl: newUrl }
+          ? { tempId: u.tempId, filename: uploadResult.filename, filesize: uploadResult.filesize, status: 'done' as const, downloadUrl: newUrl }
           : u
       ))
 
@@ -256,7 +244,6 @@ export default function EmailPage() {
       })
 
     } catch (err) {
-      if (uploadKey && uploadId) abortUpload({ key: uploadKey, uploadId }).catch(() => {})
       const msg = err instanceof Error ? err.message : String(err)
       setSessionUploads(prev => prev.map(u =>
         u.tempId === tempId
@@ -503,49 +490,12 @@ export default function EmailPage() {
             {/* Leveranseopplasting — kun synlig for levering-steget */}
             {emailType === 'delivery' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* Skjult fil-input */}
-                <input
-                  ref={deliveryFileInputRef}
-                  type="file"
-                  style={{ display: 'none' }}
-                  onChange={e => {
-                    const file = e.target.files?.[0]
-                    if (file) { handleDeliveryFileUpload(file); e.target.value = '' }
-                  }}
-                />
-
-                {/* Kompakt opplastingsknapp */}
-                <button
-                  onClick={() => deliveryFileInputRef.current?.click()}
+                {/* Kompakt dropsone — støtter enkeltfiler, flere filer og mapper */}
+                <DeliveryDropzone
+                  variant="compact"
                   disabled={sessionUploads.some(u => u.status === 'uploading')}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    border: `1px dashed ${C.border}`, borderRadius: 8,
-                    padding: '10px 14px', cursor: sessionUploads.some(u => u.status === 'uploading') ? 'default' : 'pointer',
-                    background: 'none', color: C.text3,
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
-                    width: '100%', boxSizing: 'border-box',
-                    opacity: sessionUploads.some(u => u.status === 'uploading') ? 0.5 : 1,
-                    transition: 'border-color 0.15s, color 0.15s',
-                  }}
-                  onMouseEnter={e => {
-                    if (!sessionUploads.some(u => u.status === 'uploading')) {
-                      const btn = e.currentTarget as HTMLButtonElement
-                      btn.style.borderColor = C.accent
-                      btn.style.color = C.text
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    const btn = e.currentTarget as HTMLButtonElement
-                    btn.style.borderColor = C.border
-                    btn.style.color = C.text3
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 1v8M4 4l3-3 3 3M2 11h10" />
-                  </svg>
-                  Last opp leveransefil
-                </button>
+                  onFilesSelected={meta => { handleDeliveryItemsUpload(meta.items) }}
+                />
 
                 {/* Filer lastet opp i denne økten */}
                 {sessionUploads.length > 0 && (

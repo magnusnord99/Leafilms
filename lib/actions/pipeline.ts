@@ -1669,7 +1669,7 @@ export async function getCurrentUserProfile(): Promise<{
  */
 export async function generateEmailDraft(
   projectId: string,
-  type: 'meeting' | 'pitch' | 'follow_up' | 'general',
+  type: 'meeting' | 'pitch' | 'follow_up' | 'general' | 'delivery',
   extraContext?: string
 ): Promise<{ subject: string; body: string }> {
   const supabase = await createClient()
@@ -1696,6 +1696,7 @@ export async function generateEmailDraft(
     pitch: `Prosjektbeskrivelse og tilbud — ${project.title}`,
     follow_up: `Oppfølging — ${project.title}`,
     general: `Angående ${project.title}`,
+    delivery: `Leveransen din er klar — ${project.title}`,
   }
 
   const prompts: Record<typeof type, string> = {
@@ -1726,6 +1727,14 @@ Prosjekt: ${project.title}
 Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }`,
+
+    delivery: `Generer en varm og personlig leveranse-e-post på norsk for Leafilms (filmproduksjon).
+Prosjektet er nå ferdig og klart til levering.
+Prosjekt: ${project.title}
+Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
+
+Returner JSON: { "subject": "...", "body": "..." }
+Body: varm og stolt tone, maks 100 ord, fortell at arbeidet er ferdig og at de finner alt via lenken under (IKKE dikte opp selve lenken — den limes inn av avsender), signer med "Leafilms-teamet"`,
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {

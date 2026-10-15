@@ -127,6 +127,8 @@ export type CreateTransferInput = {
   // Må være satt til en fullført R2-nøkkel fra completeUpload() før kall
   r2_key?: string
   customer_id?: string
+  // Kobler leveransen til et prosjekt (lagt til i 169_transfer_project_link.sql)
+  project_id?: string
   // Sti i "assets"-bucketen (ikke R2) — kundelogo/leveransebilde er ikke
   // like sensitivt som selve leveransefilen og trenger ikke presigned URL
   background_image_path?: string
@@ -149,6 +151,33 @@ export async function getTransfers(): Promise<TransferWithLink[]> {
 
   if (error) {
     console.error('[getTransfers]', error)
+    return []
+  }
+
+  return (data || []).map(t => ({
+    ...t,
+    primary_link: t.links?.[0] ?? null,
+  }))
+}
+
+// Henter alle leveranser knyttet til et bestemt prosjekt (for prosjektsiden)
+export async function getTransfersForProject(projectId: string): Promise<TransferWithLink[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('transfers')
+    .select(`
+      *,
+      links:transfer_links(*)
+    `)
+    .eq('project_id', projectId)
+    .neq('status', 'deleted')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[getTransfersForProject]', error)
     return []
   }
 
@@ -304,6 +333,7 @@ export async function createTransfer(input: CreateTransferInput): Promise<{
       max_downloads: input.max_downloads ?? null,
       language: input.language ?? 'no',
       customer_id: input.customer_id ?? null,
+      project_id: input.project_id ?? null,
       background_image_path: input.background_image_path ?? null,
     })
     .select()

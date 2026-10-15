@@ -210,6 +210,7 @@ export default function EmailPage() {
 
       const completeResult = await completeUpload({ key: initResult.key, uploadId: initResult.uploadId, parts })
       if ('error' in completeResult) {
+        abortUpload({ key: uploadKey, uploadId }).catch(() => {})
         setSessionUploads(prev => prev.map(u =>
           u.tempId === tempId
             ? { tempId: u.tempId, filename: u.filename, filesize: u.filesize, status: 'error' as const, error: completeResult.error }
@@ -298,6 +299,7 @@ export default function EmailPage() {
   }
 
   const canSend = !sending && !generatingDraft && !!toEmail.trim() && !!subject.trim() && !!body.trim()
+    && !sessionUploads.some(u => u.status === 'uploading')
 
   // Cmd/Ctrl+K — samme snarvei som i vanlige mailklienter — gjør markert tekst
   // om til en ordentlig lenke ([visningstekst](url)) i stedet for en rå URL i

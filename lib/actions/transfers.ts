@@ -92,6 +92,7 @@ export type Transfer = {
   status: 'active' | 'expired' | 'deleted'
   language: 'no' | 'en'
   customer_id: string | null
+  project_id: string | null
   background_image_path: string | null
   created_at: string
   updated_at: string

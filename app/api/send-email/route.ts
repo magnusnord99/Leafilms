@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { emailBodyToHtml, emailBodyToPlainText } from '@/lib/email-markup'
+import { renderEmailFooter } from '@/lib/email-footer'
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,25 +27,37 @@ export async function POST(req: NextRequest) {
 
     let fromAddress = 'Leafilms <post@leafilms.no>'
 
-    if (!useLeafilmsAddress) {
-      const supabase = await createClient()
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name, email')
-        .eq('id', user.id)
-        .single()
+    // Hentes alltid (uavhengig av useLeafilmsAddress) — footeren nedenfor viser
+    // alltid den faktiske avsenderen, selv når e-posten sendes fra den delte
+    // post@leafilms.no-adressen.
+    const supabase = await createClient()
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('name, email, phone, job_title')
+      .eq('id', user.id)
+      .single()
 
-      if (profile?.email) {
-        fromAddress = `${profile.name ?? 'Leafilms'} <${profile.email}>`
-      }
+    if (!useLeafilmsAddress && senderProfile?.email) {
+      fromAddress = `${senderProfile.name ?? 'Leafilms'} <${senderProfile.email}>`
     }
 
     let resendMessageId: string | null = null
 
     if (process.env.RESEND_API_KEY) {
+      const { data: footerRow } = await supabase
+        .from('email_footer_template')
+        .select('template')
+        .eq('id', 'main')
+        .maybeSingle()
+      const footer = footerRow?.template && senderProfile
+        ? renderEmailFooter(footerRow.template, senderProfile)
+        : ''
+
       const bodyWithMeeting = meetingLink ? `${body}\n\nMøtelink: ${meetingLink}` : body
-      const emailText = emailBodyToPlainText(bodyWithMeeting)
-      const emailHtml = emailBodyToHtml(bodyWithMeeting)
+      const emailText = emailBodyToPlainText(bodyWithMeeting) + (footer ? `\n\n--\n${emailBodyToPlainText(footer)}` : '')
+      const emailHtml = emailBodyToHtml(bodyWithMeeting) + (footer
+        ? `<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e2e2;color:#888888;font-size:12px;line-height:1.5;">${emailBodyToHtml(footer)}</div>`
+        : '')
 
       const resendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',

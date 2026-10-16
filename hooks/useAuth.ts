@@ -15,6 +15,7 @@ interface Profile {
   customer_id: string | null
   color: string | null
   phone: string | null
+  job_title: string | null
 }
 
 export function useAuth() {

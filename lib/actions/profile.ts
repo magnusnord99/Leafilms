@@ -42,6 +42,25 @@ export async function updateProfilePhone(phone: string): Promise<{ error?: strin
   return {}
 }
 
+export async function updateProfileJobTitle(jobTitle: string): Promise<{ error?: string }> {
+  const trimmed = jobTitle.trim()
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke innlogget.' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ job_title: trimmed || null })
+    .eq('id', user.id)
+
+  if (error) {
+    console.error('updateProfileJobTitle error:', error)
+    return { error: 'Kunne ikke lagre stilling.' }
+  }
+  return {}
+}
+
 export async function updateProfileColor(color: string): Promise<{ error?: string }> {
   if (!AVATAR_COLORS.includes(color as AvatarColor)) {
     return { error: 'Ugyldig farge.' }

@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
+import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles, getEmailSuggestions } from '@/lib/actions/pipeline'
+import type { EmailSuggestion } from '@/lib/actions/pipeline'
+import { EmailAutocomplete } from '@/components/shared/EmailAutocomplete'
 import { createTransfer, getTransfersForProject } from '@/lib/actions/transfers'
 import type { TransferWithLink } from '@/lib/actions/transfers'
 import { uploadDeliveryItems } from '@/lib/delivery-upload-client'
@@ -107,6 +109,7 @@ export default function EmailPage() {
   const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
   const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(new Set())
   const lastLinksBlockRef = useRef('')
+  const [emailSuggestions, setEmailSuggestions] = useState<EmailSuggestion[]>([])
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -171,6 +174,11 @@ export default function EmailPage() {
       .then(transfers => setExistingTransfers(transfers))
       .catch(() => {})
   }, [projectId])
+
+  // Last inn kjente e-postadresser (kunder, team, tidligere mottakere) for autofullføring i Til/Kopi
+  useEffect(() => {
+    getEmailSuggestions().then(setEmailSuggestions).catch(() => {})
+  }, [])
 
   // Alle lenker brukeren kan velge å ta med i e-posten: filer lastet opp i denne økten + tidligere sendte leveranser
   const linkOptions: LinkOption[] = [
@@ -419,16 +427,32 @@ export default function EmailPage() {
 
             <div>
               <FieldLabel>Til</FieldLabel>
-              <input type="email" value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="kunde@selskap.no" style={inputStyle}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
+              <EmailAutocomplete
+                type="email"
+                mode="single"
+                value={toEmail}
+                onChange={setToEmail}
+                suggestions={emailSuggestions}
+                placeholder="kunde@selskap.no"
+                style={inputStyle}
+                borderColor={C.border}
+                focusBorderColor={C.accent}
+              />
             </div>
 
             <div>
               <FieldLabel>Kopi (CC)</FieldLabel>
-              <input type="text" value={cc} onChange={e => setCc(e.target.value)} placeholder="valgfritt, kommaseparert" style={inputStyle}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
+              <EmailAutocomplete
+                type="text"
+                mode="multi"
+                value={cc}
+                onChange={setCc}
+                suggestions={emailSuggestions}
+                placeholder="valgfritt, kommaseparert"
+                style={inputStyle}
+                borderColor={C.border}
+                focusBorderColor={C.accent}
+              />
             </div>
 
             <div>

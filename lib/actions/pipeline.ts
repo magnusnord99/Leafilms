@@ -1529,6 +1529,44 @@ export async function getAllProfiles(): Promise<{ id: string; name: string | nul
   }
 }
 
+export type EmailSuggestion = { email: string; label: string | null }
+
+/**
+ * Henter alle kjente e-postadresser i systemet for autofullføring i e-postkomponisten —
+ * kunder, Leafilms-teamet, og tidligere mottakere fra email_log. Deduplisert på e-post.
+ */
+export async function getEmailSuggestions(): Promise<EmailSuggestion[]> {
+  try {
+    const supabase = await createClient()
+    const [customersRes, profilesRes, logRes] = await Promise.all([
+      supabase.from('customers').select('name, email, invoice_email'),
+      supabase.from('profiles').select('name, email'),
+      supabase.from('email_log').select('to_email').order('sent_at', { ascending: false }).limit(500),
+    ])
+
+    const byEmail = new Map<string, string | null>()
+    const add = (email: string | null | undefined, label: string | null) => {
+      const trimmed = email?.trim().toLowerCase()
+      if (!trimmed || !trimmed.includes('@')) return
+      if (!byEmail.has(trimmed) || (label && !byEmail.get(trimmed))) byEmail.set(trimmed, label)
+    }
+
+    for (const c of customersRes.data ?? []) {
+      add(c.email, c.name ?? null)
+      add(c.invoice_email, c.name ?? null)
+    }
+    for (const p of profilesRes.data ?? []) add(p.email, p.name ?? null)
+    for (const l of logRes.data ?? []) add(l.to_email, null)
+
+    return Array.from(byEmail.entries())
+      .map(([email, label]) => ({ email, label }))
+      .sort((a, b) => a.email.localeCompare(b.email))
+  } catch (err) {
+    console.error('getEmailSuggestions error:', err)
+    return []
+  }
+}
+
 /**
  * Legger til eller fjerner en bruker fra task_assignees (toggle).
  * Returnerer om brukeren nå er tildelt (true) eller fjernet (false).

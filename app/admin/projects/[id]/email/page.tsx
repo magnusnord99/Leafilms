@@ -31,6 +31,24 @@ type DeliveryUpload = {
   | { status: 'error'; error: string }
 )
 
+type LinkOption = { id: string; filename: string; url: string }
+
+function buildLinksBlock(items: LinkOption[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return `[Klikk her](${items[0].url}) for å laste ned.`
+  return `Nedlastingslenker:\n${items.map(i => `- [${i.filename}](${i.url})`).join('\n')}`
+}
+
+/** Bytter ut forrige innsatte lenkeblokk med en ny, uten å røre resten av teksten brukeren har skrevet. */
+function mergeLinksIntoBody(body: string, prevBlock: string, newBlock: string): string {
+  let next = body
+  if (prevBlock && next.includes(prevBlock)) {
+    next = next.replace(prevBlock, '').replace(/\n{3,}$/, '\n\n').trimEnd()
+  }
+  if (!newBlock) return next
+  return next.trim().length > 0 ? `${next}\n\n${newBlock}` : newBlock
+}
+
 function resolveEmailType(stage: PipelineStage | undefined): EmailType {
   if (stage === 'møte') return 'meeting'
   if (stage === 'tilbud_sendt') return 'pitch'
@@ -87,6 +105,8 @@ export default function EmailPage() {
   const [sessionUploads, setSessionUploads] = useState<DeliveryUpload[]>([])
   const [pendingSelection, setPendingSelection] = useState<SelectionMeta | null>(null)
   const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
+  const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(new Set())
+  const lastLinksBlockRef = useRef('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -152,6 +172,39 @@ export default function EmailPage() {
       .catch(() => {})
   }, [projectId])
 
+  // Alle lenker brukeren kan velge å ta med i e-posten: filer lastet opp i denne økten + tidligere sendte leveranser
+  const linkOptions: LinkOption[] = [
+    ...sessionUploads
+      .filter((u): u is DeliveryUpload & { status: 'done'; downloadUrl: string } => u.status === 'done')
+      .map(u => ({ id: u.tempId, filename: u.filename, url: u.downloadUrl })),
+    ...existingTransfers
+      .filter(t => t.primary_link)
+      .map(t => ({
+        id: t.id,
+        filename: t.filename,
+        url: `${typeof window !== 'undefined' ? window.location.origin : ''}/d/${t.primary_link!.token}`,
+      })),
+  ]
+
+  // Hold meldingsteksten i sync med hvilke lenker som er huket av, uten å røre resten av teksten
+  useEffect(() => {
+    if (emailType !== 'delivery') return
+    const block = buildLinksBlock(linkOptions.filter(l => selectedLinkIds.has(l.id)))
+    if (block === lastLinksBlockRef.current) return
+    setBody(prev => mergeLinksIntoBody(prev, lastLinksBlockRef.current, block))
+    lastLinksBlockRef.current = block
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLinkIds, sessionUploads, existingTransfers, emailType])
+
+  function toggleLink(id: string) {
+    setSelectedLinkIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function loadDraft() {
     if (!hubData) return
     setGeneratingDraft(true)
@@ -174,7 +227,13 @@ export default function EmailPage() {
           : undefined
       }
       const draft = await generateEmailDraft(projectId, emailType, extraContext)
-      if (draft) { setSubject(draft.subject ?? ''); setBody(draft.body ?? '') }
+      if (draft) {
+        setSubject(draft.subject ?? '')
+        // Sett inn eventuelt allerede valgte lenker på nytt i det ferske utkastet
+        const block = buildLinksBlock(linkOptions.filter(l => selectedLinkIds.has(l.id)))
+        setBody(mergeLinksIntoBody(draft.body ?? '', '', block))
+        lastLinksBlockRef.current = block
+      }
     } catch {}
     finally { setGeneratingDraft(false) }
   }
@@ -236,12 +295,8 @@ export default function EmailPage() {
           : u
       ))
 
-      // Sett inn nedlastingslenken i meldingsteksten som hyperlenke ("Klikk her") — én samlet seksjon, unngå duplikat
-      setBody(prev => {
-        if (prev.includes(newUrl)) return prev
-        const linkLine = `[Klikk her](${newUrl}) for å laste ned.`
-        return prev.trim().length > 0 ? `${prev}\n\n${linkLine}` : linkLine
-      })
+      // Huk automatisk av den nye filen — brukeren kan selv velge bort den/legge til flere under
+      setSelectedLinkIds(prev => new Set(prev).add(tempId))
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -533,13 +588,23 @@ export default function EmailPage() {
                         borderRadius: 7, padding: '8px 10px',
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                          <div style={{ minWidth: 0 }}>
-                            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {u.filename}
-                            </p>
-                            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
-                              {formatFileSize(u.filesize)}
-                            </p>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, minWidth: 0 }}>
+                            {u.status === 'done' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedLinkIds.has(u.tempId)}
+                                onChange={() => toggleLink(u.tempId)}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                              />
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {u.filename}
+                              </p>
+                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                {formatFileSize(u.filesize)}
+                              </p>
+                            </div>
                           </div>
                           <span style={{
                             fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600,
@@ -558,8 +623,8 @@ export default function EmailPage() {
                           </div>
                         )}
                         {u.status === 'done' && (
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.accent, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.downloadUrl}
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3, marginTop: 4, marginLeft: 21 }}>
+                            {selectedLinkIds.has(u.tempId) ? 'Lenke tas med i e-posten' : 'Lenke ikke med i e-posten'}
                           </p>
                         )}
                         {u.status === 'error' && (
@@ -576,35 +641,47 @@ export default function EmailPage() {
                 {existingTransfers.length > 0 && (
                   <div>
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
-                      Tidligere sendt
+                      Tidligere sendt — velg om den også skal med i e-posten
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {existingTransfers.map(t => (
                         <div key={t.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px' }}>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {t.filename}
-                          </p>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
-                              {formatFileSize(t.filesize_bytes)}
-                            </span>
-                            <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
-                            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
-                              {new Date(t.created_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                             {t.primary_link && (
-                              <>
-                                <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
-                                <a
-                                  href={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${t.primary_link.token}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.accent, textDecoration: 'none' }}
-                                >
-                                  Åpne ↗
-                                </a>
-                              </>
+                              <input
+                                type="checkbox"
+                                checked={selectedLinkIds.has(t.id)}
+                                onChange={() => toggleLink(t.id)}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                              />
                             )}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {t.filename}
+                              </p>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                  {formatFileSize(t.filesize_bytes)}
+                                </span>
+                                <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                  {new Date(t.created_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                                {t.primary_link && (
+                                  <>
+                                    <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                    <a
+                                      href={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${t.primary_link.token}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.accent, textDecoration: 'none' }}
+                                    >
+                                      Åpne ↗
+                                    </a>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}

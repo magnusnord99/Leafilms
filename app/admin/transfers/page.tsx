@@ -5,6 +5,7 @@ import { getTransfers } from '@/lib/actions/transfers'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { C } from '@/lib/admin-theme'
 import { TransferRowActions } from './TransferRowActions'
+import { DownloadStatusBadge } from '@/components/transfers/DownloadStatusBadge'
 
 function StatusBadge({ transfer }: { transfer: { status: string; expires_at: string | null; download_count: number; max_downloads: number | null } }) {
   const isExpired = transfer.expires_at && new Date(transfer.expires_at) < new Date()
@@ -198,6 +199,9 @@ export default async function TransfersPage() {
                         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
                           {t.download_count}{t.max_downloads != null ? ` / ${t.max_downloads}` : ''}
                         </span>
+                        <div style={{ marginTop: 2 }}>
+                          <DownloadStatusBadge downloadCount={t.download_count} lastDownloadedAt={t.last_downloaded_at} />
+                        </div>
                       </td>
 
                       {/* Utløper */}

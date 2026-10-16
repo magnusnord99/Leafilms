@@ -89,6 +89,7 @@ export type Transfer = {
   expires_at: string | null
   max_downloads: number | null
   download_count: number
+  last_downloaded_at: string | null
   status: 'active' | 'expired' | 'deleted'
   language: 'no' | 'en'
   customer_id: string | null
@@ -381,7 +382,10 @@ export async function recordDownload(token: string): Promise<{
 
   await supabase
     .from('transfers')
-    .update({ download_count: result.transfer.download_count + 1 })
+    .update({
+      download_count: result.transfer.download_count + 1,
+      last_downloaded_at: new Date().toISOString(),
+    })
     .eq('id', result.transfer.id)
 
   try {

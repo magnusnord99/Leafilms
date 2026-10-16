@@ -13,6 +13,7 @@ import type { DroppedItem } from '@/lib/delivery-upload-client'
 import { DeliveryDropzone } from '@/components/transfers/DeliveryDropzone'
 import type { SelectionMeta } from '@/components/transfers/DeliveryDropzone'
 import { TransferAppearanceEditor } from '@/components/transfers/TransferAppearanceEditor'
+import { DownloadStatusBadge } from '@/components/transfers/DownloadStatusBadge'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
@@ -750,6 +751,9 @@ export default function EmailPage() {
                                   Rediger utseende
                                 </button>
                               </div>
+                              <div style={{ marginTop: 3 }}>
+                                <DownloadStatusBadge downloadCount={t.download_count} lastDownloadedAt={t.last_downloaded_at} />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -813,6 +817,9 @@ export default function EmailPage() {
                                 >
                                   Rediger utseende
                                 </button>
+                              </div>
+                              <div style={{ marginTop: 3 }}>
+                                <DownloadStatusBadge downloadCount={t.download_count} lastDownloadedAt={t.last_downloaded_at} />
                               </div>
                             </div>
                           </div>

@@ -42,7 +42,6 @@ export function DeliveryDropzone({
   const [phase, setPhase] = useState<InternalPhase>('idle')
   const [selection, setSelection] = useState<SelectionMeta | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const dirInputRef = useRef<HTMLInputElement>(null)
 
   const processItems = useCallback(
     (items: DroppedItem[]) => {
@@ -103,7 +102,6 @@ export function DeliveryDropzone({
     setPhase('idle')
     setSelection(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
-    if (dirInputRef.current) dirInputRef.current.value = ''
     onClear?.()
   }
 
@@ -112,10 +110,8 @@ export function DeliveryDropzone({
   if (variant === 'compact') {
     return (
       <div>
-        {/* Skjulte fil-inputs */}
+        {/* Skjult fil-input */}
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFileChange} />
-        <input ref={dirInputRef} type="file" style={{ display: 'none' }} onChange={onFileChange}
-          {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
 
         {phase === 'selected' && selection ? (
           /* Valgt-tilstand: vis fil/zip-info */
@@ -175,42 +171,23 @@ export function DeliveryDropzone({
             }}>
               {phase === 'dragging' ? '↓ Slipp her' : phase === 'loading' ? 'Leser filer...' : '↑ Dra filer eller mappe hit, eller:'}
             </p>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button
-                type="button"
-                disabled={!isInteractive}
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  border: `1px solid ${C.border}`, borderRadius: 6,
-                  padding: '7px 8px', cursor: isInteractive ? 'pointer' : 'default',
-                  background: 'none', color: C.text3,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem',
-                  transition: 'border-color 0.15s, color 0.15s',
-                }}
-                onMouseEnter={e => { if (isInteractive) { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent; (e.currentTarget as HTMLButtonElement).style.color = C.text } }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border; (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-              >
-                📄 Velg filer
-              </button>
-              <button
-                type="button"
-                disabled={!isInteractive}
-                onClick={() => dirInputRef.current?.click()}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  border: `1px solid ${C.border}`, borderRadius: 6,
-                  padding: '7px 8px', cursor: isInteractive ? 'pointer' : 'default',
-                  background: 'none', color: C.text3,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem',
-                  transition: 'border-color 0.15s, color 0.15s',
-                }}
-                onMouseEnter={e => { if (isInteractive) { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent; (e.currentTarget as HTMLButtonElement).style.color = C.text } }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border; (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
-              >
-                📁 Velg mappe
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={!isInteractive}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: `1px solid ${C.border}`, borderRadius: 6,
+                padding: '7px 8px', cursor: isInteractive ? 'pointer' : 'default',
+                background: 'none', color: C.text3,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { if (isInteractive) { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent; (e.currentTarget as HTMLButtonElement).style.color = C.text } }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border; (e.currentTarget as HTMLButtonElement).style.color = C.text3 }}
+            >
+              📄 Velg filer
+            </button>
           </div>
         )}
       </div>
@@ -220,10 +197,8 @@ export function DeliveryDropzone({
   // ---- Large variant (TransferUploadClient) ----
   return (
     <div>
-      {/* Skjulte fil-inputs */}
+      {/* Skjult fil-input */}
       <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFileChange} />
-      <input ref={dirInputRef} type="file" style={{ display: 'none' }} onChange={onFileChange}
-        {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
 
       <div
         onDrop={onDrop}
@@ -280,41 +255,23 @@ export function DeliveryDropzone({
                 </span>
               </div>
             )}
-            {/* Klikk-knapper */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  border: `1px solid ${C.border}`, borderRadius: 8,
-                  padding: '9px 18px', cursor: 'pointer',
-                  background: C.surface2, color: C.text2,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500,
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
-              >
-                📄 Velg filer
-              </button>
-              <button
-                type="button"
-                onClick={() => dirInputRef.current?.click()}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  border: `1px solid ${C.border}`, borderRadius: 8,
-                  padding: '9px 18px', cursor: 'pointer',
-                  background: C.surface2, color: C.text2,
-                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500,
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
-              >
-                📁 Velg mappe
-              </button>
-            </div>
+            {/* Klikk-knapp */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, marginTop: 8,
+                border: `1px solid ${C.border}`, borderRadius: 8,
+                padding: '9px 18px', cursor: 'pointer',
+                background: C.surface2, color: C.text2,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 500,
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.accent }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
+            >
+              📄 Velg filer
+            </button>
           </>
         )}
 

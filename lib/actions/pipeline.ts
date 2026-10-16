@@ -1734,7 +1734,13 @@ Prosjekt: ${project.title}
 Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }
-Body: varm og stolt tone, maks 100 ord, fortell at arbeidet er ferdig og at de finner alt via lenken under (IKKE dikte opp selve lenken — den limes inn av avsender), signer med "Leafilms-teamet"`,
+Body skal være en komplett, sammenhengende e-post, maks 120 ord, med denne strukturen:
+1. Hilsen med kundens fornavn, f.eks. "Hei ${customerName.split(' ')[0]},"
+2. Takk kunden for samarbeidet/tilliten gjennom prosjektet (varm og stolt tone)
+3. Fortell at arbeidet nå er ferdig og klart
+4. Avslutt denne delen med en naturlig overgang til nedlastingen, f.eks. "Du finner alt klart til nedlasting under." — IKKE dikte opp selve lenken eller skriv "[lenke]"/placeholder, den limes inn automatisk rett under teksten din
+5. Signer med "Leafilms-teamet"
+Ikke skriv noe etter signaturen — nedlastingslenken(e) legges til automatisk helt til slutt.`,
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {

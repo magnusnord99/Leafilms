@@ -6,12 +6,13 @@ import Link from 'next/link'
 import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles, getEmailSuggestions } from '@/lib/actions/pipeline'
 import type { EmailSuggestion } from '@/lib/actions/pipeline'
 import { EmailAutocomplete } from '@/components/shared/EmailAutocomplete'
-import { createTransfer, getTransfersForProject } from '@/lib/actions/transfers'
+import { createTransfer, getTransfersForProject, getTransfers } from '@/lib/actions/transfers'
 import type { TransferWithLink } from '@/lib/actions/transfers'
 import { uploadDeliveryItems } from '@/lib/delivery-upload-client'
 import type { DroppedItem } from '@/lib/delivery-upload-client'
 import { DeliveryDropzone } from '@/components/transfers/DeliveryDropzone'
 import type { SelectionMeta } from '@/components/transfers/DeliveryDropzone'
+import { TransferAppearanceEditor } from '@/components/transfers/TransferAppearanceEditor'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { getOrCreateEmailDiscussionConversation } from '@/lib/actions/email-discussion-chat'
 import type { ConversationParticipant } from '@/lib/actions/messages'
@@ -107,6 +108,9 @@ export default function EmailPage() {
   const [sessionUploads, setSessionUploads] = useState<DeliveryUpload[]>([])
   const [pendingSelection, setPendingSelection] = useState<SelectionMeta | null>(null)
   const [existingTransfers, setExistingTransfers] = useState<TransferWithLink[]>([])
+  const [allTransfers, setAllTransfers] = useState<TransferWithLink[]>([])
+  const [otherTransfersQuery, setOtherTransfersQuery] = useState('')
+  const [editingTransferId, setEditingTransferId] = useState<string | null>(null)
   const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(new Set())
   const lastLinksBlockRef = useRef('')
   const [emailSuggestions, setEmailSuggestions] = useState<EmailSuggestion[]>([])
@@ -175,24 +179,57 @@ export default function EmailPage() {
       .catch(() => {})
   }, [projectId])
 
+  // Last inn alle aktive leveranser i systemet — lar brukeren søke opp og ta med
+  // leveranser fra andre prosjekter i e-posten (se "Andre leveranser" under)
+  useEffect(() => {
+    getTransfers().then(setAllTransfers).catch(() => {})
+  }, [])
+
   // Last inn kjente e-postadresser (kunder, team, tidligere mottakere) for autofullføring i Til/Kopi
   useEffect(() => {
     getEmailSuggestions().then(setEmailSuggestions).catch(() => {})
   }, [])
 
-  // Alle lenker brukeren kan velge å ta med i e-posten: filer lastet opp i denne økten + tidligere sendte leveranser
+  const siteOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  const transferLinkOption = (t: TransferWithLink): LinkOption => ({
+    id: t.id,
+    filename: t.filename,
+    url: `${siteOrigin}/d/${t.primary_link!.token}`,
+  })
+
+  // Andre aktive leveranser i systemet som brukeren har huket av — vist/søkt opp under
+  // "Andre leveranser". Holdes utenfor søketreffene (som endrer seg med otherTransfersQuery)
+  // slik at et valg ikke forsvinner fra meldingsteksten når søketeksten endres.
+  const selectedOtherTransfers = allTransfers.filter(t =>
+    t.primary_link && selectedLinkIds.has(t.id) && !existingTransfers.some(et => et.id === t.id)
+  )
+
+  // Alle lenker brukeren kan velge å ta med i e-posten: filer lastet opp i denne økten,
+  // tidligere sendte leveranser for dette prosjektet, og valgte "andre leveranser"
   const linkOptions: LinkOption[] = [
     ...sessionUploads
       .filter((u): u is DeliveryUpload & { status: 'done'; downloadUrl: string } => u.status === 'done')
       .map(u => ({ id: u.tempId, filename: u.filename, url: u.downloadUrl })),
-    ...existingTransfers
-      .filter(t => t.primary_link)
-      .map(t => ({
-        id: t.id,
-        filename: t.filename,
-        url: `${typeof window !== 'undefined' ? window.location.origin : ''}/d/${t.primary_link!.token}`,
-      })),
+    ...existingTransfers.filter(t => t.primary_link).map(transferLinkOption),
+    ...selectedOtherTransfers.map(transferLinkOption),
   ]
+
+  // Søketreff blant alle andre aktive leveranser (ikke allerede listet over for dette prosjektet)
+  const otherTransfersMatches = (() => {
+    const q = otherTransfersQuery.trim().toLowerCase()
+    if (q.length < 2) return []
+    const now = Date.now()
+    return allTransfers
+      .filter(t => t.status !== 'deleted' && (!t.expires_at || new Date(t.expires_at).getTime() > now))
+      .filter(t => !existingTransfers.some(et => et.id === t.id))
+      .filter(t =>
+        t.filename.toLowerCase().includes(q) ||
+        t.title?.toLowerCase().includes(q) ||
+        t.primary_link?.recipient_name?.toLowerCase().includes(q) ||
+        t.primary_link?.recipient_email?.toLowerCase().includes(q)
+      )
+      .slice(0, 8)
+  })()
 
   // Hold meldingsteksten i sync med hvilke lenker som er huket av, uten å røre resten av teksten
   useEffect(() => {
@@ -202,7 +239,7 @@ export default function EmailPage() {
     setBody(prev => mergeLinksIntoBody(prev, lastLinksBlockRef.current, block))
     lastLinksBlockRef.current = block
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLinkIds, sessionUploads, existingTransfers, emailType])
+  }, [selectedLinkIds, sessionUploads, existingTransfers, allTransfers, emailType])
 
   function toggleLink(id: string) {
     setSelectedLinkIds(prev => {
@@ -704,6 +741,14 @@ export default function EmailPage() {
                                     </a>
                                   </>
                                 )}
+                                <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTransferId(t.id)}
+                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                >
+                                  Rediger utseende
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -711,6 +756,84 @@ export default function EmailPage() {
                       ))}
                     </div>
                   </div>
+                )}
+
+                {/* Søk opp og ta med leveranser fra andre prosjekter */}
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.text3, marginBottom: 6 }}>
+                    Andre leveranser
+                  </p>
+                  <input
+                    type="text"
+                    value={otherTransfersQuery}
+                    onChange={e => setOtherTransfersQuery(e.target.value)}
+                    placeholder="Søk på filnavn, prosjekt eller mottaker..."
+                    style={{ ...inputStyle, fontSize: '0.72rem', padding: '7px 10px' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                  />
+                  {otherTransfersQuery.trim().length >= 2 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                      {otherTransfersMatches.length === 0 ? (
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, fontStyle: 'italic' }}>
+                          Ingen treff
+                        </p>
+                      ) : otherTransfersMatches.map(t => (
+                        <div key={t.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                            {t.primary_link && (
+                              <input
+                                type="checkbox"
+                                checked={selectedLinkIds.has(t.id)}
+                                onChange={() => toggleLink(t.id)}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                              />
+                            )}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {t.title || t.filename}
+                              </p>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                  {formatFileSize(t.filesize_bytes)}
+                                </span>
+                                {(t.primary_link?.recipient_name || t.primary_link?.recipient_email) && (
+                                  <>
+                                    <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3 }}>
+                                      {t.primary_link?.recipient_name || t.primary_link?.recipient_email}
+                                    </span>
+                                  </>
+                                )}
+                                <span style={{ color: C.border, fontSize: '0.5rem' }}>&#9679;</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTransferId(t.id)}
+                                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                >
+                                  Rediger utseende
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {editingTransferId && (
+                  <TransferAppearanceEditor
+                    transferId={editingTransferId}
+                    customerId={
+                      [...existingTransfers, ...allTransfers].find(t => t.id === editingTransferId)?.customer_id ?? null
+                    }
+                    backgroundImagePath={
+                      [...existingTransfers, ...allTransfers].find(t => t.id === editingTransferId)?.background_image_path ?? null
+                    }
+                    onClose={() => setEditingTransferId(null)}
+                    onBackgroundChanged={() => {}}
+                  />
                 )}
               </div>
             )}

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-server'
 import { getTransfers } from '@/lib/actions/transfers'
 import { formatFileSize } from '@/lib/utils/file-size'
 import { C } from '@/lib/admin-theme'
+import { TransferRowActions } from './TransferRowActions'
 
 function StatusBadge({ transfer }: { transfer: { status: string; expires_at: string | null; download_count: number; max_downloads: number | null } }) {
   const isExpired = transfer.expires_at && new Date(transfer.expires_at) < new Date()
@@ -211,9 +212,12 @@ export default async function TransfersPage() {
 
                       {/* Handlinger */}
                       <td style={{ padding: '13px 16px' }}>
-                        {downloadUrl && (
-                          <CopyLinkButton url={downloadUrl} />
-                        )}
+                        <TransferRowActions
+                          transferId={t.id}
+                          customerId={t.customer_id}
+                          backgroundImagePath={t.background_image_path}
+                          downloadUrl={downloadUrl}
+                        />
                       </td>
                     </tr>
                   )
@@ -225,25 +229,5 @@ export default async function TransfersPage() {
         )}
       </div>
     </div>
-  )
-}
-
-function CopyLinkButton({ url }: { url: string }) {
-  return (
-    <form action={async () => { 'use server' }}>
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
-          color: C.accent, textDecoration: 'none',
-          padding: '4px 10px', border: `1px solid rgba(124,92,252,0.3)`,
-          borderRadius: 6, background: C.accentBg, whiteSpace: 'nowrap',
-        }}
-      >
-        Åpne lenke
-      </a>
-    </form>
   )
 }

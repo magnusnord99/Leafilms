@@ -236,13 +236,11 @@ export default function EmailPage() {
           : u
       ))
 
-      // Sett inn nedlastingslenken i meldingsteksten — én samlet seksjon, unngå duplikat
+      // Sett inn nedlastingslenken i meldingsteksten som hyperlenke ("Klikk her") — én samlet seksjon, unngå duplikat
       setBody(prev => {
         if (prev.includes(newUrl)) return prev
-        const MARKER = '\n\nLast ned her:\n'
-        return prev.includes(MARKER)
-          ? prev + newUrl + '\n'
-          : prev + MARKER + newUrl + '\n'
+        const linkLine = `[Klikk her](${newUrl}) for å laste ned.`
+        return prev.trim().length > 0 ? `${prev}\n\n${linkLine}` : linkLine
       })
 
     } catch (err) {

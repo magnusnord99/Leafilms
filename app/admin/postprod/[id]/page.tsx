@@ -1653,7 +1653,7 @@ export default function PostProdDetailPage() {
                           onChange={e => handleExtraLinkChange(selectedTask.id, i, e.target.value)}
                           placeholder="https://..."
                           style={{
-                            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
+                            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                             color: C.text, background: C.surface,
                             border: `1px solid ${C.border}`, borderRadius: 7,
                             padding: '8px 12px', outline: 'none',

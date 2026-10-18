@@ -565,7 +565,7 @@ export default function ProjectQuotePage({ params }: Props) {
                     placeholder="Notat (f.eks. 2 filmer)"
                     onBlur={e => handleLabelChange(active.id, e.target.value)}
                     style={{
-                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem',
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                       padding: '5px 8px', borderRadius: 3, background: C.surface,
                       border: `1px solid ${C.border}`, color: C.text, width: 160,
                     }}

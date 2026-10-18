@@ -476,7 +476,7 @@ export default function RoomDetailPage() {
                                     onClick={e => e.stopPropagation()}
                                     onChange={e => setCatalogCount(item.id, Math.max(1, parseInt(e.target.value, 10) || 1))}
                                     style={{
-                                      width: 52, flexShrink: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem',
+                                      width: 52, flexShrink: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                                       color: C.text, background: C.surface2, border: `1px solid ${C.border}`,
                                       borderRadius: 5, padding: '4px 6px', outline: 'none',
                                     }}

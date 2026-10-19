@@ -113,6 +113,7 @@ export type Project = {
   quote_assignee_id?: string | null
   invoice_assignee_id?: string | null
   resale_assignee_id?: string | null
+  resale_visible_at?: string | null
   project_lead_id?: string | null
   pitch_review_enabled?: boolean
   pitch_reviewer_id?: string | null

@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  getProjectsForPipeline, updatePipelineStage, setProjectType,
+  getProjectsForPipeline, getHibernatingProjects, updatePipelineStage, setProjectType,
   getTasksForProjects, getAllProfiles, toggleTaskAssignee, updateTaskStatus,
   advanceFromKontraktUnsigned, assignQuoteAndMove, setQuoteAssignee, setInvoiceAssignee,
   assignResaleAndMove, setResaleAssignee, setProjectLead,
@@ -1291,6 +1291,68 @@ function LockedColumn({ label, count }: { label: string; count: number }) {
   )
 }
 
+// ─── HibernatingColumn ──────────────────────────────────────────────────────
+// Viser prosjekter som er flyttet til videresalg, men fortsatt skjult fra sin
+// egen kolonne i RESALE_HIDE_DAYS dager (se advanceToVideresalg/assignResaleAndMove
+// i lib/actions/pipeline.ts) — ellers forsvinner de fra tavlen uten spor. Ikke
+// droppable (man flytter ikke et prosjekt hit manuelt, det skjer automatisk).
+
+function daysUntil(iso: string): number {
+  const ms = new Date(iso).getTime() - Date.now()
+  return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+}
+
+function HibernatingColumn({ projects }: { projects: ProjectWithPipeline[] }) {
+  return (
+    <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', opacity: 0.75 }}>
+      <div style={{ paddingBottom: 8, marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.text3 + 'AA', display: 'inline-block', flexShrink: 0 }} />
+            I dvale
+          </span>
+          {projects.length > 0 && (
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, background: C.surface2, padding: '1px 7px', borderRadius: 10, fontWeight: 500 }}>
+              {projects.length}
+            </span>
+          )}
+        </div>
+        <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.64rem', color: C.text3, lineHeight: 1.4 }}>
+          Fullført, venter på å dukke opp under Videresalg
+        </p>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 80, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {projects.map(project => (
+          <Link key={project.id} href={`/admin/projects/${project.id}`} style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.text3}66`,
+              borderRadius: 6, padding: '10px 12px', cursor: 'pointer',
+            }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600, color: C.text }}>
+                {project.title}
+              </p>
+              {project.customer?.name && (
+                <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
+                  {project.customer.name}
+                </p>
+              )}
+              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                Synlig om {daysUntil(project.resale_visible_at!)} dag{daysUntil(project.resale_visible_at!) !== 1 ? 'er' : ''}
+              </p>
+            </div>
+          </Link>
+        ))}
+        {projects.length === 0 && (
+          <div style={{ padding: '12px 0', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, opacity: 0.4 }}>Tomt</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 export function ProjectsBoardView({ view, onViewChange }: {
@@ -1300,6 +1362,7 @@ export function ProjectsBoardView({ view, onViewChange }: {
   const { profile: authProfile } = useAuth()
   const role: StaffRole = isStaffRole(authProfile?.role) ? authProfile.role : 'admin'
   const [projects, setProjects] = useState<ProjectWithPipeline[]>([])
+  const [hibernatingProjects, setHibernatingProjects] = useState<ProjectWithPipeline[]>([])
   const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({})
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
@@ -1319,11 +1382,13 @@ export function ProjectsBoardView({ view, onViewChange }: {
 
   async function fetchAll() {
     setLoading(true)
-    const [data, allProfiles] = await Promise.all([
+    const [data, hibernating, allProfiles] = await Promise.all([
       getProjectsForPipeline(),
+      getHibernatingProjects(),
       getAllProfiles(),
     ])
     setProjects(data)
+    setHibernatingProjects(hibernating)
     setProfiles(allProfiles)
     if (data.length > 0) {
       const tasks = await getTasksForProjects(data.map(p => p.id))
@@ -1573,6 +1638,7 @@ export function ProjectsBoardView({ view, onViewChange }: {
                 />
               )
             })}
+            <HibernatingColumn projects={hibernatingProjects} />
           </div>
         </div>
 

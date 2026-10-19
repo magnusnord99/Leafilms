@@ -122,6 +122,47 @@ export async function advanceToVideresalg(projectId: string): Promise<void> {
 }
 
 /**
+ * Henter prosjekter som er i videresalg-dvale — flyttet til 'videresalg', men
+ * fortsatt skjult fra selve pipeline-tavlen fordi resale_visible_at ligger i
+ * fremtiden. Brukes til å vise en egen "I dvale"-kolonne i BoardView, slik at
+ * disse ikke bare forsvinner uten spor. Se getProjectsForPipeline for filteret
+ * disse ellers ville falt utenfor.
+ */
+export async function getHibernatingProjects(): Promise<ProjectWithPipeline[]> {
+  try {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customers (
+          id,
+          name,
+          company
+        )
+      `)
+      .eq('pipeline_stage', 'videresalg')
+      .gt('resale_visible_at', new Date().toISOString())
+      .order('resale_visible_at', { ascending: true })
+
+    if (error) {
+      console.error('getHibernatingProjects error:', error)
+      return []
+    }
+
+    return (data ?? []).map((row: ProjectRow) => ({
+      ...row,
+      customer: row.customers ?? null,
+      customers: undefined,
+    })) as ProjectWithPipeline[]
+  } catch (err) {
+    console.error('getHibernatingProjects unexpected error:', err)
+    return []
+  }
+}
+
+/**
  * Henter tasks for et prosjekt. Filtrerer på stage hvis oppgitt.
  * Inkluderer assignee-info fra profiles-tabellen.
  */
@@ -2236,11 +2277,17 @@ export async function assignResaleAndMove(
       return { ok: false, error: 'Prosjekt ikke funnet' }
     }
 
+    // Samme dvale-periode som advanceToVideresalg — uten dette hoppet prosjekter
+    // flyttet via Kanban-tavlens "tildel videresalg-ansvarlig"-modal rett forbi
+    // RESALE_HIDE_DAYS og ble synlige under Videresalg umiddelbart.
+    const resaleVisibleAt = new Date(Date.now() + RESALE_HIDE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
     const { error } = await supabase
       .from('projects')
       .update({
         resale_assignee_id: assigneeId,
         pipeline_stage: 'videresalg',
+        resale_visible_at: resaleVisibleAt,
         updated_at: new Date().toISOString(),
       })
       .eq('id', projectId)

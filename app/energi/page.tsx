@@ -90,38 +90,40 @@ export default function EnergiPage() {
         </a>
       </section>
 
-      {/* Løpende tekst: hvorfor oss, hva vi tilbyr, resultater — i én bevegelse */}
+      {/* Om oss */}
       <section className="border-t border-[#EDEAE2] px-6 py-20 md:px-12 md:py-28">
-        <div className="max-w-2xl text-lg leading-relaxed text-[#3A372F] md:text-xl">
-          <p>
-            Vi kjenner industrien. Teamet har vært på anlegg, i produksjonshaller og på
-            byggeplasser i hele landet, og vet hva som kreves av HMS-kurs og sikkerhetsrutiner før
-            kamera i det hele tatt kommer fram. Et kraftverk eller en batterifabrikk er ikke
-            selvforklarende — jobben vår er å gjøre prosessene forståelige og visuelt
-            interessante, for kunder, investorer og fremtidige ansatte. Det gir resultater:
-            kampanjer med film har gitt kundene våre over 140 % mer trafikk til landingssiden, og
-            fire ganger høyere engasjement enn et vanlig tekstinnlegg.
-          </p>
-        </div>
+        <h2 className="text-3xl font-bold sm:text-4xl">Om oss</h2>
 
-        <div className="my-16 md:my-24">
-          <p className="text-[5rem] font-bold leading-none text-[#B8641F] sm:text-[7rem] md:text-[9rem]">
-            18
-          </p>
-          <p className="mt-2 max-w-xs text-lg text-[#6B675E]">
-            ferdige klipp hentet ut av én produksjonsdag for Corvus Energy.
-          </p>
-        </div>
+        <div className="mt-8 grid gap-10 md:grid-cols-[1.3fr_1fr] md:gap-16">
+          <div className="space-y-6 text-lg leading-relaxed text-[#3A372F] md:text-xl">
+            <p>
+              Vi kjenner industrien. Teamet har vært på anlegg, i produksjonshaller og på
+              byggeplasser i hele landet, og vet hva som kreves av HMS-kurs og sikkerhetsrutiner
+              før kamera i det hele tatt kommer fram. Et kraftverk eller en batterifabrikk er ikke
+              selvforklarende — jobben vår er å gjøre prosessene forståelige og visuelt
+              interessante, for kunder, investorer og fremtidige ansatte. Det gir resultater:
+              kampanjer med film har gitt kundene våre over 140 % mer trafikk til landingssiden,
+              og fire ganger høyere engasjement enn et vanlig tekstinnlegg.
+            </p>
+            <p>
+              Vi leverer både video — merkefilm, reportasjer fra anlegg og prosjekter, dronefilm,
+              og korte kutt til sosiale medier og internkommunikasjon — og foto:
+              anleggsdokumentasjon, produktbilder, portretter til pressemateriell, og bilder til
+              årsrapport og nettside. Fra opptak til ferdig klipp holder vi tidsfristene dere
+              faktisk trenger. Én tidligere kunde brukte filmen direkte i et vinnende anbud. I dag
+              jobber vi også med Statkraft, Netflix, Breitling, Asics og Vitamin Well.
+            </p>
+          </div>
 
-        <div className="max-w-2xl text-lg leading-relaxed text-[#3A372F] md:text-xl">
-          <p>
-            Vi leverer både video — merkefilm, reportasjer fra anlegg og prosjekter, dronefilm, og
-            korte kutt til sosiale medier og internkommunikasjon — og foto:
-            anleggsdokumentasjon, produktbilder, portretter til pressemateriell, og bilder til
-            årsrapport og nettside. Fra opptak til ferdig klipp holder vi tidsfristene dere
-            faktisk trenger. Én tidligere kunde brukte filmen direkte i et vinnende anbud. I dag
-            jobber vi også med Statkraft, Netflix, Breitling, Asics og Vitamin Well.
-          </p>
+          <div className="relative aspect-square w-full overflow-hidden bg-[#EDEAE2] md:aspect-auto">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/images/511810jjo23.jpg"
+              alt="Leafilms-fotograf på oppdrag, med hjelm og vernebriller"
+              loading="lazy"
+              className="h-full w-full object-cover object-left"
+            />
+          </div>
         </div>
       </section>
 

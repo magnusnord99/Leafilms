@@ -199,7 +199,7 @@ export function DeliverablesButton({
                           value={item.name ?? ''}
                           onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, name: e.target.value } : it))}
                           placeholder="Navn"
-                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
+                          style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 600, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
                         />
                         {item.type !== 'video' && (
                           <input
@@ -208,7 +208,7 @@ export function DeliverablesButton({
                             value={item.quantity ?? ''}
                             onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: parseInt(e.target.value, 10) || undefined } : it))}
                             placeholder="Ant."
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
                           />
                         )}
                         {item.type !== 'video' && (
@@ -216,7 +216,7 @@ export function DeliverablesButton({
                             value={item.format ?? ''}
                             onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, format: e.target.value } : it))}
                             placeholder="Format"
-                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
+                            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none' }}
                           />
                         )}
                       </div>
@@ -253,7 +253,7 @@ export function DeliverablesButton({
                             value={item.durationValue ?? ''}
                             onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, durationValue: e.target.value === '' ? undefined : parseInt(e.target.value, 10) } : it))}
                             placeholder="0"
-                            style={{ width: 56, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
+                            style={{ width: 56, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text, outline: 'none', textAlign: 'center' }}
                           />
                           <div style={{ display: 'flex', gap: 4 }}>
                             {(['sek', 'min'] as const).map(u => {
@@ -283,7 +283,7 @@ export function DeliverablesButton({
                         onChange={e => setDraft(prev => prev.map((it, idx) => idx === i ? { ...it, description: e.target.value } : it))}
                         placeholder="Beskrivelse (valgfri)"
                         rows={2}
-                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', width: '100%', resize: 'vertical', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 8px', color: C.text3, outline: 'none', boxSizing: 'border-box' }}
                       />
                     </div>
                   ))}

@@ -358,7 +358,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
     width: '100%', boxSizing: 'border-box' as const,
     background: C.surface2, border: `1px solid ${C.border}`,
     borderRadius: 8, padding: '10px 12px',
-    fontFamily: 'var(--font-dm-sans)', fontSize: '0.84rem', color: C.text,
+    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
     outline: 'none', transition: 'border-color 0.15s',
   }
 
@@ -697,7 +697,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
                 type="checkbox"
                 checked={useLeafilmsAddress}
                 onChange={e => setUseLeafilmsAddress(e.target.checked)}
-                style={{ accentColor: C.accent, width: 14, height: 14, cursor: 'pointer' }}
+                style={{ accentColor: C.accent, width: 22, height: 22, cursor: 'pointer' }}
               />
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                 Send fra post@leafilms.no i stedet for min egen adresse

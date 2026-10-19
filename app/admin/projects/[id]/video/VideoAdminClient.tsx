@@ -507,7 +507,7 @@ export default function VideoAdminClient({
     padding: '9px 12px', borderRadius: 7,
     border: `1px solid ${C.border}`,
     background: C.surface2, color: C.text,
-    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
     outline: 'none',
   }
 
@@ -619,6 +619,7 @@ export default function VideoAdminClient({
                 type="checkbox"
                 checked={addToGallery}
                 onChange={e => setAddToGallery(e.target.checked)}
+                style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
               />
               Vis i kundens seleksjonsgalleri (sammen med bildealbumene)
             </label>

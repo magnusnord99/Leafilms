@@ -167,7 +167,7 @@ export function CrewSection({
             placeholder="Rolle (f.eks. Kameramann, Editor...)"
             onKeyDown={e => e.key === 'Enter' && addCrew()}
             style={{
-              fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+              fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
               background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5,
               padding: '6px 8px', outline: 'none', transition: 'border-color 0.12s',
             }}
@@ -245,7 +245,7 @@ export function CrewSection({
                     <select
                       value={editSelectedId}
                       onChange={e => setEditSelectedId(e.target.value)}
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
                     >
                       {profiles.map(p => (
                         <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
@@ -256,7 +256,7 @@ export function CrewSection({
                       onChange={e => setEditRole(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && saveEdit()}
                       placeholder="Rolle"
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 8px', outline: 'none' }}
                     />
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button

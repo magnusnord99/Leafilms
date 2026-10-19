@@ -1714,7 +1714,7 @@ export default function PostProdDetailPage() {
                           onChange={e => handleExtraLinkChange(selectedTask.id, i, e.target.value)}
                           placeholder="https://..."
                           style={{
-                            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
+                            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                             color: C.text, background: C.surface,
                             border: `1px solid ${C.border}`, borderRadius: 7,
                             padding: '8px 12px', outline: 'none',
@@ -1893,7 +1893,7 @@ export default function PostProdDetailPage() {
                   onChange={e => handleDueDateChange(selectedTask.id, e.target.value)}
                   style={{
                     width: 138, boxSizing: 'border-box',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: '8px 12px', outline: 'none',
@@ -1923,7 +1923,7 @@ export default function PostProdDetailPage() {
                   disabled={readOnly}
                   style={{
                     width: '100%', boxSizing: 'border-box',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: '8px 12px', outline: 'none',
@@ -1963,7 +1963,7 @@ export default function PostProdDetailPage() {
                       rows={3}
                       style={{
                         width: '100%', boxSizing: 'border-box',
-                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                         color: C.text, background: 'rgba(240,165,0,0.05)',
                         border: `1px solid rgba(240,165,0,0.3)`, borderRadius: 8,
                         padding: '12px 14px', resize: 'vertical',
@@ -1995,7 +1995,7 @@ export default function PostProdDetailPage() {
                   rows={5}
                   style={{
                     width: '100%', boxSizing: 'border-box',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                     color: C.text, background: C.surface,
                     border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: '12px 14px', resize: 'vertical',
@@ -2062,7 +2062,7 @@ export default function PostProdDetailPage() {
                         rows={4}
                         style={{
                           width: '100%', boxSizing: 'border-box',
-                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
                           color: C.text, background: C.surface2,
                           border: `1px solid ${rejectionNoteError ? C.danger : C.border}`,
                           borderRadius: 8, padding: '10px 12px',

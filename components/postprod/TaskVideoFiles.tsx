@@ -429,7 +429,7 @@ function TaskFileRow({
                     type="checkbox"
                     checked={c.resolved}
                     onChange={() => toggleCustomerCommentResolved(c)}
-                    style={{ marginTop: 3, flexShrink: 0, cursor: 'pointer' }}
+                    style={{ marginTop: 3, width: 22, height: 22, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
                   />
                   <div
                     style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}

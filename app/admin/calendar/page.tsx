@@ -655,7 +655,7 @@ function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
             )}
             {colleagues.map(c => (
               <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 4, background: participantIds.includes(c.id) ? C.accentBg : 'transparent' }}>
-                <input type="checkbox" checked={participantIds.includes(c.id)} onChange={() => toggleParticipant(c.id)} />
+                <input type="checkbox" checked={participantIds.includes(c.id)} onChange={() => toggleParticipant(c.id)} style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }} />
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>{c.name ?? c.email}</span>
               </label>
             ))}
@@ -841,7 +841,7 @@ function UnavailabilityModal({ initialDate, onClose, onCreated }: {
         </Field>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-          <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} />
+          <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }} />
           <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>Hele dagen (evt. flere dager i strekk)</span>
         </label>
 

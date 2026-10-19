@@ -605,7 +605,7 @@ function AddonsSection({
                       checked={item.discountable ?? true}
                       onChange={e => update(item.id, 'discountable', e.target.checked)}
                       title="Skal tillegget rabatteres sammen med kategorien(e)? (Utgifter rabatteres uansett aldri)"
-                      style={{ cursor: 'pointer' }}
+                      style={{ width: 22, height: 22, cursor: 'pointer' }}
                     />
                     Rabatterbar
                   </label>

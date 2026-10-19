@@ -205,7 +205,7 @@ export default function PreprodChat({
           top: 48,
           right: 0,
           zIndex: 95,
-          height: 'calc(100vh - 48px)',
+          height: 'calc(100dvh - 48px)',
           display: 'flex',
           flexDirection: 'column',
           background: C.bg,

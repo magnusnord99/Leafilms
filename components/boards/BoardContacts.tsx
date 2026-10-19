@@ -166,7 +166,7 @@ function CustomerContactPicker({
 
   const inputStyle: React.CSSProperties = {
     background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4,
-    padding: '4px 6px', color: C.text, fontSize: '0.7rem', outline: 'none',
+    padding: '4px 6px', color: C.text, fontSize: '1rem', outline: 'none',
   }
 
   return (

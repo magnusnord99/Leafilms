@@ -76,7 +76,7 @@ function EditableTextField({
           placeholder={placeholder}
           style={{
             width: '100%', boxSizing: 'border-box', resize: 'vertical',
-            fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+            fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
             background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
             padding: '8px 10px', outline: 'none', lineHeight: 1.55,
           }}
@@ -136,7 +136,7 @@ function EditableShootDates({ projectId, initialStart, initialEnd }: {
   }
 
   const dateInputStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text,
+    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
     background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
     padding: '6px 8px', outline: 'none',
   }

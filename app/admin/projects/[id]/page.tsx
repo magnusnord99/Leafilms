@@ -1688,12 +1688,12 @@ export default function ProjectHubPage() {
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Fra</label>
                     <input autoFocus type="date" value={shootStart} onChange={e => setShootStart(e.target.value)}
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }} />
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }} />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Til</label>
                     <input type="date" value={shootEnd} onChange={e => setShootEnd(e.target.value)}
-                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', outline: 'none' }}
                       onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
                       onBlur={e => { e.currentTarget.style.borderColor = C.border }} />
                   </div>
@@ -1773,7 +1773,7 @@ export default function ProjectHubPage() {
                   rows={6}
                   style={{
                     width: '100%', boxSizing: 'border-box', resize: 'vertical',
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text,
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                     background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
                     padding: '10px 12px', outline: 'none', lineHeight: 1.6,
                   }}
@@ -1924,6 +1924,7 @@ export default function ProjectHubPage() {
                         type="checkbox"
                         checked={reviewSettings[row.enabledKey]}
                         onChange={e => handleReviewSettingChange({ [row.enabledKey]: e.target.checked })}
+                        style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
                       />
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>{row.label}</span>
                     </label>
@@ -2474,7 +2475,7 @@ export default function ProjectHubPage() {
                 checked={(project.pipeline_data as { request_invoice_info?: boolean } | null)?.request_invoice_info !== false}
                 onChange={handleToggleRequestInvoiceInfo}
                 disabled={togglingRequestInvoiceInfo}
-                style={{ marginTop: 2, accentColor: C.accent, width: 16, height: 16, flexShrink: 0, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer' }}
+                style={{ marginTop: 2, accentColor: C.accent, width: 22, height: 22, flexShrink: 0, cursor: togglingRequestInvoiceInfo ? 'default' : 'pointer' }}
               />
               <div>
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, margin: 0 }}>
@@ -2527,7 +2528,7 @@ export default function ProjectHubPage() {
                         type="checkbox"
                         checked={invoiceForm.invoice_info_skipped}
                         onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
-                        style={{ accentColor: C.accent, width: 15, height: 15 }}
+                        style={{ accentColor: C.accent, width: 22, height: 22 }}
                       />
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
                         Marker som «ikke klart» (må følges opp manuelt før fakturering)
@@ -2659,7 +2660,7 @@ export default function ProjectHubPage() {
                       type="checkbox"
                       checked={saveSignatureToProfile}
                       onChange={e => setSaveSignatureToProfile(e.target.checked)}
-                      style={{ accentColor: C.accent }}
+                      style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }}
                     />
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>Lagre til neste gang</span>
                   </label>
@@ -2753,7 +2754,7 @@ export default function ProjectHubPage() {
                 onChange={e => setLostNotes(e.target.value)}
                 placeholder="Hva vet vi om hvorfor dette ikke gikk gjennom?"
                 rows={3}
-                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', outline: 'none', resize: 'vertical', marginBottom: 20 }}
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', outline: 'none', resize: 'vertical', marginBottom: 20 }}
                 onFocus={e => { e.currentTarget.style.borderColor = C.danger }}
                 onBlur={e => { e.currentTarget.style.borderColor = C.border }}
               />

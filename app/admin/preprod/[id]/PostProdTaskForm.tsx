@@ -115,7 +115,7 @@ export function PostProdTaskForm({
       </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, cursor: 'pointer' }}>
-        <input type="checkbox" checked={isReusable} onChange={e => setIsReusable(e.target.checked)} />
+        <input type="checkbox" checked={isReusable} onChange={e => setIsReusable(e.target.checked)} style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }} />
         Gjenbrukbar oppgave (lagres i biblioteket)
       </label>
 

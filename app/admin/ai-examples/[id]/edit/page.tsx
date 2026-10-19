@@ -30,7 +30,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 3,
   color: C.text,
   fontFamily: 'var(--font-dm-sans)',
-  fontSize: '0.75rem',
+  fontSize: '1rem',
   letterSpacing: '0.03em',
   outline: 'none',
 }

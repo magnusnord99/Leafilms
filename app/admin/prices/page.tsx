@@ -47,7 +47,7 @@ const fieldStyle = {
   border: `1px solid ${C.border}`,
   borderRadius: 3,
   padding: '8px 12px',
-  fontSize: '0.8rem',
+  fontSize: '1rem',
   color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   width: '100%',

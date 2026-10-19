@@ -19,7 +19,7 @@ function parseColdEmail(raw: string): { subject: string; body: string } {
 
 const fieldStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
+  fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
   color: C.text, background: C.surface2,
   border: `1px solid ${C.border}`, borderRadius: 7,
   padding: '9px 12px', outline: 'none',
@@ -205,7 +205,7 @@ export function ColdEmailCard({
                 <textarea
                   value={body}
                   onChange={e => setBody(e.target.value)}
-                  style={{ ...fieldStyle, resize: 'none', lineHeight: 1.7, fontSize: '0.85rem', flex: 1, minHeight: 320 }}
+                  style={{ ...fieldStyle, resize: 'none', lineHeight: 1.7, flex: 1, minHeight: 320 }}
                 />
               </div>
               {error && (

@@ -47,7 +47,7 @@ const SOURCE_SUGGESTIONS = ['Markedsanalyse', 'Instagram', 'LinkedIn', 'Nettside
 
 const editInputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem',
+  fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
   color: C.text, background: C.surface2,
   border: `1px solid ${C.border}`, borderRadius: 7,
   padding: '9px 12px', outline: 'none',

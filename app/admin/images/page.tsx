@@ -338,8 +338,8 @@ export default function ImagesPage() {
                         position: 'absolute',
                         top: 6,
                         left: 6,
-                        width: 20,
-                        height: 20,
+                        width: 24,
+                        height: 24,
                         borderRadius: 3,
                         background: isSelected ? C.accent : 'rgba(24,25,32,0.7)',
                         border: `1px solid ${isSelected ? C.accent : 'rgba(255,255,255,0.4)'}`,
@@ -353,7 +353,7 @@ export default function ImagesPage() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelected(image.id)}
-                        style={{ position: 'absolute', opacity: 0, width: 20, height: 20, cursor: 'pointer' }}
+                        style={{ position: 'absolute', opacity: 0, width: 24, height: 24, cursor: 'pointer' }}
                       />
                       {isSelected && (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3}>

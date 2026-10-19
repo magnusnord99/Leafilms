@@ -183,7 +183,7 @@ export default function ProfilePage() {
               value={name}
               onChange={e => setName(e.target.value)}
               style={{
-                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: C.text,
+                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                 background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px',
               }}
             />
@@ -217,7 +217,7 @@ export default function ProfilePage() {
               onChange={e => setPhone(e.target.value)}
               placeholder="+47 900 00 000"
               style={{
-                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: C.text,
+                flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
                 background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px',
               }}
             />

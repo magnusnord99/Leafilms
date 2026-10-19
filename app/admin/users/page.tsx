@@ -86,7 +86,7 @@ export default function UsersPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+    fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
     width: '100%', padding: '10px 14px', boxSizing: 'border-box',
     background: C.surface2, border: `1px solid ${C.border}`,
     borderRadius: 8, color: C.text, outline: 'none',

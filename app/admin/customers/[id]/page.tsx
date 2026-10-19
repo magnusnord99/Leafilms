@@ -1016,7 +1016,7 @@ export default function CustomerDetailPage() {
                     <input
                       value={invoiceForm[key]}
                       onChange={e => setInvoiceForm(f => ({ ...f, [key]: e.target.value }))}
-                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
+                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', outline: 'none' }}
                     />
                   </div>
                 ))}
@@ -1026,7 +1026,7 @@ export default function CustomerDetailPage() {
                   type="checkbox"
                   checked={invoiceForm.invoice_info_skipped}
                   onChange={e => setInvoiceForm(f => ({ ...f, invoice_info_skipped: e.target.checked }))}
-                  style={{ accentColor: C.accent, width: 15, height: 15 }}
+                  style={{ accentColor: C.accent, width: 22, height: 22 }}
                 />
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                   Marker som «ikke klart» (må følges opp manuelt før fakturering)

@@ -240,7 +240,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   )
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 48px)', background: C.bg }}>
+    <div style={{ display: 'flex', height: 'calc(100dvh - 48px)', background: C.bg }}>
       {/* Samtaleliste — full bredde på mobil (skjules når en samtale er åpnet), fast 280px på desktop */}
       <div
         className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-[280px] flex-shrink-0`}

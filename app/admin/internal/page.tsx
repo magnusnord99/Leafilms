@@ -62,7 +62,7 @@ function DueDateBadge({ task, onChange }: { task: AdminTask; onChange: (dueDate:
         onBlur={e => { setEditing(false); onChange(e.target.value || null) }}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
         style={{
-          fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text,
+          fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', color: C.text,
           background: C.surface, border: `1px solid ${C.border}`, borderRadius: 5,
           padding: '2px 4px', colorScheme: 'dark', flexShrink: 0,
         }}
@@ -412,7 +412,7 @@ function AddTaskInput({ value, onChange, dueDate, onDueDateChange, onSubmit, dis
         onChange={e => onDueDateChange(e.target.value)}
         title="Frist"
         style={{
-          fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+          fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
           color: C.text, background: 'transparent', border: `1px solid ${C.border}`,
           borderRadius: 6, padding: '7px 10px', outline: 'none', colorScheme: 'dark',
         }}

@@ -81,7 +81,6 @@ export function ColdEmailCard({
           to: to.trim(),
           subject: subject.trim() || 'Henvendelse fra Leafilms',
           body,
-          useLeafilmsAddress: true,
         }),
       })
       if (!res.ok) {

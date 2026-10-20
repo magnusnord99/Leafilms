@@ -59,12 +59,21 @@ const TASK_LINK_FIELDS: Record<string, { key: string; label: string }[]> = {
 // prosjektsiden i stedet, se rendering under) er bevisst IKKE med her.
 const VIDEO_FILE_STEPS = ['Grovklipp', 'Farger', 'Lyd', 'Klipp']
 
-function getExtraLinks(data: Record<string, string>): string[] {
+type ExtraLink = { url: string; name: string }
+
+// Eldre lagrede lenker er en ren string[] (uten navn) — konverter dem til
+// ExtraLink-formen på lesing, slik at eksisterende prosjekter ikke mister data.
+function getExtraLinks(data: Record<string, string>): ExtraLink[] {
   try {
     const raw = data['extra_links']
     if (!raw) return []
     const arr = JSON.parse(raw)
-    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []
+    if (!Array.isArray(arr)) return []
+    return arr.map((x): ExtraLink | null => {
+      if (typeof x === 'string') return { url: x, name: '' }
+      if (x && typeof x === 'object' && typeof x.url === 'string') return { url: x.url, name: typeof x.name === 'string' ? x.name : '' }
+      return null
+    }).filter((x): x is ExtraLink => x !== null)
   } catch {
     return []
   }
@@ -538,16 +547,16 @@ export default function PostProdDetailPage() {
     commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), customer_feedback: value })
   }
 
-  function handleExtraLinkChange(taskId: string, index: number, value: string) {
+  function handleExtraLinkChange(taskId: string, index: number, field: 'url' | 'name', value: string) {
     if (readOnly) return
     const links = getExtraLinks(pendingTaskDataRef.current[taskId] ?? {})
-    links[index] = value
+    links[index] = { ...links[index], [field]: value }
     commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), extra_links: JSON.stringify(links) })
   }
 
   function handleAddExtraLink(taskId: string) {
     if (readOnly) return
-    const links = [...getExtraLinks(pendingTaskDataRef.current[taskId] ?? {}), '']
+    const links = [...getExtraLinks(pendingTaskDataRef.current[taskId] ?? {}), { url: '', name: '' }]
     commitTaskData(taskId, { ...(pendingTaskDataRef.current[taskId] ?? {}), extra_links: JSON.stringify(links) })
   }
 
@@ -1671,9 +1680,9 @@ export default function PostProdDetailPage() {
                         <a href={l.value} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.accent }}>{l.value}</a>
                       </div>
                     ))}
-                    {archivedExtra.map((val, i) => (
+                    {archivedExtra.map((link, i) => (
                       <div key={i} style={{ marginBottom: 6 }}>
-                        <a href={val} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.accent }}>{val}</a>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.76rem', color: C.accent }}>{link.name || link.url}</a>
                       </div>
                     ))}
                   </div>
@@ -1706,52 +1715,73 @@ export default function PostProdDetailPage() {
                         + Legg til lenke
                       </button>
                     </div>
-                    {extraLinks.map((val, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                        <input
-                          type="text"
-                          value={val}
-                          onChange={e => handleExtraLinkChange(selectedTask.id, i, e.target.value)}
-                          placeholder="https://..."
-                          style={{
-                            flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
-                            color: C.text, background: C.surface,
-                            border: `1px solid ${C.border}`, borderRadius: 7,
-                            padding: '8px 12px', outline: 'none',
-                            transition: 'border-color 0.15s',
-                          }}
-                          onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                          onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-                        />
-                        {val && (
-                          <a
-                            href={val}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                    {extraLinks.map((link, i) => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={link.name}
+                            onChange={e => handleExtraLinkChange(selectedTask.id, i, 'name', e.target.value)}
+                            placeholder="Navn, f.eks. «Grading-referanse»"
+                            disabled={readOnly}
                             style={{
-                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
-                              color: C.accent, textDecoration: 'none',
-                              padding: '7px 11px', borderRadius: 6, flexShrink: 0,
-                              background: C.accentBg, border: `1px solid rgba(124,92,252,0.25)`,
-                              whiteSpace: 'nowrap',
+                              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem',
+                              color: C.text, background: C.surface2,
+                              border: `1px solid ${C.border}`, borderRadius: 6,
+                              padding: '6px 10px', outline: 'none',
+                              transition: 'border-color 0.15s',
+                            }}
+                            onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                            onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                          />
+                          <button
+                            onClick={() => handleRemoveExtraLink(selectedTask.id, i)}
+                            disabled={readOnly}
+                            style={{
+                              width: 26, height: 26, flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '1rem', color: C.text3, background: 'transparent',
+                              border: `1px solid ${C.border}`, borderRadius: 6,
+                              cursor: readOnly ? 'default' : 'pointer',
                             }}
                           >
-                            Åpne ↗
-                          </a>
-                        )}
-                        <button
-                          onClick={() => handleRemoveExtraLink(selectedTask.id, i)}
-                          disabled={readOnly}
-                          style={{
-                            width: 30, height: 30, flexShrink: 0,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1rem', color: C.text3, background: 'transparent',
-                            border: `1px solid ${C.border}`, borderRadius: 6,
-                            cursor: readOnly ? 'default' : 'pointer',
-                          }}
-                        >
-                          ×
-                        </button>
+                            ×
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={link.url}
+                            onChange={e => handleExtraLinkChange(selectedTask.id, i, 'url', e.target.value)}
+                            placeholder="https://..."
+                            disabled={readOnly}
+                            style={{
+                              flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
+                              color: C.text, background: C.surface,
+                              border: `1px solid ${C.border}`, borderRadius: 7,
+                              padding: '8px 12px', outline: 'none',
+                              transition: 'border-color 0.15s',
+                            }}
+                            onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
+                            onBlur={e => { e.currentTarget.style.borderColor = C.border }}
+                          />
+                          {link.url && (
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500,
+                                color: C.accent, textDecoration: 'none',
+                                padding: '7px 11px', borderRadius: 6, flexShrink: 0,
+                                background: C.accentBg, border: `1px solid rgba(124,92,252,0.25)`,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Åpne ↗
+                            </a>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

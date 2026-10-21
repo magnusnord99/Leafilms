@@ -32,7 +32,8 @@ export default function EnergiPage() {
         </p>
       </section>
 
-      {/* Corvus Energy — hovedcase, i full bredde */}
+      {/* Corvus Energy — samme størrelse som Statkraft-caset under (feedback:
+          Corvus i full bredde vs. Statkraft forskjøvet/mindre så ubalansert ut) */}
       <section className="px-6 pt-12 md:px-12 md:pt-16">
         <a
           href="https://vimeo.com/1099950470"
@@ -40,7 +41,7 @@ export default function EnergiPage() {
           rel="noopener noreferrer"
           className="group block"
         >
-          <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#EDEAE2] md:aspect-[21/9]">
+          <div className="relative aspect-video w-full max-w-2xl overflow-hidden bg-[#EDEAE2]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://fmwcrgfxmlgfnsinnuyy.supabase.co/storage/v1/object/public/assets/case-thumbnails/9canbsqkrr7.jpg"
@@ -50,9 +51,9 @@ export default function EnergiPage() {
               className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
             />
           </div>
-          <div className="mt-6 flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between">
+          <div className="mt-5 max-w-2xl">
             <h2 className="text-3xl font-bold sm:text-4xl">Corvus Energy</h2>
-            <p className="text-lg text-[#6B675E] md:max-w-md md:text-right">
+            <p className="mt-2 text-lg text-[#6B675E]">
               Se hvordan Corvus Energy er med på å forme en bærekraftig fremtid.
             </p>
           </div>

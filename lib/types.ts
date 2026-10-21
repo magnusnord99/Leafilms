@@ -605,6 +605,35 @@ export type CaseStudy = {
   updated_at: string
 }
 
+export type IndustryLandingPage = {
+  id: string
+  slug: string
+  published: boolean
+  meta_title: string
+  meta_description: string
+  hero_type: 'video' | 'image'
+  hero_video_path: string | null
+  hero_poster_path: string | null
+  hero_headline: string
+  lede_text: string
+  about_heading: string
+  about_content: string
+  about_image_path: string | null
+  cta_headline: string
+  cta_subtext: string
+  cta_email: string
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export type IndustryLandingPageCase = {
+  id: string
+  page_id: string
+  case_study_id: string
+  order_index: number
+}
+
 export type Image = {
   id: string
   filename: string

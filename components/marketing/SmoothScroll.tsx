@@ -3,6 +3,8 @@
 import { useEffect } from 'react'
 import Lenis from 'lenis'
 
+// Flyttet uendret fra app/energi/SmoothScroll.tsx — delt av alle
+// bransje-landingssider nå.
 export function SmoothScroll() {
   useEffect(() => {
     const lenis = new Lenis()

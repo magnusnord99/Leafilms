@@ -145,11 +145,11 @@ body.admin-page {
   background: #181920;
 }
 
-/* Energi-outreach-siden — egen identitet, ingen grain eller cinematic-bakgrunn */
-body.energi-page {
+/* Bransje-landingssider (/energi og flere) — egen identitet, ingen grain eller cinematic-bakgrunn */
+body.marketing-page {
   background: #ffffff;
 }
-body.energi-page::after {
+body.marketing-page::after {
   display: none;
 }
 

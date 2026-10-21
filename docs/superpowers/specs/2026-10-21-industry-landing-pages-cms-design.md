@@ -16,7 +16,7 @@ Magnus ønsker flere slike bransjesider (`/bryllup`, `/sport`, osv.) med **samme
 ## Mål
 
 - Admin kan opprette en ny bransjeside (slug, f.eks. `bryllup`) fra en egen admin-side, og den er umiddelbart live på `/bryllup` — ingen kodeendring eller deploy.
-- Admin kan redigere alt innhold på en eksisterende side: hero (video **eller** bilde, headline), ingress, en ordnet liste med case-studier (valgt fra det eksisterende case-biblioteket), "Om oss"-tekst + bilde, avsluttende CTA-tekst, og SEO-metadata (tittel/beskrivelse).
+- Admin kan redigere alt innhold på en eksisterende side **inline, direkte på selve siden** — samme idé som redigeringsmodus på pitch-siden (`/p/[token]`): staff ser siden akkurat slik en besøkende ville sett den, og klikker/redigerer teksten, bildene og case-listen der de faktisk vises, i stedet for å fylle ut et skjema separat fra resultatet. Hero (video **eller** bilde, headline), ingress, en ordnet liste med case-studier (valgt fra det eksisterende case-biblioteket), "Om oss"-tekst + bilde, avsluttende CTA-tekst, og SEO-metadata (tittel/beskrivelse, uten naturlig synlig plassering — egen liten panel).
 - `/energi` migreres til å være den første siden i dette systemet — dagens innhold legges inn som seed-data i migrasjonen, og `app/energi/page.tsx` fjernes til fordel for den nye dynamiske ruten (se "Ruting" for hvorfor `app/energi/layout.tsx` beholdes, slanket, for `/energi/arbeid`). Visuelt og funksjonelt uendret for en besøkende.
 - En side kan settes til kladd (`published = false`) og skjules fra offentligheten mens den redigeres.
 
@@ -24,7 +24,6 @@ Magnus ønsker flere slike bransjesider (`/bryllup`, `/sport`, osv.) med **samme
 
 - Ingen fri seksjons-rekkefølge/nye seksjonstyper utover det `/energi` allerede bruker (hero, ingress, cases, om oss, CTA). Et ekte fritt bygge-verktøy er en mye større jobb og ikke det som er bedt om.
 - `app/energi/arbeid/page.tsx` (en egen, hardkodet "se alt arbeid"-side) røres ikke — den er ikke nevnt i oppgaven og er et eget, urelatert stykke tech debt. Noteres som en mulig oppfølging, ikke en del av denne leveransen.
-- Ingen inline rediger-på-selve-siden (slik pitch-systemet har på `/p/[token]`). Redigering skjer fra en egen admin-side, slik Magnus ba om.
 - Ingen flerspråk-støtte (matcher at resten av siten er norsk-only i dag).
 - Jeg skriver ikke faktisk tekst/innhold for `/bryllup`, `/sport` e.l. — denne leveransen er infrastrukturen; Magnus fyller inn reelt innhold via admin når han er klar.
 
@@ -141,7 +140,7 @@ I dag: `app/energi/page.tsx` (statisk), `app/energi/layout.tsx`, `app/energi/Her
 Nytt: en rutegruppe `app/(marketing)/[slug]/` som slår opp siden fra DB basert på slug:
 
 - `app/(marketing)/[slug]/page.tsx` — Server Component. Henter raden (+ cases, sortert på `order_index`) via `getIndustryLandingPage(slug)`. `notFound()` hvis ingen rad, eller hvis rad finnes men `published = false` **og** besøkende ikke er innlogget staff (så admin kan forhåndsvise en kladd via URL). Renderer dagens faste JSX-mal (hero/ingress/cases/om oss/CTA) med feltene fra raden i stedet for hardkodede verdier.
-- `app/(marketing)/[slug]/layout.tsx` — bruker samme delte "marketing chrome" som beskrevet under, men med `generateMetadata` lest fra DB (`meta_title`/`meta_description`) i stedet for en hardkodet konstant.
+- `app/(marketing)/[slug]/layout.tsx` — bruker samme delte "marketing chrome" som beskrevet under, men med `generateMetadata` lest fra DB (`meta_title`/`meta_description`) i stedet for en hardkodet konstant. **Retter R4 fra inspeksjonen:** `openGraph.images`/`twitter.images` settes til `hero_poster_path` når den finnes (alle sider har et poster/fallback-bilde uansett `hero_type`) — uten dette mistet `/energi` delingsbildet helt. Ikke pikselidentisk med det gamle, dedikerte `/energi/hero-og.jpg` (som var beskåret spesifikt til OG-format, 1200×630, og skiller seg fra `hero-poster.jpg`), men et reelt, relevant delingsbilde i stedet for ingen — en egen dedikert OG-bildefelt per side er ikke verdt kompleksiteten for dette.
 - `HeroMedia.tsx` (generalisert fra `HeroVideo.tsx`): rendrer `<video>` når `hero_type = 'video'`, ellers et `<img>`, samme `object-cover`-oppførsel og samme `prefers-reduced-motion`-håndtering for video-varianten.
 
 `app/energi/page.tsx` og `app/energi/HeroVideo.tsx` slettes (erstattet av den dynamiske ruten). `app/energi/arbeid/page.tsx` beholdes **urørt** — men den deler i dag font/body-class/smooth-scroll/`robots: noindex`-oppsettet med `app/energi/layout.tsx` (**funnet under planrevisjon**: å slette hele `app/energi/layout.tsx`, slik første planutkast foreslo, ville fjernet denne arvingen for `/energi/arbeid` stille, siden den undersiden har ingen egen `robots`-metadata og rot-layouten (`app/layout.tsx`) ikke setter noen). Derfor: felles oppsett (Schibsted Grotesk + Newsreader-fontene, kroppsklassen som demper korn-effekten, `SmoothScroll`, `robots: { index: false, follow: false }`) trekkes ut til en delt komponent `components/marketing/MarketingChrome.tsx` (tar `children`, bruker samme to komponenter som i dag — `BodyClass`/`SmoothScroll`, generalisert fra `EnergiBodyClass`/`SmoothScroll` med klassenavnet endret fra `.energi-page` til `.marketing-page` i `app/globals.css` + komponenten). Både `app/(marketing)/[slug]/layout.tsx` (ny, DB-drevet metadata) og `app/energi/layout.tsx` (**beholdes**, nå slankere — wrapper kun `/energi/arbeid`, fortsatt statisk `robots: noindex`-metadata som i dag) bruker denne delte komponenten. Ingen dupliserte font-/scroll-oppsett, og `/energi/arbeid` sin oppførsel er uendret.
@@ -165,18 +164,70 @@ Atferdsnøytralt for alle eksisterende gyldige stier (`/admin`, `/admin/...`, `/
 
 ## Admin UI
 
+**Revidert etter første byggerunde** (Magnus, under implementering): redigering skal være **inline, på selve siden** — samme idé som redigeringsmodus på pitch-siden (`/p/[token]`), der staff ser nøyaktig det en besøkende ville sett og redigerer direkte i det, i stedet for et separat skjema som ikke viser resultatet. Reverserer det opprinnelige ikke-målet om et eget redigeringsskjema. Mye lettere enn pitch-systemets `Section`/`SectionRenderer`-maskineri siden datamodellen her er noen få faste felter, ikke en fri seksjonsliste.
+
 Ny nav-lenke i `app/admin/layout.tsx`, i «Salg & CRM»-gruppen: `{ href: '/admin/landingssider', label: 'Landingssider' }`.
 
-- **`app/admin/landingssider/page.tsx`** — liste over alle `industry_landing_pages` (slug, publisert-badge, sist oppdatert), "+ Ny side"-knapp (ber om slug, validerer mot reservert-liste/format, oppretter tom rad med `published = false`, navigerer til redigeringssiden). Samme visuelle mønster som `/admin/cases`.
-- **`app/admin/landingssider/[id]/edit/page.tsx`** — redigeringsskjema, samme stil som `/admin/retning` (tekstfelt per innholdsfelt, ikke rich text siden dagens innhold er ren tekst):
-  - Slug (kun visning + evt. endring med samme validering), publisert-bryter, SEO-felt.
-  - Hero: type-valg (video/bilde), filopplasting (direkte til Supabase Storage `assets`-bucket under `landing-pages/{slug}/`, samme opplastingsmønster som `app/admin/cases/new/page.tsx` sin thumbnail-opplasting), headline-felt.
-  - Ingress-felt.
-  - Case-liste: viser valgte cases i rekkefølge med opp/ned-knapper (samme mønster som "Ekstra lenker" på postprod-siden) og en "+ Legg til case"-knapp som åpner **`CasePickerModal`** (gjenbrukt uendret) mot hele `case_studies`-biblioteket.
-  - Om oss: heading, fritekst (avsnitt via tom linje), bilde — bildevalg via **`ImagePickerModal`** (gjenbrukt uendret) eller direkte opplasting, samme valg som hero.
-  - CTA: headline, undertekst, e-post.
-- **`lib/actions/industry-landing-pages.ts`** (nytt, `'use server'`, samme mønster som `lib/actions/email-footer.ts`/`lib/actions/leads.ts`): `listIndustryLandingPages`, `getIndustryLandingPage(slugOrId)`, `createIndustryLandingPage(slug)`, `updateIndustryLandingPage(id, fields)`, `setIndustryLandingPageCases(id, caseStudyIds[])` (erstatter hele lista i riktig rekkefølge, enklest korrekte implementasjon for en kort liste), `deleteIndustryLandingPage(id)`.
-- **`lib/types.ts`**: legg til `IndustryLandingPage` og `IndustryLandingPageCase`-typer.
+- **`app/admin/landingssider/page.tsx`** — uendret: liste over alle `industry_landing_pages` (slug, publisert-badge, sist oppdatert), "+ Ny side"-knapp (ber om slug, validerer mot reservert-liste/format, oppretter tom rad med `published = false`), som nå lenker til **den offentlige siden selv** (`/{slug}`) i stedet for en egen redigeringsrute — det finnes ingen egen `/admin/landingssider/[id]/edit`-side lenger.
+- **`app/(marketing)/[slug]/page.tsx`** (Server Component, uendret ansvar: henter data, avgjør `canEdit` via `getAuthenticatedStaffUser()`) rendrer nå en Client Component, **`MarketingPageView`** (`components/marketing/MarketingPageView.tsx`), og gir den `page`, `cases` og `canEdit` som props. Anonyme besøkende og ikke-redigerende staff får nøyaktig samme markup som i dag (ingen edit-maskineri rendres i det hele tatt når `canEdit` er `false`, eller når staff ikke har slått på redigeringsmodus).
+- **`MarketingPageView`**:
+  - Holder lokal state for `editing` (av/på, kun tilgjengelig når `canEdit`) og en lokal kopi av sideinnholdet, initiert fra server-dataene.
+  - En flytende "Rediger"/"Ferdig"-knapp (kun rendret når `canEdit`) slår redigeringsmodus av/på.
+  - **I redigeringsmodus**: hvert tekstfelt (hero-overskrift, ingress, "Om oss"-overskrift/tekst, CTA-overskrift/undertekst/e-post) rendres som et innholds-redigerbart element stylet til å se ut som den faktiske teksten (samme font/størrelse/vekt), som lagrer seg selv ved blur — kaller `updateIndustryLandingPage` direkte for det ene feltet, viser en liten feilmelding inline ved lagringsfeil (retter R3 fra inspeksjonen: ingen stille "Lagret ✓" ved faktisk feil). Ingen egen global "Lagre"-knapp, og dermed ingen fare for å miste utfylt-men-ulagret tekst ved andre handlinger på siden (retter R1: det var nettopp en slik "annen handling" — case-plukkeren — som trigget tap av ulagrede tekstfelt i skjema-varianten).
+  - Hero-seksjonen og "Om oss"-bildet får et hover-overlegg i redigeringsmodus med "Bytt video/bilde" → åpner enten direkte filopplasting eller **`ImagePickerModal`** (begge veier for BÅDE hero og "Om oss"-bildet — retter R5, som fant at skjema-varianten kun støttet biblioteksvalg for "Om oss", ikke hero).
+  - Case-seksjonen får i redigeringsmodus små opp/ned/fjern-kontroller direkte på hvert case-kort, pluss en "+ Legg til case"-knapp som åpner **`CasePickerModal`** (gjenbrukt uendret) — samme underliggende `setIndustryLandingPageCases`-kall som før.
+  - Et lite flytende panel (ikke inline på siden, siden feltene ikke har en naturlig synlig plassering) for det som ikke er sidelayout: publisert-bryter, slug (visning), SEO-tittel/beskrivelse.
+- **`lib/actions/industry-landing-pages.ts`** (uendret eksport-liste): `listIndustryLandingPages`, `getIndustryLandingPage(slugOrId)`, `createIndustryLandingPage(slug)`, `updateIndustryLandingPage(id, fields)`, `setIndustryLandingPageCases(id, caseStudyIds[])`, `deleteIndustryLandingPage(id)`, `copyLibraryImageToPage`. `setIndustryLandingPageCases` endres fra to separate DELETE/INSERT-kall til ett `supabase.rpc('replace_landing_page_cases', ...)`-kall (se migrasjon 175 under) — retter R2: et nettverksbrudd eller en ugyldig case-id mellom de to separate kallene kunne før la siden stå med en tom case-liste.
+- **`lib/types.ts`**: uendret — `IndustryLandingPage` og `IndustryLandingPageCase`-typer.
+
+## Migrasjon `175_replace_landing_page_cases_rpc.sql`
+
+Retter R2 fra inspeksjonen. En Postgres-funksjon som gjør delete+insert i én transaksjon (en funksjonskropp er implisitt atomisk), kalt via `supabase.rpc(...)` i stedet for to separate klient-kall:
+
+```sql
+CREATE OR REPLACE FUNCTION public.replace_landing_page_cases(
+  p_page_id uuid,
+  p_case_study_ids uuid[]
+) RETURNS void AS $$
+BEGIN
+  IF NOT public.is_staff(auth.uid()) THEN
+    RAISE EXCEPTION 'not authorized';
+  END IF;
+
+  DELETE FROM industry_landing_page_cases WHERE page_id = p_page_id;
+
+  INSERT INTO industry_landing_page_cases (page_id, case_study_id, order_index)
+  SELECT p_page_id, id, ord - 1
+  FROM unnest(p_case_study_ids) WITH ORDINALITY AS t(id, ord);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+```
+
+`SECURITY DEFINER` + en eksplisitt `is_staff()`-sjekk inni funksjonen (siden RPC-kall ikke automatisk går gjennom tabell-RLS-policyene på samme måte som direkte `.from()`-kall — funksjonen må selv håndheve det samme staff-only-kravet som `staff_all_industry_landing_page_cases`-policyen allerede uttrykker).
+
+## Migrasjon `176_lock_replace_landing_page_cases.sql`
+
+Funnet under 2. Codex-inspeksjon (av selve inline-redigerings-byggingen): funksjonen over var transaksjonell internt, men serialiserte ikke to **samtidige** kall for samme side — to staff-sesjoner som erstatter en tom case-liste med hhv. `[A]` og `[B]` samtidig kunne begge få `DELETE`-setningen til å treffe null rader og begge `INSERT`-setningene til å lykkes, med et sammenflettet sluttresultat. Retter med `SELECT ... FOR UPDATE` på foreldreraden før delete/insert (serialiserer de to kallene) + et eksplisitt avvis av et ukjent `page_id` (`CREATE OR REPLACE FUNCTION` — samme signatur, egen migrasjon for sporbarhet).
+
+## Øvrige funn fra 2. Codex-inspeksjon, alle rettet
+
+- **Uendelig nullstilling i bildevelgeren (høy):** `ImagePickerModal` ble kalt uten `selectedImageIds`, så default-verdien `[]` fikk en ny referanse på hver render — modalens interne `useEffect` synker valg fra denne proppen på referanse-endring, og nullstilte dermed brukerens pågående valg hver gang noe annet i redigeringsmodus rendret på nytt mens plukkeren var åpen. Rettet med en stabil, modul-nivå tom-array-konstant.
+- **Hero-kontrollene kunne ikke klikkes (høy):** bade hero-kontrollene (type/opplasting/biblioteksvalg) og tekst-innholdswrapperen under hadde `z-index: 10` — wrapperen kom senere i DOM og fanget dermed klikk over hele hero-området, selv der kun kontrollene var synlige. Rettet ved å heve kontrollene til `z-index: 20`.
+- **Stille "lagret" ved 0 påvirkede rader (middels):** `updateIndustryLandingPage` sjekket kun `error`, ikke om raden faktisk ble truffet — en slettet side eller en RLS-filtrert oppdatering ga "ok" uten at noe ble lagret. Rettet med `.select('id')` + eksplisitt feil hvis ingen rad kom tilbake.
+- **Full side-reload etter case-lagring (middels):** `handleCasePickerSave` kalte `window.location.reload()` for å få tak i de nye casenes data, noe som kunne kaste bort andre ulagrede/mislykkede feltendringer — nøyaktig den typen tap den reviderte redigerings-modellen skulle fjerne. Rettet med en målrettet re-henting av kun case-listen (`getIndustryLandingPageBySlug`), slått inn i eksisterende lokal tilstand.
+- **Stille svelgde opplastings-/kopieringsfeil (middels):** mislykket filopplasting eller biblioteks-kopiering viste ingen feil til brukeren. Rettet ved å vise disse gjennom samme feil-UI som tekstfelt-lagring, og nullstille filvelgeren etter bruk slik at samme fil kan velges på nytt ved feil.
+
+## Øvrige funn fra 3. Codex-inspeksjon, alle rettet
+
+- **Lenis fanget scroll inni plukke-modalene (middels):** `SmoothScroll`/Lenis er kun brukt på bransjesidene — `CasePickerModal`/`ImagePickerModal` har aldri stått på en Lenis-styrt side før (pitch-byggeren, som også bruker dem, har ingen smooth-scroll). Med et langt bildebibliotek ville musehjul/touchpad i modalen rullet bakgrunnssiden i stedet for bildelisten. Rettet med `data-lenis-prevent` på modalenes rulle-container — inert og virkningsløst på sider uten Lenis, så trygt å legge til i de delte komponentene.
+- **Delt feilmelding kunne maskeres av en urelatert lagring + ingen forsøk på nettverksfeil/avvist promise (middels):** `fieldError` ble tømt ved START av enhver ny lagring, ikke bare ved et nytt utfall — en reell feil (f.eks. mislykket publiseringsendring, bryteren viser fortsatt avhuket lokalt selv om databasen ikke ble oppdatert) kunne forsvinne stille idet brukeren redigerte noe helt annet. Et nettverksnivå-avvist kall (ikke bare et `{error}`-svar) ble heller ikke fanget noe sted, så `savingField` kunne bli stående uendelig. Rettet: `saveField` og de andre mutasjons-handlerne wrapper nå i try/catch/finally, feilmeldingen tømmes kun ved et vellykket utfall (ikke ved start av noe nytt), og diskrete felt (publisert-bryteren, case-listen ved reorder/fjerning) reverteres til forrige verdi ved feil — fritekstfelt beholder det brukeren skrev (reverte ville kastet bort arbeidet deres i stedet for bare å gi en feil å prøve på nytt fra).
+- **`prefers-reduced-motion` kun sjekket ved mount (lav):** `HeroMedia` sin effekt kjørte kun én gang — en video som dukker opp etter mount (f.eks. hero-type byttes fra bilde til video i redigeringsmodus) fikk ikke redusert-bevegelse-preferansen håndhevet. Rettet ved å legge `type`/`src` i avhengighetslisten, slik at sjekken kjører på nytt hver gang en ny video faktisk monteres.
+
+## Øvrige funn fra 4. Codex-inspeksjon, alle rettet
+
+- **Delt feilmelding kunne fortsatt maskeres, nå av en ANNEN felts suksess (middels):** runde 3 sin fiks løste kun "tømmes ved start av en ny lagring" — en ekte gjenværende feil på f.eks. hero-overskriften forsvant fortsatt stille idet et helt annet felt (f.eks. ingressen) ble lagret vellykket rett etter, siden begge delte samme `fieldError`-variabel. Omstrukturert til **per-felt** tilstand (`fieldErrors: Partial<Record<Field, string>>`), vist som en liten inline-melding rett under nettopp det feltet som feilet, kun tømt av DET feltets egen vellykkede lagring.
+- **Kapp-løp mellom samtidige case-mutasjoner (middels):** rask dobbelklikk på "fjern" før første forespørsel var ferdig kunne la en sent ankommende rollback fra den første overskrive resultatet av en raskere, vellykket andre. Rettet ved å disable alle case-knapper (flytt/fjern/legg til) mens én mutasjon er underveis — serialiserer fullstendig i stedet for å måtte rekonsiliere utfall i vilkårlig rekkefølge.
+- **`updated_at` ble ikke oppdatert ved case-endring (lav):** `replace_landing_page_cases` endret kun selve case-koblingene, aldri foreldre-sidens `updated_at`/`updated_by` — admin-listens "sist oppdatert" ble stående på et gammelt tidspunkt etter en ren case-endring. Rettet i migrasjon `177_touch_landing_page_on_case_replace.sql` (samme låste transaksjon som 176).
 
 ## Verifikasjon
 
@@ -185,5 +236,7 @@ Ny nav-lenke i `app/admin/layout.tsx`, i «Salg & CRM»-gruppen: `{ href: '/admi
 - Migrasjoner kjøres mot lokal/dev-tilkobling (samme `psql`-mønster med port 5432 som tidligere migrasjoner i denne sesjonen); `SELECT` bekrefter seed-raden for `energi` og de to case-koblingene, og at de nye case_studies/assets-policyene er staff-scoped.
 - Dev-server: `/energi` rendres **visuelt identisk** til før endringen (samme skjermbilde-sjekk i nettleseren som ble gjort for de to foregående `/energi`-fiksene i denne samtalen — full-bleed hero, like store case-bokser, "Om oss", CTA). `/energi/arbeid` fortsatt fungerende, med samme fonter/robots-metadata som før.
 - Bekreft at `/admin-kurs` og `/login-film` (ikke-eksisterende stier) ikke lenger feilaktig omdirigeres av `middleware.ts` etter grense-fiksen, og at `/admin`, `/admin/projects`, `/login`, `/auth/callback` fortsatt oppfører seg som i dag.
-- Opprett en testside (f.eks. slug `test-bransje`) fra `/admin/landingssider`, fyll inn minimalt innhold. Last opp et **dedikert, engangs-test-bilde** (ikke et eksisterende biblioteksbilde — unngår å røre noe som faktisk brukes av et pitch-prosjekt eller en annen side, siden `images`-sletting kaskaderer til `section_images`) til `/admin/images` spesifikt for denne verifiseringen, velg det via `ImagePickerModal` på testsiden, publiser, bekreft at `/test-bransje` er live uten noen kodeendring. Slett deretter **kun dette test-bildet** fra `/admin/images` og bekreft at testsiden fortsatt viser bildet (kopiert, ikke referert). Rydd opp (slett testsiden og det kopierte filobjektet dens) etterpå.
+- Opprett en testside (f.eks. slug `test-bransje`) fra `/admin/landingssider`, åpne `/test-bransje`, slå på "Rediger", fyll inn minimalt innhold inline (headline, ingress, en case via `CasePickerModal`, "Om oss"-bilde via opplasting), publiser via innstillinger-panelet, bekreft at `/test-bransje` er live uten noen kodeendring. Rydd opp (slett testsiden fra `/admin/landingssider`-listen) etterpå.
+- Bekreft at redigeringsknappen kun vises for innlogget staff (anonymt `curl`-kall mot `/energi` skal ikke inneholde "Rediger" i den server-rendrede HTML-en — ren betinget rendering i `MarketingPageView`, ikke CSS-skjuling).
+- Last opp et **dedikert, engangs-test-bilde** (ikke et eksisterende biblioteksbilde — unngår å røre noe som faktisk brukes av et pitch-prosjekt eller en annen side, siden `images`-sletting kaskaderer til `section_images`) til `/admin/images`, velg det via "Fra bibliotek" på "Om oss"-bildet i redigeringsmodus, bekreft at det vises. Slett deretter **kun dette test-bildet** fra `/admin/images` og bekreft at testsiden fortsatt viser bildet (kopiert, ikke referert).
 - Bekreft at en upublisert side gir `notFound()` for en ikke-innlogget besøkende, men er synlig for en innlogget staff-bruker (forhåndsvisning) — og, hvis det finnes en kundekonto å teste med, at en publisert side også er synlig for en innlogget kunde (ikke bare anon).

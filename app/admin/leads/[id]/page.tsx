@@ -706,10 +706,9 @@ export default function LeadDetailPage() {
               </div>
             )}
 
-            {/* Kald e-post */}
-            {lead.cold_email && (
-              <ColdEmailCard leadId={lead.id} coldEmail={lead.cold_email} initialTo={lead.email} />
-            )}
+            {/* E-post — vises uansett om AI har generert en kladd (cold_email) eller ikke,
+                se app/admin/projects/[id]/contact/page.tsx for samme begrunnelse. */}
+            <ColdEmailCard leadId={lead.id} coldEmail={lead.cold_email} initialTo={lead.email} />
 
           </div>
         </div>

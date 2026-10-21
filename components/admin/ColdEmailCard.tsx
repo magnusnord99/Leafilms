@@ -39,10 +39,10 @@ export function ColdEmailCard({
   initialTo,
 }: {
   leadId: string
-  coldEmail: string
+  coldEmail: string | null
   initialTo: string | null
 }) {
-  const parsed = parseColdEmail(coldEmail)
+  const parsed = parseColdEmail(coldEmail ?? '')
   const [copied, setCopied] = useState(false)
   const [composing, setComposing] = useState(false)
   const [to, setTo] = useState(initialTo ?? '')
@@ -62,6 +62,7 @@ export function ColdEmailCard({
   }, [composing])
 
   async function handleCopy() {
+    if (!coldEmail) return
     await navigator.clipboard.writeText(coldEmail)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -105,22 +106,24 @@ export function ColdEmailCard({
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-          Kald e-post
+          {coldEmail ? 'Kald e-post' : 'E-post'}
         </p>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            onClick={handleCopy}
-            style={{
-              fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
-              padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-              background: copied ? 'rgba(76,175,125,0.12)' : C.surface2,
-              color: copied ? C.success : C.text2,
-              border: `1px solid ${copied ? 'rgba(76,175,125,0.3)' : C.border}`,
-              transition: 'all 0.15s',
-            }}
-          >
-            {copied ? '✓ Kopiert' : 'Kopier'}
-          </button>
+          {coldEmail && (
+            <button
+              onClick={handleCopy}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+                padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                background: copied ? 'rgba(76,175,125,0.12)' : C.surface2,
+                color: copied ? C.success : C.text2,
+                border: `1px solid ${copied ? 'rgba(76,175,125,0.3)' : C.border}`,
+                transition: 'all 0.15s',
+              }}
+            >
+              {copied ? '✓ Kopiert' : 'Kopier'}
+            </button>
+          )}
           <button
             onClick={() => setComposing(true)}
             style={{
@@ -135,11 +138,17 @@ export function ColdEmailCard({
         </div>
       </div>
 
-      <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {coldEmail}
+      {coldEmail ? (
+        <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {coldEmail}
+          </p>
+        </div>
+      ) : (
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+          Ingen AI-generert kladd for denne leaden — skriv e-posten selv.
         </p>
-      </div>
+      )}
 
       {sentTo && (
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.success, marginTop: 10 }}>
@@ -164,7 +173,7 @@ export function ColdEmailCard({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
-                Send kald e-post
+                {coldEmail ? 'Send kald e-post' : 'Send e-post'}
               </p>
               <button
                 onClick={() => setComposing(false)}

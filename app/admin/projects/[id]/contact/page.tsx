@@ -707,8 +707,10 @@ export default function ProjectContactPage() {
               </div>
             )}
 
-            {/* Kald e-post */}
-            {lead?.cold_email && (
+            {/* E-post — vises uansett om AI har generert en kladd (cold_email) eller ikke,
+                ellers er det ingen måte å sende e-post i det hele tatt for leads som ikke
+                kommer fra markedsanalyse-agenten (f.eks. manuelt lagt inn, kilde "referanse"). */}
+            {lead && (
               <ColdEmailCard leadId={lead.id} coldEmail={lead.cold_email} initialTo={email} />
             )}
 

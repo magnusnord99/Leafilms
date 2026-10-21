@@ -7,8 +7,8 @@ const italicSerif = { fontFamily: 'var(--font-newsreader)', fontStyle: 'italic' 
 export default function EnergiPage() {
   return (
     <main className="bg-[#ffffff] text-[#1A1812]">
-      {/* Hero */}
-      <section className="relative h-screen min-h-[640px] w-full bg-[#ffffff] px-6 md:px-12">
+      {/* Hero — fullbredde, ingen marg rundt videoen */}
+      <section className="relative h-screen min-h-[640px] w-full bg-[#ffffff]">
         <div className="relative h-full w-full overflow-hidden bg-[#16140F]">
           <HeroVideo src={HERO_VIDEO_URL} poster="/energi/hero-poster.jpg" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent" />

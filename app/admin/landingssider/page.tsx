@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { C } from '@/lib/admin-theme'
 import { IndustryLandingPage } from '@/lib/types'
 import { listIndustryLandingPages, createIndustryLandingPage, deleteIndustryLandingPage } from '@/lib/actions/industry-landing-pages'
 
 export default function LandingssiderPage() {
-  const router = useRouter()
   const [pages, setPages] = useState<IndustryLandingPage[]>([])
   const [loading, setLoading] = useState(true)
   const [newSlug, setNewSlug] = useState('')
@@ -36,7 +34,9 @@ export default function LandingssiderPage() {
       setError(result.error)
       return
     }
-    router.push(`/${slug}`)
+    setNewSlug('')
+    await fetchPages()
+    window.open(`/${slug}`, '_blank', 'noopener,noreferrer')
   }
 
   async function handleDelete(e: React.MouseEvent, id: string, slug: string) {
@@ -107,6 +107,8 @@ export default function LandingssiderPage() {
               <Link
                 key={page.id}
                 href={`/${page.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{ textDecoration: 'none', display: 'block' }}
               >
                 <div style={{

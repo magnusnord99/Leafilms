@@ -11,7 +11,7 @@ export type ConversationParticipant = {
 
 export type ConversationListItem = {
   id: string
-  otherParticipant: ConversationParticipant
+  otherParticipants: ConversationParticipant[]
   lastMessage: { content: string; created_at: string; sender_id: string } | null
   unreadCount: number
 }
@@ -63,14 +63,26 @@ export async function getConversations(): Promise<ConversationListItem[]> {
       unreadCountByConversation.set(n.conversation_id, (unreadCountByConversation.get(n.conversation_id) ?? 0) + 1)
     }
 
+    // En samtale med 3+ deltakere gir én rad PER motpart i otherRows (én rad per
+    // conversation_participants-rad som ikke er meg selv) — grupperes her per
+    // conversation_id slik at en gruppesamtale vises som ÉN rad i sidebaren med
+    // alle motpartene listet, i stedet for at den samme siste meldingen dukker
+    // opp flere ganger under forskjellige navn (det Magnus opplevde som at
+    // brukere virket "linket sammen").
     type OtherRow = { conversation_id: string; profiles: ConversationParticipant | null }
-    const items: ConversationListItem[] = ((otherRows ?? []) as unknown as OtherRow[])
-      .filter((r): r is OtherRow & { profiles: ConversationParticipant } => r.profiles !== null)
-      .map((r) => ({
-        id: r.conversation_id,
-        otherParticipant: r.profiles,
-        lastMessage: lastMessageByConversation.get(r.conversation_id) ?? null,
-        unreadCount: unreadCountByConversation.get(r.conversation_id) ?? 0,
+    const participantsByConversation = new Map<string, ConversationParticipant[]>()
+    for (const r of (otherRows ?? []) as unknown as OtherRow[]) {
+      if (!r.profiles) continue
+      const list = participantsByConversation.get(r.conversation_id) ?? []
+      list.push(r.profiles)
+      participantsByConversation.set(r.conversation_id, list)
+    }
+    const items: ConversationListItem[] = Array.from(participantsByConversation.entries())
+      .map(([conversationId, otherParticipants]) => ({
+        id: conversationId,
+        otherParticipants,
+        lastMessage: lastMessageByConversation.get(conversationId) ?? null,
+        unreadCount: unreadCountByConversation.get(conversationId) ?? 0,
       }))
 
     items.sort((a, b) => {

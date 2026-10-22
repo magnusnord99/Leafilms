@@ -28,6 +28,12 @@ function displayName(p: { name: string | null; email: string }) {
   return p.name || p.email
 }
 
+// Samtalens motparter samlet til én visningstekst — "Navn" for en vanlig 1:1,
+// "Navn1, Navn2" for en gruppesamtale.
+function participantNames(participants: ConversationParticipant[]) {
+  return participants.map(displayName).join(', ')
+}
+
 // Usendte utkast lagres lokalt per bruker og samtale, slik at man kan bytte samtale
 // eller forlate siden uten å miste det man har begynt å skrive.
 function draftKey(userId: string, conversationId: string) {
@@ -209,7 +215,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   }
 
   async function handleStartConversation(profile: ConversationParticipant) {
-    const existing = conversations.find((c) => c.otherParticipant.id === profile.id)
+    const existing = conversations.find((c) => c.otherParticipants.length === 1 && c.otherParticipants[0].id === profile.id)
     if (existing) {
       setSelectedId(existing.id)
       setShowPicker(false)
@@ -219,7 +225,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
     const conversationId = await startConversation(profile.id)
     if (!conversationId) return
     setConversations((prev) => [
-      { id: conversationId, otherParticipant: profile, lastMessage: null, unreadCount: 0 },
+      { id: conversationId, otherParticipants: [profile], lastMessage: null, unreadCount: 0 },
       ...prev,
     ])
     setSelectedId(conversationId)
@@ -322,15 +328,18 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                 }}
               >
                 <span style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipant), color: '#fff',
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipants[0]), color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 700,
                 }}>
-                  {displayName(c.otherParticipant)[0].toUpperCase()}
+                  {displayName(c.otherParticipants[0])[0].toUpperCase()}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text }}>
-                      {displayName(c.otherParticipant)}
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {participantNames(c.otherParticipants)}
                     </span>
                     {c.unreadCount > 0 && (
                       <span style={{
@@ -379,13 +388,13 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                 </svg>
               </button>
               <span style={{
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(selected.otherParticipant), color: '#fff',
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(selected.otherParticipants[0]), color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700,
               }}>
-                {displayName(selected.otherParticipant)[0].toUpperCase()}
+                {displayName(selected.otherParticipants[0])[0].toUpperCase()}
               </span>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
-                {displayName(selected.otherParticipant)}
+                {participantNames(selected.otherParticipants)}
               </p>
             </div>
 

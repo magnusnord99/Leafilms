@@ -40,6 +40,13 @@ function draftKey(userId: string, conversationId: string) {
   return `meldinger-draft-${userId}-${conversationId}`
 }
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
+function isRecent(c: ConversationListItem) {
+  if (!c.lastMessage) return false
+  return Date.now() - new Date(c.lastMessage.created_at).getTime() <= THIRTY_DAYS_MS
+}
+
 export function MeldingerClient({ currentUser, initialConversations, allProfiles }: Props) {
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [selectedId, setSelectedId] = useState<string | null>(initialConversations[0]?.id ?? null)
@@ -49,9 +56,14 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const [sending, setSending] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
   const [pickerFilter, setPickerFilter] = useState('')
+  const [recentOnly, setRecentOnly] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null
+  // Listen er allerede sortert nyeste-først; dette filteret skjuler i tillegg
+  // samtaler uten aktivitet de siste 30 dagene (inkl. tomme "Ingen meldinger
+  // ennå"-tråder) når Magnus slår det på, uten å slette noe.
+  const visibleConversations = recentOnly ? conversations.filter(isRecent) : conversations
 
   async function refreshConversations() {
     const fresh = await getConversations()
@@ -269,6 +281,21 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
           </button>
         </div>
 
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <button
+            onClick={() => setRecentOnly((r) => !r)}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
+              padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+              background: recentOnly ? C.accentBg : 'transparent',
+              border: `1px solid ${recentOnly ? C.accent : C.border}`,
+              color: recentOnly ? C.accent : C.text3,
+            }}
+          >
+            Siste 30 dager
+          </button>
+        </div>
+
         {showPicker && (
           <div style={{ padding: 12, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
             <input
@@ -315,7 +342,12 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
               Ingen samtaler ennå. Trykk + for å starte en.
             </p>
           )}
-          {conversations.map((c) => {
+          {conversations.length > 0 && visibleConversations.length === 0 && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
+              Ingen samtaler med aktivitet siste 30 dager.
+            </p>
+          )}
+          {visibleConversations.map((c) => {
             const active = c.id === selectedId
             return (
               <button

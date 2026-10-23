@@ -1022,7 +1022,7 @@ export type DashboardWidgetKey =
 
 export type DashboardLayoutItem = {
   widgetKey: DashboardWidgetKey
+  column: number
   position: number
-  enabled: boolean
 }
 

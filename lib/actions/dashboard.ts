@@ -3,33 +3,37 @@
 import { createClient } from '@/lib/supabase-server'
 import type { DashboardLayoutItem, DashboardWidgetKey } from '@/lib/types'
 
-const DEFAULT_ORDER: DashboardWidgetKey[] = [
-  'stats', 'pipeline', 'calendar', 'recent_projects', 'customers', 'market_analysis',
+// Default: to kolonner, en rimelig fordeling av widgets fra registeret —
+// se components/admin/dashboard/registry.tsx for selve widget-definisjonene.
+const DEFAULT_LAYOUT: DashboardLayoutItem[] = [
+  { widgetKey: 'stats', column: 0, position: 0 },
+  { widgetKey: 'pipeline', column: 0, position: 1 },
+  { widgetKey: 'recent_projects', column: 0, position: 2 },
+  { widgetKey: 'calendar', column: 1, position: 0 },
+  { widgetKey: 'customers', column: 1, position: 1 },
+  { widgetKey: 'market_analysis', column: 1, position: 2 },
 ]
-
-function defaultLayout(): DashboardLayoutItem[] {
-  return DEFAULT_ORDER.map((widgetKey, position) => ({ widgetKey, position, enabled: true }))
-}
 
 export async function getDashboardLayout(): Promise<DashboardLayoutItem[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return defaultLayout()
+  if (!user) return DEFAULT_LAYOUT
 
   const { data, error } = await supabase
     .from('dashboard_layouts')
-    .select('widget_key, position, enabled')
+    .select('widget_key, column_index, position')
     .eq('profile_id', user.id)
+    .order('column_index', { ascending: true })
     .order('position', { ascending: true })
 
   if (error || !data || data.length === 0) {
-    return defaultLayout()
+    return DEFAULT_LAYOUT
   }
 
   return data.map((row) => ({
     widgetKey: row.widget_key as DashboardWidgetKey,
+    column: row.column_index,
     position: row.position,
-    enabled: row.enabled,
   }))
 }
 
@@ -54,8 +58,8 @@ export async function saveDashboardLayout(items: DashboardLayoutItem[]): Promise
     .insert(items.map((item) => ({
       profile_id: user.id,
       widget_key: item.widgetKey,
+      column_index: item.column,
       position: item.position,
-      enabled: item.enabled,
     })))
   if (insertError) {
     console.error('saveDashboardLayout insert:', insertError)

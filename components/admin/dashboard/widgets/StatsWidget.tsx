@@ -68,7 +68,7 @@ export default function StatsWidget() {
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4" style={{ gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
       {stats.map((s) => (
         <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
           <div

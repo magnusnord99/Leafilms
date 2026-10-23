@@ -1012,3 +1012,17 @@ export type BoardComment = {
   created_at: string
 }
 
+export type DashboardWidgetKey =
+  | 'stats'
+  | 'pipeline'
+  | 'calendar'
+  | 'recent_projects'
+  | 'customers'
+  | 'market_analysis'
+
+export type DashboardLayoutItem = {
+  widgetKey: DashboardWidgetKey
+  position: number
+  enabled: boolean
+}
+

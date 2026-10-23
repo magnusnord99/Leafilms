@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase-client'
 import { Customer } from '@/lib/types'
@@ -11,6 +11,7 @@ export default function CustomersWidget() {
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({})
+  const [search, setSearch] = useState('')
 
   useEffect(() => { fetchData() }, [])
 
@@ -36,6 +37,12 @@ export default function CustomersWidget() {
     }
   }
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return customers
+    return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.company ?? '').toLowerCase().includes(q))
+  }, [customers, search])
+
   if (loading) return null
 
   return (
@@ -47,34 +54,51 @@ export default function CustomersWidget() {
           <Btn href="/admin/customers/new">Opprett første kunde</Btn>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-          {customers.map((customer) => (
-            <Link key={customer.id} href={`/admin/customers/${customer.id}`} style={{ textDecoration: 'none' }}>
-              <div
-                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
-                onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = C.hoverBorder}
-                onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text, marginBottom: 2 }}>
-                      {customer.name}
-                    </p>
-                    {customer.company && (
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginBottom: 6 }}>{customer.company}</p>
-                    )}
-                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3 }}>
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søk etter kunde..."
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 8,
+              background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, outline: 'none',
+              color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+            }}
+          />
+          <div style={{ maxHeight: 220, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            {filtered.length === 0 ? (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, padding: '16px' }}>
+                Ingen kunder matcher &quot;{search}&quot;
+              </p>
+            ) : (
+              filtered.map((customer, i) => (
+                <Link key={customer.id} href={`/admin/customers/${customer.id}`} style={{ textDecoration: 'none' }}>
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                      padding: '9px 14px', background: C.surface,
+                      borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : 'none',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
+                    onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.background = C.surface}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {customer.name}
+                        {customer.company && <span style={{ color: C.text3, fontWeight: 400 }}> · {customer.company}</span>}
+                      </p>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
                       {projectCounts[customer.id] || 0} prosjekt{(projectCounts[customer.id] || 0) !== 1 ? 'er' : ''}
-                    </p>
+                    </span>
                   </div>
-                  <svg width="14" height="14" fill="none" stroke={C.text3} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   )

@@ -8,10 +8,13 @@ import type { DashboardLayoutItem, DashboardWidgetKey } from '@/lib/types'
 const DEFAULT_LAYOUT: DashboardLayoutItem[] = [
   { widgetKey: 'stats', column: 0, position: 0 },
   { widgetKey: 'pipeline', column: 0, position: 1 },
-  { widgetKey: 'recent_projects', column: 0, position: 2 },
+  { widgetKey: 'my_tasks', column: 0, position: 2 },
+  { widgetKey: 'recent_projects', column: 0, position: 3 },
   { widgetKey: 'calendar', column: 1, position: 0 },
-  { widgetKey: 'customers', column: 1, position: 1 },
-  { widgetKey: 'market_analysis', column: 1, position: 2 },
+  { widgetKey: 'upcoming_shoots', column: 1, position: 1 },
+  { widgetKey: 'leads_follow_up', column: 1, position: 2 },
+  { widgetKey: 'customers', column: 1, position: 3 },
+  { widgetKey: 'market_analysis', column: 1, position: 4 },
 ]
 
 export async function getDashboardLayout(): Promise<DashboardLayoutItem[]> {

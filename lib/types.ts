@@ -1019,6 +1019,9 @@ export type DashboardWidgetKey =
   | 'recent_projects'
   | 'customers'
   | 'market_analysis'
+  | 'my_tasks'
+  | 'leads_follow_up'
+  | 'upcoming_shoots'
 
 export type DashboardLayoutItem = {
   widgetKey: DashboardWidgetKey

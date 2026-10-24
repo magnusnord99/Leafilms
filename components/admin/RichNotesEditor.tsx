@@ -2,7 +2,6 @@
 
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { C } from '@/lib/admin-theme'
 
@@ -74,7 +73,6 @@ export default function RichNotesEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
-      Underline,
       Placeholder.configure({ placeholder: placeholder ?? '' }),
     ],
     content: value,

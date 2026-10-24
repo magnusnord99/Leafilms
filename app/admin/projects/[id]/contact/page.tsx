@@ -413,7 +413,9 @@ export default function ProjectContactPage() {
                     Kilde: {SOURCE_LABELS[lead.source] ?? lead.source}
                   </p>
                 )}
-                {lead?.contact_deadline && (() => {
+                {lead?.contact_deadline && lead.status === 'new' && (() => {
+                  // Fristen gjelder kun første kontakt — en gang leaden har status utover
+                  // "new" er den innen eller forbi definisjon, og skal ikke lenger vises.
                   const overdue = new Date(lead.contact_deadline) < new Date(new Date().toDateString())
                   return (
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: overdue ? C.danger : C.text3, marginTop: 2, fontWeight: overdue ? 600 : 400 }}>

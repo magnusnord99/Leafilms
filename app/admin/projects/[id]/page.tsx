@@ -1056,6 +1056,14 @@ export default function ProjectHubPage() {
   }
 
   async function handleGenerateContract() {
+    // Uten kunde koblet til prosjektet er «Bedrift»/«Kundekontakt»/«Org.nummer» tomme,
+    // og kontrakten genereres med hull i grammatikken ("Leafilms og , org.nummer .")
+    // — med mindre feltene er fylt inn manuelt under. Varsle i stedet for å generere
+    // en tekst som kan sendes videre til en ekte kunde slik.
+    if (!project.customer && !contractForm.bedrift.trim()) {
+      alert('Ingen kunde er koblet til dette prosjektet, og «Bedrift» er ikke fylt ut manuelt — kontrakten vil derfor få hull i teksten. Velg kunde med «Bytt kunde» øverst på siden, eller fyll inn feltene under manuelt, før du genererer.')
+      return
+    }
     const hasExistingText = contractText.trim().length > 0
     if (hasExistingText && !confirm('Dette bygger kontraktteksten på nytt fra mal og felt, og overskriver eventuelle manuelle endringer i teksten under. Fortsette?')) {
       return

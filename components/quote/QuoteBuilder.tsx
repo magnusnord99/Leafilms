@@ -70,7 +70,7 @@ const inputBase: React.CSSProperties = {
   borderBottom: `1px solid ${C.border}`,
   outline: 'none',
   padding: '4px',
-  fontSize: '0.8rem',
+  fontSize: '1rem',
   color: C.text,
   width: '100%',
   fontFamily: 'var(--font-dm-sans)',
@@ -83,7 +83,7 @@ const fieldStyle: React.CSSProperties = {
   border: `1px solid ${C.border}`,
   borderRadius: 3,
   padding: '8px 12px',
-  fontSize: '0.8rem',
+  fontSize: '1rem',
   color: C.text,
   fontFamily: 'var(--font-dm-sans)',
   outline: 'none',
@@ -178,7 +178,7 @@ function CatalogPicker({
             <div style={{ padding: 8, flexShrink: 0 }}>
               <input
                 autoFocus
-                style={{ ...fieldStyle, background: C.bg, padding: '6px 12px', fontSize: '0.78rem' }}
+                style={{ ...fieldStyle, background: C.bg, padding: '6px 12px' }}
                 placeholder="Søk..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -368,7 +368,7 @@ function CustomerSelector({
         }}>
           <div style={{ padding: 8 }}>
             <input autoFocus
-              style={{ ...fieldStyle, background: C.bg, padding: '6px 12px', fontSize: '0.78rem' }}
+              style={{ ...fieldStyle, background: C.bg, padding: '6px 12px' }}
               placeholder="Søk..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ overflowY: 'auto', maxHeight: 200 }}>
@@ -735,7 +735,7 @@ function DeliverablesSection({
                   title="Fjern">×</button>
               </div>
               <input
-                style={{ ...inputBase, fontSize: '0.7rem' }}
+                style={{ ...inputBase }}
                 value={item.description ?? ''}
                 onChange={e => update(item.id, 'description', e.target.value)}
                 placeholder="Beskrivelse (valgfri)"

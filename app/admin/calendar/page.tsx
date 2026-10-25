@@ -943,7 +943,7 @@ function UnavailabilityDetailModal({ block, currentUserId, onClose, onChanged }:
           </Field>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} />
+            <input type="checkbox" checked={wholeDay} onChange={e => setWholeDay(e.target.checked)} style={{ width: 22, height: 22, accentColor: C.accent, cursor: 'pointer' }} />
             <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text }}>Hele dagen (evt. flere dager i strekk)</span>
           </label>
 

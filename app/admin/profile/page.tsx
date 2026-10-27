@@ -8,6 +8,7 @@ import { AVATAR_COLORS, getAvatarColor } from '@/lib/avatar-colors'
 import { updateProfileName, updateProfilePhone, updateProfileJobTitle, updateProfileColor, getTakenColors, type ProfileColorOwner } from '@/lib/actions/profile'
 import { getEmailFooterTemplate, updateEmailFooterTemplate } from '@/lib/actions/email-footer'
 import { renderEmailFooter, EMAIL_FOOTER_PLACEHOLDERS } from '@/lib/email-footer'
+import { getCalendarFeedUrl } from '@/lib/actions/calendar'
 
 export default function ProfilePage() {
   const { user, profile, loading } = useAuth()
@@ -39,6 +40,10 @@ export default function ProfilePage() {
   const [footerSaving, setFooterSaving] = useState(false)
   const [footerSaved, setFooterSaved] = useState(false)
 
+  const [calendarUrl, setCalendarUrl] = useState<string | null>(null)
+  const [calendarLoading, setCalendarLoading] = useState(true)
+  const [calendarCopied, setCalendarCopied] = useState(false)
+
   useEffect(() => {
     if (!loading && !user) router.push('/login')
   }, [loading, user, router])
@@ -63,6 +68,20 @@ export default function ProfilePage() {
       setFooterLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    getCalendarFeedUrl().then(({ url }) => {
+      setCalendarUrl(url)
+      setCalendarLoading(false)
+    })
+  }, [])
+
+  async function handleCopyCalendarUrl() {
+    if (!calendarUrl) return
+    await navigator.clipboard.writeText(calendarUrl)
+    setCalendarCopied(true)
+    setTimeout(() => setCalendarCopied(false), 2000)
+  }
 
   async function handleSaveName() {
     setNameSaving(true)
@@ -305,6 +324,49 @@ export default function ProfilePage() {
             })}
           </div>
           {colorError && <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555', marginTop: 12 }}>{colorError}</p>}
+        </section>
+
+        <section style={{ marginTop: 32, paddingTop: 28, borderTop: `1px solid ${C.border}` }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 10 }}>
+            Kalenderabonnement <span style={{ color: C.accent }}>— delt for alle</span>
+          </label>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginBottom: 10 }}>
+            Opptak, leveringsdatoer, oppgavefrister og godkjente interne møter — legg denne lenken til
+            som &quot;Abonnert kalender&quot; på iPhone (eller i Google Calendar). Samme lenke for alle;
+            abonnerte kalendere oppdateres ikke alltid umiddelbart — be telefonen hente nye data manuelt
+            hvis noe mangler.
+          </p>
+          {calendarLoading ? (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
+          ) : calendarUrl ? (
+            <>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  readOnly
+                  value={calendarUrl}
+                  onFocus={e => e.target.select()}
+                  style={{
+                    flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2,
+                    background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px',
+                  }}
+                />
+                <button
+                  onClick={handleCopyCalendarUrl}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600,
+                    padding: '9px 16px', borderRadius: 8, cursor: 'pointer',
+                    background: C.accent, color: '#fff', border: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {calendarCopied ? 'Kopiert!' : 'Kopier lenke'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555' }}>
+              Kalenderfeed er ikke konfigurert (CALENDAR_FEED_TOKEN mangler).
+            </p>
+          )}
         </section>
 
         <section style={{ marginTop: 32, paddingTop: 28, borderTop: `1px solid ${C.border}` }}>

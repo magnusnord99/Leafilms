@@ -4,6 +4,21 @@ import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { companyLabel, buildTaskCalendarLabel } from '@/lib/calendar-label'
 
+// Abonnements-URL for iPhone/Google Calendar (se lib/ics-feed.ts) — tokenet er et
+// serverhemmelig miljøvariabel, så URL-en bygges kun server-side og returneres til
+// en allerede innlogget admin-bruker, aldri til et uautentisert endepunkt.
+export async function getCalendarFeedUrl(): Promise<{ url: string | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { url: null }
+
+  const token = process.env.CALENDAR_FEED_TOKEN
+  if (!token) return { url: null }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
+  return { url: `${siteUrl}/api/calendar-feed/${token}` }
+}
+
 export type ShootingEvent = {
   projectId: string
   projectTitle: string

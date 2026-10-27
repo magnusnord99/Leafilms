@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getQuoteMessages, sendQuoteMessage } from '@/lib/actions/quotes'
+import { getQuoteMessages, markQuoteMessagesRead, sendQuoteMessage } from '@/lib/actions/quotes'
 import type { QuoteMessage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
@@ -60,6 +60,7 @@ export default function QuoteChat({
   useEffect(() => {
     if (!open) return
     loadMessages()
+    markQuoteMessagesRead(projectId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, quoteId])
 

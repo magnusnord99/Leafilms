@@ -1454,6 +1454,25 @@ export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
 }
 
 /**
+ * Markerer egne uleste varsler for en tasks chat som lest (feedback 0e01c18e —
+ * varselklokken slapp ikke unread-tallet når man selv åpnet chatten varselet kom fra).
+ */
+export async function markTaskMessagesRead(taskId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('task_id', taskId)
+      .eq('read', false)
+      .in('type', ['task_message', 'task_message_mention', 'task_message_reaction'])
+  } catch {}
+}
+
+/**
  * Sender en chat-melding på en task som innlogget bruker.
  */
 export async function sendTaskMessage(

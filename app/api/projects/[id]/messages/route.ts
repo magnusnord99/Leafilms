@@ -45,6 +45,16 @@ export async function GET(
       return Response.json({ error: 'Kunne ikke hente meldinger' }, { status: 500 })
     }
 
+    // Markér egne uleste varsler for denne prosjekt-chatten som lest — man åpner
+    // nettopp denne chatten for å lese dem (feedback 0e01c18e).
+    await auth.supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', auth.user.id)
+      .eq('project_id', projectId)
+      .eq('read', false)
+      .in('type', ['project_message', 'project_message_mention', 'project_message_reaction'])
+
     return Response.json({ messages: data })
   } catch (err) {
     console.error('GET /messages error:', err)

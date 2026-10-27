@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getPreprodMessages, sendPreprodMessage } from '@/lib/actions/preprod'
+import { getPreprodMessages, markPreprodMessagesRead, sendPreprodMessage } from '@/lib/actions/preprod'
 import type { PreprodMessage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
@@ -58,6 +58,7 @@ export default function PreprodChat({
   useEffect(() => {
     if (!open) return
     loadMessages()
+    markPreprodMessagesRead(projectId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId])
 

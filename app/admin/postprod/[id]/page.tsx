@@ -19,6 +19,7 @@ import { buildTaskCalendarLabel, companyLabel } from '@/lib/calendar-label'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'
+import { getGalleryReviewByTaskId, overrideWaitingReview } from '@/lib/actions/gallery-reviews'
 import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
@@ -261,6 +262,8 @@ export default function PostProdDetailPage() {
   const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
   const [gallerySummary, setGallerySummary] = useState<{ id: string; status: 'open' | 'submitted' | 'purged' } | null>(null)
+  const [waitingReviewInfo, setWaitingReviewInfo] = useState<{ reviewId: string; galleryId: string; reviewerName: string | null } | null>(null)
+  const [overridingReview, setOverridingReview] = useState(false)
 
   const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
   const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
@@ -305,6 +308,21 @@ export default function PostProdDetailPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [leadDropdownOpen])
 
+  async function handleOverrideWaitingReview(taskId: string) {
+    if (readOnly) return
+    if (!confirm('Fortsette uten at reviewen er godkjent? Reviewer får et varsel om at dere fortsatte uten svar, og kan fortsatt svare etterpå.')) return
+    setOverridingReview(true)
+    setActionError(null)
+    const result = await overrideWaitingReview(taskId)
+    if (result.ok) {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t))
+      setWaitingReviewInfo(null)
+    } else {
+      setActionError(result.error ?? 'Kunne ikke låse opp steget — sjekk nettverket og prøv igjen.')
+    }
+    setOverridingReview(false)
+  }
+
   function toggleSidebarCollapsed() {
     setSidebarCollapsed(prev => {
       const next = !prev
@@ -340,6 +358,21 @@ export default function PostProdDetailPage() {
   const activeIdx = displayTasks.findIndex(t => t.status !== 'done')
   const allDone = displayTasks.length > 0 && activeIdx === -1
   const selectedTask = displayTasks[selectedIdx] ?? null
+
+  // Henter hvem som reviewer og en lenke til tilbakemeldingene så langt når det
+  // valgte steget står fast i 'waiting_review' — uten dette var steget helt tomt
+  // mens man ventet (feedback 9841b60e).
+  useEffect(() => {
+    if (!selectedTask || selectedTask.status !== 'waiting_review') {
+      setWaitingReviewInfo(null)
+      return
+    }
+    let cancelled = false
+    getGalleryReviewByTaskId(selectedTask.id).then(info => {
+      if (!cancelled) setWaitingReviewInfo(info)
+    })
+    return () => { cancelled = true }
+  }, [selectedTask?.id, selectedTask?.status])
 
   async function handleDeleteSelectionComment(imageId: string, commentId: string) {
     if (readOnly) return
@@ -1485,6 +1518,11 @@ export default function PostProdDetailPage() {
                     Aktiv
                   </span>
                 )}
+                {isSelectedActive && selectedTask.status === 'waiting_review' && (
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#C49434', background: 'rgba(196,148,52,0.1)', border: `1px solid rgba(196,148,52,0.25)`, padding: '2px 8px', borderRadius: 4 }}>
+                    Venter på review
+                  </span>
+                )}
                 {isSelectedLocked && (
                   <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, background: 'var(--admin-overlay-04)', border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4 }}>
                     Venter
@@ -2126,6 +2164,38 @@ export default function PostProdDetailPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              ) : isSelectedActive && selectedTask.status === 'waiting_review' ? (
+                /* Steget er sendt til en kollega for intern review (requestGalleryReview
+                   i lib/actions/gallery-reviews.ts) og venter på svar derfra — uten denne
+                   grenen falt verken "Sett i gang"- eller "Merk som ferdig"-betingelsen
+                   under til, og steget sto helt tomt (feedback 9841b60e). */
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, fontStyle: 'italic', marginBottom: 10 }}>
+                    🕒 Venter på at {waitingReviewInfo?.reviewerName ?? 'kollegaen'} godkjenner bildeutvalget
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {waitingReviewInfo && (
+                      <Link
+                        href={`/admin/selections/${waitingReviewInfo.galleryId}/review/${waitingReviewInfo.reviewId}`}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.accent, textDecoration: 'underline' }}
+                      >
+                        Se tilbakemeldinger så langt →
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => handleOverrideWaitingReview(selectedTask.id)}
+                      disabled={readOnly || overridingReview}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                        padding: '8px 16px', borderRadius: 7, cursor: overridingReview ? 'default' : 'pointer',
+                        background: 'transparent', color: C.text3, border: `1px solid ${C.border}`,
+                        opacity: overridingReview ? 0.6 : 1,
+                      }}
+                    >
+                      {overridingReview ? 'Låser opp...' : 'Fortsett uten godkjenning'}
+                    </button>
+                  </div>
                 </div>
               ) : isSelectedActive && selectedTask.title === SELEKSJON_TITLE ? (
                 /* Spesialbehandling: Selektering fullføres normalt av kundens innsending,

@@ -79,6 +79,14 @@ export default function GalleryReviewClient({
     return marks[imageId] ?? { keep: true, note: '' }
   }
 
+  // Bilder uten en eksplisitt lagret markering vises IKKE som "Godkjent"/"Behold" —
+  // det defaultverdien i markFor() bare betyr internt (ingen handling = beholdes ved
+  // innsending). Viste vi den som grønn "Godkjent" så alt i et helt nytt review-runde
+  // ut som ferdig vurdert før reviewer har rørt noe (feedback b54f1335/c745468c).
+  function isUnreviewed(imageId: string) {
+    return !(imageId in marks)
+  }
+
   async function toggleKeep(imageId: string) {
     if (readOnly) return
     const current = markFor(imageId)
@@ -175,8 +183,9 @@ export default function GalleryReviewClient({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
               {imgs.map(img => {
                 const mark = markFor(img.id)
+                const unreviewed = isUnreviewed(img.id)
                 return (
-                  <div key={img.id} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}`, background: C.surface, opacity: mark.keep ? 1 : 0.45 }}>
+                  <div key={img.id} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}`, background: C.surface, opacity: !unreviewed && !mark.keep ? 0.45 : 1 }}>
                     <div
                       onClick={() => setLightboxIndex(images.findIndex(i => i.id === img.id))}
                       style={{ aspectRatio: '4/3', background: C.surface2, cursor: 'zoom-in' }}
@@ -190,13 +199,15 @@ export default function GalleryReviewClient({
                         style={{
                           padding: '5px', borderRadius: 5, border: 'none', cursor: readOnly ? 'default' : 'pointer',
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
-                          background: mark.keep ? 'rgba(76,175,125,0.12)' : 'rgba(212,100,90,0.15)',
-                          color: mark.keep ? '#4CAF7D' : '#D4645A',
+                          background: unreviewed ? C.surface2 : (mark.keep ? 'rgba(76,175,125,0.12)' : 'rgba(212,100,90,0.15)'),
+                          color: unreviewed ? C.text3 : (mark.keep ? '#4CAF7D' : '#D4645A'),
                         }}
                       >
-                        {isDelivery
-                          ? (mark.keep ? '✓ Godkjent' : '✗ Trenger endring')
-                          : (mark.keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
+                        {unreviewed
+                          ? 'Ikke vurdert ennå'
+                          : isDelivery
+                            ? (mark.keep ? '✓ Godkjent' : '✗ Trenger endring')
+                            : (mark.keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
                       </button>
                       {readOnly ? (
                         mark.note && (
@@ -272,13 +283,15 @@ export default function GalleryReviewClient({
               style={{
                 padding: '8px 14px', borderRadius: 6, border: 'none', cursor: readOnly ? 'default' : 'pointer', flexShrink: 0,
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
-                background: markFor(lightboxImage.id).keep ? 'rgba(76,175,125,0.18)' : 'rgba(212,100,90,0.2)',
-                color: markFor(lightboxImage.id).keep ? '#4CAF7D' : '#D4645A',
+                background: isUnreviewed(lightboxImage.id) ? 'rgba(255,255,255,0.1)' : (markFor(lightboxImage.id).keep ? 'rgba(76,175,125,0.18)' : 'rgba(212,100,90,0.2)'),
+                color: isUnreviewed(lightboxImage.id) ? 'rgba(255,255,255,0.65)' : (markFor(lightboxImage.id).keep ? '#4CAF7D' : '#D4645A'),
               }}
             >
-              {isDelivery
-                ? (markFor(lightboxImage.id).keep ? '✓ Godkjent' : '✗ Trenger endring')
-                : (markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
+              {isUnreviewed(lightboxImage.id)
+                ? 'Ikke vurdert ennå'
+                : isDelivery
+                  ? (markFor(lightboxImage.id).keep ? '✓ Godkjent' : '✗ Trenger endring')
+                  : (markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
             </button>
             {readOnly ? (
               markFor(lightboxImage.id).note && (

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { getAllGalleriesOverview, getHiddenGalleriesOverview, getStandaloneGalleries } from '@/lib/actions/selection-albums'
+import { getInternalReviewGalleriesOverview } from '@/lib/actions/gallery-reviews'
 import CreateStandaloneGalleryButton from './CreateStandaloneGalleryButton'
 import DeleteGalleryButton from './DeleteGalleryButton'
 import { C } from '@/lib/admin-theme'
@@ -17,16 +18,24 @@ export default async function SelectionsOverviewPage({
 
   const { tab } = await searchParams
   const showHidden = tab === 'hidden'
+  const showInternal = tab === 'internal'
 
-  const [projects, standaloneGalleries] = await Promise.all([
-    showHidden ? getHiddenGalleriesOverview() : getAllGalleriesOverview(),
-    getStandaloneGalleries(),
+  const [projects, standaloneGalleries, internalReviews] = await Promise.all([
+    showHidden ? getHiddenGalleriesOverview() : showInternal ? Promise.resolve([]) : getAllGalleriesOverview(),
+    showInternal ? Promise.resolve([]) : getStandaloneGalleries(),
+    showInternal ? getInternalReviewGalleriesOverview() : Promise.resolve([]),
   ])
 
   const galleryStatusMap: Record<string, { label: string; color: string }> = {
     open:      { label: 'Åpen',     color: '#4CAF7D' },
     submitted: { label: 'Innsendt', color: '#C49434' },
     purged:    { label: 'Slettet',  color: '#8484A0' },
+  }
+
+  const reviewStatusMap: Record<string, { label: string; color: string }> = {
+    pending:            { label: 'Venter på review', color: '#C49434' },
+    approved:           { label: 'Godkjent',         color: '#4CAF7D' },
+    changes_requested:  { label: 'Endringer ønsket',  color: '#D4645A' },
   }
 
   return (
@@ -39,18 +48,20 @@ export default async function SelectionsOverviewPage({
           <CreateStandaloneGalleryButton />
         </div>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 18 }}>
-          {showHidden
-            ? 'Kunden har sendt inn sitt bildevalg — prosjektet er videre i redigering'
-            : 'Prosjekter i post-prod med aktiv seleksjonsfase'}
+          {showInternal
+            ? 'Gallerier sendt til en kollega for godkjenning før kunden får tilgang — kunden ser aldri disse'
+            : showHidden
+              ? 'Kunden har sendt inn sitt bildevalg — prosjektet er videre i redigering'
+              : 'Prosjekter i post-prod med aktiv seleksjonsfase'}
         </p>
 
         <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
-          {[{ key: 'active', label: 'Aktive' }, { key: 'hidden', label: 'Skjulte' }].map(t => {
-            const isActive = (t.key === 'hidden') === showHidden
+          {[{ key: 'active', label: 'Aktive' }, { key: 'hidden', label: 'Skjulte' }, { key: 'internal', label: 'Intern review' }].map(t => {
+            const isActive = t.key === 'internal' ? showInternal : t.key === 'hidden' ? showHidden : !showHidden && !showInternal
             return (
               <Link
                 key={t.key}
-                href={t.key === 'hidden' ? '/admin/selections?tab=hidden' : '/admin/selections'}
+                href={t.key === 'active' ? '/admin/selections' : `/admin/selections?tab=${t.key}`}
                 style={{
                   padding: '6px 14px', borderRadius: 7,
                   fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
@@ -66,7 +77,57 @@ export default async function SelectionsOverviewPage({
           })}
         </div>
 
-        {projects.length === 0 ? (
+        {showInternal ? (
+          internalReviews.length === 0 ? (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '40px 24px', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>Ingen gallerier sendt til intern review ennå.</p>
+            </div>
+          ) : (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      {['Prosjekt', 'Review-status', 'Reviewer', 'Sendt'].map(h => (
+                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3, fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {internalReviews.map((g, i) => {
+                      const st = g.reviewStatus ? reviewStatusMap[g.reviewStatus] : null
+                      return (
+                        <tr key={g.galleryId} style={{ borderBottom: i < internalReviews.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                          <td style={{ padding: '13px 16px' }}>
+                            <Link
+                              href={`/admin/selections/${g.galleryId}`}
+                              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text, textDecoration: 'none' }}
+                            >
+                              {g.projectName}
+                            </Link>
+                          </td>
+                          <td style={{ padding: '13px 16px' }}>
+                            {st ? (
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: st.color }}>{st.label}</span>
+                            ) : (
+                              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>Ikke sendt</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text2 }}>
+                            {g.reviewerName ?? '—'}
+                          </td>
+                          <td style={{ padding: '13px 16px', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
+                            {g.requestedAt ? new Date(g.requestedAt).toLocaleDateString('nb-NO') : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        ) : projects.length === 0 ? (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '40px 24px', textAlign: 'center' }}>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', color: C.text3 }}>
               {showHidden ? 'Ingen skjulte gallerier ennå.' : 'Ingen prosjekter i seleksjonsfasen akkurat nå.'}

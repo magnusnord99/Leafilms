@@ -231,6 +231,169 @@ export async function saveReviewMark(reviewId: string, imageId: string, keep: bo
   }
 }
 
+// Henter den aktive (pending) reviewen et postprod-steg venter på, slik at
+// "Redigering"-steget kan vise hvem som reviewer og lenke til tilbakemeldingene
+// så langt — i stedet for å stå helt tomt mens status er 'waiting_review'.
+export async function getGalleryReviewByTaskId(taskId: string): Promise<{
+  reviewId: string
+  galleryId: string
+  reviewerName: string | null
+} | null> {
+  try {
+    const supabase = await createClient()
+    const { data: review } = await supabase
+      .from('gallery_reviews')
+      .select('id, gallery_id, reviewer_id')
+      .eq('task_id', taskId)
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!review) return null
+
+    const { data: reviewer } = await supabase
+      .from('profiles')
+      .select('name, email')
+      .eq('id', review.reviewer_id)
+      .maybeSingle()
+
+    return {
+      reviewId: review.id,
+      galleryId: review.gallery_id,
+      reviewerName: reviewer?.name ?? reviewer?.email ?? null,
+    }
+  } catch (err) {
+    console.error('getGalleryReviewByTaskId unexpected error:', err)
+    return null
+  }
+}
+
+// Lar avsender overstyre en 'waiting_review'-lås som henger fast fordi reviewer
+// ikke har svart ennå (feedback 9841b60e) — f.eks. glemt det. Reviewen selv
+// røres ikke (forblir 'pending'), slik at reviewer fortsatt kan svare etterpå —
+// dette bare låser opp steget og minner reviewer på forespørselen på nytt.
+export async function overrideWaitingReview(taskId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .select('id, status, project_id')
+      .eq('id', taskId)
+      .single()
+
+    if (taskError || !task) return { ok: false, error: 'Fant ikke oppgaven' }
+    if (task.status !== 'waiting_review') return { ok: false, error: 'Oppgaven venter ikke på review' }
+
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+      .eq('id', taskId)
+
+    if (updateError) {
+      console.error('overrideWaitingReview update error:', updateError)
+      return { ok: false, error: 'Kunne ikke låse opp steget' }
+    }
+
+    const { data: review } = await supabase
+      .from('gallery_reviews')
+      .select('id, gallery_id, reviewer_id')
+      .eq('task_id', taskId)
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (review) {
+      let projectTitle: string | null = null
+      if (task.project_id) {
+        const { data: project } = await supabase.from('projects').select('title').eq('id', task.project_id).maybeSingle()
+        projectTitle = project?.title ?? null
+      }
+      await notifyAssignment({
+        recipientId: review.reviewer_id,
+        type: 'gallery_review_requested',
+        projectId: task.project_id,
+        galleryId: review.gallery_id,
+        galleryReviewId: review.id,
+        preview: projectTitle
+          ? `Fortsatte uten din godkjenning på "${projectTitle}" — se gjennom bildeutvalget når du kan`
+          : 'Fortsatte uten din godkjenning — se gjennom bildeutvalget når du kan',
+      })
+    }
+
+    revalidatePath(`/admin/postprod/${task.project_id}`)
+    return { ok: true }
+  } catch (err) {
+    console.error('overrideWaitingReview unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+// Egen oversikt for intern-review-gallerier (gallery_type='delivery') — disse
+// hørte tidligere ingen steder hjemme i /admin/selections, som kun viser
+// kunde-gallerier (gallery_type='selection') knyttet til Selektering-steget
+// (feedback 5aec4626/6c9e4ffa).
+export async function getInternalReviewGalleriesOverview(): Promise<{
+  projectId: string | null
+  projectName: string
+  galleryId: string
+  reviewId: string | null
+  reviewStatus: GalleryReview['status'] | null
+  reviewerName: string | null
+  requestedAt: string | null
+}[]> {
+  try {
+    const supabase = await createClient()
+    const { data: galleries } = await supabase
+      .from('selection_galleries')
+      .select('id, project_id, created_at, projects(title)')
+      .eq('gallery_type', 'delivery')
+      .order('created_at', { ascending: false })
+
+    if (!galleries || galleries.length === 0) return []
+
+    const galleryIds = galleries.map(g => g.id)
+    const { data: reviews } = await supabase
+      .from('gallery_reviews')
+      .select('id, gallery_id, status, reviewer_id, requested_at')
+      .in('gallery_id', galleryIds)
+      .order('requested_at', { ascending: false })
+
+    const latestReviewByGallery: Record<string, NonNullable<typeof reviews>[0]> = {}
+    for (const r of reviews ?? []) {
+      if (!latestReviewByGallery[r.gallery_id]) latestReviewByGallery[r.gallery_id] = r
+    }
+
+    const reviewerIds = [...new Set(Object.values(latestReviewByGallery).map(r => r.reviewer_id))]
+    const { data: reviewerProfiles } = reviewerIds.length > 0
+      ? await supabase.from('profiles').select('id, name, email').in('id', reviewerIds)
+      : { data: [] as ProfileRow[] }
+    const reviewerMap = Object.fromEntries(((reviewerProfiles ?? []) as ProfileRow[]).map(p => [p.id, p]))
+
+    return galleries.map(g => {
+      const review = latestReviewByGallery[g.id] ?? null
+      const reviewer = review ? reviewerMap[review.reviewer_id] : null
+      const project = g.projects as unknown as { title: string } | null
+      return {
+        projectId: g.project_id,
+        projectName: project?.title ?? 'Frittstående galleri',
+        galleryId: g.id,
+        reviewId: review?.id ?? null,
+        reviewStatus: review?.status ?? null,
+        reviewerName: reviewer ? (reviewer.name ?? reviewer.email) : null,
+        requestedAt: review?.requested_at ?? null,
+      }
+    })
+  } catch (err) {
+    console.error('getInternalReviewGalleriesOverview unexpected error:', err)
+    return []
+  }
+}
+
 export async function respondToGalleryReview(reviewId: string, decision: 'approved' | 'changes_requested', comment?: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()

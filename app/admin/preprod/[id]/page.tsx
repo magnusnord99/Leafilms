@@ -824,21 +824,10 @@ export default function PreprodDetailPage() {
 
   const access = getStageAccess('pre_prod', project.pipeline_stage)
 
-  if (access === 'not_yet_reached') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet har ikke nådd pre-produksjon ennå
-          </p>
-          <button onClick={() => router.push('/admin/preprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-            ← Tilbake
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  // Steg prosjektet ikke har nådd ennå er fullt redigerbare her, ikke
+  // blokkert — man skal kunne jobbe med alle deler av prosjektet, ikke bare
+  // der det er nå (feedback 2e41d344/b0d97ab3). Kun "past"-steg er
+  // skrivebeskyttet (med opplåsingsmulighet).
   const readOnly = access === 'past' && !unlocked
 
   return (

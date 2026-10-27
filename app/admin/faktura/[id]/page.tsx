@@ -115,16 +115,13 @@ export default function FakturaPage() {
 
   const access = getStageAccess('fakturert', project.pipeline_stage)
 
-  // Faktura hadde ingen stegsperre i det hele tatt før denne featuren — i
-  // motsetning til pre-prod/post-prod (som alltid har blokkert helt før
-  // fakturering) finnes det en reell inngang hit før prosjektet når
-  // fakturert: invoice_assigned-varselet (satt fra pre-prod, se
-  // InvoiceAssigneeCard) lenker alltid til denne siden uavhengig av steg. Et
-  // hardt blokkskjerm ville brutt den lenken, så not_yet_reached rendres her
-  // skrivebeskyttet i stedet — samme mønster som 'past', bare uten
-  // opplåsingsmulighet siden det ikke gir mening å "låse opp" et steg som
-  // ikke er nådd ennå.
-  const readOnly = access !== 'current' && !unlocked
+  // Steg prosjektet ikke har nådd ennå er fullt redigerbare her, ikke
+  // skrivebeskyttet — man skal kunne jobbe med alle deler av prosjektet, ikke
+  // bare der det er nå (feedback 2e41d344/b0d97ab3). Kun "past"-steg er
+  // skrivebeskyttet (med opplåsingsmulighet). "Marker faktura som sendt"
+  // (handleMarkDone under) er likevel fortsatt låst til access === 'current'
+  // — det er en fremdriftshandling, ikke bare redigering.
+  const readOnly = access === 'past' && !unlocked
 
   const customer = project.customer ?? null
   const customerName = customer?.name ?? null

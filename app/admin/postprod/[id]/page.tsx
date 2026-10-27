@@ -372,20 +372,22 @@ export default function PostProdDetailPage() {
     setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
 
-    // Åpne på et steg prosjektet ikke er i akkurat nå (forbi eller ikke nådd
-    // ennå) skal aldri seede/reseede oppgaver — det ville mutert data fra en
-    // rent skrivebeskyttet visning. Se lib/pipeline-stage-lock.ts.
-    const isCurrentStage = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) === 'current'
+    // Åpner man på et steg prosjektet allerede har passert, skal oppgaver
+    // aldri seedes/reseedes på nytt — det ville mutert data fra en
+    // skrivebeskyttet visning. Steg prosjektet ikke har nådd ennå er derimot
+    // fullt redigerbare (feedback 2e41d344/b0d97ab3), så de seedes på samme
+    // måte som det faktiske nåværende steget. Se lib/pipeline-stage-lock.ts.
+    const canSeedTasks = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) !== 'past'
 
     // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
     // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
     // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
     // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
-    if (isCurrentStage && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+    if (canSeedTasks && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
 
     const projectTasks = await getTasksForProject(projectId, 'post_prod')
 
-    if (isCurrentStage && projectTasks.length === 0 && currentProj?.project_type) {
+    if (canSeedTasks && projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
       if (result.error) {
         setSeedError(result.error)
@@ -865,21 +867,10 @@ export default function PostProdDetailPage() {
 
   const access = getStageAccess('post_prod', currentProject.pipeline_stage)
 
-  if (access === 'not_yet_reached') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet har ikke nådd post-produksjon ennå
-          </p>
-          <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-            ← Tilbake
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  // Steg prosjektet ikke har nådd ennå er fullt redigerbare her, ikke
+  // blokkert — man skal kunne jobbe med alle deler av prosjektet, ikke bare
+  // der det er nå (feedback 2e41d344/b0d97ab3). Kun "past"-steg er
+  // skrivebeskyttet (med opplåsingsmulighet).
   const readOnly = access === 'past' && !unlocked
 
   const typeConf = currentProject.project_type ? TYPE_CONFIG[currentProject.project_type] : null

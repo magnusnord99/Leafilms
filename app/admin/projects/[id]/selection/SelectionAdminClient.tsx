@@ -811,6 +811,14 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
           {latest.comment}
         </div>
       )}
+      {latest?.status === 'pending' && (
+        <button
+          onClick={() => router.push(`/admin/selections/${galleryId}/review/${latest.id}`)}
+          style={{ marginTop: 4, padding: 0, border: 'none', background: 'none', color: C.accent, fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          Se tilbakemeldinger så langt (ikke sendt inn ennå) →
+        </button>
+      )}
 
       {picking ? (
         <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', marginTop: 6 }}>

@@ -198,6 +198,19 @@ export async function getGalleryForInternalReview(reviewId: string): Promise<{
 export async function saveReviewMark(reviewId: string, imageId: string, keep: boolean, note?: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+    const { data: review } = await supabase
+      .from('gallery_reviews')
+      .select('reviewer_id')
+      .eq('id', reviewId)
+      .single()
+
+    if (!review || user.id !== review.reviewer_id) {
+      return { ok: false, error: 'Du er ikke satt som reviewer for denne forespørselen' }
+    }
+
     const { error } = await supabase
       .from('gallery_review_marks')
       .upsert({

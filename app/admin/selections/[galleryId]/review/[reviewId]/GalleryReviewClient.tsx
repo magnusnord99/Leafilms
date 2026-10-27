@@ -16,11 +16,18 @@ type ReviewImage = {
 
 export default function GalleryReviewClient({
   data,
+  isReviewer,
 }: {
   data: { review: GalleryReview; marks: GalleryReviewMark[]; gallery: AdminSelectionPageData }
+  isReviewer: boolean
 }) {
   const router = useRouter()
   const { review, gallery } = data
+  // Alle andre enn den faktiske reviewer (f.eks. den som ba om reviewen) skal bare
+  // kunne se markeringene som er lagret så langt — ikke redigere dem eller sende inn
+  // reviewen på reviewers vegne. saveReviewMark/respondToGalleryReview har samme
+  // sjekk server-side, dette er bare for å ikke by på knapper som uansett avvises.
+  const readOnly = !isReviewer && review.status === 'pending'
   // Leverings-galleri (ferdigredigerte bilder) skal aldri kunne fjerne/legge til
   // bilder her — alt det ble avgjort i seleksjonen. Reviewer skal kun vurdere
   // redigeringen: kommentere og merke godkjent/trenger endring per bilde.
@@ -73,6 +80,7 @@ export default function GalleryReviewClient({
   }
 
   async function toggleKeep(imageId: string) {
+    if (readOnly) return
     const current = markFor(imageId)
     const next = { ...current, keep: !current.keep }
     setMarks(prev => ({ ...prev, [imageId]: next }))
@@ -80,6 +88,7 @@ export default function GalleryReviewClient({
   }
 
   async function saveNote(imageId: string, note: string) {
+    if (readOnly) return
     const current = markFor(imageId)
     setMarks(prev => ({ ...prev, [imageId]: { ...current, note } }))
     await saveReviewMark(review.id, imageId, current.keep, note)
@@ -132,10 +141,19 @@ export default function GalleryReviewClient({
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 120 }}>
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '14px 20px' }}>
         <h1 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', fontWeight: 700, color: C.text }}>
-          {isDelivery ? 'Gjennomgå redigerte bilder' : 'Gjennomgå bildeutvalg'}
+          {readOnly
+            ? 'Forhåndsvisning av tilbakemeldinger'
+            : (isDelivery ? 'Gjennomgå redigerte bilder' : 'Gjennomgå bildeutvalg')}
         </h1>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, marginTop: 2 }}>
-          {isDelivery ? (
+          {readOnly ? (
+            <>
+              {review.reviewer?.name ?? review.reviewer?.email ?? 'Reviewer'} har ikke sendt inn reviewen ennå —
+              dette viser det som er markert og notert så langt, og oppdateres ikke automatisk.
+              {Object.keys(marks).length > 0 && ` ${Object.keys(marks).length} av ${images.length} bilder vurdert.`}
+              {excludedCount > 0 && ` ${excludedCount} ${isDelivery ? 'trenger endring' : 'tas ikke med'}.`}
+            </>
+          ) : isDelivery ? (
             <>
               Vurder graden på redigeringen og legg på en kommentar der noe må endres. Ingen bilder
               fjernes eller legges til her — det er allerede avgjort.
@@ -168,8 +186,9 @@ export default function GalleryReviewClient({
                     <div style={{ padding: '7px 8px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                       <button
                         onClick={() => toggleKeep(img.id)}
+                        disabled={readOnly}
                         style={{
-                          padding: '5px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                          padding: '5px', borderRadius: 5, border: 'none', cursor: readOnly ? 'default' : 'pointer',
                           fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600,
                           background: mark.keep ? 'rgba(76,175,125,0.12)' : 'rgba(212,100,90,0.15)',
                           color: mark.keep ? '#4CAF7D' : '#D4645A',
@@ -179,13 +198,19 @@ export default function GalleryReviewClient({
                           ? (mark.keep ? '✓ Godkjent' : '✗ Trenger endring')
                           : (mark.keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
                       </button>
-                      <input
-                        defaultValue={mark.note}
-                        onBlur={e => saveNote(img.id, e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                        placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
-                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
-                      />
+                      {readOnly ? (
+                        mark.note && (
+                          <p style={{ margin: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text2, lineHeight: 1.3 }}>{mark.note}</p>
+                        )
+                      ) : (
+                        <input
+                          defaultValue={mark.note}
+                          onBlur={e => saveNote(img.id, e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                          placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
+                          style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 7px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                        />
+                      )}
                     </div>
                   </div>
                 )
@@ -243,8 +268,9 @@ export default function GalleryReviewClient({
           >
             <button
               onClick={() => toggleKeep(lightboxImage.id)}
+              disabled={readOnly}
               style={{
-                padding: '8px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', flexShrink: 0,
+                padding: '8px 14px', borderRadius: 6, border: 'none', cursor: readOnly ? 'default' : 'pointer', flexShrink: 0,
                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
                 background: markFor(lightboxImage.id).keep ? 'rgba(76,175,125,0.18)' : 'rgba(212,100,90,0.2)',
                 color: markFor(lightboxImage.id).keep ? '#4CAF7D' : '#D4645A',
@@ -254,22 +280,30 @@ export default function GalleryReviewClient({
                 ? (markFor(lightboxImage.id).keep ? '✓ Godkjent' : '✗ Trenger endring')
                 : (markFor(lightboxImage.id).keep ? '✓ Behold i utvalg' : '✗ Tas ikke med')}
             </button>
-            <input
-              ref={lightboxNoteRef}
-              key={lightboxImage.id}
-              defaultValue={markFor(lightboxImage.id).note}
-              onBlur={e => saveNote(lightboxImage.id, e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-              placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
-              style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
-            />
-            <button
-              onClick={() => lightboxNoteRef.current?.blur()}
-              title="Lagre notat (Enter)"
-              style={{ flexShrink: 0, padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
-            >
-              Lagre
-            </button>
+            {readOnly ? (
+              markFor(lightboxImage.id).note && (
+                <p style={{ flex: 1, margin: 0, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)' }}>{markFor(lightboxImage.id).note}</p>
+              )
+            ) : (
+              <>
+                <input
+                  ref={lightboxNoteRef}
+                  key={lightboxImage.id}
+                  defaultValue={markFor(lightboxImage.id).note}
+                  onBlur={e => saveNote(lightboxImage.id, e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  placeholder={isDelivery ? 'Kommentar (kun internt)...' : 'Notat (kun internt)...'}
+                  style={{ flex: 1, boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '8px 10px', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                />
+                <button
+                  onClick={() => lightboxNoteRef.current?.blur()}
+                  title="Lagre notat (Enter)"
+                  style={{ flexShrink: 0, padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Lagre
+                </button>
+              </>
+            )}
           </div>
           <p style={{ marginTop: 10, fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
             {lightboxIndex! + 1} / {images.length} · Esc for å lukke · ← → for å bla
@@ -277,38 +311,46 @@ export default function GalleryReviewClient({
         </div>
       )}
 
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'center' }}>
-        <textarea
-          value={comment}
-          onChange={e => setComment(e.target.value)}
-          placeholder="Overordnet kommentar (påkrevd ved «Be om endringer»)..."
-          rows={2}
-          style={{ flex: 1, maxWidth: 480, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', resize: 'none' }}
-        />
-        {/* På leveringsreview styres hvilken knapp som vises av bildemerkingene —
-            enten alt er godkjent (kun "Godkjenn"), eller noe trenger endring
-            (kun "Be om endringer"). På seleksjonsreview betyr "trenger endring"
-            noe annet (ekskluder fra kunde) og skal ikke låse valget, så der vises
-            begge knappene som før. */}
-        {(!isDelivery || excludedCount > 0) && (
-          <button
-            onClick={() => handleDecision('changes_requested')}
-            disabled={submitting !== null}
-            style={{ padding: '10px 16px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'none', color: '#D4645A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-          >
-            {submitting === 'changes_requested' ? '...' : 'Be om endringer'}
-          </button>
-        )}
-        {(!isDelivery || excludedCount === 0) && (
-          <button
-            onClick={() => handleDecision('approved')}
-            disabled={submitting !== null}
-            style={{ padding: '10px 18px', borderRadius: 7, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-          >
-            {submitting === 'approved' ? '...' : 'Godkjenn'}
-          </button>
-        )}
-      </div>
+      {readOnly ? (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, padding: '10px 24px', textAlign: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
+            Kun {review.reviewer?.name ?? review.reviewer?.email ?? 'reviewer'} kan sende inn denne reviewen.
+          </span>
+        </div>
+      ) : (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'center' }}>
+          <textarea
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            placeholder="Overordnet kommentar (påkrevd ved «Be om endringer»)..."
+            rows={2}
+            style={{ flex: 1, maxWidth: 480, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', resize: 'none' }}
+          />
+          {/* På leveringsreview styres hvilken knapp som vises av bildemerkingene —
+              enten alt er godkjent (kun "Godkjenn"), eller noe trenger endring
+              (kun "Be om endringer"). På seleksjonsreview betyr "trenger endring"
+              noe annet (ekskluder fra kunde) og skal ikke låse valget, så der vises
+              begge knappene som før. */}
+          {(!isDelivery || excludedCount > 0) && (
+            <button
+              onClick={() => handleDecision('changes_requested')}
+              disabled={submitting !== null}
+              style={{ padding: '10px 16px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'none', color: '#D4645A', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {submitting === 'changes_requested' ? '...' : 'Be om endringer'}
+            </button>
+          )}
+          {(!isDelivery || excludedCount === 0) && (
+            <button
+              onClick={() => handleDecision('approved')}
+              disabled={submitting !== null}
+              style={{ padding: '10px 18px', borderRadius: 7, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {submitting === 'approved' ? '...' : 'Godkjenn'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

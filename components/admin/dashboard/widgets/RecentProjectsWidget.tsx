@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui'
 import { Project, PIPELINE_STAGE_LABELS_SHORT } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 import { WidgetHeader, Btn } from '../shared'
+import { getStageHref, getStageLabel } from '@/lib/pipeline-stage-nav'
 
 const PIPELINE_STAGE_COLORS: Record<string, string> = {
   lead: C.text3, møte: '#4A9AC4', tilbud_sendt: C.accent,
@@ -98,7 +99,10 @@ export default function RecentProjectsWidget() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <Btn href={`/admin/projects/${project.id}`}>Oversikt</Btn>
+                  <Btn href={getStageHref(project.id, stage)}>{getStageLabel(stage)}</Btn>
+                  {stage && stage !== 'lead' && (
+                    <Btn href={`/admin/projects/${project.id}`} variant="secondary">Oversikt</Btn>
+                  )}
                   <Btn href={`/admin/projects/${project.id}/edit`} variant="secondary">Pitch</Btn>
                   {shareLinks[project.id] ? (
                     <Btn variant="ghost" onClick={() => window.open(shareLinks[project.id], '_blank')}>↗</Btn>

@@ -7,6 +7,7 @@ import { getMyInternalTasks } from '@/lib/actions/admin-tasks'
 import { TASK_STATUS_LABELS, type TaskStatus } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 import { WidgetHeader, Btn } from '../shared'
+import { getStageHref } from '@/lib/pipeline-stage-nav'
 
 type MyTaskItem = {
   id: string
@@ -35,7 +36,7 @@ export default function MyTasksWidget() {
           subtitle: t.project.title,
           dueDate: t.due_date,
           status: t.status,
-          href: `/admin/projects/${t.project.id}`,
+          href: getStageHref(t.project.id, t.project.pipeline_stage),
         }))
 
       const fromInternal: MyTaskItem[] = internalTasks

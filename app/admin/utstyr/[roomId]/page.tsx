@@ -119,6 +119,10 @@ export default function RoomDetailPage() {
   const [busy, setBusy] = useState(false)
   const [panelRefreshTick, setPanelRefreshTick] = useState(0)
   const [ownerEditOpen, setOwnerEditOpen] = useState(false)
+  // Romoversikten ble én lang flat liste uansett hvor mye utstyr som lå der — gruppert
+  // på kategori med individuell kollaps gjør det mulig å f.eks. ha kamera åpent og
+  // objektiver lukket samtidig (feedback 30c0172b).
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
 
   const load = useCallback(() => {
     getRoomDetail(roomId).then(data => {
@@ -280,6 +284,20 @@ export default function RoomDetailPage() {
   const visibleUnitsInRoom = targetProjectId
     ? detail.unitsInRoom.filter(u => !u.reservations.some(r => r.project_id === targetProjectId))
     : detail.unitsInRoom
+
+  const unitsInRoomByCategory = visibleUnitsInRoom.reduce<Record<string, EquipmentUnitRow[]>>((acc, u) => {
+    (acc[u.catalog_category] ??= []).push(u)
+    return acc
+  }, {})
+
+  function toggleCategoryCollapsed(category: string) {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      return next
+    })
+  }
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
@@ -533,16 +551,40 @@ export default function RoomDetailPage() {
               {detail.unitsInRoom.length === 0 ? 'Ingen utstyr i dette rommet' : 'Alt utstyr her er allerede hentet til dette prosjektet'}
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {visibleUnitsInRoom.map((u: EquipmentUnitRow) => (
-                <InRoomUnitRow
-                  key={u.id}
-                  unit={u}
-                  selected={selectedInRoom.has(u.id)}
-                  onToggle={() => toggleInRoom(u.id)}
-                  onCancelReservation={projectId => handleCancelReservation(u.id, projectId)}
-                />
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {Object.entries(unitsInRoomByCategory).map(([category, units]) => {
+                const collapsed = collapsedCategories.has(category)
+                return (
+                  <div key={category}>
+                    <button
+                      onClick={() => toggleCategoryCollapsed(category)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 6px',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, transition: 'transform 0.12s', transform: collapsed ? 'rotate(-90deg)' : 'none' }}>▾</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {EQUIPMENT_CATEGORY_LABELS[category] ?? category}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3 }}>({units.length})</span>
+                    </button>
+                    {!collapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {units.map((u: EquipmentUnitRow) => (
+                          <InRoomUnitRow
+                            key={u.id}
+                            unit={u}
+                            selected={selectedInRoom.has(u.id)}
+                            onToggle={() => toggleInRoom(u.id)}
+                            onCancelReservation={projectId => handleCancelReservation(u.id, projectId)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

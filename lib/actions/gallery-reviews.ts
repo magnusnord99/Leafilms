@@ -48,7 +48,7 @@ export async function getLatestGalleryReview(galleryId: string): Promise<Gallery
   return history[0] ?? null
 }
 
-export async function requestGalleryReview(galleryId: string, reviewerId: string, dueDate?: string): Promise<{ ok: boolean; error?: string }> {
+export async function requestGalleryReview(galleryId: string, reviewerId: string, dueDate?: string, dueTime?: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -113,6 +113,9 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
         description: `Intern review før kunden får tilgang. Åpne fra varselet i /admin/varsler, eller direkte: /admin/selections/${galleryId}`,
         assignee_id: reviewerId,
         due_date: dueDate || null,
+        // Kun klokkeslett-info, ren visning — due_date selv brukes fortsatt alene i
+        // sortering/"forfaller i dag"-logikk andre steder på admin_tasks (se 182_admin_task_due_time.sql).
+        due_time: dueDate && dueTime ? dueTime : null,
         sort_order: (maxOrder && maxOrder.length > 0 ? maxOrder[0].sort_order : 0) + 1,
         created_by: user.id,
         project_id: gallery.project_id ?? null,

@@ -11,6 +11,7 @@ type AdminTaskRow = {
   status: TaskStatus
   assignee_id: string | null
   due_date: string | null
+  due_time: string | null
   sort_order: number
   created_by: string | null
   created_at: string
@@ -29,6 +30,7 @@ function mapRow(row: AdminTaskRow): AdminTask {
     status: row.status,
     assignee,
     due_date: row.due_date,
+    due_time: row.due_time,
     sort_order: row.sort_order,
     created_by: row.created_by,
     created_at: row.created_at,

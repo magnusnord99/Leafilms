@@ -207,7 +207,10 @@ export function DashboardGrid({
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${COLUMN_COUNT}, 1fr)`, gap: 32, alignItems: 'start' }}>
+      {/* Fast 2-kolonners grid uten responsiv fallback gjorde at mobil måtte scrolle
+          sidelengs (feedback 6291bae8) — én kolonne under md-breakpointet, som resten
+          av adminflatens 2-kolonners seksjoner allerede gjør (se GalleryReviewClient.tsx). */}
+      <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 32, alignItems: 'start' }}>
         {columns.map((colItems, columnIndex) => (
           <DroppableColumn
             key={columnIndex}

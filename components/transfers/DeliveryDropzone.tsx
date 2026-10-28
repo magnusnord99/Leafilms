@@ -42,6 +42,11 @@ export function DeliveryDropzone({
   const [phase, setPhase] = useState<InternalPhase>('idle')
   const [selection, setSelection] = useState<SelectionMeta | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Et <input type="file"> kan ikke la samme dialog velge enten filer ELLER en mappe
+  // (webkitdirectory tvinger mappe-only-modus) — derfor en egen skjult mappe-input ved
+  // siden av, trigget av en liten lenke rett ved "Velg filer" (feedback 26a834a3).
+  // Drag-and-drop har støttet mapper hele tiden; dette dekker klikk-veien på samme måte.
+  const folderInputRef = useRef<HTMLInputElement>(null)
 
   const processItems = useCallback(
     (items: DroppedItem[]) => {
@@ -102,6 +107,7 @@ export function DeliveryDropzone({
     setPhase('idle')
     setSelection(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (folderInputRef.current) folderInputRef.current.value = ''
     onClear?.()
   }
 
@@ -110,8 +116,9 @@ export function DeliveryDropzone({
   if (variant === 'compact') {
     return (
       <div>
-        {/* Skjult fil-input */}
+        {/* Skjulte fil-/mappe-inputs */}
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFileChange} />
+        <input ref={folderInputRef} type="file" {...{ webkitdirectory: 'true', directory: 'true' }} style={{ display: 'none' }} onChange={onFileChange} />
 
         {phase === 'selected' && selection ? (
           /* Valgt-tilstand: vis fil/zip-info */
@@ -188,6 +195,19 @@ export function DeliveryDropzone({
             >
               📄 Velg filer
             </button>
+            <button
+              type="button"
+              disabled={!isInteractive}
+              onClick={() => folderInputRef.current?.click()}
+              style={{
+                width: '100%', marginTop: 4, background: 'none', border: 'none',
+                cursor: isInteractive ? 'pointer' : 'default',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3,
+                textDecoration: 'underline',
+              }}
+            >
+              eller velg en mappe
+            </button>
           </div>
         )}
       </div>
@@ -197,8 +217,9 @@ export function DeliveryDropzone({
   // ---- Large variant (TransferUploadClient) ----
   return (
     <div>
-      {/* Skjult fil-input */}
+      {/* Skjulte fil-/mappe-inputs */}
       <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFileChange} />
+      <input ref={folderInputRef} type="file" {...{ webkitdirectory: 'true', directory: 'true' }} style={{ display: 'none' }} onChange={onFileChange} />
 
       <div
         onDrop={onDrop}
@@ -271,6 +292,17 @@ export function DeliveryDropzone({
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
             >
               📄 Velg filer
+            </button>
+            <button
+              type="button"
+              onClick={() => folderInputRef.current?.click()}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', color: C.text3,
+                textDecoration: 'underline',
+              }}
+            >
+              eller velg en mappe
             </button>
           </>
         )}

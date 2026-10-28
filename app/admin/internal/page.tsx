@@ -81,7 +81,7 @@ function DueDateBadge({ task, onChange }: { task: AdminTask; onChange: (dueDate:
         opacity: task.due_date ? 1 : 0.55,
       }}
     >
-      {task.due_date ? formatDueDate(task.due_date) : '+ frist'}
+      {task.due_date ? formatDueDate(task.due_date) + (task.due_time ? ` · ${task.due_time.slice(0, 5)}` : '') : '+ frist'}
     </button>
   )
 }

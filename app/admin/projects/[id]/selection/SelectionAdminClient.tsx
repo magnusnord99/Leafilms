@@ -767,6 +767,7 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
   const [picking, setPicking] = useState(false)
   const [reviewerId, setReviewerId] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const [sending, setSending] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -782,12 +783,13 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
   async function handleSend() {
     if (!reviewerId) return
     setSending(true)
-    await requestGalleryReview(galleryId, reviewerId, dueDate || undefined)
+    await requestGalleryReview(galleryId, reviewerId, dueDate || undefined, dueTime || undefined)
     await refresh()
     setSending(false)
     setPicking(false)
     setReviewerId('')
     setDueDate('')
+    setDueTime('')
   }
 
   if (history === null) return null
@@ -832,13 +834,23 @@ function GalleryReviewPanel({ galleryId }: { galleryId: string }) {
               <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
             ))}
           </select>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={e => setDueDate(e.target.value)}
-            title="Ønsket frist for reviewen (valgfritt)"
-            style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', marginBottom: 6 }}
-          />
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              title="Ønsket frist for reviewen (valgfritt)"
+              style={{ flex: 1, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+            />
+            <input
+              type="time"
+              value={dueTime}
+              onChange={e => setDueTime(e.target.value)}
+              disabled={!dueDate}
+              title={dueDate ? 'Klokkeslett for fristen (valgfritt)' : 'Velg en dato først'}
+              style={{ width: 100, boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', opacity: dueDate ? 1 : 0.5 }}
+            />
+          </div>
           <div style={{ display: 'flex', gap: 5 }}>
             <button onClick={handleSend} disabled={sending || !reviewerId} style={{ flex: 1, padding: '6px', borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>
               {sending ? '...' : 'Send'}

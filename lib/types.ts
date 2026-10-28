@@ -811,6 +811,7 @@ export type AdminTask = {
   status: TaskStatus
   assignee: { id: string; name: string | null; email: string; color: string | null } | null
   due_date: string | null
+  due_time: string | null
   sort_order: number
   created_by: string | null
   created_at: string

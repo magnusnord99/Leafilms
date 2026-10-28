@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { notifyAssignment } from '@/lib/notify-assignment'
 import { getAdminGalleryPage, type AdminSelectionPageData } from '@/lib/actions/selection-albums'
-import type { GalleryReview, GalleryReviewMark } from '@/lib/types'
+import type { GalleryReview, GalleryReviewMark, GalleryReviewPin } from '@/lib/types'
 
 type ProfileRow = { id: string; name: string | null; email: string }
 
@@ -164,6 +164,7 @@ export async function requestGalleryReview(galleryId: string, reviewerId: string
 export async function getGalleryForInternalReview(reviewId: string): Promise<{
   review: GalleryReview
   marks: GalleryReviewMark[]
+  pins: GalleryReviewPin[]
   gallery: AdminSelectionPageData
 } | null> {
   try {
@@ -176,10 +177,11 @@ export async function getGalleryForInternalReview(reviewId: string): Promise<{
 
     if (error || !reviewRow) return null
 
-    const [[review], gallery, marksResult] = await Promise.all([
+    const [[review], gallery, marksResult, pinsResult] = await Promise.all([
       attachProfiles(supabase, [reviewRow as Omit<GalleryReview, 'requester' | 'reviewer'>]),
       getAdminGalleryPage(reviewRow.gallery_id),
       supabase.from('gallery_review_marks').select('id, review_id, image_id, keep, note').eq('review_id', reviewId),
+      supabase.from('gallery_review_pins').select('id, review_id, image_id, x_pct, y_pct, text, created_by, created_at').eq('review_id', reviewId).order('created_at'),
     ])
 
     if (!gallery) return null
@@ -188,10 +190,110 @@ export async function getGalleryForInternalReview(reviewId: string): Promise<{
       review,
       gallery,
       marks: (marksResult.data ?? []) as GalleryReviewMark[],
+      pins: (pinsResult.data ?? []) as GalleryReviewPin[],
     }
   } catch (err) {
     console.error('getGalleryForInternalReview unexpected error:', err)
     return null
+  }
+}
+
+// Punkt-kommentarer på bildet, for leverings-galleri-review (se 180_gallery_review_pins.sql).
+// Samme reviewer-sjekk som saveReviewMark — kun den oppsatte reviewer for denne
+// runden kan legge til/endre/slette punkter.
+async function assertIsReviewer(supabase: Awaited<ReturnType<typeof createClient>>, reviewId: string): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Ikke innlogget' }
+
+  const { data: review } = await supabase
+    .from('gallery_reviews')
+    .select('reviewer_id')
+    .eq('id', reviewId)
+    .single()
+
+  if (!review || user.id !== review.reviewer_id) {
+    return { ok: false, error: 'Du er ikke satt som reviewer for denne forespørselen' }
+  }
+  return { ok: true, userId: user.id }
+}
+
+export async function addReviewPin(reviewId: string, imageId: string, xPct: number, yPct: number, text: string): Promise<{ ok: boolean; error?: string; pin?: GalleryReviewPin }> {
+  try {
+    const supabase = await createClient()
+    const access = await assertIsReviewer(supabase, reviewId)
+    if (!access.ok) return { ok: false, error: access.error }
+
+    if (!text.trim()) return { ok: false, error: 'Kommentaren kan ikke være tom' }
+
+    const { data, error } = await supabase
+      .from('gallery_review_pins')
+      .insert({
+        review_id: reviewId,
+        image_id: imageId,
+        x_pct: Math.max(0, Math.min(100, xPct)),
+        y_pct: Math.max(0, Math.min(100, yPct)),
+        text: text.trim(),
+        created_by: access.userId,
+      })
+      .select('id, review_id, image_id, x_pct, y_pct, text, created_by, created_at')
+      .single()
+
+    if (error || !data) {
+      console.error('addReviewPin error:', error)
+      return { ok: false, error: 'Kunne ikke lagre kommentaren' }
+    }
+    return { ok: true, pin: data as GalleryReviewPin }
+  } catch (err) {
+    console.error('addReviewPin unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function updateReviewPin(pinId: string, reviewId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const access = await assertIsReviewer(supabase, reviewId)
+    if (!access.ok) return { ok: false, error: access.error }
+
+    if (!text.trim()) return { ok: false, error: 'Kommentaren kan ikke være tom' }
+
+    const { error } = await supabase
+      .from('gallery_review_pins')
+      .update({ text: text.trim() })
+      .eq('id', pinId)
+      .eq('review_id', reviewId)
+
+    if (error) {
+      console.error('updateReviewPin error:', error)
+      return { ok: false, error: 'Kunne ikke lagre kommentaren' }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('updateReviewPin unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
+  }
+}
+
+export async function deleteReviewPin(pinId: string, reviewId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const access = await assertIsReviewer(supabase, reviewId)
+    if (!access.ok) return { ok: false, error: access.error }
+
+    const { error } = await supabase
+      .from('gallery_review_pins')
+      .delete()
+      .eq('id', pinId)
+      .eq('review_id', reviewId)
+
+    if (error) {
+      console.error('deleteReviewPin error:', error)
+      return { ok: false, error: 'Kunne ikke slette kommentaren' }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('deleteReviewPin unexpected error:', err)
+    return { ok: false, error: 'Uventet feil' }
   }
 }
 

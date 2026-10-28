@@ -211,6 +211,17 @@ export type GalleryReviewMark = {
   note: string | null
 }
 
+export type GalleryReviewPin = {
+  id: string
+  review_id: string
+  image_id: string
+  x_pct: number
+  y_pct: number
+  text: string
+  created_by: string | null
+  created_at: string
+}
+
 export type CrewMember = {
   id: string
   role: string

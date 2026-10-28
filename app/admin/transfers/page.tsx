@@ -218,6 +218,7 @@ export default async function TransfersPage() {
                       <td style={{ padding: '13px 16px' }}>
                         <TransferRowActions
                           transferId={t.id}
+                          filename={t.filename}
                           customerId={t.customer_id}
                           backgroundImagePath={t.background_image_path}
                           downloadUrl={downloadUrl}

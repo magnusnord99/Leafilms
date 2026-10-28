@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
+import { headers } from 'next/headers'
 import { randomBytes } from 'crypto'
 import { r2, R2_BUCKET } from '@/lib/r2'
 import {
@@ -388,6 +389,18 @@ export async function recordDownload(token: string): Promise<{
     })
     .eq('id', result.transfer.id)
 
+  // Detaljert logg pr. nedlasting (i tillegg til den aggregerte telleren over) —
+  // lar oss se enhet/nettleser og tidspunkt for hvert forsøk, se 181_transfer_downloads.sql.
+  const headerList = await headers()
+  const userAgent = headerList.get('user-agent')
+  const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+  await supabase.from('transfer_downloads').insert({
+    transfer_id: result.transfer.id,
+    link_id: result.link.id,
+    user_agent: userAgent,
+    ip_address: ipAddress,
+  })
+
   try {
     const downloadUrl = await getSignedUrl(r2, new GetObjectCommand({
       Bucket: R2_BUCKET,
@@ -400,6 +413,33 @@ export async function recordDownload(token: string): Promise<{
     console.error('[recordDownload]', err)
     return { error: 'Kunne ikke generere nedlastingslenke' }
   }
+}
+
+export type TransferDownloadEvent = {
+  id: string
+  downloaded_at: string
+  user_agent: string | null
+  ip_address: string | null
+}
+
+// Henter detaljert nedlastingslogg for én leveranse (nyeste først), for
+// "Nedlastinger"-detaljvisningen i /admin/transfers.
+export async function getTransferDownloadHistory(transferId: string): Promise<TransferDownloadEvent[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('transfer_downloads')
+    .select('id, downloaded_at, user_agent, ip_address')
+    .eq('transfer_id', transferId)
+    .order('downloaded_at', { ascending: false })
+
+  if (error) {
+    console.error('[getTransferDownloadHistory]', error)
+    return []
+  }
+  return data as TransferDownloadEvent[]
 }
 
 // Sletter en leveranse (soft delete)

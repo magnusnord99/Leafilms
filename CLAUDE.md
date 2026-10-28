@@ -73,6 +73,8 @@ Disse er skrevet men ikke kjort mot Supabase enna.
 
 **Kjørt 2026-10-27:** `137_delivery_galleries.sql` viste seg å allerede ligge i databasen (`gallery_type`-kolonnen fantes — kjørt manuelt eller via et tidligere ukjent skript, uten at "uapplied"-notatet ble ryddet opp) — kjørt på nytt her uten effekt (IF NOT EXISTS), bare for å bekrefte. Samtidig anvendt: `180_gallery_review_pins.sql`, ny tabell for punkt-kommentarer på leverings-galleri-bilder (reviewer klikker et sted på det redigerte bildet og kommenterer der, i stedet for ett fritekstfelt pr. bilde) — se `GalleryReviewClient.tsx`s nye pin-lag i fullskjermvisningen, kun aktivt for `gallery_type = 'delivery'`. Kjørt via port 5432.
 
+**Kjørt 2026-10-28:** `181_transfer_downloads.sql` er anvendt mot Supabase (ny tabell som logger hvert enkelt nedlastingsforsøk på en leveranse — tidspunkt, User-Agent, IP — i tillegg til den eksisterende aggregerte `transfers.download_count`/`last_downloaded_at`. "Se detaljer"-lenke i `/admin/transfers`s nedlastingskolonne, se `components/transfers/DownloadHistoryButton.tsx`. Bakgrunn: Statkraft Høyanger-kunden fikk ikke åpnet en 854 MB zip-leveranse på mobil — denne loggen gir enhet/nettleser-info for å feilsøke slikt videre. Leveranser som ble lastet ned før denne migrasjonen viser "ingen detaljert logg" i stedet for tom liste). Kjørt via port 5432. (Samme dag, egen commit/deploy: "Endre navn" på leveranser i `/admin/transfers` — redigerer kun filnavnet, etternavnet låst/vist separat så filen fortsatt kan åpnes etter omdøping. Se `TransferRowActions.tsx`.)
+
 ## Utviklingsfilosofi
 
 - **Lean:** minste mulige feature som gir verdi, lever raskt, iterer

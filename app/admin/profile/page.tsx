@@ -8,7 +8,7 @@ import { AVATAR_COLORS, getAvatarColor } from '@/lib/avatar-colors'
 import { updateProfileName, updateProfilePhone, updateProfileJobTitle, updateProfileColor, getTakenColors, type ProfileColorOwner } from '@/lib/actions/profile'
 import { getEmailFooterTemplate, updateEmailFooterTemplate } from '@/lib/actions/email-footer'
 import { renderEmailFooter, EMAIL_FOOTER_PLACEHOLDERS } from '@/lib/email-footer'
-import { getCalendarFeedUrl } from '@/lib/actions/calendar'
+import { getCalendarFeedUrl, getPersonalCalendarFeedUrl, updateCalendarSyncPreferences, type CalendarSyncPreferences } from '@/lib/actions/calendar'
 
 export default function ProfilePage() {
   const { user, profile, loading } = useAuth()
@@ -44,6 +44,11 @@ export default function ProfilePage() {
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarCopied, setCalendarCopied] = useState(false)
 
+  const [personalCalendarUrl, setPersonalCalendarUrl] = useState<string | null>(null)
+  const [calendarPrefs, setCalendarPrefs] = useState<CalendarSyncPreferences | null>(null)
+  const [personalCalendarLoading, setPersonalCalendarLoading] = useState(true)
+  const [personalCalendarCopied, setPersonalCalendarCopied] = useState(false)
+
   useEffect(() => {
     if (!loading && !user) router.push('/login')
   }, [loading, user, router])
@@ -76,11 +81,33 @@ export default function ProfilePage() {
     })
   }, [])
 
+  useEffect(() => {
+    getPersonalCalendarFeedUrl().then(({ url, prefs }) => {
+      setPersonalCalendarUrl(url)
+      setCalendarPrefs(prefs)
+      setPersonalCalendarLoading(false)
+    })
+  }, [])
+
   async function handleCopyCalendarUrl() {
     if (!calendarUrl) return
     await navigator.clipboard.writeText(calendarUrl)
     setCalendarCopied(true)
     setTimeout(() => setCalendarCopied(false), 2000)
+  }
+
+  async function handleCopyPersonalCalendarUrl() {
+    if (!personalCalendarUrl) return
+    await navigator.clipboard.writeText(personalCalendarUrl)
+    setPersonalCalendarCopied(true)
+    setTimeout(() => setPersonalCalendarCopied(false), 2000)
+  }
+
+  async function toggleCalendarPref(key: keyof CalendarSyncPreferences) {
+    if (!calendarPrefs) return
+    const next = { ...calendarPrefs, [key]: !calendarPrefs[key] }
+    setCalendarPrefs(next)
+    await updateCalendarSyncPreferences(next)
   }
 
   async function handleSaveName() {
@@ -365,6 +392,69 @@ export default function ProfilePage() {
           ) : (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555' }}>
               Kalenderfeed er ikke konfigurert (CALENDAR_FEED_TOKEN mangler).
+            </p>
+          )}
+        </section>
+
+        <section style={{ marginTop: 32, paddingTop: 28, borderTop: `1px solid ${C.border}` }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 10 }}>
+            Personlig kalenderabonnement <span style={{ color: C.accent }}>— kun deg</span>
+          </label>
+          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, marginBottom: 10 }}>
+            En egen lenke der du selv velger hva som skal synces — bruk denne i stedet for den delte
+            lenken over hvis du f.eks. ikke vil ha oppgavefrister i kalenderen din.
+          </p>
+          {personalCalendarLoading ? (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>Laster...</p>
+          ) : personalCalendarUrl && calendarPrefs ? (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 12 }}>
+                {([
+                  ['shoots', 'Opptak'],
+                  ['deliveries', 'Levering'],
+                  ['meetings', 'Møter'],
+                  ['tasks', 'Oppgavefrister'],
+                ] as [keyof CalendarSyncPreferences, string][]).map(([key, labelText]) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={calendarPrefs[key]}
+                      onChange={() => toggleCalendarPref(key)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2 }}>{labelText}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  readOnly
+                  value={personalCalendarUrl}
+                  onFocus={e => e.target.select()}
+                  style={{
+                    flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2,
+                    background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px',
+                  }}
+                />
+                <button
+                  onClick={handleCopyPersonalCalendarUrl}
+                  style={{
+                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: 600,
+                    padding: '9px 16px', borderRadius: 8, cursor: 'pointer',
+                    background: C.accent, color: '#fff', border: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {personalCalendarCopied ? 'Kopiert!' : 'Kopier lenke'}
+                </button>
+              </div>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: C.text3, marginTop: 8 }}>
+                Endringer i valgene over slår inn neste gang kalender-appen din henter oppdatering —
+                lenken i seg selv endres ikke, du trenger ikke legge den til på nytt.
+              </p>
+            </>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: '#E05555' }}>
+              Fant ikke noe personlig kalendertoken for brukeren din.
             </p>
           )}
         </section>

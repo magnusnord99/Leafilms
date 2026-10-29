@@ -19,6 +19,61 @@ export async function getCalendarFeedUrl(): Promise<{ url: string | null }> {
   return { url: `${siteUrl}/api/calendar-feed/${token}` }
 }
 
+export type CalendarSyncPreferences = {
+  shoots: boolean
+  deliveries: boolean
+  meetings: boolean
+  tasks: boolean
+}
+
+// Personlig abonnements-URL (183_personal_calendar_feed.sql) — i tillegg til den
+// delte lenken over. Hver bruker har sitt eget token og velger selv hvilke
+// hendelsestyper som skal med (se app/admin/profile).
+export async function getPersonalCalendarFeedUrl(): Promise<{ url: string | null; prefs: CalendarSyncPreferences | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { url: null, prefs: null }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('calendar_feed_token, calendar_sync_shoots, calendar_sync_deliveries, calendar_sync_meetings, calendar_sync_tasks')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!profile?.calendar_feed_token) return { url: null, prefs: null }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
+  return {
+    url: `${siteUrl}/api/calendar-feed/me/${profile.calendar_feed_token}`,
+    prefs: {
+      shoots: profile.calendar_sync_shoots,
+      deliveries: profile.calendar_sync_deliveries,
+      meetings: profile.calendar_sync_meetings,
+      tasks: profile.calendar_sync_tasks,
+    },
+  }
+}
+
+export async function updateCalendarSyncPreferences(prefs: CalendarSyncPreferences): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Ikke innlogget' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      calendar_sync_shoots: prefs.shoots,
+      calendar_sync_deliveries: prefs.deliveries,
+      calendar_sync_meetings: prefs.meetings,
+      calendar_sync_tasks: prefs.tasks,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  return {}
+}
+
 export type ShootingEvent = {
   projectId: string
   projectTitle: string

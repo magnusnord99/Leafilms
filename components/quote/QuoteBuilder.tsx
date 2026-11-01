@@ -459,7 +459,7 @@ function CrewSection({
 
       {crew.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', minWidth: 420, fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Rolle', 'Navn', 'Dagsats', 'Dager', 'Total', ''].map((h, i) => (
@@ -524,7 +524,7 @@ function ItemSection({
 
       {items.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', minWidth: 420, fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Beskrivelse', 'Antall', 'Stk.pris', 'Total', ''].map((h, i) => (
@@ -1039,7 +1039,7 @@ function ShootCrewSection({
 
       {crew.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', minWidth: 480, fontSize: '0.8rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Rolle', 'Navn', 'Sats', 'Antall', '', 'Total', ''].map((h, i) => (

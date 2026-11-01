@@ -130,7 +130,7 @@ export function SigningProjectClient({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       {/* Signert-varsel — alltid synlig helt øverst, så kunden lett finner avtalen sin igjen */}
       {contractSigned && (
         <button

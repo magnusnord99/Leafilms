@@ -1084,6 +1084,24 @@ function DraggableCard({
               />
             </div>
           )}
+          {stage === 'lead' && project.first_contacted_at && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
+                color: '#7bcea8',
+                background: 'rgba(123,206,168,0.08)',
+                border: '1px solid rgba(123,206,168,0.25)',
+                borderRadius: 4, padding: '2px 7px',
+              }}>
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ flexShrink: 0 }}>
+                  <circle cx="4" cy="4" r="3" fill="#7bcea8" fillOpacity="0.3" stroke="#7bcea8" strokeWidth="1" />
+                  <path d="M2.5 4l1 1 2-2" stroke="#7bcea8" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Kontaktet {new Date(project.first_contacted_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+              </span>
+            </div>
+          )}
           {(stage === 'lead' || stage === 'levering') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', color: C.text3, flexShrink: 0 }}>Ansvarlig:</span>

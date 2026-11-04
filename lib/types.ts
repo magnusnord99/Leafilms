@@ -119,6 +119,8 @@ export type Project = {
   pitch_reviewer_id?: string | null
   quote_review_enabled?: boolean
   quote_reviewer_id?: string | null
+  /** Settes automatisk første gang en e-post sendes fra prosjektet (via /api/send-email). Vises som "Kontaktet"-badge på lead-kort i Kanban. */
+  first_contacted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -361,6 +363,15 @@ export type ProjectDocument = {
   file_path: string
   file_type: string | null
   file_size: number | null
+  created_at: string
+}
+
+export type ProjectLink = {
+  id: string
+  project_id: string
+  created_by: string | null
+  label: string
+  url: string
   created_at: string
 }
 

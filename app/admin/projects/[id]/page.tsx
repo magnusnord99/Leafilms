@@ -19,6 +19,7 @@ import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { DeliverablesButton, summarizeDeliverables } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
@@ -1730,9 +1731,14 @@ export default function ProjectHubPage() {
               </Link>
             </div>
 
-            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, se ProjectDocuments */}
-            <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <ProjectDocuments projectId={projectId} />
+            {/* Filer og lenker — vedlegg/dokumenter og navngitte URL-er knyttet til prosjektet */}
+            <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <ProjectDocuments projectId={projectId} />
+              </div>
+              <div style={{ padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <ProjectLinks projectId={projectId} />
+              </div>
             </div>
 
             {/* Tilknyttet — board og kundeseleksjon-galleri, vises kun når de finnes, uavhengig av pipeline-steg */}

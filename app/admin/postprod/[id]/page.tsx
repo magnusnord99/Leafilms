@@ -30,6 +30,7 @@ import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { TaskVideoFiles } from '@/components/postprod/TaskVideoFiles'
 import { C } from '@/lib/admin-theme'
 
@@ -1234,8 +1235,13 @@ export default function PostProdDetailPage() {
               {showDeliveryInfo && (
                 <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={handleDeliverablesSaved} variant="inline" readOnly={readOnly} />
-                  <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <ProjectDocuments projectId={projectId} defaultCollapsed />
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                      <ProjectDocuments projectId={projectId} defaultCollapsed />
+                    </div>
+                    <div style={{ padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                      <ProjectLinks projectId={projectId} defaultCollapsed />
+                    </div>
                   </div>
                 </div>
               )}

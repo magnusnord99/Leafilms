@@ -122,6 +122,27 @@ export async function advanceToVideresalg(projectId: string): Promise<void> {
 }
 
 /**
+ * Markerer et lead-prosjekt som kontaktet (feedback 6cae069d) — brukt når en
+ * ansatt klikker mailto-lenken på /admin/projects/[id]/contact, siden vi ikke
+ * kan vite om den eksterne e-postklienten faktisk sendte noe. Samme felt som
+ * settes automatisk av /api/send-email ved sending via den innebygde
+ * e-postfunksjonen. Kun første gang — overskriver ikke en eksisterende verdi.
+ */
+export async function markProjectContacted(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('projects')
+      .update({ first_contacted_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .is('first_contacted_at', null)
+    revalidatePath('/admin/projects')
+  } catch (err) {
+    console.error('markProjectContacted unexpected error:', err)
+  }
+}
+
+/**
  * Henter prosjekter som er i videresalg-dvale — flyttet til 'videresalg', men
  * fortsatt skjult fra selve pipeline-tavlen fordi resale_visible_at ligger i
  * fremtiden. Brukes til å vise en egen "I dvale"-kolonne i BoardView, slik at

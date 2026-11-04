@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getProjectHub } from '@/lib/actions/pipeline'
+import { getProjectHub, markProjectContacted } from '@/lib/actions/pipeline'
 import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, updateLead, LeadRecord, LeadStatus, LeadTemperature } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
@@ -555,7 +555,7 @@ export default function ProjectContactPage() {
                   )}
 
                   {email && (
-                    <a href={`mailto:${email}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
+                    <a href={`mailto:${email}`} onClick={() => markProjectContacted(projectId)} style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.12s' }}
                         onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.accent}
                         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.border}

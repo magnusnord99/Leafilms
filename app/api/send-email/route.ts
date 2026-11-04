@@ -101,6 +101,17 @@ export async function POST(req: NextRequest) {
 
     // Log til email_log (bruk service client for å omgå RLS-kanttilfeller)
     const serviceClient = createServiceClient()
+
+    // Marker prosjektet som "kontaktet" første gang en e-post sendes
+    // (first_contacted_at settes kun hvis den er null — skrives aldri over ved etterfølgende e-poster)
+    if (projectId) {
+      await serviceClient
+        .from('projects')
+        .update({ first_contacted_at: new Date().toISOString() })
+        .eq('id', projectId)
+        .is('first_contacted_at', null)
+    }
+
     const { error: logError } = await serviceClient.from('email_log').insert({
       project_id: projectId ?? null,
       lead_id: leadId ?? null,

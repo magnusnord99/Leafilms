@@ -21,6 +21,7 @@ import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { CrewSection } from '@/components/admin/CrewSection'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { C } from '@/lib/admin-theme'
 
@@ -1061,10 +1062,14 @@ export default function PreprodDetailPage() {
               readOnly={readOnly}
             />
 
-            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
-                prosjektoversikten (feedback 8578db28) */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
-              <ProjectDocuments projectId={id} />
+            {/* Filer og lenker — vedlegg/dokumenter og navngitte URL-er knyttet til prosjektet */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+                <ProjectDocuments projectId={id} />
+              </div>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+                <ProjectLinks projectId={id} />
+              </div>
             </div>
           </div>
 

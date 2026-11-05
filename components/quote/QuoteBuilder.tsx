@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem, CustomerContact } from '@/lib/types'
 import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
+import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
@@ -1152,6 +1153,21 @@ export function QuoteBuilder({
   })
   const [headerOpen, setHeaderOpen] = useState(true)
   const [termsOpen, setTermsOpen] = useState(false)
+  const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
+
+  // Hent lagrede kontaktpersoner for valgt kunde (feedback 6f3ea21e) — brukes
+  // som søkbar datalist på Kundekontakt-feltet i stedet for kun customer.name.
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setCustomerContacts([])
+      return
+    }
+    let cancelled = false
+    getCustomerContacts(selectedCustomerId).then(contacts => {
+      if (!cancelled) setCustomerContacts(contacts)
+    })
+    return () => { cancelled = true }
+  }, [selectedCustomerId])
 
   const REQUIRED_FIELDS: { key: keyof QuoteBuilderData; label: string }[] = [
     { key: 'clientContact', label: 'Kundekontakt' },
@@ -1342,7 +1358,22 @@ export function QuoteBuilder({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
                 <label style={labelStyle}>Kundekontakt</label>
-                <input ref={fieldRefs.clientContact} style={fieldStyle} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
+                <input
+                  ref={fieldRefs.clientContact}
+                  style={fieldStyle}
+                  value={data.clientContact}
+                  onChange={e => set('clientContact', e.target.value)}
+                  placeholder="Navn"
+                  list="quote-customer-contacts"
+                  autoComplete="off"
+                />
+                {customerContacts.length > 0 && (
+                  <datalist id="quote-customer-contacts">
+                    {customerContacts.map(c => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Kundenummer</label>

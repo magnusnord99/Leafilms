@@ -619,7 +619,6 @@ function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
     e.preventDefault()
     setError(null)
     if (!title.trim()) { setError('Møtet trenger en tittel'); return }
-    if (participantIds.length === 0) { setError('Velg minst én kollega'); return }
 
     setSaving(true)
     const startsAt = new Date(`${date}T${startTime}`).toISOString()
@@ -668,7 +667,7 @@ function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
         </Field>
 
-        <Field label="Inviter kolleger">
+        <Field label="Inviter kolleger (valgfritt)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6 }}>
             {colleagues.length === 0 && (
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, padding: '4px 6px' }}>Ingen andre kolleger funnet</span>

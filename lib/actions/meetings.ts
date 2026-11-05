@@ -133,7 +133,6 @@ export async function createMeeting(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     if (!input.title.trim()) return { ok: false, error: 'Møtet trenger en tittel' }
-    if (input.participantIds.length === 0) return { ok: false, error: 'Velg minst én kollega' }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -154,12 +153,14 @@ export async function createMeeting(input: {
 
     if (error || !meeting) { console.error('createMeeting:', error); return { ok: false, error: 'Kunne ikke opprette møtet' } }
 
-    const participantRows = input.participantIds.map((profileId) => ({
-      meeting_id: meeting.id,
-      profile_id: profileId,
-    }))
-    const { error: partError } = await supabase.from('meeting_participants').insert(participantRows)
-    if (partError) { console.error('createMeeting participants:', partError); return { ok: false, error: 'Kunne ikke invitere deltakere' } }
+    if (input.participantIds.length > 0) {
+      const participantRows = input.participantIds.map((profileId) => ({
+        meeting_id: meeting.id,
+        profile_id: profileId,
+      }))
+      const { error: partError } = await supabase.from('meeting_participants').insert(participantRows)
+      if (partError) { console.error('createMeeting participants:', partError); return { ok: false, error: 'Kunne ikke invitere deltakere' } }
+    }
 
     revalidatePath('/admin/calendar')
     return { ok: true }

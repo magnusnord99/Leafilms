@@ -190,7 +190,10 @@ export async function analyzeLeadNotes(
 // AI-generert kladd — f.eks. manuelt opprettede leads, som kun market-analysis-agenten
 // tidligere genererte cold_email for. Lagrer resultatet på leaden slik at knappen i
 // ColdEmailCard går fra "Generer" til "Regenerer" etterpå.
-export async function generateLeadColdEmail(leadId: string): Promise<{ cold_email: string } | { error: string }> {
+// feedback: valgfri tilbakemelding fra brukeren på forrige utkast (feedback
+// b28f6204) — når den er satt, sendes forrige kladd + tilbakemeldingen med til
+// AI-en slik at den reviderer i stedet for å finne på et helt nytt utkast.
+export async function generateLeadColdEmail(leadId: string, feedback?: string): Promise<{ cold_email: string } | { error: string }> {
   try {
     if (!process.env.ANTHROPIC_API_KEY) return { error: 'AI-generering er ikke konfigurert.' }
     const lead = await getLeadById(leadId)
@@ -208,13 +211,18 @@ export async function generateLeadColdEmail(leadId: string): Promise<{ cold_emai
       lead.notes && `Interne notater: ${stripHtml(lead.notes)}`,
     ].filter(Boolean).join('\n')
 
+    const trimmedFeedback = feedback?.trim()
+    const revisionContext = trimmedFeedback && lead.cold_email
+      ? `\n\nForrige utkast:\n${lead.cold_email}\n\nTilbakemelding på dette utkastet: ${trimmedFeedback}\n\nSkriv et revidert utkast som tar hensyn til tilbakemeldingen.`
+      : ''
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 600,
       system: 'Du er en erfaren salgsstrateg for Leafilms, et norsk profesjonelt film- og videoproduksjonsselskap. Du skriver en personlig, konkret kald-e-post til en lead basert på informasjonen du får om dem. Svar KUN med et JSON-objekt — ingen markdown-fences, ingen tekst før eller etter.',
       messages: [{
         role: 'user',
-        content: `Skriv en kald e-post til denne leaden:\n\n${facts}\n\nE-posten skal være 3-4 korte avsnitt: vis at du vet noe om dem, presentér Leafilms kort, foreslå et konkret neste steg. Avslutt med "Med vennlig hilsen,\\nLeafilms". Ikke finn på detaljer som ikke er gitt over.\n\nSvar med nøyaktig dette JSON-objektet, der "cold_email" inneholder emne og brødtekst i samme format som her (med ekte linjeskift):\n{"cold_email": "Emne: ...\\n\\nHei ${lead.name.split(' ')[0]},\\n\\n..."}`
+        content: `Skriv en kald e-post til denne leaden:\n\n${facts}${revisionContext}\n\nE-posten skal være 3-4 korte avsnitt: vis at du vet noe om dem, presentér Leafilms kort, foreslå et konkret neste steg. Avslutt med "Med vennlig hilsen,\\nLeafilms". Ikke finn på detaljer som ikke er gitt over.\n\nSvar med nøyaktig dette JSON-objektet, der "cold_email" inneholder emne og brødtekst i samme format som her (med ekte linjeskift):\n{"cold_email": "Emne: ...\\n\\nHei ${lead.name.split(' ')[0]},\\n\\n..."}`
       }]
     })
 

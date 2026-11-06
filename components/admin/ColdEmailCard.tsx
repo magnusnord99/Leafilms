@@ -54,6 +54,8 @@ export function ColdEmailCard({
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
 
   useEffect(() => {
     if (!composing) return
@@ -71,11 +73,11 @@ export function ColdEmailCard({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(withFeedback?: string) {
     if (generating) return
     setGenerating(true)
     setGenerateError(null)
-    const res = await generateLeadColdEmail(leadId)
+    const res = await generateLeadColdEmail(leadId, withFeedback)
     if ('error' in res) {
       setGenerateError(res.error)
     } else {
@@ -83,6 +85,8 @@ export function ColdEmailCard({
       const next = parseColdEmail(res.cold_email)
       setSubject(next.subject)
       setBody(next.body)
+      setFeedbackOpen(false)
+      setFeedbackText('')
     }
     setGenerating(false)
   }
@@ -144,13 +148,13 @@ export function ColdEmailCard({
             </button>
           )}
           <button
-            onClick={handleGenerate}
+            onClick={() => currentColdEmail ? setFeedbackOpen(v => !v) : handleGenerate()}
             disabled={generating}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
               padding: '4px 10px', borderRadius: 5, cursor: generating ? 'default' : 'pointer',
-              background: C.surface2, color: C.text2,
-              border: `1px solid ${C.border}`,
+              background: feedbackOpen ? C.accentBg : C.surface2, color: feedbackOpen ? C.accent : C.text2,
+              border: `1px solid ${feedbackOpen ? 'rgba(124,92,252,0.3)' : C.border}`,
               opacity: generating ? 0.6 : 1,
             }}
           >
@@ -172,6 +176,31 @@ export function ColdEmailCard({
 
       {generateError && (
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, marginBottom: 10 }}>{generateError}</p>
+      )}
+
+      {feedbackOpen && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, padding: '10px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+          <textarea
+            autoFocus
+            value={feedbackText}
+            onChange={e => setFeedbackText(e.target.value)}
+            placeholder="Hva skal endres? (f.eks. «kortere», «mer uformell tone», «nevn ikke prisen») — la stå tom for å bare prøve igjen"
+            rows={2}
+            style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5, fontSize: '0.82rem' }}
+          />
+          <button
+            onClick={() => handleGenerate(feedbackText)}
+            disabled={generating}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+              padding: '6px 14px', borderRadius: 6, cursor: generating ? 'default' : 'pointer',
+              background: C.accent, color: '#fff', border: 'none',
+              opacity: generating ? 0.6 : 1, alignSelf: 'flex-end',
+            }}
+          >
+            {generating ? 'Genererer...' : 'Regenerer'}
+          </button>
+        </div>
       )}
 
       {currentColdEmail ? (

@@ -215,9 +215,22 @@ export default function RoomDetailPage() {
     if (entries.length === 0) return
     setAddError(null)
     setBusy(true)
-    const results = await Promise.all(
-      entries.map(([catalogId, count]) => addEquipmentUnits(roomId, catalogId, count))
-    )
+
+    // Enheter som allerede ligger ubrukt i et annet rom flyttes hit i stedet for
+    // å opprettes på nytt — "vi har kun en av hvert objekt" (feedback 503aa1cb).
+    // Kun overskytende antall (utover det som finnes å flytte) blir ekte ny stock.
+    const moves: string[] = []
+    const addCalls: Promise<{ error?: string }>[] = []
+    for (const [catalogId, count] of entries) {
+      const elsewhereIds = detail?.catalog.find(c => c.id === catalogId)?.elsewhereUnitIds ?? []
+      const toMove = elsewhereIds.slice(0, count)
+      moves.push(...toMove)
+      const remaining = count - toMove.length
+      if (remaining > 0) addCalls.push(addEquipmentUnits(roomId, catalogId, remaining))
+    }
+
+    if (moves.length > 0) await returnUnits(moves, roomId)
+    const results = await Promise.all(addCalls)
     setBusy(false)
     const firstError = results.find(r => r.error)?.error
     if (firstError) {
@@ -508,6 +521,7 @@ export default function RoomDetailPage() {
                                       ? loc.room_name
                                       : `ute til ${loc.project_title}${loc.shoot_start ? ` (${formatDate(loc.shoot_start)})` : ''}`
                                   )).join(', ')}
+                                  {item.elsewhereUnitIds.length > 0 ? ' — flyttes hit i stedet for å opprettes på nytt' : ''}
                                 </p>
                               )}
                             </div>

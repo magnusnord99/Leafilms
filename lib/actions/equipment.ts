@@ -33,7 +33,7 @@ export type RoomDetail = {
   room: { id: string; name: string; owner_id: string | null }
   unitsInRoom: EquipmentUnitRow[]
   unitsCheckedOut: CheckedOutUnitRow[]
-  catalog: { id: string; name: string; category: string; existingElsewhere: CatalogLocation[] }[]
+  catalog: { id: string; name: string; category: string; existingElsewhere: CatalogLocation[]; elsewhereUnitIds: string[] }[]
   preprodProjects: { id: string; title: string }[]
   staff: { id: string; name: string | null }[]
 }
@@ -176,11 +176,16 @@ export async function getRoomDetail(roomId: string): Promise<RoomDetail | null> 
     // Hvor finnes enheter av hvert katalogprodukt allerede (i ANDRE rom, eller ute
     // til shoot)? Vises i "+ Legg til utstyr" slik at man ikke oppretter en ny
     // enhet uten å vite at objektet allerede finnes et sted (skal kun ligge ett sted).
+    // Enheter som ligger ubrukt i et annet rom flyttes nå dit i stedet for å duplikeres
+    // (feedback 503aa1cb — "Legg til" opprettet en ny DJI Ronin i stedet for å flytte
+    // den som allerede fantes) — elsewhereUnitIds gir handleAdd (page.tsx) id-ene den
+    // skal flytte via returnUnits, i stedet for å gå via addEquipmentUnits.
     const { data: allUnitsForCatalog } = await supabase
       .from('equipment_units')
-      .select('catalog_id, room_id, equipment_rooms(name), equipment_reservations(project_id, projects(title, shoot_start))')
+      .select('id, catalog_id, room_id, equipment_rooms(name), equipment_reservations(project_id, projects(title, shoot_start))')
 
     const locationsByCatalog: Record<string, CatalogLocation[]> = {}
+    const elsewhereUnitIdsByCatalog: Record<string, string[]> = {}
     for (const u of allUnitsForCatalog ?? []) {
       const catalogId = u.catalog_id as string
       const roomRow = u.equipment_rooms as unknown as { name: string } | null
@@ -194,6 +199,7 @@ export async function getRoomDetail(roomId: string): Promise<RoomDetail | null> 
         })
       } else if (u.room_id && u.room_id !== roomId) {
         (locationsByCatalog[catalogId] ??= []).push({ kind: 'room', room_name: roomRow?.name ?? '?' })
+        ;(elsewhereUnitIdsByCatalog[catalogId] ??= []).push(u.id)
       }
     }
 
@@ -241,7 +247,11 @@ export async function getRoomDetail(roomId: string): Promise<RoomDetail | null> 
       room,
       unitsInRoom,
       unitsCheckedOut,
-      catalog: (catalog ?? []).map(c => ({ ...c, existingElsewhere: locationsByCatalog[c.id] ?? [] })),
+      catalog: (catalog ?? []).map(c => ({
+        ...c,
+        existingElsewhere: locationsByCatalog[c.id] ?? [],
+        elsewhereUnitIds: elsewhereUnitIdsByCatalog[c.id] ?? [],
+      })),
       preprodProjects,
       staff: staff.map(p => ({ id: p.id, name: p.name })),
     }

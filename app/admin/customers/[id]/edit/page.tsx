@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Customer, CustomerContact } from '@/lib/types'
-import { getCustomerContacts, createCustomerContact, updateCustomerContact, deleteCustomerContact } from '@/lib/actions/schedule-people'
+import { getCustomerContacts, createCustomerContact, updateCustomerContact, deleteCustomerContact, setPrimaryCustomerContact } from '@/lib/actions/schedule-people'
 import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
@@ -61,6 +61,7 @@ export default function EditCustomer() {
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ name: '', role: '', email: '', phone: '' })
   const [contactError, setContactError] = useState<string | null>(null)
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null)
 
   useEffect(() => {
     if (customerId) {
@@ -112,6 +113,18 @@ export default function EditCustomer() {
     if (!confirm('Slette denne kontaktpersonen?')) return
     const ok = await deleteCustomerContact(id)
     if (ok) setContacts(prev => prev.filter(c => c.id !== id))
+  }
+
+  async function handleSetPrimary(id: string) {
+    setSettingPrimaryId(id)
+    const result = await setPrimaryCustomerContact(id)
+    if (result.ok) {
+      // Oppdater lokal state: sett is_primary=true på denne, false på alle andre
+      setContacts(prev => prev.map(c => ({ ...c, is_primary: c.id === id })))
+    } else {
+      setContactError(result.error ?? 'Kunne ikke sette primærkontakt')
+    }
+    setSettingPrimaryId(null)
   }
 
   useEffect(() => {
@@ -386,7 +399,17 @@ export default function EditCustomer() {
                             {c.email || 'Ingen e-post'} · {c.phone || 'Ingen telefon'}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 10 }}>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          {!c.is_primary && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(c.id)}
+                              disabled={settingPrimaryId === c.id}
+                              style={{ fontSize: '0.65rem', color: C.text2, background: 'none', border: `1px solid ${C.border}`, borderRadius: 3, padding: '2px 7px', cursor: 'pointer', opacity: settingPrimaryId === c.id ? 0.5 : 1 }}
+                            >
+                              Sett som hovedkontakt
+                            </button>
+                          )}
                           <button type="button" onClick={() => startEditContact(c)} style={{ fontSize: '0.65rem', color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}>Rediger</button>
                           <button type="button" onClick={() => handleDeleteContact(c.id)} style={{ fontSize: '0.65rem', color: C.text3, background: 'none', border: 'none', cursor: 'pointer' }}>Slett</button>
                         </div>

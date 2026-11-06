@@ -45,7 +45,13 @@ export async function getCustomerContacts(customerId: string): Promise<CustomerC
 }
 
 export async function createCustomerContact(input: {
-  customer_id: string; name: string; email?: string | null; phone?: string | null; role?: string | null
+  customer_id: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  role?: string | null
+  /** Sett til true for å markere denne som primærkontakt (anbefalt for første kontakt på ny kunde) */
+  is_primary?: boolean
 }): Promise<CustomerContact | null> {
   try {
     const supabase = await createClient()
@@ -55,7 +61,7 @@ export async function createCustomerContact(input: {
       email: input.email?.trim() || null,
       phone: input.phone?.trim() || null,
       role: input.role?.trim() || null,
-      is_primary: false,
+      is_primary: input.is_primary ?? false,
     }).select('*').single()
     if (error) { console.error('createCustomerContact:', error); return null }
     return data as CustomerContact

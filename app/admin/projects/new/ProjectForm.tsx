@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Customer, PIPELINE_STAGES, PipelineStage } from '@/lib/types'
 import { seedTasksFromTemplates } from '@/lib/actions/pipeline'
+import { createCustomerContact } from '@/lib/actions/schedule-people'
 import { C } from '@/lib/admin-theme'
 
 const projectTypeOptions = [
@@ -167,7 +168,8 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     searchParams.get('customer_id') || null
   )
-  const [newCustomerInfo, setNewCustomerInfo] = useState({ company: '', email: '', phone: '' })
+  // Kontaktperson for ny kunde (email/phone lagres i customer_contacts, ikke på customers-raden)
+  const [newCustomerInfo, setNewCustomerInfo] = useState({ contactName: '', email: '', phone: '' })
 
   // Hvilket prosjekt et evt. pitch-innhold skal genereres for og lagres på — enten fra
   // ?project_id= (fra prosjektsidens "Opprett med AI"-steg) eller valgt i prosjekt-velgeren
@@ -341,14 +343,10 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
           customerId = existingCustomer.id
           clientName = existingCustomer.name
         } else {
+          // customers-rad: kun kontonavn — ingen email/phone/company (se migrasjon 186/187)
           const { data: newCustomer, error: customerError } = await supabase
             .from('customers')
-            .insert({
-              name: customerInput.trim(),
-              company: newCustomerInfo.company || customerInput.trim(),
-              email: newCustomerInfo.email || null,
-              phone: newCustomerInfo.phone || null,
-            })
+            .insert({ name: customerInput.trim() })
             .select()
             .single()
 
@@ -356,6 +354,19 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
             customerId = newCustomer.id
             clientName = newCustomer.name
             setCustomers([...customers, newCustomer as Customer])
+
+            // Opprett primærkontakt hvis noe kontaktinfo er fylt inn
+            const hasContactInfo = newCustomerInfo.email.trim() || newCustomerInfo.phone.trim() || newCustomerInfo.contactName.trim()
+            if (hasContactInfo) {
+              await createCustomerContact({
+                customer_id: newCustomer.id,
+                // Bruk oppgitt kontaktnavn, ellers kundekontoens navn
+                name: newCustomerInfo.contactName.trim() || customerInput.trim(),
+                email: newCustomerInfo.email.trim() || null,
+                phone: newCustomerInfo.phone.trim() || null,
+                is_primary: true,
+              })
+            }
           }
         }
       }
@@ -950,7 +961,7 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
                     onChange={(e) => {
                       setCustomerInput(e.target.value)
                       setSelectedCustomerId(null)
-                      setNewCustomerInfo({ company: '', email: '', phone: '' })
+                      setNewCustomerInfo({ contactName: '', email: '', phone: '' })
                     }}
                     onBlur={(e) => {
                       const match = customers.find(
@@ -959,7 +970,7 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
                       if (match) {
                         setSelectedCustomerId(match.id)
                         setCustomerInput(match.name)
-                        setNewCustomerInfo({ company: '', email: '', phone: '' })
+                        setNewCustomerInfo({ contactName: '', email: '', phone: '' })
                       }
                     }}
                     placeholder="Skriv navn eller velg fra listen..."
@@ -998,15 +1009,16 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
                         Ny kunde — fyll inn mer info (valgfritt)
                       </span>
                     </div>
+                    {/* Disse feltene lagres som customer_contacts (is_primary=true), ikke på customers-raden */}
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          {fieldLabel('Firma')}
+                          {fieldLabel('Kontaktnavn')}
                           <input
                             type="text"
-                            value={newCustomerInfo.company}
-                            onChange={(e) => setNewCustomerInfo({ ...newCustomerInfo, company: e.target.value })}
-                            placeholder="Firmanavn"
+                            value={newCustomerInfo.contactName}
+                            onChange={(e) => setNewCustomerInfo({ ...newCustomerInfo, contactName: e.target.value })}
+                            placeholder="Fullt navn (blank = samme som kontonavn)"
                             style={inputStyle}
                           />
                         </div>

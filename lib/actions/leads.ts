@@ -186,6 +186,67 @@ export async function analyzeLeadNotes(
   }
 }
 
+// Genererer et e-postutkast (emne + brødtekst) for en lead som ennå ikke har en
+// AI-generert kladd — f.eks. manuelt opprettede leads, som kun market-analysis-agenten
+// tidligere genererte cold_email for. Lagrer resultatet på leaden slik at knappen i
+// ColdEmailCard går fra "Generer" til "Regenerer" etterpå.
+export async function generateLeadColdEmail(leadId: string): Promise<{ cold_email: string } | { error: string }> {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) return { error: 'AI-generering er ikke konfigurert.' }
+    const lead = await getLeadById(leadId)
+    if (!lead) return { error: 'Fant ikke leaden.' }
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    const facts = [
+      `Navn: ${lead.name}`,
+      lead.company && `Bedrift: ${lead.company}`,
+      lead.website && `Nettside: ${lead.website}`,
+      lead.source && `Kilde: ${lead.source}`,
+      lead.reason && `Hvorfor dette passer for Leafilms: ${lead.reason}`,
+      lead.sales_points.length > 0 && `Salgspunkter:\n${lead.sales_points.map(p => `- ${p}`).join('\n')}`,
+      lead.notes && `Interne notater: ${stripHtml(lead.notes)}`,
+    ].filter(Boolean).join('\n')
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      system: 'Du er en erfaren salgsstrateg for Leafilms, et norsk profesjonelt film- og videoproduksjonsselskap. Du skriver en personlig, konkret kald-e-post til en lead basert på informasjonen du får om dem. Svar KUN med et JSON-objekt — ingen markdown-fences, ingen tekst før eller etter.',
+      messages: [{
+        role: 'user',
+        content: `Skriv en kald e-post til denne leaden:\n\n${facts}\n\nE-posten skal være 3-4 korte avsnitt: vis at du vet noe om dem, presentér Leafilms kort, foreslå et konkret neste steg. Avslutt med "Med vennlig hilsen,\\nLeafilms". Ikke finn på detaljer som ikke er gitt over.\n\nSvar med nøyaktig dette JSON-objektet, der "cold_email" inneholder emne og brødtekst i samme format som her (med ekte linjeskift):\n{"cold_email": "Emne: ...\\n\\nHei ${lead.name.split(' ')[0]},\\n\\n..."}`
+      }]
+    })
+
+    const raw = (response.content.find(b => b.type === 'text')?.text ?? '').trim()
+    if (!raw) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    let parsed: { cold_email?: string } = {}
+    try {
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+    } catch {
+      parsed = {}
+    }
+
+    const coldEmail = (parsed.cold_email ?? '').trim()
+    if (!coldEmail) return { error: 'Fikk ikke noe svar fra AI-tjenesten.' }
+
+    const supabase = await createClient()
+    await supabase.from('leads').update({ cold_email: coldEmail, updated_at: new Date().toISOString() }).eq('id', leadId)
+    revalidatePath(`/admin/leads/${leadId}`)
+    revalidatePath('/admin/leads')
+
+    return { cold_email: coldEmail }
+  } catch (err) {
+    console.error('generateLeadColdEmail error:', err)
+    if (err instanceof Anthropic.APIError && err.status === 400 && /credit balance/i.test(err.message)) {
+      return { error: 'AI-tjenesten har ikke nok kreditt. Kontakt en administrator.' }
+    }
+    return { error: 'Kunne ikke generere e-post akkurat nå. Prøv igjen senere.' }
+  }
+}
+
 export type LeadStatus = 'new' | 'contacted' | 'meeting_booked' | 'converted' | 'lost'
 export type LeadTemperature = 'cold' | 'lukewarm' | 'warm'
 

@@ -10,6 +10,7 @@ import {
 import { toggleReaction, type MessageType } from '@/lib/actions/reactions'
 import { respondToMeetingInvite } from '@/lib/actions/meetings'
 import { PushNotificationToggle } from '@/components/admin/PushNotificationToggle'
+import { getStageHref } from '@/lib/pipeline-stage-nav'
 import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
@@ -131,7 +132,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
           async (payload) => {
             const { data } = await supabase
               .from('notifications')
-              .select('*, projects(title), tasks(title, pipeline_stage), leads(name, company)')
+              .select('*, projects(title, pipeline_stage), tasks(title, pipeline_stage), leads(name, company)')
               .eq('id', (payload.new as { id: string }).id)
               .single()
             if (data) {
@@ -222,6 +223,8 @@ export default function VarslerClient({ notifications: initialNotifications }: {
       }
     } else if (n.type === 'board_comment_mention' || n.type === 'board_comment_reply') {
       router.push(`/admin/boards/${n.board_id}?comment=${n.board_card_id}`)
+    } else if (n.type === 'colleague_nudge') {
+      if (n.project_id) router.push(getStageHref(n.project_id, n.projects?.pipeline_stage ?? undefined))
     } else {
       router.push(`/admin/postprod/${n.project_id}`)
     }
@@ -514,6 +517,10 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4508C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
                         </svg>
+                      ) : n.type === 'colleague_nudge' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4z" />
+                        </svg>
                       ) : n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded' || n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded' || n.type === 'task_turn_ready' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
@@ -566,6 +573,7 @@ export default function VarslerClient({ notifications: initialNotifications }: {
                             : n.type === 'gallery_review_responded' ? 'svarte på review av bildeutvalget'
                             : n.type === 'quote_assigned' ? 'tildelte deg et tilbud'
                             : n.type === 'invoice_assigned' ? 'tildelte deg en faktura'
+                            : n.type === 'colleague_nudge' ? 'sendte deg dette'
                             : 'i en oppgave'}
                         </span>
                       </div>

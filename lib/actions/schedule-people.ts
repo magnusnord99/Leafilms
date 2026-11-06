@@ -3,7 +3,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { CustomerContact, ResolvedSchedulePerson, SchedulePersonRef } from '@/lib/types'
 
-export type CustomerMatch = { id: string; name: string; company: string | null }
+// company er fjernet fra customers etter migrasjon 186/187
+export type CustomerMatch = { id: string; name: string }
 export type TeamMemberOption = { id: string; name: string; role: string; email: string | null; phone: string | null }
 
 const now = () => new Date().toISOString()
@@ -16,8 +17,8 @@ export async function searchCustomers(query: string): Promise<CustomerMatch[]> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('customers')
-      .select('id, name, company')
-      .or(`name.ilike.%${safe}%,company.ilike.%${safe}%`)
+      .select('id, name')
+      .ilike('name', `%${safe}%`)
       .order('name')
       .limit(20)
     return (data ?? []) as CustomerMatch[]
@@ -86,6 +87,28 @@ export async function deleteCustomerContact(id: string): Promise<boolean> {
   } catch (err) {
     console.error('deleteCustomerContact:', err)
     return false
+  }
+}
+
+/**
+ * Setter én kontaktperson som primærkontakt for en kunde.
+ * Databasetriggeren enforce_single_primary_customer_contact (migrasjon 186)
+ * rydder automatisk opp i eventuelle andre is_primary=true-rader.
+ */
+export async function setPrimaryCustomerContact(
+  contactId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('customer_contacts')
+      .update({ is_primary: true, updated_at: now() })
+      .eq('id', contactId)
+    if (error) return { ok: false, error: 'Kunne ikke sette primærkontakt' }
+    return { ok: true }
+  } catch (err) {
+    console.error('setPrimaryCustomerContact:', err)
+    return { ok: false, error: 'Uventet feil' }
   }
 }
 

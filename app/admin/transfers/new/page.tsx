@@ -55,7 +55,8 @@ export default async function NewTransferPage({ searchParams }: Props) {
         </h1>
         {project?.customer && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 32 }}>
-            Til {project.customer.name}{project.customer.company ? ` — ${project.customer.company}` : ''}
+            Til {project.customer.name}
+            {project.customer.contactName ? ` — ${project.customer.contactName}` : ''}
             {project.customer.email ? ` · ${project.customer.email}` : ''}
           </p>
         )}

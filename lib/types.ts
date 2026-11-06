@@ -44,9 +44,9 @@ export type PipelineData = {
 export type Customer = {
   id: string
   name: string
-  email: string | null
-  company: string | null
-  phone: string | null
+  // email, phone og company er fjernet — se migrasjon 186/187.
+  // All kontaktinfo bor i customer_contacts, med nøyaktig én is_primary-rad per kunde.
+  invoice_company_name: string | null
   address: string | null
   notes: string | null
   customer_number: number
@@ -859,7 +859,7 @@ export type DailyPlanItem =
       kind: 'task'
       sort_order: number
       task: Task & {
-        project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null } | null
+        project: { id: string; title: string; pipeline_stage: string; customer: { name: string } | null } | null
       }
     }
   | {
@@ -900,9 +900,7 @@ export type ProjectWithPipeline = Project & {
   customer?: {
     id: string
     name: string
-    company: string | null
-    email?: string | null
-    phone?: string | null
+    invoice_company_name?: string | null
     org_nummer?: string | null
     address?: string | null
     invoice_email?: string | null

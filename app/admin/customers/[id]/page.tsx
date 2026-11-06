@@ -107,7 +107,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 type InvoiceInfoForm = {
-  company: string
+  invoice_company_name: string // tilsvarer customers.invoice_company_name
   org_nummer: string
   address: string
   invoice_email: string
@@ -132,7 +132,7 @@ export default function CustomerDetailPage() {
   const [uploadingDocument, setUploadingDocument] = useState(false)
 
   const [invoiceEdit, setInvoiceEdit] = useState(false)
-  const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ company: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
+  const [invoiceForm, setInvoiceForm] = useState<InvoiceInfoForm>({ invoice_company_name: '', org_nummer: '', address: '', invoice_email: '', invoice_reference: '', invoice_info_skipped: false })
   const [savingInvoice, setSavingInvoice] = useState(false)
 
   async function fetchData() {
@@ -478,7 +478,7 @@ export default function CustomerDetailPage() {
 
   function handleOpenInvoiceEdit() {
     setInvoiceForm({
-      company: customer?.company ?? '',
+      invoice_company_name: customer?.invoice_company_name ?? '',
       org_nummer: customer?.org_nummer ?? '',
       address: customer?.address ?? '',
       invoice_email: customer?.invoice_email ?? '',
@@ -492,7 +492,7 @@ export default function CustomerDetailPage() {
     if (!customer) return
     setSavingInvoice(true)
     const patch = {
-      company: invoiceForm.company.trim() || null,
+      invoice_company_name: invoiceForm.invoice_company_name.trim() || null,
       org_nummer: invoiceForm.org_nummer.trim() || null,
       address: invoiceForm.address.trim() || null,
       invoice_email: invoiceForm.invoice_email.trim() || null,
@@ -605,9 +605,6 @@ export default function CustomerDetailPage() {
             <h1 style={{ fontFamily: 'var(--font-cormorant)', fontSize: 'clamp(1.8rem, 3vw, 2.4rem)', fontWeight: 300, fontStyle: 'italic', color: C.text, lineHeight: 1.1, marginBottom: 6 }}>
               {customer.name}
             </h1>
-            {customer.company && (
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>{customer.company}</span>
-            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginTop: 4 }}>
@@ -650,8 +647,14 @@ export default function CustomerDetailPage() {
               Kontaktinfo
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <InfoRow label="E-post" value={customer.email || '–'} />
-              <InfoRow label="Telefon" value={customer.phone || '–'} />
+              {/* E-post/telefon er nå på customer_contacts, ikke på Customer */}
+              {(() => {
+                const primary = contacts.find(c => c.is_primary)
+                return <>
+                  <InfoRow label="E-post" value={primary?.email || '–'} />
+                  <InfoRow label="Telefon" value={primary?.phone || '–'} />
+                </>
+              })()}
               <InfoRow label="Adresse" value={customer.address || '–'} />
               <InfoRow label="Org.nummer" value={customer.org_nummer || '–'} />
             </div>
@@ -1005,7 +1008,7 @@ export default function CustomerDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {([
-                  ['company', 'Firma'],
+                  ['invoice_company_name', 'Firma'],
                   ['org_nummer', 'Org.nummer'],
                   ['address', 'Fakturaadresse'],
                   ['invoice_email', 'Faktura-e-post'],
@@ -1048,9 +1051,9 @@ export default function CustomerDetailPage() {
                 </button>
               </div>
             </div>
-          ) : customer.company || customer.org_nummer || customer.address || customer.invoice_email || customer.invoice_reference ? (
+          ) : customer.invoice_company_name || customer.org_nummer || customer.address || customer.invoice_email || customer.invoice_reference ? (
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              {customer.company && <InfoRow label="Firma" value={customer.company} />}
+              {customer.invoice_company_name && <InfoRow label="Firma" value={customer.invoice_company_name} />}
               {customer.org_nummer && <InfoRow label="Org.nummer" value={customer.org_nummer} />}
               {customer.address && <InfoRow label="Fakturaadresse" value={customer.address} />}
               {customer.invoice_email && <InfoRow label="Faktura-e-post" value={customer.invoice_email} />}

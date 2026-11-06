@@ -968,7 +968,7 @@ export default function ProjectForm({ entry = 'project' }: { entry?: 'project' |
                   <datalist id="customers-list">
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.name}>
-                        {customer.company ? `${customer.name} (${customer.company})` : customer.name}
+                        {customer.name}
                       </option>
                     ))}
                   </datalist>

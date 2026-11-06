@@ -109,7 +109,7 @@ export default function PersonPicker({ onSelect, onClose }: Props) {
             />
             {customerMatches.map(c => (
               <div key={c.id} onClick={() => setActiveCustomer(c)} style={{ padding: '5px 6px', fontSize: '0.72rem', color: P.text, cursor: 'pointer', borderRadius: 4 }}>
-                {c.name}{c.company ? ` · ${c.company}` : ''}
+                {c.name}
               </div>
             ))}
           </>

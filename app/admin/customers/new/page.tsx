@@ -38,12 +38,10 @@ export default function NewCustomer() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // email/company/phone er fjernet fra customers etter migrasjon 186/187 — legg til kontaktperson via kundekortets "Kontaktpersoner"-seksjon etter opprettelse
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    company: '',
     org_nummer: '',
-    phone: '',
     address: '',
     notes: ''
   })
@@ -152,27 +150,7 @@ export default function NewCustomer() {
             />
           </div>
 
-          <div>
-            {fieldLabel('E-post')}
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="kunde@example.com"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Firma')}
-            <input
-              type="text"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-              placeholder="Firmanavn"
-              style={inputStyle}
-            />
-          </div>
+          {/* E-post, firma og telefon er fjernet fra Customer — legges til via Kontaktpersoner-seksjonen etter opprettelse */}
 
           <div>
             {fieldLabel('Org.nummer')}
@@ -181,17 +159,6 @@ export default function NewCustomer() {
               value={formData.org_nummer}
               onChange={(e) => setFormData({ ...formData, org_nummer: e.target.value })}
               placeholder="923 456 789"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Telefon')}
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+47 123 45 678"
               style={inputStyle}
             />
           </div>

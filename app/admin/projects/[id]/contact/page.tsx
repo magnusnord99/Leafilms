@@ -81,7 +81,8 @@ export default function ProjectContactPage() {
   const [projectTitle, setProjectTitle] = useState<string | null>(null)
   const [projectStage, setProjectStage] = useState<PipelineStage | null>(null)
   const [unlocked, setUnlocked] = useState(false)
-  const [customer, setCustomer] = useState<{ name: string; company: string | null; email?: string | null; phone?: string | null } | null>(null)
+  // company/email/phone er fjernet fra Customer — vi henter dem via lead eller customer_contacts
+  const [customer, setCustomer] = useState<{ id?: string; name: string } | null>(null)
   const [lead, setLead] = useState<LeadRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState('')
@@ -278,9 +279,10 @@ export default function ProjectContactPage() {
 
   // Use lead info if available, fall back to customer info
   const name = lead?.name ?? customer?.name ?? projectTitle ?? 'Ukjent'
-  const company = lead?.company ?? customer?.company ?? null
-  const email = lead?.email ?? customer?.email ?? null
-  const phone = lead?.phone ?? (customer as { phone?: string | null } | null)?.phone ?? null
+  // Etter migrasjon 186 finnes ikke company/email/phone direkte på Customer — bruk lead-data
+  const company = lead?.company ?? null
+  const email = lead?.email ?? null
+  const phone = lead?.phone ?? null
   const website = lead?.website ?? null
   const status = lead ? STATUS_CONFIG[lead.status] : null
 

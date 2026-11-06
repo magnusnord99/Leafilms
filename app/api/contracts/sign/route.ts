@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
           invoice_info_confirmed_at: signedAt,
         }
         if (!noInvoiceInfo) {
-          if (invoiceCompany?.trim()) customerUpdate.company = invoiceCompany.trim()
+          if (invoiceCompany?.trim()) customerUpdate.invoice_company_name = invoiceCompany.trim()
           if (invoiceOrgNummer?.trim()) customerUpdate.org_nummer = invoiceOrgNummer.trim()
           if (invoiceAddress?.trim()) customerUpdate.address = invoiceAddress.trim()
           if (invoiceEmail?.trim()) customerUpdate.invoice_email = invoiceEmail.trim()

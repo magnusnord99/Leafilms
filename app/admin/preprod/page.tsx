@@ -40,7 +40,7 @@ function ProjectCard({ project }: { project: PreprodProject }) {
             </p>
             {project.customer && (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-                {project.customer.name}{project.customer.company ? ` · ${project.customer.company}` : ''}
+                {project.customer.name}
               </p>
             )}
             {project.project_lead && (

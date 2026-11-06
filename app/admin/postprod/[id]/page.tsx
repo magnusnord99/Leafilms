@@ -1048,7 +1048,7 @@ export default function PostProdDetailPage() {
                 </div>
                 {currentProject.customer && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-                    {currentProject.customer.name}{currentProject.customer.company ? ` — ${currentProject.customer.company}` : ''}
+                    {currentProject.customer.name}
                   </p>
                 )}
                 {/* Prosjektleder */}

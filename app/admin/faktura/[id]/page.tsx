@@ -125,7 +125,7 @@ export default function FakturaPage() {
 
   const customer = project.customer ?? null
   const customerName = customer?.name ?? null
-  const hasInvoiceInfo = !!(customer?.company || customer?.org_nummer || customer?.address || customer?.invoice_email)
+  const hasInvoiceInfo = !!(customer?.invoice_company_name || customer?.org_nummer || customer?.address || customer?.invoice_email)
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '32px 24px', fontFamily: 'var(--font-dm-sans)' }}>
@@ -279,7 +279,7 @@ export default function FakturaPage() {
 
           {hasInvoiceInfo ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {customer?.company && <InfoLine label="Firma" value={customer.company} />}
+              {customer?.invoice_company_name && <InfoLine label="Firma" value={customer.invoice_company_name} />}
               {customer?.org_nummer && <InfoLine label="Org.nummer" value={customer.org_nummer} />}
               {customer?.address && <InfoLine label="Fakturaadresse" value={customer.address} />}
               {customer?.invoice_email && <InfoLine label="Faktura-e-post" value={customer.invoice_email} />}

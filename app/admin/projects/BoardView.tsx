@@ -976,7 +976,7 @@ function DraggableCard({
         </div>
         {project.customer && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginTop: 2 }}>
-            {project.customer.name}{project.customer.company ? ` · ${project.customer.company}` : ''}
+            {project.customer.name}
           </p>
         )}
       </div>

@@ -46,12 +46,10 @@ export default function EditCustomer() {
   const [error, setError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  // email/company/phone er fjernet fra customers etter migrasjon 186/187 — de redigeres via customer_contacts
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    company: '',
     org_nummer: '',
-    phone: '',
     address: '',
     notes: ''
   })
@@ -135,10 +133,7 @@ export default function EditCustomer() {
       setCustomer(data as Customer)
       const loaded = {
         name: data.name || '',
-        email: data.email || '',
-        company: data.company || '',
         org_nummer: data.org_nummer || '',
-        phone: data.phone || '',
         address: data.address || '',
         notes: data.notes || ''
       }
@@ -324,27 +319,7 @@ export default function EditCustomer() {
             />
           </div>
 
-          <div>
-            {fieldLabel('E-post')}
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="kunde@example.com"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Firma')}
-            <input
-              type="text"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-              placeholder="Firmanavn"
-              style={inputStyle}
-            />
-          </div>
+          {/* E-post, firma og telefon er fjernet fra Customer — redigeres via Kontaktpersoner under */}
 
           <div>
             {fieldLabel('Org.nummer')}
@@ -353,17 +328,6 @@ export default function EditCustomer() {
               value={formData.org_nummer}
               onChange={(e) => setFormData({ ...formData, org_nummer: e.target.value })}
               placeholder="923 456 789"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Telefon')}
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+47 123 45 678"
               style={inputStyle}
             />
           </div>

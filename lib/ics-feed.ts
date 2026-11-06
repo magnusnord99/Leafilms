@@ -30,7 +30,7 @@ type TaskRow = {
   due_date: string
   calendar_name: string | null
   project_id: string
-  project: { title: string; customers: { name: string | null; company: string | null } | null } | null
+  project: { title: string; customers: { name: string | null } | null } | null
 }
 
 type ProfileRef = { name: string | null; email: string } | { name: string | null; email: string }[] | null
@@ -174,7 +174,7 @@ export async function buildCalendarFeed(filter: CalendarFeedFilter = ALL_EVENTS)
     // og ekskluderes derfor her for å unngå duplikat (feedback 5bff440e).
     supabase
       .from('tasks')
-      .select('id, title, pipeline_stage, due_date, calendar_name, project_id, project:projects(title, customers(name, company))')
+      .select('id, title, pipeline_stage, due_date, calendar_name, project_id, project:projects(title, customers(name))')
       .not('due_date', 'is', null)
       .not('title', 'eq', 'Lever ferdig materiale'),
   ])

@@ -7,7 +7,7 @@ import { computeStepperLocks } from '@/lib/task-lock'
 
 type PlanProject = {
   id: string; title: string; pipeline_stage: string
-  customer: { name: string; company: string | null } | null
+  customer: { name: string } | null
 }
 
 type DailyPlanRow = {
@@ -47,7 +47,7 @@ export async function getDailyPlanItems(): Promise<DailyPlanItem[]> {
         task:tasks (
           *,
           task_assignees ( profile:profiles ( id, name, email ) ),
-          project:projects ( id, title, pipeline_stage, customer:customers ( name, company ) )
+          project:projects ( id, title, pipeline_stage, customer:customers ( name ) )
         )
       `)
       .eq('profile_id', user.id)

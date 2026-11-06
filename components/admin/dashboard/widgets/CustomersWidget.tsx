@@ -17,7 +17,7 @@ export default function CustomersWidget() {
 
   async function fetchData() {
     try {
-      const { data } = await supabase.from('customers').select('id, name, company, email, phone, customer_number').order('name', { ascending: true })
+      const { data } = await supabase.from('customers').select('id, name, customer_number').order('name', { ascending: true })
       const customerList = (data || []) as Customer[]
       setCustomers(customerList)
 
@@ -40,7 +40,7 @@ export default function CustomersWidget() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return customers
-    return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.company ?? '').toLowerCase().includes(q))
+    return customers.filter((c) => c.name.toLowerCase().includes(q))
   }, [customers, search])
 
   if (loading) return null
@@ -87,7 +87,6 @@ export default function CustomersWidget() {
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {customer.name}
-                        {customer.company && <span style={{ color: C.text3, fontWeight: 400 }}> · {customer.company}</span>}
                       </p>
                     </div>
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>

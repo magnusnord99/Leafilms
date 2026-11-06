@@ -338,8 +338,7 @@ function CustomerSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.company?.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase())
   )
   const selected = customers.find(c => c.id === selectedCustomerId)
   return (
@@ -386,7 +385,6 @@ function CustomerSelector({
                 onClick={() => { onSelect(c); setOpen(false); setSearch('') }}>
                 <span>{c.name}</span>
                 {c.customer_number && <span style={{ color: C.accent, marginLeft: 8, fontSize: '0.72rem' }}>#{c.customer_number}</span>}
-                {c.company && <span style={{ color: C.text2, marginLeft: 8, fontSize: '0.72rem' }}>{c.company}</span>}
               </button>
             ))}
             {filtered.length === 0 && <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>}

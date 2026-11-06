@@ -27,7 +27,8 @@ export type ProjectForTransfer = {
   customer: {
     id: string
     name: string
-    company: string | null
+    // email hentes fra primærkontakten i customer_contacts (se getProjectForTransfer)
+    contactName: string | null
     email: string | null
     logo_path: string | null
   } | null
@@ -49,7 +50,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     .from('projects')
     .select(`
       id, title, language, deliverables,
-      customers (id, name, company, email, logo_path)
+      customers (id, name, logo_path, customer_contacts(name, email, is_primary))
     `)
     .eq('id', projectId)
     .single()
@@ -58,9 +59,17 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
 
   const deliverables = (project as { deliverables?: ProjectForTransfer['deliverables'] }).deliverables ?? []
 
+  type TransferCustomerRow = {
+    id: string
+    name: string
+    logo_path: string | null
+    customer_contacts?: { name: string | null; email: string | null; is_primary: boolean }[]
+  }
+
   const customer = Array.isArray(project.customers)
-    ? project.customers[0] ?? null
-    : (project.customers as ProjectForTransfer['customer'] | null)
+    ? (project.customers[0] as TransferCustomerRow | undefined) ?? null
+    : (project.customers as TransferCustomerRow | null)
+  const primaryContact = customer?.customer_contacts?.find(c => c.is_primary) ?? null
 
   return {
     id: project.id,
@@ -69,8 +78,8 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     customer: customer ? {
       id: customer.id,
       name: customer.name,
-      company: customer.company ?? null,
-      email: customer.email ?? null,
+      contactName: primaryContact?.name ?? null,
+      email: primaryContact?.email ?? null,
       logo_path: customer.logo_path ?? null,
     } : null,
     deliverables,

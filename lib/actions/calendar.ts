@@ -115,7 +115,7 @@ export async function getCalendarEvents(filterProfileId: string | null = null): 
         .from('tasks')
         .select(`
           id, title, pipeline_stage, status, due_date, project_id, calendar_name,
-          project:projects ( id, title, pipeline_stage, customers(name, company) )
+          project:projects ( id, title, pipeline_stage, customers(name) )
         `)
         .not('due_date', 'is', null)
         .order('due_date', { ascending: true }),
@@ -136,7 +136,7 @@ export async function getCalendarEvents(filterProfileId: string | null = null): 
     type TaskCalRow = {
       id: string; title: string; pipeline_stage: string; status: 'todo' | 'in_progress' | 'done'; due_date: string
       calendar_name: string | null
-      project: { id: string; title: string; pipeline_stage: string; customers?: { name: string | null; company: string | null } | null } | null
+      project: { id: string; title: string; pipeline_stage: string; customers?: { name: string | null } | null } | null
     }
 
     // Opptak regnes som bekreftet kun når kontrakten er signert, eller admin har bekreftet manuelt.

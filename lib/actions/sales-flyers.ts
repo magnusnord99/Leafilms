@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { SalesFlyer, CaseStudy, Quote } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
 
@@ -22,13 +22,22 @@ export async function listSalesFlyers(): Promise<SalesFlyer[]> {
   return (data ?? []) as SalesFlyer[]
 }
 
-// Brukes av den offentlige ruten (app/(marketing)/[slug]/page.tsx).
+// Brukes av den offentlige ruten (app/(marketing)/[slug]/page.tsx), besøkt av
+// anonyme flyer-mottakere uten innlogging. Derfor service-klient (bypasser
+// RLS) her — samme mønster som /p/[token] — i stedet for den cookie-bundne
+// klienten: quotes har ingen anon-read-policy (kun authenticated_read_quotes,
+// se migrasjon 019/087), så et vanlig klient-kall ville stille RLS-nullet
+// quotes (*)-embedet og vist tomme pakke-lister for alle ekte besøkende.
+// published/includeDraft-gatingen er allerede håndtert på applikasjonsnivå
+// (kalleren avgjør includeDraft etter egen staff-sjekk), ikke av RLS, så
+// dette endrer ikke autorisasjonsgrensen — bare hvilken klient utfører
+// selve databasekallet.
 // includeDraft=true lar innlogget staff forhåndsvise en upublisert flyer.
 export async function getSalesFlyerBySlug(
   slug: string,
   { includeDraft = false }: { includeDraft?: boolean } = {}
 ): Promise<SalesFlyerWithRelations | null> {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   let query = supabase.from('sales_flyers').select('*').eq('slug', slug)
   if (!includeDraft) query = query.eq('published', true)
   const { data: flyer, error } = await query.maybeSingle()
@@ -44,7 +53,7 @@ export async function getSalesFlyerBySlug(
 }
 
 async function getOrderedCases(flyerId: string): Promise<(CaseStudy & { order_index: number })[]> {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('sales_flyer_cases')
     .select('order_index, case_studies (*)')
@@ -61,7 +70,7 @@ async function getOrderedCases(flyerId: string): Promise<(CaseStudy & { order_in
 }
 
 async function getOrderedPackages(flyerId: string): Promise<{ id: string; order_index: number; quote: Quote }[]> {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('sales_flyer_packages')
     .select('id, order_index, quotes (*)')

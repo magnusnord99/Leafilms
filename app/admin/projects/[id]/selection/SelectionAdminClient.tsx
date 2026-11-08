@@ -595,7 +595,7 @@ function SendGalleryEmailPanel({
   }
 
   const fieldStyle: React.CSSProperties = {
-    width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+    width: '100%', fontFamily: 'var(--font-dm-sans)', fontSize: '1rem',
     background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
     padding: '6px 9px', borderRadius: 6, outline: 'none', boxSizing: 'border-box',
   }

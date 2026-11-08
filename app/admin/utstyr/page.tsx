@@ -78,7 +78,7 @@ export default function UtstyrPage() {
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '32px 32px 48px' }}>
-      <div style={{ maxWidth: projectId ? 1244 : 960, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div className="flex flex-col items-stretch md:flex-row md:items-start" style={{ maxWidth: projectId ? 1244 : 960, margin: '0 auto', gap: 24 }}>
       <div style={{ flex: 1, minWidth: 0, maxWidth: 960 }}>
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>

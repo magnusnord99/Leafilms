@@ -526,7 +526,7 @@ function AdminLightbox({
         {url ? (
           <img src={url} alt={img.filename} style={{ maxWidth: '85vw', maxHeight: '80dvh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
         ) : (
-          <div style={{ width: 300, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem' }}>
+          <div style={{ width: 'min(300px, 85vw)', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem' }}>
             Ingen forhåndsvisning
           </div>
         )}

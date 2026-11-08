@@ -50,8 +50,8 @@ export default function EquipmentPickerPanel({
   }, {})
 
   return (
-    <div style={{
-      width: 260, flexShrink: 0, position: 'sticky', top: 24,
+    <div className="w-full md:w-[260px] md:flex-shrink-0 md:sticky" style={{
+      top: 24,
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
       padding: '16px 16px', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto',
     }}>

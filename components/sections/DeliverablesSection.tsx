@@ -65,7 +65,7 @@ export function DeliverablesSection({
     <div className="w-full">
       <div
         onClick={onImageClick}
-        className={`relative min-h-[85vh] flex flex-col justify-end overflow-hidden ${
+        className={`relative min-h-[85dvh] flex flex-col justify-end overflow-hidden ${
           editMode && !sectionImages[section.id]?.[0] ? 'cursor-pointer' : ''
         }`}
         style={{

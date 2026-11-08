@@ -245,7 +245,7 @@ export default function SelectionGallery({
                 style={{
                   flex: 1, padding: '7px 10px', borderRadius: 6, background: C.surface2,
                   border: `1px solid ${C.border}`, color: C.text2, fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.72rem', outline: 'none',
+                  fontSize: '1rem', outline: 'none',
                 }}
               />
               <button onClick={() => copyText(galleryUrl, setCopiedLink)} style={copyBtnStyle}>
@@ -526,7 +526,7 @@ function AdminLightbox({
         {url ? (
           <img src={url} alt={img.filename} style={{ maxWidth: '85vw', maxHeight: '80dvh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
         ) : (
-          <div style={{ width: 300, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem' }}>
+          <div style={{ width: 'min(300px, 85vw)', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.text3, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem' }}>
             Ingen forhåndsvisning
           </div>
         )}

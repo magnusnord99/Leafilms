@@ -314,7 +314,7 @@ export default function RoomDetailPage() {
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
-      <div style={{ maxWidth: lockedProjectId ? 1004 : 720, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div className="flex flex-col items-stretch md:flex-row md:items-start" style={{ maxWidth: lockedProjectId ? 1004 : 720, margin: '0 auto', gap: 24 }}>
       <div style={{ flex: 1, minWidth: 0, maxWidth: 720 }}>
 
         {/* Breadcrumb */}

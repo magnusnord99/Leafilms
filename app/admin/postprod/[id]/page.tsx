@@ -1631,7 +1631,7 @@ export default function PostProdDetailPage() {
                         <div style={{ maxWidth: '90vw', maxHeight: '80vh', position: 'relative' }} onClick={e => e.stopPropagation()}>
                           {img?.signedUrl
                             ? <img src={img.signedUrl} alt={img.filename} style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
-                            : <div style={{ width: 400, height: 300, background: C.surface2 }} />
+                            : <div style={{ width: 'min(400px, 90vw)', height: 300, background: C.surface2 }} />
                           }
                           {img && img.comments.length > 0 && (
                             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>

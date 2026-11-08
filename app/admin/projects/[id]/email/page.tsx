@@ -656,7 +656,7 @@ export default function EmailPage() {
                                 type="checkbox"
                                 checked={selectedLinkIds.has(u.tempId)}
                                 onChange={() => toggleLink(u.tempId)}
-                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer', width: 22, height: 22 }}
                               />
                             )}
                             <div style={{ minWidth: 0 }}>
@@ -714,7 +714,7 @@ export default function EmailPage() {
                                 type="checkbox"
                                 checked={selectedLinkIds.has(t.id)}
                                 onChange={() => toggleLink(t.id)}
-                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer', width: 22, height: 22 }}
                               />
                             )}
                             <div style={{ minWidth: 0, flex: 1 }}>
@@ -790,7 +790,7 @@ export default function EmailPage() {
                                 type="checkbox"
                                 checked={selectedLinkIds.has(t.id)}
                                 onChange={() => toggleLink(t.id)}
-                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer' }}
+                                style={{ marginTop: 3, flexShrink: 0, accentColor: C.accent, cursor: 'pointer', width: 22, height: 22 }}
                               />
                             )}
                             <div style={{ minWidth: 0, flex: 1 }}>

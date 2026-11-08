@@ -228,7 +228,7 @@ export function PublicProjectClient({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       {/* Section Navigation (desktop only, shows on scroll) */}
       <SectionNavigation sections={sections} getSectionTitle={getSectionTitle} />
 

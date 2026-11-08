@@ -24,7 +24,7 @@ export default function ShareDialog({ boardId, initialToken, onClose }: {
         {url ? (
           <>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <input readOnly value={url} style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', color: C.text, fontSize: '0.75rem', outline: 'none' }} />
+              <input readOnly value={url} style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', color: C.text, fontSize: '1rem', outline: 'none' }} />
               <button
                 onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
                 style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}

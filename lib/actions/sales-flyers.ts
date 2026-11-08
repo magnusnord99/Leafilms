@@ -1,13 +1,31 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import { SalesFlyer, CaseStudy, Quote } from '@/lib/types'
+import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
+import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+
+// Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
+// ALDRI hele Quote-raden. getSalesFlyerBySlug serialiseres som initialFlyer
+// til den klient-rendrede SalesFlyerView, og denne listen går derfor rett i
+// side-payloaden til hver anonyme flyer-besøkende. Et fullt quotes(*)-embed
+// (som tidligere) lekket crew-navn/dagspriser, linjepriser, discountFactor,
+// ourContact/companyEmail, kontraktsvilkår, project_id, created_by, pdf_path
+// — og hvis et ekte kundetilbud merkes som pakke, kundens navn/nummer/
+// prosjektnavn også.
+export type SalesFlyerPackageItem = {
+  id: string
+  order_index: number
+  quote_id: string
+  package_label: string
+  package_category: SalesFlyerPackageCategory
+  amount: number
+}
 
 export type SalesFlyerWithRelations = SalesFlyer & {
   cases: (CaseStudy & { order_index: number })[]
-  packages: { id: string; order_index: number; quote: Quote }[]
+  packages: SalesFlyerPackageItem[]
 }
 
 // view_count er totalt antall rader i sales_flyer_views for flyeren (ikke
@@ -28,20 +46,24 @@ export async function listSalesFlyers(): Promise<SalesFlyerListItem[]> {
   const flyers = (data ?? []) as SalesFlyer[]
   if (flyers.length === 0) return []
 
-  // Samme mønster som loadChildMeta i boards.ts/equipment.ts: hent rå rader
-  // for de relevante foreldre-ID-ene og tell opp i JS, i stedet for en
-  // separat RPC/aggregat-query pr. flyer.
-  const flyerIds = flyers.map(f => f.id)
-  const { data: views, error: viewsError } = await supabase
-    .from('sales_flyer_views')
-    .select('flyer_id')
-    .in('flyer_id', flyerIds)
-  if (viewsError) console.error('listSalesFlyers (views):', viewsError)
+  // IKKE hent rå rader og tell i JS (som loadChildMeta i boards.ts/
+  // equipment.ts gjør) — Supabase begrenser ett enkelt svar til 1000 rader by
+  // default, og denne tabellen har ingen lokal override. Når sales_flyer_views
+  // samlet passerer 1000 rader ville enhver flyers view_count stille sluttet å
+  // øke. count: 'exact', head: true pr. flyer unngår grensen (hver spørring
+  // returnerer kun selve tallet, ingen rader).
+  const counts = await Promise.all(
+    flyers.map(async f => {
+      const { count, error: viewsError } = await supabase
+        .from('sales_flyer_views')
+        .select('*', { count: 'exact', head: true })
+        .eq('flyer_id', f.id)
+      if (viewsError) console.error('listSalesFlyers (views):', viewsError)
+      return count ?? 0
+    })
+  )
 
-  const counts: Record<string, number> = {}
-  for (const row of views ?? []) counts[row.flyer_id] = (counts[row.flyer_id] ?? 0) + 1
-
-  return flyers.map(f => ({ ...f, view_count: counts[f.id] ?? 0 }))
+  return flyers.map((f, i) => ({ ...f, view_count: counts[i] }))
 }
 
 // Brukes av den offentlige ruten (app/(marketing)/[slug]/page.tsx), besøkt av
@@ -97,21 +119,41 @@ async function getOrderedCases(flyerId: string): Promise<(CaseStudy & { order_in
     .map(row => ({ ...row.case_studies, order_index: row.order_index }))
 }
 
-async function getOrderedPackages(flyerId: string): Promise<{ id: string; order_index: number; quote: Quote }[]> {
+async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageItem[]> {
   const supabase = createServiceClient()
+  // quote_data hentes KUN for å beregne amount under — den selve forblir
+  // internt i denne funksjonen og går aldri ut til kalleren/klienten.
   const { data, error } = await supabase
     .from('sales_flyer_packages')
-    .select('id, order_index, quotes (*)')
+    .select('id, order_index, quote_id, quotes (package_label, package_category, quote_data)')
     .eq('flyer_id', flyerId)
     .order('order_index', { ascending: true })
   if (error) {
     console.error('getOrderedPackages:', error)
     return []
   }
-  const rows = (data ?? []) as unknown as { id: string; order_index: number; quotes: Quote | null }[]
+  type Row = {
+    id: string
+    order_index: number
+    quote_id: string
+    quotes: { package_label: string | null; package_category: SalesFlyerPackageCategory | null; quote_data: unknown } | null
+  }
+  const rows = (data ?? []) as unknown as Row[]
+  // Samme defensive filter som listPackageTemplateQuotes: package_category
+  // (og dermed package_label) er nullbar i DB uavhengig av koblingen her —
+  // en pakke uten kategori kan ikke plasseres i noen fane og utelates.
   return rows
-    .filter((row): row is { id: string; order_index: number; quotes: Quote } => row.quotes !== null)
-    .map(row => ({ id: row.id, order_index: row.order_index, quote: row.quotes }))
+    .filter((row): row is Row & { quotes: { package_label: string; package_category: SalesFlyerPackageCategory; quote_data: unknown } } =>
+      row.quotes !== null && row.quotes.package_label !== null && row.quotes.package_category !== null
+    )
+    .map(row => ({
+      id: row.id,
+      order_index: row.order_index,
+      quote_id: row.quote_id,
+      package_label: row.quotes.package_label,
+      package_category: row.quotes.package_category,
+      amount: getQuoteAmountExclVat(row.quotes.quote_data) ?? 0,
+    }))
 }
 
 export async function createSalesFlyer(slug: string): Promise<{ id: string } | { error: string }> {

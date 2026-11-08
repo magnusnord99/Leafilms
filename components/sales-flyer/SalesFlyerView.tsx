@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react'
 import { CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
 import { splitParagraphs } from '@/lib/industry-landing-pages'
-import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
 import {
   SalesFlyerWithRelations,
   SalesFlyerUpdate,
@@ -306,7 +305,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // ── Pakker ───────────────────────────────────────────────────────────────
 
   async function openPackagePicker() {
-    setPendingPackageIds(flyer.packages.map(p => p.quote.id))
+    setPendingPackageIds(flyer.packages.map(p => p.quote_id))
     if (!packagesLoaded) {
       try {
         const packages = await listPackageTemplateQuotes()
@@ -351,14 +350,14 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   async function movePackage(quoteId: string, direction: 'up' | 'down') {
     if (packageMutating) return
     const previous = flyer.packages
-    const index = previous.findIndex(p => p.quote.id === quoteId)
+    const index = previous.findIndex(p => p.quote_id === quoteId)
     if (index === -1) return
-    const category = previous[index].quote.package_category
+    const category = previous[index].package_category
     let swapWith = -1
     if (direction === 'up') {
-      for (let i = index - 1; i >= 0; i--) if (previous[i].quote.package_category === category) { swapWith = i; break }
+      for (let i = index - 1; i >= 0; i--) if (previous[i].package_category === category) { swapWith = i; break }
     } else {
-      for (let i = index + 1; i < previous.length; i++) if (previous[i].quote.package_category === category) { swapWith = i; break }
+      for (let i = index + 1; i < previous.length; i++) if (previous[i].package_category === category) { swapWith = i; break }
     }
     if (swapWith === -1) return
     const next = [...previous]
@@ -366,7 +365,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     set('packages', next)
     setPackageMutating(true)
     try {
-      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote.id))
+      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote_id))
       if ('error' in result) { setPackagesError(`Kunne ikke lagre rekkefølgen: ${result.error}`); set('packages', previous) }
       else setPackagesError(null)
     } catch (err) {
@@ -381,11 +380,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   async function removePackage(quoteId: string) {
     if (packageMutating) return
     const previous = flyer.packages
-    const next = flyer.packages.filter(p => p.quote.id !== quoteId)
+    const next = flyer.packages.filter(p => p.quote_id !== quoteId)
     set('packages', next)
     setPackageMutating(true)
     try {
-      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote.id))
+      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote_id))
       if ('error' in result) { setPackagesError(`Kunne ikke fjerne pakken: ${result.error}`); set('packages', previous) }
       else setPackagesError(null)
     } catch (err) {
@@ -398,13 +397,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   }
 
   // Gruppering etter kategori, flyerens egen rekkefølge innen hver gruppe.
-  // En pakke uten kategori (bør ikke skje — unmarkQuoteAsPackage fjerner
-  // koblingene først) kan ikke plasseres i noen gruppe: skjules for besøkende,
-  // men vises for redaktøren slik at den kan fjernes.
+  // getOrderedPackages (lib/actions/sales-flyers.ts) filtrerer allerede bort
+  // pakker uten kategori server-side, så package_category er alltid satt her.
   const packagesByCategory = CATEGORY_ORDER
-    .map(category => ({ category, items: flyer.packages.filter(p => p.quote.package_category === category) }))
+    .map(category => ({ category, items: flyer.packages.filter(p => p.package_category === category) }))
     .filter(group => group.items.length > 0)
-  const uncategorizedPackages = flyer.packages.filter(p => p.quote.package_category === null)
 
   const editableStyle = (extra?: React.CSSProperties): React.CSSProperties => ({ ...editableBase, ...extra })
   const heroHasMedia = Boolean(flyer.hero_video_path || flyer.hero_poster_path)
@@ -413,15 +410,15 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // Render-funksjon (ikke en indre komponent) så kortene ikke remountes på
   // hver render av forelderen.
   function renderPackageCard(pkg: FlyerPackage, positionInGroup: number, groupSize: number) {
-    const amount = getQuoteAmountExclVat(pkg.quote.quote_data)
-    const title = pkg.quote.package_label ?? pkg.quote.label ?? 'Pakke'
+    const amount = pkg.amount
+    const title = pkg.package_label
     return (
       <div key={pkg.id} className="relative flex flex-col justify-between rounded-[2px] p-6 md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {editing && (
           <div style={{ position: 'absolute', top: -14, right: -14, zIndex: 5, display: 'flex', gap: 4 }}>
-            <button onClick={() => movePackage(pkg.quote.id, 'up')} disabled={positionInGroup === 0 || packageMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === 0 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↑</button>
-            <button onClick={() => movePackage(pkg.quote.id, 'down')} disabled={positionInGroup === groupSize - 1 || packageMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === groupSize - 1 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↓</button>
-            <button onClick={() => removePackage(pkg.quote.id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
+            <button onClick={() => movePackage(pkg.quote_id, 'up')} disabled={positionInGroup === 0 || packageMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === 0 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↑</button>
+            <button onClick={() => movePackage(pkg.quote_id, 'down')} disabled={positionInGroup === groupSize - 1 || packageMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === groupSize - 1 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↓</button>
+            <button onClick={() => removePackage(pkg.quote_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
           </div>
         )}
         <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
@@ -696,17 +693,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                 </div>
               </div>
             ))}
-
-            {editing && uncategorizedPackages.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold" style={{ color: '#E05A4A' }}>Uten kategori (vises ikke for besøkende)</h3>
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {uncategorizedPackages.map(pkg => (
-                    renderPackageCard(pkg, 0, 1)
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {packagesByCategory.length > 0 && (

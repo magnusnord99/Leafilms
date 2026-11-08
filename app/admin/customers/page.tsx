@@ -24,7 +24,7 @@ export default function CustomersPage() {
   async function fetchProjectCounts() {
     const supabase = createClient()
     const ids = customers.map(c => c.id)
-    const { data } = await supabase.from('projects').select('customer_id').in('customer_id', ids)
+    const { data } = await supabase.from('projects').select('customer_id').in('customer_id', ids).eq('is_package_template', false)
     if (data) {
       const counts: Record<string, number> = {}
       data.forEach((p: { customer_id: string | null }) => { if (p.customer_id) counts[p.customer_id] = (counts[p.customer_id] || 0) + 1 })

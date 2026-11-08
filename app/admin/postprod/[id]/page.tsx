@@ -31,6 +31,7 @@ import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { ProjectLinks } from '@/components/project/ProjectLinks'
+import { NudgeButton } from '@/components/shared/NudgeButton'
 import { TaskVideoFiles } from '@/components/postprod/TaskVideoFiles'
 import { C } from '@/lib/admin-theme'
 
@@ -1815,6 +1816,9 @@ export default function PostProdDetailPage() {
                             >
                               Åpne ↗
                             </a>
+                          )}
+                          {link.url && (
+                            <NudgeButton projectId={projectId} label={`lenken «${link.name || link.url}»`} />
                           )}
                         </div>
                       </div>

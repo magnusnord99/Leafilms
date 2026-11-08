@@ -28,7 +28,7 @@ BEGIN
   SELECT p_flyer_id, id, ord - 1
   FROM unnest(p_case_study_ids) WITH ORDINALITY AS t(id, ord);
 
-  UPDATE sales_flyers SET updated_at = now() WHERE id = p_flyer_id;
+  UPDATE sales_flyers SET updated_at = now(), updated_by = auth.uid() WHERE id = p_flyer_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -52,6 +52,6 @@ BEGIN
   SELECT p_flyer_id, id, ord - 1
   FROM unnest(p_quote_ids) WITH ORDINALITY AS t(id, ord);
 
-  UPDATE sales_flyers SET updated_at = now() WHERE id = p_flyer_id;
+  UPDATE sales_flyers SET updated_at = now(), updated_by = auth.uid() WHERE id = p_flyer_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

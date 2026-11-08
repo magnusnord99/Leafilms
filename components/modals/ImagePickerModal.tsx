@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button, Card, Heading, Text, Input } from '@/components/ui'
 import { Image } from '@/lib/types'
+import { useImageCategories } from '@/hooks/useImageCategories'
 
 interface ImagePickerModalProps {
   isOpen: boolean
@@ -30,18 +31,10 @@ export function ImagePickerModal({
   const [limitWarning, setLimitWarning] = useState(false)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
+  const { categories: categoryList } = useImageCategories()
   const categories = [
     { value: 'all', label: 'Alle' },
-    { value: 'landskap', label: 'Landskap' },
-    { value: 'sport', label: 'Sport' },
-    { value: 'closeup', label: 'Close-up' },
-    { value: 'portrett', label: 'Portrett' },
-    { value: 'event', label: 'Event' },
-    { value: 'kommersiell', label: 'Kommersiell' },
-    { value: 'abstrakt', label: 'Abstrakt' },
-    { value: 'bts', label: 'Behind The Scenes' },
-    { value: 'bryllup', label: 'Bryllup' },
-    { value: 'industri', label: 'Industri/Corporate' }
+    ...categoryList.map(cat => ({ value: cat.slug, label: cat.label })),
   ]
 
   // Rediger navn/tags direkte her — uten dette må man forlate pitchen og inn i det separate

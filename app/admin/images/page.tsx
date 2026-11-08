@@ -5,22 +5,213 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Image } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
-import { IMAGE_CATEGORIES, categoryLabel } from '@/lib/image-categories'
-
-const categories = [
-  { value: 'all', label: 'Alle' },
-  ...Object.keys(IMAGE_CATEGORIES).map(value => ({ value, label: categoryLabel(value) })),
-]
+import { useImageCategories, type ImageCategory, type ImageSubcategory } from '@/hooks/useImageCategories'
+import { useGridZoom } from '@/hooks/useGridZoom'
 
 function getImageUrl(image: Image) {
   return supabase.storage.from('assets').getPublicUrl(image.file_path).data.publicUrl
+}
+
+function PencilIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z" />
+    </svg>
+  )
+}
+
+function CategoryChip({
+  label,
+  active,
+  onSelect,
+  onRename,
+  onDelete,
+}: {
+  label: string
+  active: boolean
+  onSelect: () => void
+  onRename: (newLabel: string) => Promise<void>
+  onDelete: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(label)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setValue(label) }, [label])
+
+  async function save() {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === label) { setValue(label); setEditing(false); return }
+    setSaving(true)
+    try {
+      await onRename(trimmed)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke lagre nytt navn')
+      setValue(label)
+    } finally {
+      setSaving(false)
+      setEditing(false)
+    }
+  }
+
+  const chipFont = { fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', letterSpacing: '0.04em' }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        disabled={saving}
+        onChange={e => setValue(e.target.value)}
+        onFocus={e => e.target.select()}
+        onBlur={save}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); save() }
+          if (e.key === 'Escape') { setValue(label); setEditing(false) }
+        }}
+        style={{
+          ...chipFont,
+          padding: '6px 10px',
+          borderRadius: 3,
+          border: `1px solid ${C.accent}`,
+          background: C.surface,
+          color: C.text,
+          outline: 'none',
+          width: 140,
+        }}
+      />
+    )
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '5px 5px 5px 12px',
+        borderRadius: 3,
+        border: active ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+        background: active ? C.accentBg : C.surface,
+      }}
+    >
+      <button
+        onClick={onSelect}
+        style={{ ...chipFont, background: 'none', border: 'none', padding: '1px 2px', color: active ? C.accent : C.text3, cursor: 'pointer' }}
+      >
+        {label}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+        title="Gi nytt navn"
+        style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', opacity: 0.55, color: active ? C.accent : C.text3, display: 'flex' }}
+      >
+        <PencilIcon />
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete() }}
+        title="Slett"
+        style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', opacity: 0.55, color: active ? C.accent : C.text3, display: 'flex' }}
+      >
+        <TrashIcon />
+      </button>
+    </div>
+  )
+}
+
+function NewCategoryChip({ placeholder, onCreate }: { placeholder: string; onCreate: (label: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    const trimmed = value.trim()
+    if (!trimmed) { setEditing(false); return }
+    setSaving(true)
+    try {
+      await onCreate(trimmed)
+      setValue('')
+      setEditing(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke opprette')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        disabled={saving}
+        placeholder={placeholder}
+        onChange={e => setValue(e.target.value)}
+        onBlur={submit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); submit() }
+          if (e.key === 'Escape') { setValue(''); setEditing(false) }
+        }}
+        style={{
+          fontFamily: 'var(--font-dm-sans)',
+          fontSize: '0.65rem',
+          padding: '6px 10px',
+          borderRadius: 3,
+          border: `1px dashed ${C.accent}`,
+          background: C.surface,
+          color: C.text,
+          outline: 'none',
+          width: 150,
+        }}
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      style={{
+        fontFamily: 'var(--font-dm-sans)',
+        fontSize: '0.65rem',
+        letterSpacing: '0.04em',
+        padding: '6px 12px',
+        borderRadius: 3,
+        border: `1px dashed ${C.border}`,
+        background: 'transparent',
+        color: C.text3,
+        cursor: 'pointer',
+      }}
+    >
+      + Ny
+    </button>
+  )
 }
 
 export default function ImagesPage() {
   const [loading, setLoading] = useState(true)
   const [images, setImages] = useState<Image[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
+  const {
+    categories: cats,
+    createCategory,
+    renameCategory,
+    createSubcategory,
+    renameSubcategory,
+    deleteCategory,
+    deleteSubcategory,
+  } = useImageCategories()
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null)
+  const [selectedSubSlug, setSelectedSubSlug] = useState<string | null>(null)
+  const [zoom, setZoom] = useGridZoom('lf_admin_images_zoom', 180)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -37,8 +228,11 @@ export default function ImagesPage() {
         .select('id, filename, file_path, title, category, subcategory, tags, width, height, file_size, created_at, updated_at')
         .order('created_at', { ascending: false })
 
-      if (selectedCategory !== 'all') {
-        query = query.eq('category', selectedCategory)
+      if (selectedCategorySlug) {
+        query = query.eq('category', selectedCategorySlug)
+        if (selectedSubSlug) {
+          query = query.eq('subcategory', `${selectedCategorySlug}/${selectedSubSlug}`)
+        }
       }
 
       const { data, error } = await query
@@ -51,7 +245,7 @@ export default function ImagesPage() {
     }
   }
 
-  useEffect(() => { fetchImages() }, [selectedCategory])
+  useEffect(() => { fetchImages() }, [selectedCategorySlug, selectedSubSlug])
 
   const filtered = searchQuery
     ? images.filter(img =>
@@ -62,7 +256,42 @@ export default function ImagesPage() {
 
   const visibleIds = filtered.map(img => img.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
-  const bulkSubcategoryOptions = IMAGE_CATEGORIES[bulkCategory] || []
+  const activeCategory = cats.find(c => c.slug === selectedCategorySlug) || null
+  const bulkCategoryObj = cats.find(c => c.slug === bulkCategory)
+  const bulkSubcategoryOptions = bulkCategoryObj?.subcategories || []
+
+  function labelForCategory(slug: string) {
+    return cats.find(c => c.slug === slug)?.label || slug
+  }
+
+  function labelForSubcategory(fullSlug: string) {
+    const [catSlug, subSlug] = fullSlug.split('/')
+    const sub = cats.find(c => c.slug === catSlug)?.subcategories.find(s => s.slug === subSlug)
+    return sub?.label || subSlug
+  }
+
+  async function handleDeleteCategory(cat: ImageCategory) {
+    if (!confirm(`Slett kategorien "${cat.label}"?`)) return
+    try {
+      await deleteCategory(cat)
+      if (selectedCategorySlug === cat.slug) {
+        setSelectedCategorySlug(null)
+        setSelectedSubSlug(null)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke slette kategorien')
+    }
+  }
+
+  async function handleDeleteSubcategory(cat: ImageCategory, sub: ImageSubcategory) {
+    if (!confirm(`Slett underkategorien "${sub.label}"?`)) return
+    try {
+      await deleteSubcategory(cat, sub)
+      if (selectedSubSlug === sub.slug) setSelectedSubSlug(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunne ikke slette underkategorien')
+    }
+  }
 
   function toggleSelected(id: string) {
     setSelectedIds(prev => {
@@ -92,7 +321,7 @@ export default function ImagesPage() {
   async function handleBulkApply() {
     if (!bulkCategory || selectedIds.size === 0) return
     const count = selectedIds.size
-    if (!confirm(`Endre kategori til "${categoryLabel(bulkCategory)}" for ${count} bilde${count === 1 ? '' : 'r'}?`)) return
+    if (!confirm(`Endre kategori til "${labelForCategory(bulkCategory)}" for ${count} bilde${count === 1 ? '' : 'r'}?`)) return
 
     setBulkApplying(true)
     setBulkError(null)
@@ -190,7 +419,7 @@ export default function ImagesPage() {
         )}
 
         {/* Filters */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14, alignItems: 'center' }}>
           {/* Search */}
           <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
             <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
@@ -216,29 +445,90 @@ export default function ImagesPage() {
             />
           </div>
 
-          {/* Category filter */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {categories.map(cat => (
+          {/* Zoom */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>－</span>
+            <input
+              type="range"
+              min={120}
+              max={320}
+              step={20}
+              value={zoom}
+              onChange={e => setZoom(Number(e.target.value))}
+              style={{ width: 110, accentColor: C.accent, cursor: 'pointer' }}
+              aria-label="Zoom i bildegrid"
+            />
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3 }}>＋</span>
+          </div>
+        </div>
+
+        {/* Category / underkategori-mapper */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => { setSelectedCategorySlug(null); setSelectedSubSlug(null) }}
+              style={{
+                padding: '6px 12px',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.04em',
+                borderRadius: 3,
+                border: !selectedCategorySlug ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                background: !selectedCategorySlug ? C.accentBg : C.surface,
+                color: !selectedCategorySlug ? C.accent : C.text3,
+                cursor: 'pointer',
+              }}
+            >
+              Alle
+            </button>
+            {cats.map(cat => (
+              <CategoryChip
+                key={cat.id}
+                label={cat.label}
+                active={selectedCategorySlug === cat.slug}
+                onSelect={() => { setSelectedCategorySlug(cat.slug); setSelectedSubSlug(null) }}
+                onRename={(label) => renameCategory(cat.id, label)}
+                onDelete={() => handleDeleteCategory(cat)}
+              />
+            ))}
+            <NewCategoryChip placeholder="Ny kategori..." onCreate={createCategory} />
+          </div>
+
+          {activeCategory && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8, paddingLeft: 18 }}>
+              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>↳</span>
               <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
+                onClick={() => setSelectedSubSlug(null)}
                 style={{
                   padding: '6px 12px',
                   fontFamily: 'var(--font-dm-sans)',
                   fontSize: '0.65rem',
                   letterSpacing: '0.04em',
                   borderRadius: 3,
-                  border: selectedCategory === cat.value ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                  background: selectedCategory === cat.value ? C.accentBg : C.surface,
-                  color: selectedCategory === cat.value ? C.accent : C.text3,
+                  border: !selectedSubSlug ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+                  background: !selectedSubSlug ? C.accentBg : C.surface,
+                  color: !selectedSubSlug ? C.accent : C.text3,
                   cursor: 'pointer',
-                  transition: 'all 0.12s',
                 }}
               >
-                {cat.label}
+                Alle i {activeCategory.label}
               </button>
-            ))}
-          </div>
+              {activeCategory.subcategories.map(sub => (
+                <CategoryChip
+                  key={sub.id}
+                  label={sub.label}
+                  active={selectedSubSlug === sub.slug}
+                  onSelect={() => setSelectedSubSlug(sub.slug)}
+                  onRename={(label) => renameSubcategory(sub.id, label)}
+                  onDelete={() => handleDeleteSubcategory(activeCategory, sub)}
+                />
+              ))}
+              <NewCategoryChip
+                placeholder="Ny underkategori..."
+                onCreate={(label) => createSubcategory(activeCategory, label)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Selection toolbar */}
@@ -308,7 +598,7 @@ export default function ImagesPage() {
             )}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${zoom}px, 1fr))`, gap: 8 }}>
             {filtered.map(image => {
               const imgUrl = getImageUrl(image)
               const isDeleting = deletingId === image.id
@@ -376,7 +666,7 @@ export default function ImagesPage() {
                       {image.title || image.filename}
                     </p>
                     <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
-                      {categoryLabel(image.category)}{image.subcategory ? ` · ${image.subcategory.split('/').pop()}` : ''}
+                      {labelForCategory(image.category)}{image.subcategory ? ` · ${labelForSubcategory(image.subcategory)}` : ''}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 4, padding: '0 8px 8px' }}>
@@ -460,8 +750,8 @@ export default function ImagesPage() {
             }}
           >
             <option value="">Ny kategori...</option>
-            {Object.keys(IMAGE_CATEGORIES).map(cat => (
-              <option key={cat} value={cat}>{categoryLabel(cat)}</option>
+            {cats.map(cat => (
+              <option key={cat.id} value={cat.slug}>{cat.label}</option>
             ))}
           </select>
 
@@ -480,9 +770,9 @@ export default function ImagesPage() {
               }}
             >
               <option value="">Ingen underkategori</option>
-              {bulkSubcategoryOptions.map(subcat => (
-                <option key={subcat} value={`${bulkCategory}/${subcat}`}>
-                  {subcat.charAt(0).toUpperCase() + subcat.slice(1)}
+              {bulkSubcategoryOptions.map(sub => (
+                <option key={sub.id} value={`${bulkCategory}/${sub.slug}`}>
+                  {sub.label}
                 </option>
               ))}
             </select>

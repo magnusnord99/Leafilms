@@ -5,16 +5,21 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
 import { Image } from '@/lib/types'
-import { IMAGE_CATEGORIES, categoryLabel } from '@/lib/image-categories'
+import { useImageCategories } from '@/hooks/useImageCategories'
 
 type Props = {
   params: Promise<{ id: string }>
 }
 
-const categories = IMAGE_CATEGORIES
-
 export default function EditImagePage({ params }: Props) {
   const router = useRouter()
+  const { categories: categoryList } = useImageCategories()
+  const categories = Object.fromEntries(
+    categoryList.map(cat => [cat.slug, cat.subcategories.map(sub => sub.slug)])
+  ) as Record<string, string[]>
+  const categoryLabel = (slug: string) => categoryList.find(c => c.slug === slug)?.label || slug
+  const subcategoryLabel = (categorySlug: string, subSlug: string) =>
+    categoryList.find(c => c.slug === categorySlug)?.subcategories.find(s => s.slug === subSlug)?.label || subSlug
   const [id, setId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -178,7 +183,7 @@ export default function EditImagePage({ params }: Props) {
                 <option value="">Ingen underkategori</option>
                 {subcategoryOptions.map((subcat) => (
                   <option key={subcat} value={`${formData.category}/${subcat}`}>
-                    {subcat.charAt(0).toUpperCase() + subcat.slice(1)}
+                    {subcategoryLabel(formData.category, subcat)}
                   </option>
                 ))}
               </select>

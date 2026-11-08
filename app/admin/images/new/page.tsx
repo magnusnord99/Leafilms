@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button, Input, Textarea, Card, Heading, Text } from '@/components/ui'
+import { useImageCategories } from '@/hooks/useImageCategories'
 
 export default function NewImage() {
   const router = useRouter()
@@ -20,19 +21,13 @@ export default function NewImage() {
   const [imagePreviews, setImagePreviews] = useState<Array<{ file: File; preview: string; analysis?: Record<string, unknown>; analyzing: boolean; analysisError?: string }>>([])
   const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number | null>(null)
 
-  // Kategorier med underkategorier
-  const categories = {
-    landskap: ['fjell', 'kyst', 'by', 'natur', 'skog'],
-    sport: ['ski', 'løping', 'sykkel', 'vannsport', 'klatring', 'fotball'],
-    closeup: ['produkt', 'detalj', 'tekstur', 'ansikt'],
-    portrett: ['enkel', 'gruppe', 'bedrift'],
-    event: ['konsert', 'konferanse', 'festival', 'sport'],
-    kommersiell: ['produkt', 'merkevare', 'reklame'],
-    abstrakt: ['kunst', 'mønster', 'farge'],
-    bts: ['opptak', 'rigging', 'team', 'utstyr', 'lokasjon'],
-    bryllup: ['seremoni', 'fest', 'portrett', 'detaljer'],
-    industri: ['kontor', 'produksjon', 'team', 'produkt', 'fasade']
-  }
+  // Kategorier med underkategorier, hentet fra /admin/images (image_categories-tabellen)
+  const { categories: categoryList } = useImageCategories()
+  const categories = Object.fromEntries(
+    categoryList.map(cat => [cat.slug, cat.subcategories.map(sub => sub.slug)])
+  ) as Record<string, string[]>
+  const subcategoryLabel = (categorySlug: string, subSlug: string) =>
+    categoryList.find(c => c.slug === categorySlug)?.subcategories.find(s => s.slug === subSlug)?.label || subSlug
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -472,16 +467,16 @@ export default function NewImage() {
               className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-2 text-white"
               required
             >
-              {Object.keys(categories).map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              {categoryList.map((cat) => (
+                <option key={cat.slug} value={cat.slug}>
+                  {cat.label}
                 </option>
               ))}
             </select>
           </div>
 
           {/* Subcategory */}
-          {categories[formData.category as keyof typeof categories] && (
+          {categories[formData.category as keyof typeof categories] && categories[formData.category as keyof typeof categories].length > 0 && (
             <div>
               <Text variant="body" className="mb-2 block">Underkategori (valgfritt)</Text>
               <select
@@ -492,7 +487,7 @@ export default function NewImage() {
                 <option value="">Ingen underkategori</option>
                 {categories[formData.category as keyof typeof categories].map((subcat) => (
                   <option key={subcat} value={`${formData.category}/${subcat}`}>
-                    {subcat.charAt(0).toUpperCase() + subcat.slice(1)}
+                    {subcategoryLabel(formData.category, subcat)}
                   </option>
                 ))}
               </select>

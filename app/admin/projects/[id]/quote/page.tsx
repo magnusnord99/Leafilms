@@ -83,10 +83,18 @@ export default function ProjectQuotePage({ params }: Props) {
       const members = (teamRes.data || []) as TeamMember[]
       const custs = (customersRes.data || []) as Customer[]
       const allQuotes = (quoteRes.data || []) as Quote[]
+      // En ?quote=<id>-param (fra pakke-malenes liste i /admin/quotes, se Task 6 i
+      // sales-flyers-planen) velger et spesifikt tilbud eksplisitt — nødvendig fordi
+      // flere pakke-maler kan dele samme skjulte prosjekt, og da er de alle is_current,
+      // så pickBestQuote alene ikke kunne skille dem fra hverandre. Faller tilbake til
+      // vanlig oppslag når parameteren er borte eller ikke treffer noe tilbud på dette
+      // prosjektet — ingen endring i oppførsel for alle andre prosjektsider.
+      const requestedQuoteId = searchParams?.get('quote')
+      const requestedQuote = requestedQuoteId ? allQuotes.find(q => q.id === requestedQuoteId) : undefined
       // Et akseptert/signert tilbud vinner alltid over "gjeldende versjon" —
       // ellers åpnes plutselig et nyere, usignert tilleggstilbud som om DET var
       // det kunden hadde akseptert (feedback 08a0235b).
-      const existingQuote = pickBestQuote(allQuotes)
+      const existingQuote = requestedQuote ?? pickBestQuote(allQuotes)
 
       const shareToken = (shareRes.data as { token: string } | null)?.token
       setShareLink(shareToken ? `${window.location.origin}/p/${shareToken}` : null)

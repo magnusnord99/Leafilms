@@ -108,6 +108,7 @@ export function ProjectsListView({ view, onViewChange }: {
             project_lead:profiles!project_lead_id(name, email)
           `)
           .neq('status', 'lost')
+          .eq('is_package_template', false)
           .order('updated_at', { ascending: false }),
         supabase.from('tasks').select('project_id, pipeline_stage, status'),
         supabase

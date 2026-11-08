@@ -472,6 +472,7 @@ export default function ProjectQuotePage({ params }: Props) {
 
   async function handleConfirmUnmark() {
     setUnmarking(true)
+    setPkgError(null)
     try {
       await doUnmark()
     } finally {
@@ -777,35 +778,42 @@ export default function ProjectQuotePage({ params }: Props) {
             style={{ padding: '14px 18px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}
           >
             {activeQuote.package_label ? (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent, marginBottom: 3 }}>
-                    Pakke-mal
-                  </p>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text }}>
-                    {activeQuote.package_label}
-                    <span style={{ color: C.text3, marginLeft: 8, fontSize: '0.72rem' }}>
-                      ({activeQuote.package_category ? PACKAGE_CATEGORY_LABEL[activeQuote.package_category] : '—'})
-                    </span>
-                  </p>
+              <div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent, marginBottom: 3 }}>
+                      Pakke-mal
+                    </p>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text }}>
+                      {activeQuote.package_label}
+                      <span style={{ color: C.text3, marginLeft: 8, fontSize: '0.72rem' }}>
+                        ({activeQuote.package_category ? PACKAGE_CATEGORY_LABEL[activeQuote.package_category] : '—'})
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openDuplicateModal}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
+                    >
+                      Dupliser som nytt tilbud
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUnmarkClick}
+                      disabled={unmarking}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', padding: '6px 12px', borderRadius: 6, cursor: unmarking ? 'default' : 'pointer', background: 'transparent', color: C.danger, border: `1px solid ${C.border}`, opacity: unmarking ? 0.6 : 1 }}
+                    >
+                      {unmarking ? 'Sjekker…' : 'Fjern pakke-merking'}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={openDuplicateModal}
-                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
-                  >
-                    Dupliser som nytt tilbud
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUnmarkClick}
-                    disabled={unmarking}
-                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', padding: '6px 12px', borderRadius: 6, cursor: unmarking ? 'default' : 'pointer', background: 'transparent', color: C.danger, border: `1px solid ${C.border}`, opacity: unmarking ? 0.6 : 1 }}
-                  >
-                    {unmarking ? 'Sjekker…' : 'Fjern pakke-merking'}
-                  </button>
-                </div>
+                {pkgError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, marginTop: 6 }}>
+                    {pkgError}
+                  </p>
+                )}
               </div>
             ) : (
               <div>
@@ -900,6 +908,11 @@ export default function ProjectQuotePage({ params }: Props) {
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
                 Fjern merkingen likevel? Pakken forsvinner da fra disse flyerne.
               </p>
+              {pkgError && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>
+                  {pkgError}
+                </p>
+              )}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"

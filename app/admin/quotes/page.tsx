@@ -75,6 +75,7 @@ export default function QuotesPage() {
         .from('projects')
         .select('id, title, client_name, customers(name), updated_at')
         .neq('status', 'archived')
+        .eq('is_package_template', false)
         .order('updated_at', { ascending: false })
       setPickerProjects((data ?? []) as unknown as PickerProject[])
     } finally {
@@ -108,7 +109,7 @@ export default function QuotesPage() {
         .from('quotes')
         .select(`
           id, project_id, version, label, status, accepted_at, pdf_path, updated_at, quote_data, selected_addon_ids,
-          projects(title, customers(name), client_name)
+          projects(title, customers(name), client_name, is_package_template)
         `)
         .eq('is_current', true)
         .order('updated_at', { ascending: false })
@@ -119,9 +120,12 @@ export default function QuotesPage() {
         id: string; project_id: string; version: string; label: string | null
         status: QuoteRow['status']; accepted_at: string | null; pdf_path: string | null
         updated_at: string; quote_data: QuoteBuilderData | null; selected_addon_ids: string[] | null
-        projects?: { title: string | null; client_name: string | null; customers?: { name: string | null } | null } | null
+        projects?: { title: string | null; client_name: string | null; customers?: { name: string | null } | null; is_package_template?: boolean | null } | null
       }
-      const mapped: QuoteRow[] = ((data || []) as unknown as Row[]).map(q => ({
+      // Filtrer bort pakkemal-prosjektet i JS i stedet for embedded-filter PostgREST-syntaks
+      // (den er upålitelig for innebygde relasjoner) — se Task 5 i sales-flyers-planen.
+      const rows = ((data || []) as unknown as Row[]).filter(q => !q.projects?.is_package_template)
+      const mapped: QuoteRow[] = rows.map(q => ({
         id: q.id,
         project_id: q.project_id,
         version: q.version,

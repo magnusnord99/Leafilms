@@ -43,6 +43,7 @@ export async function getProjectsForPipeline(): Promise<ProjectWithPipeline[]> {
         )
       `)
       .neq('status', 'lost')
+      .eq('is_package_template', false)
       .or(`pipeline_stage.neq.videresalg,resale_visible_at.is.null,resale_visible_at.lte.${new Date().toISOString()}`)
       .order('updated_at', { ascending: false })
 

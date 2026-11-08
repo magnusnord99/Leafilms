@@ -565,10 +565,12 @@ const ADDON_CATEGORY_SHORT_LABELS: Record<OptionalAddonCategory, string> = {
 }
 
 function AddonsSection({
-  items, onChange,
+  items, onChange, excludedIds, onToggleExcluded,
 }: {
   items: OptionalAddon[]
   onChange: (items: OptionalAddon[]) => void
+  excludedIds: Set<string>
+  onToggleExcluded: (id: string) => void
 }) {
   const update = (id: string, field: 'description' | 'discountable' | 'deliveryImpact', value: string | boolean) =>
     onChange(items.map(i => (i.id === id ? { ...i, [field]: value } : i)))
@@ -607,6 +609,16 @@ function AddonsSection({
                       style={{ width: 22, height: 22, cursor: 'pointer' }}
                     />
                     Rabatterbar
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', color: C.text3, fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={!excludedIds.has(item.id)}
+                      onChange={() => onToggleExcluded(item.id)}
+                      title="Ta med dette tillegget i totalsummen under (kun en forhåndsvisning — påvirker ikke hva kunden ser)"
+                      style={{ width: 22, height: 22, cursor: 'pointer' }}
+                    />
+                    I totalsum
                   </label>
                   <button type="button" onClick={() => remove(item.id)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, transition: 'opacity 0.1s, color 0.1s' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.danger }}
@@ -650,6 +662,7 @@ function AddonsSection({
       <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
         Vises som avkrysningsbokser for kunden på det publiserte tilbudet. Et tillegg kan fordeles på flere poster samtidig
         (f.eks. Opptak + Post-produksjon) — kun MVA legges på hvis kunden haker av.
+        &quot;I totalsum&quot; over er kun en forhåndsvisning for deg — slå tillegg av/på for å se hvordan totalprisen under endrer seg med ulike kombinasjoner.
       </p>
     </div>
   )
@@ -785,12 +798,15 @@ function PostProductionSection({
 
 // ─── Totals panel ──────────────────────────────────────────────────────────────
 // Kategoriradene under speiler nøyaktig det admin sin "Generer PDF"-knapp produserer (som tar
-// med alle konfigurerte tillegg — se generateQuotePDF sin `selectedAddonIds === undefined`-gren).
-// Bruker samme delte funksjon som PDF-en for å garantere at tallene aldri kan divergere igjen.
-function TotalsPanel({ data }: { data: QuoteBuilderData }) {
-  const allAddonIds = (data.optionalAddons ?? []).map(a => a.id)
-  const t = calculateQuoteTotals(data, allAddonIds)
-  const quote = convertBuilderDataToQuoteData(data, allAddonIds)
+// med alle konfigurerte tillegg — se generateQuotePDF sin `selectedAddonIds === undefined`-gren) —
+// med mindre admin har huket av enkelte tillegg under "I totalsum" for å forhåndsvise en lavere
+// sum (feedback 21ef6d6c). Det er kun en visningsinnstilling her; PDF/kontrakt bruker fortsatt
+// alle tillegg som standard. Bruker samme delte funksjon som PDF-en for å garantere at tallene
+// aldri kan divergere igjen når ingenting er ekskludert.
+function TotalsPanel({ data, excludedAddonIds }: { data: QuoteBuilderData; excludedAddonIds: Set<string> }) {
+  const includedAddonIds = (data.optionalAddons ?? []).filter(a => !excludedAddonIds.has(a.id)).map(a => a.id)
+  const t = calculateQuoteTotals(data, includedAddonIds)
+  const quote = convertBuilderDataToQuoteData(data, includedAddonIds)
   const discountPct = Math.round((data.discountFactor ?? 0) * 100)
   const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
   const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.danger, fontWeight: 600, fontFamily: 'var(--font-dm-sans)' }
@@ -1152,6 +1168,16 @@ export function QuoteBuilder({
   const [headerOpen, setHeaderOpen] = useState(true)
   const [termsOpen, setTermsOpen] = useState(false)
   const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
+  // Kun en forhåndsvisning av totalsummen under — hvilke tillegg som faktisk er med
+  // på kundens publiserte tilbud styres fortsatt av kunden selv (feedback 21ef6d6c).
+  const [previewExcludedAddonIds, setPreviewExcludedAddonIds] = useState<Set<string>>(new Set())
+  const togglePreviewAddon = (id: string) =>
+    setPreviewExcludedAddonIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Hent lagrede kontaktpersoner for valgt kunde (feedback 6f3ea21e) — brukes
   // som søkbar datalist på Kundekontakt-feltet i stedet for kun customer.name.
@@ -1445,6 +1471,8 @@ export function QuoteBuilder({
         <AddonsSection
           items={data.optionalAddons ?? []}
           onChange={v => set('optionalAddons', v)}
+          excludedIds={previewExcludedAddonIds}
+          onToggleExcluded={togglePreviewAddon}
         />
       </div>
 
@@ -1490,7 +1518,7 @@ export function QuoteBuilder({
       </div>
 
       {/* ── Totals ── */}
-      <TotalsPanel data={data} />
+      <TotalsPanel data={data} excludedAddonIds={previewExcludedAddonIds} />
 
       {/* ── Terms ── */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 3, overflow: 'hidden' }}>

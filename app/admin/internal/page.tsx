@@ -444,6 +444,9 @@ export default function InternalTasksPage() {
   const [newDueDate, setNewDueDate] = useState('')
   const [creating, setCreating] = useState(false)
   const [activeTask, setActiveTask] = useState<AdminTask | null>(null)
+  // Løste oppgaver skal ikke rote i hovedoversikten — de skjules bak et eget
+  // utvidbart avsnitt i stedet, så man ser åpne oppgaver først (feedback 7ae59956).
+  const [showDone, setShowDone] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -546,7 +549,7 @@ export default function InternalTasksPage() {
               Ingen interne oppgaver ennå.
             </p>
           )}
-          {tasks.map(task => (
+          {tasks.filter(t => t.status !== 'done').map(task => (
             <TaskRow
               key={task.id}
               task={task}
@@ -557,6 +560,40 @@ export default function InternalTasksPage() {
               onDelete={() => handleDelete(task.id)}
             />
           ))}
+          {(() => {
+            const doneTasks = tasks.filter(t => t.status === 'done')
+            if (doneTasks.length === 0) return null
+            return (
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={() => setShowDone(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer',
+                    padding: '4px 0', fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600,
+                    color: C.text3, letterSpacing: '0.04em',
+                  }}
+                >
+                  <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: showDone ? 'rotate(90deg)' : 'none' }}>›</span>
+                  Løste oppgaver ({doneTasks.length})
+                </button>
+                {showDone && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                    {doneTasks.map(task => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        profiles={profiles}
+                        onStatusChange={() => handleStatusChange(task)}
+                        onAssign={profileId => handleAssign(task.id, profileId)}
+                        onDueDateChange={dueDate => handleDueDateChange(task.id, dueDate)}
+                        onDelete={() => handleDelete(task.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           <div style={{ marginTop: 4 }}>
             <AddTaskInput value={newTitle} onChange={setNewTitle} dueDate={newDueDate} onDueDateChange={setNewDueDate} onSubmit={handleAddTask} disabled={creating} />
           </div>

@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { SalesFlyer, CaseStudy, Quote } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 
 export type SalesFlyerWithRelations = SalesFlyer & {
   cases: (CaseStudy & { order_index: number })[]
@@ -37,9 +38,15 @@ export async function getSalesFlyerBySlug(
   slug: string,
   { includeDraft = false }: { includeDraft?: boolean } = {}
 ): Promise<SalesFlyerWithRelations | null> {
+  // includeDraft er kallerens PÅSTAND, ikke en tillatelse: som 'use server'-
+  // eksport kan denne kalles direkte fra nettleseren av hvem som helst (action-
+  // ID-en ligger i klient-bundelen til SalesFlyerView). Med service-klienten
+  // over finnes ingen RLS som fanger det, så staff-statusen sjekkes her,
+  // server-side. Ikke-staff faller stille tilbake til kun publiserte flyers.
+  const allowDraft = includeDraft ? (await getAuthenticatedStaffUser()).ok : false
   const supabase = createServiceClient()
   let query = supabase.from('sales_flyers').select('*').eq('slug', slug)
-  if (!includeDraft) query = query.eq('published', true)
+  if (!allowDraft) query = query.eq('published', true)
   const { data: flyer, error } = await query.maybeSingle()
   if (error || !flyer) {
     if (error) console.error('getSalesFlyerBySlug:', error)

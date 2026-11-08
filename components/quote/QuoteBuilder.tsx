@@ -804,7 +804,7 @@ function TotalsPanel({ data }: { data: QuoteBuilderData }) {
 
       {t.discountAmount > 0 && (
         <div style={discountRowStyle}>
-          <span>Rabatt ({discountPct}%) på opptak + post-produksjon</span>
+          <span>Rabatt ({discountPct}%) på mannskap (opptak + post-produksjon)</span>
           <span>−{formatNOK(t.discountAmount)}</span>
         </div>
       )}
@@ -1484,7 +1484,7 @@ export function QuoteBuilder({
           </div>
         </div>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
-          Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisensiering eller andre kostnader.
+          Rabatten gjelder kun mannskap (opptak, inkl. oppstart, og post-produksjon-team) — ikke utstyr, post-produksjon-kostnader, lisensiering eller andre kostnader.
           {discountFactors.length > 0 && ' Oppdateres automatisk fra flerdagsrabatt-tabellen når opptaksdager endres.'}
         </p>
       </div>

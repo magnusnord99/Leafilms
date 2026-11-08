@@ -400,9 +400,11 @@ export async function generateQuotePDF(
     }
 
     const subtotal = startupDisplayTotal + productionDisplayTotal + postDisplayTotal + expensesTotal
-    // Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre kostnader —
-    // pluss rabatterbare tillegg i disse kategoriene
-    const discountBase = startupTotal + shootCrewTotal + postTotal + addonDiscountableTotal
+    // Rabatten gjelder kun mannskap — opptak (inkl. oppstart) og post-produksjon-TEAM — ikke utstyr,
+    // post-produksjon-kostnader, lisens eller andre kostnader — pluss rabatterbare tillegg i disse
+    // kategoriene. Må speile discountBase i lib/quote-builder-utils.ts (calculateQuoteTotals) —
+    // denne filen dupliserer beregningen i stedet for å kalle den delte funksjonen.
+    const discountBase = startupTotal + shootCrewTotal + postCrewTotal + addonDiscountableTotal
     const discountAmount = discountBase * discountFactor
     const afterDiscount = subtotal - discountAmount
     const vatRate = data.vatRate ?? 25

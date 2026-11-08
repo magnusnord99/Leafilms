@@ -10,7 +10,12 @@ export type SalesFlyerWithRelations = SalesFlyer & {
   packages: { id: string; order_index: number; quote: Quote }[]
 }
 
-export async function listSalesFlyers(): Promise<SalesFlyer[]> {
+// view_count er totalt antall rader i sales_flyer_views for flyeren (ikke
+// unike besøkende) — brukes av admin-listen (/admin/landingssider) for å
+// vise "X visninger" pr. flyer.
+export type SalesFlyerListItem = SalesFlyer & { view_count: number }
+
+export async function listSalesFlyers(): Promise<SalesFlyerListItem[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('sales_flyers')
@@ -20,7 +25,23 @@ export async function listSalesFlyers(): Promise<SalesFlyer[]> {
     console.error('listSalesFlyers:', error)
     return []
   }
-  return (data ?? []) as SalesFlyer[]
+  const flyers = (data ?? []) as SalesFlyer[]
+  if (flyers.length === 0) return []
+
+  // Samme mønster som loadChildMeta i boards.ts/equipment.ts: hent rå rader
+  // for de relevante foreldre-ID-ene og tell opp i JS, i stedet for en
+  // separat RPC/aggregat-query pr. flyer.
+  const flyerIds = flyers.map(f => f.id)
+  const { data: views, error: viewsError } = await supabase
+    .from('sales_flyer_views')
+    .select('flyer_id')
+    .in('flyer_id', flyerIds)
+  if (viewsError) console.error('listSalesFlyers (views):', viewsError)
+
+  const counts: Record<string, number> = {}
+  for (const row of views ?? []) counts[row.flyer_id] = (counts[row.flyer_id] ?? 0) + 1
+
+  return flyers.map(f => ({ ...f, view_count: counts[f.id] ?? 0 }))
 }
 
 // Brukes av den offentlige ruten (app/(marketing)/[slug]/page.tsx), besøkt av

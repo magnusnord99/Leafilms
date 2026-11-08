@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { C } from '@/lib/admin-theme'
-import { IndustryLandingPage, SalesFlyer } from '@/lib/types'
+import { IndustryLandingPage } from '@/lib/types'
 import { listIndustryLandingPages, createIndustryLandingPage, deleteIndustryLandingPage } from '@/lib/actions/industry-landing-pages'
-import { listSalesFlyers, createSalesFlyer, deleteSalesFlyer } from '@/lib/actions/sales-flyers'
+import { listSalesFlyers, createSalesFlyer, deleteSalesFlyer, SalesFlyerListItem } from '@/lib/actions/sales-flyers'
 
 type Tab = 'bransjesider' | 'flyers'
 
@@ -13,8 +13,8 @@ const formatDate = (ts: string) =>
   new Date(ts).toLocaleString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 function LandingPageRow<T extends { id: string; slug: string; published: boolean; updated_at: string }>({
-  item, href, onDelete,
-}: { item: T; href: string; onDelete: (e: React.MouseEvent) => void }) {
+  item, href, onDelete, extra,
+}: { item: T; href: string; onDelete: (e: React.MouseEvent) => void; extra?: string }) {
   return (
     <Link
       href={href}
@@ -33,6 +33,7 @@ function LandingPageRow<T extends { id: string; slug: string; published: boolean
           </p>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '2px 0 0' }}>
             Sist oppdatert {formatDate(item.updated_at)}
+            {extra ? ` · ${extra}` : ''}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -69,7 +70,7 @@ export default function LandingssiderPage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [flyers, setFlyers] = useState<SalesFlyer[]>([])
+  const [flyers, setFlyers] = useState<SalesFlyerListItem[]>([])
   const [flyersLoading, setFlyersLoading] = useState(true)
   const [newFlyerSlug, setNewFlyerSlug] = useState('')
   const [creatingFlyer, setCreatingFlyer] = useState(false)
@@ -276,6 +277,7 @@ export default function LandingssiderPage() {
                     item={flyer}
                     href={`/flyer/${flyer.slug}`}
                     onDelete={e => handleDeleteFlyer(e, flyer.id, flyer.slug)}
+                    extra={`${flyer.view_count} ${flyer.view_count === 1 ? 'visning' : 'visninger'}`}
                   />
                 ))
               )}

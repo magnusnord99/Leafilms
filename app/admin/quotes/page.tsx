@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 import { timeAgo } from '@/lib/format'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
-import type { QuoteBuilderData } from '@/lib/types'
+import { listPackageTemplateQuotes, createPackageTemplateQuote, type PackageTemplateQuote } from '@/lib/actions/quote-packages'
+import type { QuoteBuilderData, SalesFlyerPackageCategory } from '@/lib/types'
 
 type PickerProject = {
   id: string
@@ -45,6 +46,12 @@ const STATUS_COLOR: Record<QuoteRow['status'], string> = {
   rejected: C.danger,
 }
 
+const PACKAGE_CATEGORY_LABEL: Record<SalesFlyerPackageCategory, string> = {
+  foto: 'Bilder',
+  film: 'Film',
+  foto_film: 'Bilder og film',
+}
+
 function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
@@ -56,6 +63,10 @@ export default function QuotesPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | QuoteRow['status']>('all')
   const [search, setSearch] = useState('')
 
+  // "Aktive tilbud" (dagens visning) vs. "Pakkemaler" (pakke-tilbud for flyer-editoren,
+  // skjult fra pipeline/Kanban via is_package_template — se Task 5/6 i sales-flyers-planen).
+  const [tab, setTab] = useState<'aktive' | 'pakker'>('aktive')
+
   // Prosjektvelger for "+ Opprett tilbud" — et tilbud hører alltid til et prosjekt,
   // så vi lar brukeren søke opp/velge prosjektet i stedet for et frittstående skjema.
   const [showPicker, setShowPicker] = useState(false)
@@ -63,7 +74,79 @@ export default function QuotesPage() {
   const [pickerLoading, setPickerLoading] = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
 
+  // Pakkemaler-fanen
+  const [packageQuotes, setPackageQuotes] = useState<PackageTemplateQuote[] | null>(null)
+  // listPackageTemplateQuotes() returnerer ikke project_id (kun det quote-byggeren
+  // trenger), så vi slår opp prosjekt-id per quote-id separat for lenkene i listen.
+  const [packageProjectIds, setPackageProjectIds] = useState<Record<string, string>>({})
+  const [packagesLoading, setPackagesLoading] = useState(false)
+  const [showPackageForm, setShowPackageForm] = useState(false)
+  const [packageLabel, setPackageLabel] = useState('')
+  const [packageCategory, setPackageCategory] = useState<SalesFlyerPackageCategory>('foto')
+  const [packageSaving, setPackageSaving] = useState(false)
+  const [packageError, setPackageError] = useState<string | null>(null)
+
   useEffect(() => { fetchQuotes() }, [])
+
+  useEffect(() => {
+    if (tab === 'pakker' && packageQuotes === null) {
+      fetchPackageQuotes()
+    }
+  }, [tab, packageQuotes])
+
+  async function fetchPackageQuotes() {
+    setPackagesLoading(true)
+    try {
+      const data = await listPackageTemplateQuotes()
+      setPackageQuotes(data)
+      if (data.length > 0) {
+        const { data: rows } = await supabase
+          .from('quotes')
+          .select('id, project_id')
+          .in('id', data.map(q => q.id))
+        const map: Record<string, string> = {}
+        for (const row of (rows ?? []) as { id: string; project_id: string }[]) {
+          map[row.id] = row.project_id
+        }
+        setPackageProjectIds(map)
+      }
+    } finally {
+      setPackagesLoading(false)
+    }
+  }
+
+  function openPackageForm() {
+    setPackageLabel('')
+    setPackageCategory('foto')
+    setPackageError(null)
+    setShowPackageForm(true)
+  }
+
+  async function handleCreatePackage() {
+    const label = packageLabel.trim()
+    if (!label) {
+      setPackageError('Pakken må ha et navn')
+      return
+    }
+    setPackageSaving(true)
+    setPackageError(null)
+    try {
+      const result = await createPackageTemplateQuote({ package_label: label, package_category: packageCategory })
+      if ('error' in result) {
+        setPackageError(result.error)
+        return
+      }
+      setPackageQuotes(prev => [
+        ...(prev ?? []),
+        { id: result.quoteId, package_label: label, package_category: packageCategory, package_order: 0, amount: 0 },
+      ])
+      setPackageProjectIds(prev => ({ ...prev, [result.quoteId]: result.projectId }))
+      setShowPackageForm(false)
+      router.push(`/admin/projects/${result.projectId}/quote?quote=${result.quoteId}`)
+    } finally {
+      setPackageSaving(false)
+    }
+  }
 
   async function openPicker() {
     setShowPicker(true)
@@ -178,15 +261,124 @@ export default function QuotesPage() {
               Alle tilbud på tvers av prosjekter
             </p>
           </div>
-          <button
-            onClick={openPicker}
-            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 18px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}
-          >
-            + Opprett tilbud
-          </button>
+          {tab === 'aktive' ? (
+            <button
+              onClick={openPicker}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 18px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}
+            >
+              + Opprett tilbud
+            </button>
+          ) : (
+            <button
+              onClick={openPackageForm}
+              style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '8px 18px', borderRadius: 8, cursor: 'pointer', background: C.accent, color: '#fff', border: 'none', flexShrink: 0 }}
+            >
+              + Ny pakke-mal
+            </button>
+          )}
         </div>
 
-        {showPicker && (
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 20 }}>
+          {([['aktive', 'Aktive tilbud'], ['pakker', 'Pakkemaler']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setTab(val)}
+              style={{
+                padding: '8px 12px',
+                fontFamily: 'var(--font-dm-sans)',
+                fontSize: '0.8rem',
+                fontWeight: tab === val ? 600 : 400,
+                background: 'none',
+                border: 'none',
+                borderBottom: `2px solid ${tab === val ? C.accent : 'transparent'}`,
+                color: tab === val ? C.text : C.text3,
+                cursor: 'pointer',
+                marginBottom: -1,
+                transition: 'color 0.1s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {showPackageForm && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px', zIndex: 50 }}
+            onClick={() => !packageSaving && setShowPackageForm(false)}
+          >
+            <div
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 12 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
+                  Ny pakke-mal
+                </p>
+                <button
+                  onClick={() => setShowPackageForm(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: 4 }}
+                >
+                  ×
+                </button>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                  Navn på pakken
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={packageLabel}
+                  onChange={e => setPackageLabel(e.target.value)}
+                  placeholder="F.eks. Liten pakke"
+                  style={{
+                    width: '100%', padding: '8px 12px',
+                    background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
+                    color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                  Kategori
+                </label>
+                <select
+                  value={packageCategory}
+                  onChange={e => setPackageCategory(e.target.value as SalesFlyerPackageCategory)}
+                  style={{
+                    width: '100%', padding: '8px 12px',
+                    background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
+                    color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none',
+                  }}
+                >
+                  <option value="foto">Bilder</option>
+                  <option value="film">Film</option>
+                  <option value="foto_film">Bilder og film</option>
+                </select>
+              </div>
+              {packageError && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>
+                  {packageError}
+                </p>
+              )}
+              <button
+                onClick={handleCreatePackage}
+                disabled={packageSaving}
+                style={{
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600,
+                  padding: '9px 18px', borderRadius: 8, cursor: packageSaving ? 'default' : 'pointer',
+                  background: C.accent, color: '#fff', border: 'none', opacity: packageSaving ? 0.6 : 1,
+                }}
+              >
+                {packageSaving ? 'Oppretter...' : 'Opprett pakke'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'aktive' && showPicker && (
           <div
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px', zIndex: 50 }}
             onClick={() => setShowPicker(false)}
@@ -263,6 +455,8 @@ export default function QuotesPage() {
           </div>
         )}
 
+        {tab === 'aktive' && (
+        <>
         {/* Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
           <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
@@ -471,6 +665,66 @@ export default function QuotesPage() {
               </div>
             ))}
           </div>
+        )}
+        </>
+        )}
+
+        {tab === 'pakker' && (
+          packagesLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+              <div style={{ width: 20, height: 20, border: `1.5px solid ${C.border}`, borderTop: `1.5px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            </div>
+          ) : !packageQuotes || packageQuotes.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '56px 24px',
+              border: `1px solid ${C.border}`,
+              borderRadius: 10,
+              background: C.surface,
+            }}>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3 }}>
+                Ingen pakke-maler ennå
+              </p>
+            </div>
+          ) : (
+            <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              {packageQuotes.map((pkg, i) => {
+                const projectId = packageProjectIds[pkg.id]
+                return (
+                  <Link
+                    key={pkg.id}
+                    href={projectId ? `/admin/projects/${projectId}/quote?quote=${pkg.id}` : '#'}
+                    style={{
+                      display: 'block',
+                      textDecoration: 'none',
+                      borderBottom: i < packageQuotes.length - 1 ? `1px solid ${C.border}` : 'none',
+                      background: C.surface,
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = C.surface2}
+                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = C.surface}
+                  >
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <p style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text,
+                          marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {pkg.package_label}
+                        </p>
+                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                          {PACKAGE_CATEGORY_LABEL[pkg.package_category]}
+                        </p>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.text, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {formatNok(pkg.amount)} eks. mva
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )
         )}
       </div>
     </div>

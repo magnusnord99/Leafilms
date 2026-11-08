@@ -21,6 +21,7 @@ import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { CrewSection } from '@/components/admin/CrewSection'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { C } from '@/lib/admin-theme'
 
@@ -824,21 +825,10 @@ export default function PreprodDetailPage() {
 
   const access = getStageAccess('pre_prod', project.pipeline_stage)
 
-  if (access === 'not_yet_reached') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet har ikke nådd pre-produksjon ennå
-          </p>
-          <button onClick={() => router.push('/admin/preprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-            ← Tilbake
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  // Steg prosjektet ikke har nådd ennå er fullt redigerbare her, ikke
+  // blokkert — man skal kunne jobbe med alle deler av prosjektet, ikke bare
+  // der det er nå (feedback 2e41d344/b0d97ab3). Kun "past"-steg er
+  // skrivebeskyttet (med opplåsingsmulighet).
   const readOnly = access === 'past' && !unlocked
 
   return (
@@ -1072,10 +1062,14 @@ export default function PreprodDetailPage() {
               readOnly={readOnly}
             />
 
-            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, delt komponent med
-                prosjektoversikten (feedback 8578db28) */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
-              <ProjectDocuments projectId={id} />
+            {/* Filer og lenker — vedlegg/dokumenter og navngitte URL-er knyttet til prosjektet */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+                <ProjectDocuments projectId={id} />
+              </div>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px' }}>
+                <ProjectLinks projectId={id} />
+              </div>
             </div>
           </div>
 

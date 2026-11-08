@@ -46,10 +46,9 @@ export default function CustomersPage() {
     fetchCustomers()
   }
 
+  // company/email/phone er fjernet fra Customer — søk kun på kontonavn
   const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.company?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   if (loading) {
@@ -118,19 +117,8 @@ export default function CustomersPage() {
                         #{customer.customer_number}
                       </span>
                     )}
-                    {customer.company && (
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>
-                        {customer.company}
-                      </span>
-                    )}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
-                    {customer.email && (
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{customer.email}</span>
-                    )}
-                    {customer.phone && (
-                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>{customer.phone}</span>
-                    )}
                     <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
                       {projectCounts[customer.id] || 0} prosjekt{projectCounts[customer.id] !== 1 ? 'er' : ''}
                     </span>

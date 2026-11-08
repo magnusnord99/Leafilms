@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import type { ProjectDocument } from '@/lib/types'
+import { NudgeButton } from '@/components/shared/NudgeButton'
 import { C } from '@/lib/admin-theme'
 
 function formatFileSize(bytes: number | null): string {
@@ -159,6 +160,7 @@ export function ProjectDocuments({ projectId, defaultCollapsed = false }: { proj
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, flexShrink: 0 }}>
                   {new Date(doc.created_at).toLocaleDateString('nb-NO')}
                 </span>
+                <NudgeButton projectId={projectId} label={`filen «${doc.file_name}»`} />
                 <button
                   onClick={() => handleDelete(doc)}
                   style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, padding: '3px 9px', borderRadius: 3, cursor: 'pointer', background: 'rgba(224,85,85,0.1)', color: C.danger, border: '1px solid rgba(224,85,85,0.25)', flexShrink: 0 }}

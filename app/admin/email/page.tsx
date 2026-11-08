@@ -25,7 +25,7 @@ type CrmProject = {
   id: string
   title: string
   pipeline_stage: PipelineStage
-  customer: { name: string; company: string | null } | null
+  customer: { name: string } | null
 }
 
 type EmailLogRow = {
@@ -112,7 +112,6 @@ function ProjectRow({ summary }: { summary: ProjectEmailSummary }) {
         {project.customer && (
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 5 }}>
             {project.customer.name}
-            {project.customer.company ? ` · ${project.customer.company}` : ''}
           </p>
         )}
 
@@ -208,7 +207,7 @@ export default function EmailCrmPage() {
       const [projectsResult, logsResult] = await Promise.all([
         supabase
           .from('projects')
-          .select('id, title, pipeline_stage, customer:customers(name, company)')
+          .select('id, title, pipeline_stage, customer:customers(name)')
           .in('pipeline_stage', STAGE_ORDER),
         supabase
           .from('email_log')
@@ -221,8 +220,8 @@ export default function EmailCrmPage() {
         title: row.title as string,
         pipeline_stage: row.pipeline_stage as PipelineStage,
         customer: Array.isArray(row.customer)
-          ? (row.customer[0] as { name: string; company: string | null } | undefined) ?? null
-          : (row.customer as { name: string; company: string | null } | null),
+          ? (row.customer[0] as { name: string } | undefined) ?? null
+          : (row.customer as { name: string } | null),
       }))
 
       const logRows: EmailLogRow[] = (logsResult.data ?? []) as EmailLogRow[]

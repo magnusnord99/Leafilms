@@ -7,13 +7,17 @@ import { C } from '@/lib/admin-theme'
 
 // Snarveier fra stepperen til stadier med egen side, slik at man kan hoppe rett
 // til f.eks. postprod uten å måtte finne prosjektet igjen via sidemenyen (feedback e5ecec91).
-// Kun stadier prosjektet allerede har nådd (isPast || isCurrent) er klikkbare.
+// Alle stadier med egen side er klikkbare, uavhengig av om prosjektet har nådd
+// dit — man skal kunne jobbe med alle deler av prosjektet, ikke bare der det er
+// nå (feedback 2e41d344/b0d97ab3). Stegsidene selv avgjør skrivebeskyttelse
+// basert på faktisk fremdrift (se lib/pipeline-stage-lock.ts).
 function stageHref(stage: PipelineStage, projectId: string): string | null {
   switch (stage) {
     case 'tilbud_sendt': return `/admin/projects/${projectId}/quote`
     case 'pre_prod': return `/admin/preprod/${projectId}`
     case 'produksjon': return `/admin/produksjon/${projectId}`
     case 'post_prod': return `/admin/postprod/${projectId}`
+    case 'fakturert': return `/admin/faktura/${projectId}`
     default: return null
   }
 }
@@ -21,8 +25,7 @@ function stageHref(stage: PipelineStage, projectId: string): string | null {
 // Delt mellom prosjektoversikten og de enkelte steg-sidene (pre-prod,
 // produksjon, post-prod, faktura, kontakt) — samme stepper overalt gjør det
 // enkelt å bla mellom stegene uten å måtte om via prosjektoversikten hver
-// gang. Fullførte og nåværende steg er skrivebeskyttet-visbare (se
-// lib/pipeline-stage-lock.ts), så det er trygt å la dem være klikkbare her.
+// gang.
 export function PipelineProgress({
   currentStage, projectId, onGoToTab, viewingStage,
 }: {
@@ -55,11 +58,10 @@ export function PipelineProgress({
         const isPast = i < currentIndex
         const isCurrent = i === currentIndex
         const isViewing = i === viewingIndex
-        const reached = isPast || isCurrent
-        const href = reached
-          ? (stage.value === 'kontrakt' && !onGoToTab ? `/admin/projects/${projectId}?tab=kontrakt` : stageHref(stage.value, projectId))
-          : null
-        const isKontrakt = reached && stage.value === 'kontrakt' && !!onGoToTab
+        const href = stage.value === 'kontrakt' && !onGoToTab
+          ? `/admin/projects/${projectId}?tab=kontrakt`
+          : stageHref(stage.value, projectId)
+        const isKontrakt = stage.value === 'kontrakt' && !!onGoToTab
         // "Er her"-fremheving (isViewing) er en egen visuell kanal fra fremdrift
         // (isPast/isCurrent, som styrer farge på prikk/linje) — de kan avvike når
         // man har navigert tilbake for å se et tidligere steg enn prosjektets

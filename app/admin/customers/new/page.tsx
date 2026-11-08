@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { createCustomerContact } from '@/lib/actions/schedule-people'
 import { C } from '@/lib/admin-theme'
 
 const fieldLabel = (text: string, required?: boolean) => (
@@ -40,12 +41,16 @@ export default function NewCustomer() {
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    company: '',
     org_nummer: '',
-    phone: '',
     address: '',
     notes: ''
+  })
+  // Primærkontakt — lagres i customer_contacts, ikke på customers-raden
+  const [contactData, setContactData] = useState({
+    contactName: '',
+    email: '',
+    phone: '',
+    role: ''
   })
 
   async function handleSubmit(e: React.FormEvent) {
@@ -61,6 +66,19 @@ export default function NewCustomer() {
         .single()
 
       if (error) throw error
+
+      // Opprett primærkontakt hvis noe kontaktinfo er fylt inn
+      const hasContactInfo = contactData.contactName.trim() || contactData.email.trim() || contactData.phone.trim()
+      if (hasContactInfo) {
+        await createCustomerContact({
+          customer_id: data.id,
+          name: contactData.contactName.trim() || formData.name.trim(),
+          email: contactData.email.trim() || null,
+          phone: contactData.phone.trim() || null,
+          role: contactData.role.trim() || null,
+          is_primary: true,
+        })
+      }
 
       router.push(`/admin/customers/${data.id}`)
     } catch (err) {
@@ -153,45 +171,12 @@ export default function NewCustomer() {
           </div>
 
           <div>
-            {fieldLabel('E-post')}
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="kunde@example.com"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Firma')}
-            <input
-              type="text"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-              placeholder="Firmanavn"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
             {fieldLabel('Org.nummer')}
             <input
               type="text"
               value={formData.org_nummer}
               onChange={(e) => setFormData({ ...formData, org_nummer: e.target.value })}
               placeholder="923 456 789"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            {fieldLabel('Telefon')}
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+47 123 45 678"
               style={inputStyle}
             />
           </div>
@@ -205,6 +190,55 @@ export default function NewCustomer() {
               rows={3}
               style={{ ...inputStyle, resize: 'vertical' }}
             />
+          </div>
+
+          {/* Primærkontakt — lagres i customer_contacts, ikke direkte på kunden */}
+          <div style={{ padding: '16px 20px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3 }}>
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
+              Primærkontakt (valgfritt)
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                {fieldLabel('Kontaktnavn')}
+                <input
+                  type="text"
+                  value={contactData.contactName}
+                  onChange={(e) => setContactData({ ...contactData, contactName: e.target.value })}
+                  placeholder="Fullt navn (blank = samme som kontonavn)"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                {fieldLabel('Rolle')}
+                <input
+                  type="text"
+                  value={contactData.role}
+                  onChange={(e) => setContactData({ ...contactData, role: e.target.value })}
+                  placeholder="f.eks. Daglig leder"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                {fieldLabel('E-post')}
+                <input
+                  type="email"
+                  value={contactData.email}
+                  onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                  placeholder="kontakt@bedrift.no"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                {fieldLabel('Telefon')}
+                <input
+                  type="tel"
+                  value={contactData.phone}
+                  onChange={(e) => setContactData({ ...contactData, phone: e.target.value })}
+                  placeholder="+47 123 45 678"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
           </div>
 
           <div>

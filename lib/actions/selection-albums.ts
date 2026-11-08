@@ -173,7 +173,7 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
   if (gallery.project_id) {
     const { data: proj } = await supabase
       .from('projects')
-      .select('id, title, customer_id, customers(email)')
+      .select('id, title, customer_id')
       .eq('id', gallery.project_id)
       .maybeSingle()
 
@@ -182,15 +182,23 @@ export async function getAdminGalleryPage(galleryId: string): Promise<AdminSelec
       if (proj.customer_id) {
         const { data: contacts } = await supabase
           .from('customer_contacts')
-          .select('name, email')
+          .select('name, email, is_primary')
           .eq('customer_id', proj.customer_id)
           .not('email', 'is', null)
-        customerContacts = (contacts ?? []) as { name: string; email: string }[]
+        customerContacts = (contacts ?? []).map(c => ({ name: c.name, email: c.email })) as { name: string; email: string }[]
+        // Legg primærkontakten øverst i listen
+        const primaryIdx = (contacts ?? []).findIndex(c => c.is_primary)
+        if (primaryIdx > 0) {
+          const [primary] = customerContacts.splice(primaryIdx, 1)
+          customerContacts.unshift(primary)
+        }
       }
+      // Primærkontakten er alltid øverst etter sorteringen over
+      const primaryEmail = customerContacts[0]?.email ?? null
       linkedProject = {
         id: proj.id,
         title: proj.title,
-        customerEmail: (proj.customers as { email?: string | null } | null)?.email ?? null,
+        customerEmail: primaryEmail,
         customerContacts,
       }
     }

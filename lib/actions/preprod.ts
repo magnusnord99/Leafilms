@@ -59,7 +59,7 @@ export async function getPreprodProjects(): Promise<PreprodProject[]> {
 
     const { data, error } = await supabase
       .from('projects')
-      .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
+      .select('*, customers(id, name), project_lead:profiles!project_lead_id(id, name, email)')
       .eq('pipeline_stage', 'pre_prod')
       .order('updated_at', { ascending: false })
 
@@ -133,7 +133,7 @@ export async function getPreprodDetail(projectId: string): Promise<PreprodDetail
     ] = await Promise.all([
       supabase
         .from('projects')
-        .select('*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)')
+        .select('*, customers(id, name), project_lead:profiles!project_lead_id(id, name, email)')
         .eq('id', projectId)
         .single(),
       supabase
@@ -430,6 +430,25 @@ export async function getPreprodMessages(projectId: string): Promise<PreprodMess
     console.error('getPreprodMessages unexpected error:', err)
     return []
   }
+}
+
+/**
+ * Markerer egne uleste varsler for pre-prod-chatten som lest (samme fiks som
+ * markTaskMessagesRead i lib/actions/pipeline.ts, feedback 0e01c18e).
+ */
+export async function markPreprodMessagesRead(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('project_id', projectId)
+      .eq('read', false)
+      .in('type', ['preprod_message', 'preprod_mention', 'preprod_message_reaction'])
+  } catch {}
 }
 
 export async function sendPreprodMessage(opts: {

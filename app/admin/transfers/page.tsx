@@ -6,6 +6,7 @@ import { formatFileSize } from '@/lib/utils/file-size'
 import { C } from '@/lib/admin-theme'
 import { TransferRowActions } from './TransferRowActions'
 import { DownloadStatusBadge } from '@/components/transfers/DownloadStatusBadge'
+import { DownloadHistoryButton } from '@/components/transfers/DownloadHistoryButton'
 
 function StatusBadge({ transfer }: { transfer: { status: string; expires_at: string | null; download_count: number; max_downloads: number | null } }) {
   const isExpired = transfer.expires_at && new Date(transfer.expires_at) < new Date()
@@ -202,6 +203,9 @@ export default async function TransfersPage() {
                         <div style={{ marginTop: 2 }}>
                           <DownloadStatusBadge downloadCount={t.download_count} lastDownloadedAt={t.last_downloaded_at} />
                         </div>
+                        <div>
+                          <DownloadHistoryButton transferId={t.id} downloadCount={t.download_count} />
+                        </div>
                       </td>
 
                       {/* Utløper */}
@@ -218,6 +222,7 @@ export default async function TransfersPage() {
                       <td style={{ padding: '13px 16px' }}>
                         <TransferRowActions
                           transferId={t.id}
+                          filename={t.filename}
                           customerId={t.customer_id}
                           backgroundImagePath={t.background_image_path}
                           downloadUrl={downloadUrl}

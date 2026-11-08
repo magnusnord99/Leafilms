@@ -30,7 +30,7 @@ type TaskRow = {
   due_date: string
   calendar_name: string | null
   project_id: string
-  project: { title: string; customers: { name: string | null; company: string | null } | null } | null
+  project: { title: string; customers: { name: string | null } | null } | null
 }
 
 type ProfileRef = { name: string | null; email: string } | { name: string | null; email: string }[] | null
@@ -134,7 +134,19 @@ function veventDateTime(opts: {
   return lines.map(foldLine).join('\r\n')
 }
 
-export async function buildCalendarFeed(): Promise<string> {
+export type CalendarFeedFilter = {
+  shoots: boolean
+  deliveries: boolean
+  meetings: boolean
+  tasks: boolean
+}
+
+const ALL_EVENTS: CalendarFeedFilter = { shoots: true, deliveries: true, meetings: true, tasks: true }
+
+// filter: default ALL_EVENTS bevarer oppførselen til den eksisterende delte feeden
+// (CALENDAR_FEED_TOKEN) uendret. Personlig feed (183_personal_calendar_feed.sql)
+// sender sin egen profil-spesifikke filter inn her.
+export async function buildCalendarFeed(filter: CalendarFeedFilter = ALL_EVENTS): Promise<string> {
   const supabase = createServiceClient()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://leafilms.no'
 
@@ -162,7 +174,7 @@ export async function buildCalendarFeed(): Promise<string> {
     // og ekskluderes derfor her for å unngå duplikat (feedback 5bff440e).
     supabase
       .from('tasks')
-      .select('id, title, pipeline_stage, due_date, calendar_name, project_id, project:projects(title, customers(name, company))')
+      .select('id, title, pipeline_stage, due_date, calendar_name, project_id, project:projects(title, customers(name))')
       .not('due_date', 'is', null)
       .not('title', 'eq', 'Lever ferdig materiale'),
   ])
@@ -184,18 +196,20 @@ export async function buildCalendarFeed(): Promise<string> {
     const shootEnd = p.shoot_end && p.shoot_end >= p.shoot_start ? p.shoot_end : p.shoot_start
     const projectUrl = `${siteUrl}/admin/projects/${p.id}`
 
-    events.push(
-      vevent({
-        uid: `shoot-${p.id}@leafilms-pitch`,
-        dtstart: dateOnly(p.shoot_start),
-        dtend: addDays(shootEnd, 1),
-        summary: `${confirmed ? '🎬' : '🎬 (ikke bekreftet)'} ${label}`,
-        description: `Se prosjektet i Leafilms: ${projectUrl}`,
-        url: projectUrl,
-        status: confirmed ? 'CONFIRMED' : 'TENTATIVE',
-        stamp,
-      })
-    )
+    if (filter.shoots) {
+      events.push(
+        vevent({
+          uid: `shoot-${p.id}@leafilms-pitch`,
+          dtstart: dateOnly(p.shoot_start),
+          dtend: addDays(shootEnd, 1),
+          summary: `${confirmed ? '🎬' : '🎬 (ikke bekreftet)'} ${label}`,
+          description: `Se prosjektet i Leafilms: ${projectUrl}`,
+          url: projectUrl,
+          status: confirmed ? 'CONFIRMED' : 'TENTATIVE',
+          stamp,
+        })
+      )
+    }
 
     // Leveringsdato: bruk satt forfallsdato på "Lever ferdig materiale"-oppgaven hvis den finnes,
     // ellers et estimat basert på opptaksslutt + antall etterarbeidsdager.
@@ -204,7 +218,7 @@ export async function buildCalendarFeed(): Promise<string> {
       ? addDays(shootEnd, p.post_prod_days)
       : null
 
-    if (firmDueDate) {
+    if (filter.deliveries && firmDueDate) {
       events.push(
         vevent({
           uid: `delivery-${p.id}@leafilms-pitch`,
@@ -217,7 +231,7 @@ export async function buildCalendarFeed(): Promise<string> {
           stamp,
         })
       )
-    } else if (estimatedDate) {
+    } else if (filter.deliveries && estimatedDate) {
       events.push(
         vevent({
           uid: `delivery-est-${p.id}@leafilms-pitch`,
@@ -235,7 +249,7 @@ export async function buildCalendarFeed(): Promise<string> {
 
   // Interne møter: tas kun med når minst én deltaker har akseptert invitten
   // (meeting_participants.status = 'accepted') — upubliserte/uavklarte møter skal ikke synes her.
-  for (const m of (meetings ?? []) as unknown as MeetingRow[]) {
+  for (const m of (filter.meetings ? (meetings ?? []) : []) as unknown as MeetingRow[]) {
     const participants = m.meeting_participants ?? []
     const acceptedCount = participants.filter((p) => p.status === 'accepted').length
     if (acceptedCount === 0) continue
@@ -280,7 +294,7 @@ export async function buildCalendarFeed(): Promise<string> {
   // Egendefinerte oppgavefrister (f.eks. "Klipp" i postprod) — samme oppgavesett som
   // vises i Leafilms sin egen kalender (getCalendarEvents), som ellers manglet helt i
   // denne feeden uansett hvor mange ganger abonnenten oppdaterte iCal (feedback 5bff440e).
-  for (const t of (dueTasks ?? []) as unknown as TaskRow[]) {
+  for (const t of (filter.tasks ? (dueTasks ?? []) : []) as unknown as TaskRow[]) {
     if (!t.project) continue
     const company = companyLabel(t.project.customers)
     const label = t.calendar_name?.trim() || buildTaskCalendarLabel(t.title, t.pipeline_stage, company)

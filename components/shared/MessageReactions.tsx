@@ -54,9 +54,10 @@ export function MessageReactions({ reactions, onToggle }: Props) {
         )
       })}
 
-      {/* Hurtigreaksjoner — kun synlig ved hover over meldingen (jf. .group på forelder) */}
+      {/* Hurtigreaksjoner — synlig ved hover over meldingen (jf. .group på forelder) på enheter
+          som har ekte hover; på touch-enheter (mobil) er de alltid synlige, se globals.css */}
       <div
-        className="opacity-0 group-hover:opacity-100"
+        className="reaction-quick-buttons opacity-0 group-hover:opacity-100"
         style={{ display: 'flex', alignItems: 'center', gap: 2, transition: 'opacity 0.12s' }}
       >
         {QUICK_EMOJIS.map((emoji) => (

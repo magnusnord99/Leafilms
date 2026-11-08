@@ -145,11 +145,11 @@ body.admin-page {
   background: #181920;
 }
 
-/* Energi-outreach-siden — egen identitet, ingen grain eller cinematic-bakgrunn */
-body.energi-page {
+/* Bransje-landingssider (/energi og flere) — egen identitet, ingen grain eller cinematic-bakgrunn */
+body.marketing-page {
   background: #ffffff;
 }
-body.energi-page::after {
+body.marketing-page::after {
   display: none;
 }
 
@@ -523,3 +523,10 @@ video::-webkit-media-controls {
 .retning-doc .rich-notes-editor .ProseMirror strong { color: #EEEEF2; }
 .retning-doc .rich-notes-editor .ProseMirror ol { margin: 0 0 8px; padding-left: 20px; color: #B4B4CC; }
 .retning-doc .rich-notes-editor .ProseMirror ol li { margin-bottom: 2px; }
+
+/* Hurtigreaksjons-knappene på meldinger (MessageReactions.tsx) vises normalt kun ved
+   group-hover — på touch-enheter uten ekte hover-tilstand (mobil) var de derfor usynlige
+   og umulige å trykke på (feedback fad91fd4). Tvinger dem synlige der. */
+@media (hover: none) {
+  .reaction-quick-buttons { opacity: 1 !important; }
+}

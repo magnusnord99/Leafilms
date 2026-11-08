@@ -1,12 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import type { PipelineStage } from '@/lib/types'
 
 export type Notification = {
   id: string
-  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'task_turn_ready' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response' | 'board_comment_mention' | 'board_comment_reply' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded' | 'preprod_mention' | 'preprod_message' | 'preprod_message_reaction' | 'conversation_message_reaction' | 'conversation_message_mention' | 'gallery_review_requested' | 'gallery_review_responded'
+  type: 'project_message' | 'task_message' | 'selection_submitted' | 'task_assigned' | 'task_turn_ready' | 'lead_assigned' | 'quote_assigned' | 'invoice_assigned' | 'quote_mention' | 'project_message_mention' | 'task_message_mention' | 'quote_message' | 'feedback_reply' | 'contract_signed' | 'project_message_reaction' | 'task_message_reaction' | 'quote_message_reaction' | 'resale_assigned' | 'direct_message' | 'meeting_invite' | 'meeting_response' | 'board_comment_mention' | 'board_comment_reply' | 'pitch_review_requested' | 'pitch_review_responded' | 'quote_review_requested' | 'quote_review_responded' | 'preprod_mention' | 'preprod_message' | 'preprod_message_reaction' | 'conversation_message_reaction' | 'conversation_message_mention' | 'gallery_review_requested' | 'gallery_review_responded' | 'colleague_nudge'
   project_id: string | null
   task_id: string | null
   lead_id: string | null
@@ -21,7 +21,7 @@ export type Notification = {
   sender_name: string
   read: boolean
   created_at: string
-  projects: { title: string } | null
+  projects: { title: string; pipeline_stage: PipelineStage | null } | null
   tasks: { title: string; pipeline_stage: PipelineStage | null } | null
   leads: { name: string; company: string | null } | null
   /** Kun satt for type 'meeting_invite' — brukerens faktiske svar-status i meeting_participants, hentet i getNotifications() */
@@ -40,7 +40,7 @@ export async function getNotifications(): Promise<Notification[]> {
 
     const { data, error } = await supabase
       .from('notifications')
-      .select('*, projects(title), tasks(title, pipeline_stage), leads(name, company)')
+      .select('*, projects(title, pipeline_stage), tasks(title, pipeline_stage), leads(name, company)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -87,6 +87,36 @@ export async function getUnreadCount(): Promise<number> {
     return count ?? 0
   } catch {
     return 0
+  }
+}
+
+// "Send til kollega"-nudge på prosjektlenker/filer (feedback 4381ba9c) — lar en
+// bruker pushe et varsel direkte til en kollega i stedet for å måtte skrive en
+// melding hver gang man deler noe. label beskriver hva som ble delt
+// (f.eks. lenkens navn eller filnavnet), vist som varselets message_preview.
+export async function sendNudge(opts: { recipientId: string; projectId: string; label: string }): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Ikke innlogget.' }
+    if (user.id === opts.recipientId) return { ok: false, error: 'Kan ikke sende til deg selv.' }
+
+    const { data: profile } = await supabase.from('profiles').select('name, email').eq('id', user.id).single()
+    const senderName = profile?.name ?? profile?.email ?? 'Ukjent'
+
+    const service = createServiceClient()
+    const { error } = await service.from('notifications').insert({
+      user_id: opts.recipientId,
+      type: 'colleague_nudge',
+      project_id: opts.projectId,
+      message_preview: opts.label.slice(0, 200),
+      sender_name: senderName,
+    })
+    if (error) return { ok: false, error: 'Kunne ikke sende. Prøv igjen.' }
+    return { ok: true }
+  } catch (err) {
+    console.error('sendNudge error:', err)
+    return { ok: false, error: 'Kunne ikke sende. Prøv igjen.' }
   }
 }
 

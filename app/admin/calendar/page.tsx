@@ -47,6 +47,8 @@ type CalEvent = {
   dashed?: boolean
   meeting?: MeetingEvent
   unavail?: UnavailabilityBlock
+  /** For flerdagers unavailability-blokker: posisjon i spennet, brukes til visuell kontinuitet */
+  spanPosition?: 'first' | 'middle' | 'last' | 'only'
 }
 
 function dateRange(start: string, end: string | null): string[] {
@@ -208,18 +210,28 @@ export default function CalendarPage() {
       const days = dateRange(u.date, u.endDate)
       const baseLabel = isMine ? (u.note || 'Utilgjengelig') : `${u.profileName} utilgjengelig`
 
-      for (const d of days) {
+      for (let idx = 0; idx < days.length; idx++) {
+        const d = days[idx]
+        // 'only' for single-day, 'first'/'middle'/'last' for multi-day spans.
+        // Brukes til å gi runde/kvadrante hjørner for visuell kontinuitet (iCal-stil).
+        const spanPosition: CalEvent['spanPosition'] = days.length === 1 ? 'only'
+          : idx === 0 ? 'first'
+          : idx === days.length - 1 ? 'last'
+          : 'middle'
         add(d, {
           id: `unavail-${u.id}-${d}`,
           date: d,
-          label: d === days[0] ? baseLabel : '↔',
-          sublabel: d === days[0] ? timeLabel : null,
+          // Vis alltid baseLabel — ikke '↔' — slik at teksten er synlig på alle dager,
+          // inkludert dager der spennet starter i forrige måned (days[0] er utenfor visningen).
+          label: baseLabel,
+          sublabel: idx === 0 ? timeLabel : null,
           href: null,
           color: C.unavail,
           bgColor: 'rgba(224,85,85,0.14)',
           confirmed: true,
           type: 'unavailable',
           unavail: u,
+          spanPosition,
         })
       }
     }
@@ -433,6 +445,11 @@ export default function CalendarPage() {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {visible.map(ev => {
+                          // Flerdagers unavailability: fjern runding på "åpen" side for iCal-stil visuell kontinuitet
+                          const isUnavailSpan = ev.type === 'unavailable' && ev.spanPosition && ev.spanPosition !== 'only'
+                          const chipBorderRadius = isUnavailSpan
+                            ? (ev.spanPosition === 'first' ? '4px 0 0 4px' : ev.spanPosition === 'last' ? '0 4px 4px 0' : '0')
+                            : 4
                           const chip = (
                             <div
                               title={`${ev.label}${ev.sublabel ? ` — ${ev.sublabel}` : ''}`}
@@ -443,7 +460,7 @@ export default function CalendarPage() {
                                   : ev.dashed && ev.type === 'meeting'
                                   ? `1px dashed ${ev.color}`
                                   : `1px solid ${ev.color}30`,
-                                borderRadius: 4,
+                                borderRadius: chipBorderRadius,
                                 padding: '4px 6px',
                                 display: 'flex', alignItems: 'center', gap: 4,
                                 cursor: 'pointer',
@@ -453,7 +470,10 @@ export default function CalendarPage() {
                               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = '0.75' }}
                               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = ((ev.type === 'task' || ev.type === 'meeting') && ev.dashed) ? '0.5' : '1' }}
                             >
-                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                              {/* Skjul prikken på mellom/siste-dag i unavailability-spenn — teksten bærer informasjonen */}
+                              {!isUnavailSpan || ev.spanPosition === 'first' ? (
+                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                              ) : null}
                               <span style={{
                                 fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 500,
                                 color: ev.color,
@@ -599,7 +619,6 @@ function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
     e.preventDefault()
     setError(null)
     if (!title.trim()) { setError('Møtet trenger en tittel'); return }
-    if (participantIds.length === 0) { setError('Velg minst én kollega'); return }
 
     setSaving(true)
     const startsAt = new Date(`${date}T${startTime}`).toISOString()
@@ -648,7 +667,7 @@ function BookingModal({ colleagues, initialDate, onClose, onCreated }: {
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
         </Field>
 
-        <Field label="Inviter kolleger">
+        <Field label="Inviter kolleger (valgfritt)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6 }}>
             {colleagues.length === 0 && (
               <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, padding: '4px 6px' }}>Ingen andre kolleger funnet</span>

@@ -214,9 +214,10 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
     crewTotal + equipmentTotal + postProductionTotal + otherCostsTotal + licensingTotal +
     addonTotalsByCategory.startup + addonTotalsByCategory.production + addonTotalsByCategory.post + addonTotalsByCategory.expenses
 
-  // Én rabatt, kun på opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisens eller andre
-  // kostnader — pluss rabatterbare tillegg-poster i disse kategoriene
-  const discountBase = crewTotal + postProductionTotal + addonDiscountableTotal
+  // Én rabatt, kun på mannskap — opptak (inkl. oppstart) og post-produksjon-TEAM — ikke utstyr,
+  // post-produksjon-kostnader (f.eks. Adobe CC), lisens eller andre kostnader — pluss
+  // rabatterbare tillegg-poster i disse kategoriene
+  const discountBase = crewTotal + postCrewTotal + addonDiscountableTotal
   const discountFactor = data.discountFactor ?? 0
   const discountAmount = discountBase * discountFactor
 
@@ -236,8 +237,9 @@ export function calculateQuoteTotals(data: QuoteBuilderData, selectedAddonIds?: 
       (addonTotalsByCategory.production - addonDiscountableByCategory.production),
     equipment: equipmentTotal,
     post:
-      (postProductionTotal + addonDiscountableByCategory.post) * (1 - discountFactor) +
-      (addonTotalsByCategory.post - addonDiscountableByCategory.post),
+      (postCrewTotal + addonDiscountableByCategory.post) * (1 - discountFactor) +
+      (addonTotalsByCategory.post - addonDiscountableByCategory.post) +
+      postItemsTotal,
     expenses: otherCostsTotal + licensingTotal + addonTotalsByCategory.expenses,
   }
 

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
     const { user } = staff
 
-    const { projectId, leadId, emailType, to, cc, subject, body, meetingLink, useLeafilmsAddress } = await req.json()
+    const { projectId, leadId, emailType, to, cc, subject, body, meetingLink, useLeafilmsAddress, isRawHtml } = await req.json()
 
     if (!to || !subject || !body) {
       return Response.json({ error: 'Manglende felt: to, subject, body' }, { status: 400 })
@@ -53,11 +53,23 @@ export async function POST(req: NextRequest) {
         ? renderEmailFooter(footerRow.template, senderProfile)
         : ''
 
-      const bodyWithMeeting = meetingLink ? `${body}\n\nMøtelink: ${meetingLink}` : body
-      const emailText = emailBodyToPlainText(bodyWithMeeting) + (footer ? `\n\n--\n${emailBodyToPlainText(footer)}` : '')
-      const emailHtml = emailBodyToHtml(bodyWithMeeting) + (footer
-        ? `<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e2e2;color:#888888;font-size:12px;line-height:1.5;">${emailBodyToHtml(footer)}</div>`
-        : '')
+      // isRawHtml: avsenderen har allerede bygget en komplett HTML-e-post selv
+      // (f.eks. leveringsmailen i TransferUploadClient, med egen fil-kort/CTA-knapp-
+      // mal) — kjøres IKKE gjennom emailBodyToHtml, som escaper <, > og # til synlig
+      // tekst (skrevet for enkel markdown-aktig body, ikke ferdig HTML). Uten dette
+      // unntaket vises hele HTML-kildekoden som ren tekst hos mottaker (feedback 48f6e09e).
+      let emailText: string
+      let emailHtml: string
+      if (isRawHtml) {
+        emailText = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+        emailHtml = body
+      } else {
+        const bodyWithMeeting = meetingLink ? `${body}\n\nMøtelink: ${meetingLink}` : body
+        emailText = emailBodyToPlainText(bodyWithMeeting) + (footer ? `\n\n--\n${emailBodyToPlainText(footer)}` : '')
+        emailHtml = emailBodyToHtml(bodyWithMeeting) + (footer
+          ? `<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e2e2;color:#888888;font-size:12px;line-height:1.5;">${emailBodyToHtml(footer)}</div>`
+          : '')
+      }
 
       const resendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -89,6 +101,34 @@ export async function POST(req: NextRequest) {
 
     // Log til email_log (bruk service client for å omgå RLS-kanttilfeller)
     const serviceClient = createServiceClient()
+
+    // Marker prosjektet som "kontaktet" første gang en e-post sendes, og flytt
+    // leaden fra "Ny" til "Kontaktet" hvis den fortsatt står som ny (feedback
+    // 42c4b4a8). projectId er ikke alltid sendt inn fra kalleren (f.eks.
+    // ColdEmailCard på lead-siden) — slås da opp via leadens eget prosjekt, slik
+    // at "kontaktet"-badgen på Kanban-tavlen fanger opp denne sendeveien også,
+    // ikke bare mailto-lenken på /admin/projects/[id]/contact.
+    let contactedProjectId = projectId ?? null
+    if (leadId) {
+      const { data: lead } = await serviceClient
+        .from('leads')
+        .select('status, converted_to_project_id')
+        .eq('id', leadId)
+        .single()
+      contactedProjectId ??= lead?.converted_to_project_id ?? null
+      if (lead?.status === 'new') {
+        await serviceClient.from('leads').update({ status: 'contacted', updated_at: new Date().toISOString() }).eq('id', leadId)
+      }
+    }
+
+    if (contactedProjectId) {
+      await serviceClient
+        .from('projects')
+        .update({ first_contacted_at: new Date().toISOString() })
+        .eq('id', contactedProjectId)
+        .is('first_contacted_at', null)
+    }
+
     const { error: logError } = await serviceClient.from('email_log').insert({
       project_id: projectId ?? null,
       lead_id: leadId ?? null,

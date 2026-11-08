@@ -118,7 +118,7 @@ export function FeedbackButton() {
       {open && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 20 }}
-          onClick={() => { if (!submitting) { setOpen(false); reset() } }}
+          onClick={() => { if (!submitting) setOpen(false) }}
         >
           <div
             style={{
@@ -139,7 +139,7 @@ export function FeedbackButton() {
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600, color: C.text }}>
                     Tilbakemelding
                   </p>
-                  <button onClick={() => { setOpen(false); reset() }} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+                  <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
                 </div>
 
                 {/* Type-toggle */}

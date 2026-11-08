@@ -119,6 +119,10 @@ export default function RoomDetailPage() {
   const [busy, setBusy] = useState(false)
   const [panelRefreshTick, setPanelRefreshTick] = useState(0)
   const [ownerEditOpen, setOwnerEditOpen] = useState(false)
+  // Romoversikten ble én lang flat liste uansett hvor mye utstyr som lå der — gruppert
+  // på kategori med individuell kollaps gjør det mulig å f.eks. ha kamera åpent og
+  // objektiver lukket samtidig (feedback 30c0172b).
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
 
   const load = useCallback(() => {
     getRoomDetail(roomId).then(data => {
@@ -211,9 +215,22 @@ export default function RoomDetailPage() {
     if (entries.length === 0) return
     setAddError(null)
     setBusy(true)
-    const results = await Promise.all(
-      entries.map(([catalogId, count]) => addEquipmentUnits(roomId, catalogId, count))
-    )
+
+    // Enheter som allerede ligger ubrukt i et annet rom flyttes hit i stedet for
+    // å opprettes på nytt — "vi har kun en av hvert objekt" (feedback 503aa1cb).
+    // Kun overskytende antall (utover det som finnes å flytte) blir ekte ny stock.
+    const moves: string[] = []
+    const addCalls: Promise<{ error?: string }>[] = []
+    for (const [catalogId, count] of entries) {
+      const elsewhereIds = detail?.catalog.find(c => c.id === catalogId)?.elsewhereUnitIds ?? []
+      const toMove = elsewhereIds.slice(0, count)
+      moves.push(...toMove)
+      const remaining = count - toMove.length
+      if (remaining > 0) addCalls.push(addEquipmentUnits(roomId, catalogId, remaining))
+    }
+
+    if (moves.length > 0) await returnUnits(moves, roomId)
+    const results = await Promise.all(addCalls)
     setBusy(false)
     const firstError = results.find(r => r.error)?.error
     if (firstError) {
@@ -280,6 +297,20 @@ export default function RoomDetailPage() {
   const visibleUnitsInRoom = targetProjectId
     ? detail.unitsInRoom.filter(u => !u.reservations.some(r => r.project_id === targetProjectId))
     : detail.unitsInRoom
+
+  const unitsInRoomByCategory = visibleUnitsInRoom.reduce<Record<string, EquipmentUnitRow[]>>((acc, u) => {
+    (acc[u.catalog_category] ??= []).push(u)
+    return acc
+  }, {})
+
+  function toggleCategoryCollapsed(category: string) {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      return next
+    })
+  }
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: '28px 28px 64px' }}>
@@ -490,6 +521,7 @@ export default function RoomDetailPage() {
                                       ? loc.room_name
                                       : `ute til ${loc.project_title}${loc.shoot_start ? ` (${formatDate(loc.shoot_start)})` : ''}`
                                   )).join(', ')}
+                                  {item.elsewhereUnitIds.length > 0 ? ' — flyttes hit i stedet for å opprettes på nytt' : ''}
                                 </p>
                               )}
                             </div>
@@ -533,16 +565,40 @@ export default function RoomDetailPage() {
               {detail.unitsInRoom.length === 0 ? 'Ingen utstyr i dette rommet' : 'Alt utstyr her er allerede hentet til dette prosjektet'}
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {visibleUnitsInRoom.map((u: EquipmentUnitRow) => (
-                <InRoomUnitRow
-                  key={u.id}
-                  unit={u}
-                  selected={selectedInRoom.has(u.id)}
-                  onToggle={() => toggleInRoom(u.id)}
-                  onCancelReservation={projectId => handleCancelReservation(u.id, projectId)}
-                />
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {Object.entries(unitsInRoomByCategory).map(([category, units]) => {
+                const collapsed = collapsedCategories.has(category)
+                return (
+                  <div key={category}>
+                    <button
+                      onClick={() => toggleCategoryCollapsed(category)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 6px',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, transition: 'transform 0.12s', transform: collapsed ? 'rotate(-90deg)' : 'none' }}>▾</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {EQUIPMENT_CATEGORY_LABELS[category] ?? category}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.66rem', color: C.text3 }}>({units.length})</span>
+                    </button>
+                    {!collapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {units.map((u: EquipmentUnitRow) => (
+                          <InRoomUnitRow
+                            key={u.id}
+                            unit={u}
+                            selected={selectedInRoom.has(u.id)}
+                            onToggle={() => toggleInRoom(u.id)}
+                            onCancelReservation={projectId => handleCancelReservation(u.id, projectId)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

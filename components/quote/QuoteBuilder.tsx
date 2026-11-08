@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem } from '@/lib/types'
+import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem, CustomerContact } from '@/lib/types'
 import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
+import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
@@ -337,8 +338,7 @@ function CustomerSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.company?.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase())
   )
   const selected = customers.find(c => c.id === selectedCustomerId)
   return (
@@ -385,7 +385,6 @@ function CustomerSelector({
                 onClick={() => { onSelect(c); setOpen(false); setSearch('') }}>
                 <span>{c.name}</span>
                 {c.customer_number && <span style={{ color: C.accent, marginLeft: 8, fontSize: '0.72rem' }}>#{c.customer_number}</span>}
-                {c.company && <span style={{ color: C.text2, marginLeft: 8, fontSize: '0.72rem' }}>{c.company}</span>}
               </button>
             ))}
             {filtered.length === 0 && <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>}
@@ -805,7 +804,7 @@ function TotalsPanel({ data }: { data: QuoteBuilderData }) {
 
       {t.discountAmount > 0 && (
         <div style={discountRowStyle}>
-          <span>Rabatt ({discountPct}%) på opptak + post-produksjon</span>
+          <span>Rabatt ({discountPct}%) på mannskap (opptak + post-produksjon)</span>
           <span>−{formatNOK(t.discountAmount)}</span>
         </div>
       )}
@@ -1152,6 +1151,21 @@ export function QuoteBuilder({
   })
   const [headerOpen, setHeaderOpen] = useState(true)
   const [termsOpen, setTermsOpen] = useState(false)
+  const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
+
+  // Hent lagrede kontaktpersoner for valgt kunde (feedback 6f3ea21e) — brukes
+  // som søkbar datalist på Kundekontakt-feltet i stedet for kun customer.name.
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setCustomerContacts([])
+      return
+    }
+    let cancelled = false
+    getCustomerContacts(selectedCustomerId).then(contacts => {
+      if (!cancelled) setCustomerContacts(contacts)
+    })
+    return () => { cancelled = true }
+  }, [selectedCustomerId])
 
   const REQUIRED_FIELDS: { key: keyof QuoteBuilderData; label: string }[] = [
     { key: 'clientContact', label: 'Kundekontakt' },
@@ -1342,7 +1356,22 @@ export function QuoteBuilder({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
                 <label style={labelStyle}>Kundekontakt</label>
-                <input ref={fieldRefs.clientContact} style={fieldStyle} value={data.clientContact} onChange={e => set('clientContact', e.target.value)} placeholder="Navn" />
+                <input
+                  ref={fieldRefs.clientContact}
+                  style={fieldStyle}
+                  value={data.clientContact}
+                  onChange={e => set('clientContact', e.target.value)}
+                  placeholder="Navn"
+                  list="quote-customer-contacts"
+                  autoComplete="off"
+                />
+                {customerContacts.length > 0 && (
+                  <datalist id="quote-customer-contacts">
+                    {customerContacts.map(c => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Kundenummer</label>
@@ -1455,7 +1484,7 @@ export function QuoteBuilder({
           </div>
         </div>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3, marginTop: 10 }}>
-          Rabatten gjelder kun opptak (inkl. oppstart) og post-produksjon — ikke utstyr, lisensiering eller andre kostnader.
+          Rabatten gjelder kun mannskap (opptak, inkl. oppstart, og post-produksjon-team) — ikke utstyr, post-produksjon-kostnader, lisensiering eller andre kostnader.
           {discountFactors.length > 0 && ' Oppdateres automatisk fra flerdagsrabatt-tabellen når opptaksdager endres.'}
         </p>
       </div>

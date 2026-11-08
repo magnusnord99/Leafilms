@@ -47,7 +47,7 @@ function ProjectCard({ project }: { project: PostProdProject }) {
             </p>
             {project.customer && (
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {project.customer.name}{project.customer.company ? ` · ${project.customer.company}` : ''}
+                {project.customer.name}
               </p>
             )}
           </div>

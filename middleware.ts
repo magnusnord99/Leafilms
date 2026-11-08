@@ -30,10 +30,17 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Grense-bevisst prefiks-sjekk — ren startsWith('/admin') ville også truffet
+  // en fremtidig admin-opprettet landingsside-slug som "admin-kurs", siden
+  // '/admin-kurs'.startsWith('/admin') er true uten en skråstrek-grense.
+  function matchesRoute(pathname: string, prefix: string) {
+    return pathname === prefix || pathname.startsWith(prefix + '/')
+  }
+
   // Check if route is protected (admin routes)
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
-  const isLoginRoute = request.nextUrl.pathname.startsWith('/login')
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/auth/')
+  const isAdminRoute = matchesRoute(request.nextUrl.pathname, '/admin')
+  const isLoginRoute = matchesRoute(request.nextUrl.pathname, '/login')
+  const isAuthRoute = matchesRoute(request.nextUrl.pathname, '/auth')
   const isPublicRoute = request.nextUrl.pathname.startsWith('/p/') || request.nextUrl.pathname === '/'
 
   // If it's a public route or auth route, allow access

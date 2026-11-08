@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 
 export type CustomerInvoiceInfoPatch = {
-  company?: string | null
+  invoice_company_name?: string | null
   org_nummer?: string | null
   address?: string | null
   invoice_email?: string | null

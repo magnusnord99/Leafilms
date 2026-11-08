@@ -1,23 +1,12 @@
 import type { Metadata } from 'next'
-import { Schibsted_Grotesk, Newsreader } from 'next/font/google'
-import { EnergiBodyClass } from './EnergiBodyClass'
-import { SmoothScroll } from './SmoothScroll'
+import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 
-const schibsted = Schibsted_Grotesk({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-schibsted',
-  display: 'swap',
-})
-
-const newsreader = Newsreader({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  style: ['italic'],
-  variable: '--font-newsreader',
-  display: 'swap',
-})
-
+// /energi selv flyttet til den DB-drevne ruten app/(marketing)/[slug]/ (se
+// docs/superpowers/specs/2026-10-21-industry-landing-pages-cms-design.md).
+// Denne layouten lever videre kun for /energi/arbeid, som ikke er del av
+// den migreringen — samme felles fonter/robots-metadata som før (arbeid sin
+// egen metadata overstyrer title/description/openGraph, robots arver den
+// herfra, uendret).
 const title = 'Leafilms for energibransjen'
 const description = 'Film og foto for norske energiselskaper, fra Leafilms.'
 
@@ -44,11 +33,5 @@ export const metadata: Metadata = {
 }
 
 export default function EnergiLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className={`${schibsted.variable} ${newsreader.variable}`} style={{ fontFamily: 'var(--font-schibsted)' }}>
-      <EnergiBodyClass />
-      <SmoothScroll />
-      {children}
-    </div>
-  )
+  return <MarketingChrome>{children}</MarketingChrome>
 }

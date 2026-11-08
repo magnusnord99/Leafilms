@@ -14,7 +14,11 @@ import { getGalleryIdForProject } from '@/lib/actions/selections'
 import { getPitchTeamAsProdCrew } from '@/lib/actions/preprod'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
-type CustomerJoin = { id?: string; name: string | null; email?: string | null; company: string | null } | null
+type CustomerJoin = {
+  id?: string
+  name: string | null
+  customer_contacts?: { name: string | null; email: string | null; is_primary: boolean }[]
+} | null
 type TaskTemplateRow = { title: string; description: string | null; sort_order: number }
 
 /**
@@ -122,6 +126,27 @@ export async function advanceToVideresalg(projectId: string): Promise<void> {
 }
 
 /**
+ * Markerer et lead-prosjekt som kontaktet (feedback 6cae069d) — brukt når en
+ * ansatt klikker mailto-lenken på /admin/projects/[id]/contact, siden vi ikke
+ * kan vite om den eksterne e-postklienten faktisk sendte noe. Samme felt som
+ * settes automatisk av /api/send-email ved sending via den innebygde
+ * e-postfunksjonen. Kun første gang — overskriver ikke en eksisterende verdi.
+ */
+export async function markProjectContacted(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('projects')
+      .update({ first_contacted_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .is('first_contacted_at', null)
+    revalidatePath('/admin/projects')
+  } catch (err) {
+    console.error('markProjectContacted unexpected error:', err)
+  }
+}
+
+/**
  * Henter prosjekter som er i videresalg-dvale — flyttet til 'videresalg', men
  * fortsatt skjult fra selve pipeline-tavlen fordi resale_visible_at ligger i
  * fremtiden. Brukes til å vise en egen "I dvale"-kolonne i BoardView, slik at
@@ -138,8 +163,7 @@ export async function getHibernatingProjects(): Promise<ProjectWithPipeline[]> {
         *,
         customers (
           id,
-          name,
-          company
+          name
         )
       `)
       .eq('pipeline_stage', 'videresalg')
@@ -796,7 +820,7 @@ export async function getPostProdProjects(): Promise<(ProjectWithPipeline & { ta
 
     const { data, error } = await supabase
       .from('projects')
-      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
+      .select(`*, customers(id, name), project_lead:profiles!project_lead_id(id, name, email)`)
       .eq('pipeline_stage', 'post_prod')
       .neq('status', 'lost')
       .order('updated_at', { ascending: false })
@@ -845,7 +869,7 @@ export async function getPostProdProject(id: string): Promise<(ProjectWithPipeli
 
     const { data: row, error } = await supabase
       .from('projects')
-      .select(`*, customers(id, name, company), project_lead:profiles!project_lead_id(id, name, email)`)
+      .select(`*, customers(id, name), project_lead:profiles!project_lead_id(id, name, email)`)
       .eq('id', id)
       .single()
 
@@ -1197,7 +1221,7 @@ export async function sendMeetingLink(
     // Steg 1: Hent prosjektinfo med customer
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('*, customers(name, email, company)')
+      .select('*, customers(name, customer_contacts(name, email, is_primary))')
       .eq('id', projectId)
       .single()
 
@@ -1207,16 +1231,17 @@ export async function sendMeetingLink(
     }
 
     const customer = project.customers ?? null
-    const customerEmail: string | null = customer?.email ?? null
+    const primaryContact = (customer as { customer_contacts?: { name: string | null; email: string | null; is_primary: boolean }[] } | null)?.customer_contacts?.find(c => c.is_primary) ?? null
+    const customerEmail: string | null = primaryContact?.email ?? null
     const customerName: string = customer?.name ?? 'Kunde'
-    const customerCompany: string = customer?.company ?? ''
+    const contactName: string = primaryContact?.name ?? customerName
 
     if (!customerEmail) {
       console.warn(`sendMeetingLink: kunde mangler e-post for prosjekt ${projectId}`)
     }
 
     // Steg 2: Generer e-postutkast med Claude
-    let generatedEmail = `Hei ${customerName},\n\nTakk for din interesse i Leafilms!\n\nVi ønsker å invitere deg til et møte. Du kan booke en tid her: ${meetingLink}\n\nGleder oss til å høre fra deg!\n\nMed vennlig hilsen,\nLeafilms-teamet`
+    let generatedEmail = `Hei ${contactName},\n\nTakk for din interesse i Leafilms!\n\nVi ønsker å invitere deg til et møte. Du kan booke en tid her: ${meetingLink}\n\nGleder oss til å høre fra deg!\n\nMed vennlig hilsen,\nLeafilms-teamet`
 
     if (!process.env.ANTHROPIC_API_KEY) {
       console.warn('sendMeetingLink: ANTHROPIC_API_KEY mangler — bruker standard e-posttekst')
@@ -1226,7 +1251,7 @@ export async function sendMeetingLink(
 
         const prompt = `Du skriver en profesjonell møteinvitasjon på norsk for Leafilms (filmproduksjon).
 Prosjekt: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}
+Kunde: ${customerName}
 Møtelink: ${meetingLink}
 
 Skriv en kort, vennlig e-post (maks 80 ord) som:
@@ -1454,6 +1479,25 @@ export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
 }
 
 /**
+ * Markerer egne uleste varsler for en tasks chat som lest (feedback 0e01c18e —
+ * varselklokken slapp ikke unread-tallet når man selv åpnet chatten varselet kom fra).
+ */
+export async function markTaskMessagesRead(taskId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('task_id', taskId)
+      .eq('read', false)
+      .in('type', ['task_message', 'task_message_mention', 'task_message_reaction'])
+  } catch {}
+}
+
+/**
  * Sender en chat-melding på en task som innlogget bruker.
  */
 export async function sendTaskMessage(
@@ -1580,7 +1624,7 @@ export async function getEmailSuggestions(): Promise<EmailSuggestion[]> {
   try {
     const supabase = await createClient()
     const [customersRes, profilesRes, logRes] = await Promise.all([
-      supabase.from('customers').select('name, email, invoice_email'),
+      supabase.from('customers').select('name, invoice_email, customer_contacts(name, email)'),
       supabase.from('profiles').select('name, email'),
       supabase.from('email_log').select('to_email').order('sent_at', { ascending: false }).limit(500),
     ])
@@ -1593,8 +1637,11 @@ export async function getEmailSuggestions(): Promise<EmailSuggestion[]> {
     }
 
     for (const c of customersRes.data ?? []) {
-      add(c.email, c.name ?? null)
       add(c.invoice_email, c.name ?? null)
+      const contacts = (c as { customer_contacts?: { name: string | null; email: string | null }[] }).customer_contacts ?? []
+      for (const contact of contacts) {
+        add(contact.email, contact.name ?? c.name ?? null)
+      }
     }
     for (const p of profilesRes.data ?? []) add(p.email, p.name ?? null)
     for (const l of logRes.data ?? []) add(l.to_email, null)
@@ -1664,7 +1711,7 @@ export async function toggleTaskAssignee(taskId: string, profileId: string): Pro
  * Inkluderer prosjekt- og kundeinfo.
  */
 export async function getMyTasks(): Promise<(Task & {
-  project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null }
+  project: { id: string; title: string; pipeline_stage: string; customer: { name: string } | null }
 })[]> {
   try {
     const supabase = await createClient()
@@ -1681,7 +1728,7 @@ export async function getMyTasks(): Promise<(Task & {
           ),
           project:projects (
             id, title, pipeline_stage,
-            customer:customers ( name, company )
+            customer:customers ( name )
           )
         )
       `)
@@ -1705,7 +1752,7 @@ export async function getMyTasks(): Promise<(Task & {
         }
       })
       .filter(Boolean) as (Task & {
-        project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null }
+        project: { id: string; title: string; pipeline_stage: string; customer: { name: string } | null }
       })[]
 
     const locks = await computeStepperLocks(supabase, myTasks)
@@ -1756,7 +1803,7 @@ export async function generateEmailDraft(
   // Hent prosjekt med customer
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('title, pipeline_stage, pipeline_data, customers(id, name, company)')
+    .select('title, pipeline_stage, pipeline_data, customers(id, name, customer_contacts(name, email, is_primary))')
     .eq('id', projectId)
     .single()
 
@@ -1767,7 +1814,8 @@ export async function generateEmailDraft(
 
   const customer = (project as unknown as { customers?: CustomerJoin }).customers ?? null
   const customerName: string = customer?.name ?? 'Kunde'
-  const customerCompany: string = customer?.company ?? ''
+  const primaryContact = customer?.customer_contacts?.find(c => c.is_primary) ?? null
+  const contactFirstName: string = (primaryContact?.name ?? customerName).split(' ')[0]
   const pipelineData = (project.pipeline_data as PipelineData) ?? {}
 
   const fallbackSubjects = {
@@ -1781,7 +1829,7 @@ export async function generateEmailDraft(
   const prompts: Record<typeof type, string> = {
     meeting: `Generer en profesjonell møteinvitasjon på norsk for Leafilms (filmproduksjon).
 Prosjekt: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}
+Kunde: ${customerName}
 Møtelink: ${pipelineData.meeting_link ?? '[LIMES INN AV AVSENDER]'}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }
@@ -1789,28 +1837,28 @@ Body: vennlig, maks 80 ord, inkluder møtelink, signer med "Leafilms-teamet"`,
 
     pitch: `Generer en e-post som sender en prosjektbeskrivelse og tilbud til kunden.
 Prosjekt: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
+Kunde: ${customerName}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }
 Body: profesjonell og entusiastisk, maks 100 ord, nevn at de finner beskrivelse og pris i lenken, signer med "Leafilms-teamet"`,
 
     follow_up: `Generer en oppfølgingsmail for videresalg til eksisterende kunde.
 Prosjekt vi leverte: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
+Kunde: ${customerName}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }
 Body: varm og personlig, maks 80 ord, spør om de har nye prosjekter, signer med "Leafilms-teamet"`,
 
     general: `Generer en generell profesjonell e-post til kunde.
 Prosjekt: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
+Kunde: ${customerName}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }`,
 
     delivery: `Generer en varm og personlig leveranse-e-post på norsk for Leafilms (filmproduksjon).
 Prosjektet er nå ferdig og klart til levering.
 Prosjekt: ${project.title}
-Kunde: ${customerName}${customerCompany ? ` hos ${customerCompany}` : ''}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
+Kunde: ${customerName}${extraContext ? `\nEkstra kontekst: ${extraContext}` : ''}
 
 Returner JSON: { "subject": "...", "body": "..." }
 Body skal være en komplett, sammenhengende e-post, maks 120 ord, med denne strukturen:
@@ -2502,12 +2550,12 @@ export async function updateProjectCustomer(
 /**
  * Henter en lett kundeliste til bytt-kunde-velgeren.
  */
-export async function getCustomersList(): Promise<{ id: string; name: string; company: string | null }[]> {
+export async function getCustomersList(): Promise<{ id: string; name: string }[]> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('customers')
-      .select('id, name, company')
+      .select('id, name')
       .order('name', { ascending: true })
 
     if (error) {

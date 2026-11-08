@@ -19,6 +19,7 @@ import { ProjectChat } from '@/components/project/ProjectChat'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { DeliverablesButton, summarizeDeliverables } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useAuth } from '@/hooks/useAuth'
@@ -214,7 +215,7 @@ function InvoiceInfoLine({ label, value }: { label: string; value: string }) {
 }
 
 type InvoiceInfoForm = {
-  company: string
+  company: string // invoice_company_name i databasen
   org_nummer: string
   address: string
   invoice_email: string
@@ -594,7 +595,7 @@ export default function ProjectHubPage() {
   const [savingInvoice, setSavingInvoice] = useState(false)
 
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false)
-  const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string; company: string | null }[]>([])
+  const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string }[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
   const [savingCustomer, setSavingCustomer] = useState(false)
   const customerDropdownRef = useRef<HTMLDivElement>(null)
@@ -818,7 +819,7 @@ export default function ProjectHubPage() {
   function handleOpenInvoiceEdit() {
     const customer = project.customer
     setInvoiceForm({
-      company: customer?.company ?? '',
+      company: customer?.invoice_company_name ?? '',
       org_nummer: customer?.org_nummer ?? '',
       address: customer?.address ?? '',
       invoice_email: customer?.invoice_email ?? '',
@@ -833,7 +834,7 @@ export default function ProjectHubPage() {
     if (!customerId) return
     setSavingInvoice(true)
     const patch = {
-      company: invoiceForm.company.trim() || null,
+      invoice_company_name: invoiceForm.company.trim() || null,
       org_nummer: invoiceForm.org_nummer.trim() || null,
       address: invoiceForm.address.trim() || null,
       invoice_email: invoiceForm.invoice_email.trim() || null,
@@ -862,7 +863,7 @@ export default function ProjectHubPage() {
     setSavingCustomer(false)
     if (result.ok) {
       const picked = customerOptions.find(c => c.id === customerId)
-      setHubData(prev => prev ? { ...prev, project: { ...prev.project, customer_id: customerId, customer: picked ? { id: picked.id, name: picked.name, company: picked.company } : prev.project.customer } } : prev)
+      setHubData(prev => prev ? { ...prev, project: { ...prev.project, customer_id: customerId, customer: picked ? { id: picked.id, name: picked.name } : prev.project.customer } } : prev)
       setCustomerPickerOpen(false)
       setCustomerSearch('')
     }
@@ -1056,6 +1057,14 @@ export default function ProjectHubPage() {
   }
 
   async function handleGenerateContract() {
+    // Uten kunde koblet til prosjektet er «Bedrift»/«Kundekontakt»/«Org.nummer» tomme,
+    // og kontrakten genereres med hull i grammatikken ("Leafilms og , org.nummer .")
+    // — med mindre feltene er fylt inn manuelt under. Varsle i stedet for å generere
+    // en tekst som kan sendes videre til en ekte kunde slik.
+    if (!project.customer && !contractForm.bedrift.trim()) {
+      alert('Ingen kunde er koblet til dette prosjektet, og «Bedrift» er ikke fylt ut manuelt — kontrakten vil derfor få hull i teksten. Velg kunde med «Bytt kunde» øverst på siden, eller fyll inn feltene under manuelt, før du genererer.')
+      return
+    }
     const hasExistingText = contractText.trim().length > 0
     if (hasExistingText && !confirm('Dette bygger kontraktteksten på nytt fra mal og felt, og overskriver eventuelle manuelle endringer i teksten under. Fortsette?')) {
       return
@@ -1335,7 +1344,7 @@ export default function ProjectHubPage() {
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }} ref={customerDropdownRef}>
                 {project.customer && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-                    {project.customer.name}{project.customer.company ? ` — ${project.customer.company}` : ''}
+                    {project.customer.name}
                   </p>
                 )}
                 <button
@@ -1367,7 +1376,7 @@ export default function ProjectHubPage() {
                       />
                     </div>
                     {customerOptions
-                      .filter(c => `${c.name} ${c.company ?? ''}`.toLowerCase().includes(customerSearch.toLowerCase()))
+                      .filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()))
                       .map(c => (
                         <button
                           key={c.id}
@@ -1383,7 +1392,7 @@ export default function ProjectHubPage() {
                           onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.bg}
                           onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
                         >
-                          {c.name}{c.company ? ` — ${c.company}` : ''}
+                          {c.name}
                           {c.id === project.customer_id && <span style={{ marginLeft: 8, color: C.accent }}>✓</span>}
                         </button>
                       ))}
@@ -1722,9 +1731,14 @@ export default function ProjectHubPage() {
               </Link>
             </div>
 
-            {/* Filer — vedlegg/dokumenter knyttet til prosjektet, se ProjectDocuments */}
-            <div style={{ marginBottom: 24, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <ProjectDocuments projectId={projectId} />
+            {/* Filer og lenker — vedlegg/dokumenter og navngitte URL-er knyttet til prosjektet */}
+            <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <ProjectDocuments projectId={projectId} />
+              </div>
+              <div style={{ padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <ProjectLinks projectId={projectId} />
+              </div>
             </div>
 
             {/* Tilknyttet — board og kundeseleksjon-galleri, vises kun når de finnes, uavhengig av pipeline-steg */}
@@ -2550,9 +2564,9 @@ export default function ProjectHubPage() {
                       </button>
                     </div>
                   </div>
-                ) : project.customer.company || project.customer.org_nummer || project.customer.address || project.customer.invoice_email || project.customer.invoice_reference ? (
+                ) : project.customer.invoice_company_name || project.customer.org_nummer || project.customer.address || project.customer.invoice_email || project.customer.invoice_reference ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {project.customer.company && <InvoiceInfoLine label="Firma" value={project.customer.company} />}
+                    {project.customer.invoice_company_name && <InvoiceInfoLine label="Firma" value={project.customer.invoice_company_name} />}
                     {project.customer.org_nummer && <InvoiceInfoLine label="Org.nummer" value={project.customer.org_nummer} />}
                     {project.customer.address && <InvoiceInfoLine label="Fakturaadresse" value={project.customer.address} />}
                     {project.customer.invoice_email && <InvoiceInfoLine label="Faktura-e-post" value={project.customer.invoice_email} />}

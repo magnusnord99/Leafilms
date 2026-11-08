@@ -40,6 +40,26 @@ export async function getQuoteMessages(quoteId: string): Promise<QuoteMessage[]>
   }
 }
 
+/**
+ * Markerer egne uleste varsler for tilbuds-chatten som lest (samme fiks som
+ * markTaskMessagesRead i lib/actions/pipeline.ts, feedback 0e01c18e). Varsler for
+ * quote_message-typene har ingen egen quote_id-kolonne, kun project_id.
+ */
+export async function markQuoteMessagesRead(projectId: string): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('project_id', projectId)
+      .eq('read', false)
+      .in('type', ['quote_message', 'quote_mention', 'quote_message_reaction'])
+  } catch {}
+}
+
 export async function sendQuoteMessage(opts: {
   quoteId: string
   projectId: string

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { updateLeadEmail } from '@/lib/actions/leads'
+import { updateLeadEmail, generateLeadColdEmail } from '@/lib/actions/leads'
 import { C } from '@/lib/admin-theme'
 
 // E-posten er generert som fritekst ("Emne: ..." / "Subject: ..." på første linje,
@@ -42,7 +42,8 @@ export function ColdEmailCard({
   coldEmail: string | null
   initialTo: string | null
 }) {
-  const parsed = parseColdEmail(coldEmail ?? '')
+  const [currentColdEmail, setCurrentColdEmail] = useState(coldEmail)
+  const parsed = parseColdEmail(currentColdEmail ?? '')
   const [copied, setCopied] = useState(false)
   const [composing, setComposing] = useState(false)
   const [to, setTo] = useState(initialTo ?? '')
@@ -51,6 +52,10 @@ export function ColdEmailCard({
   const [sending, setSending] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
 
   useEffect(() => {
     if (!composing) return
@@ -62,10 +67,28 @@ export function ColdEmailCard({
   }, [composing])
 
   async function handleCopy() {
-    if (!coldEmail) return
-    await navigator.clipboard.writeText(coldEmail)
+    if (!currentColdEmail) return
+    await navigator.clipboard.writeText(currentColdEmail)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleGenerate(withFeedback?: string) {
+    if (generating) return
+    setGenerating(true)
+    setGenerateError(null)
+    const res = await generateLeadColdEmail(leadId, withFeedback)
+    if ('error' in res) {
+      setGenerateError(res.error)
+    } else {
+      setCurrentColdEmail(res.cold_email)
+      const next = parseColdEmail(res.cold_email)
+      setSubject(next.subject)
+      setBody(next.body)
+      setFeedbackOpen(false)
+      setFeedbackText('')
+    }
+    setGenerating(false)
   }
 
   async function handleSend() {
@@ -106,10 +129,10 @@ export function ColdEmailCard({
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '18px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3 }}>
-          {coldEmail ? 'Kald e-post' : 'E-post'}
+          {currentColdEmail ? 'Kald e-post' : 'E-post'}
         </p>
         <div style={{ display: 'flex', gap: 6 }}>
-          {coldEmail && (
+          {currentColdEmail && (
             <button
               onClick={handleCopy}
               style={{
@@ -125,6 +148,19 @@ export function ColdEmailCard({
             </button>
           )}
           <button
+            onClick={() => currentColdEmail ? setFeedbackOpen(v => !v) : handleGenerate()}
+            disabled={generating}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
+              padding: '4px 10px', borderRadius: 5, cursor: generating ? 'default' : 'pointer',
+              background: feedbackOpen ? C.accentBg : C.surface2, color: feedbackOpen ? C.accent : C.text2,
+              border: `1px solid ${feedbackOpen ? 'rgba(124,92,252,0.3)' : C.border}`,
+              opacity: generating ? 0.6 : 1,
+            }}
+          >
+            {generating ? 'Genererer...' : currentColdEmail ? 'Regenerer' : 'Generer e-post'}
+          </button>
+          <button
             onClick={() => setComposing(true)}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 500,
@@ -138,15 +174,44 @@ export function ColdEmailCard({
         </div>
       </div>
 
-      {coldEmail ? (
+      {generateError && (
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, marginBottom: 10 }}>{generateError}</p>
+      )}
+
+      {feedbackOpen && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, padding: '10px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+          <textarea
+            autoFocus
+            value={feedbackText}
+            onChange={e => setFeedbackText(e.target.value)}
+            placeholder="Hva skal endres? (f.eks. «kortere», «mer uformell tone», «nevn ikke prisen») — la stå tom for å bare prøve igjen"
+            rows={2}
+            style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.5, fontSize: '0.82rem' }}
+          />
+          <button
+            onClick={() => handleGenerate(feedbackText)}
+            disabled={generating}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 600,
+              padding: '6px 14px', borderRadius: 6, cursor: generating ? 'default' : 'pointer',
+              background: C.accent, color: '#fff', border: 'none',
+              opacity: generating ? 0.6 : 1, alignSelf: 'flex-end',
+            }}
+          >
+            {generating ? 'Genererer...' : 'Regenerer'}
+          </button>
+        </div>
+      )}
+
+      {currentColdEmail ? (
         <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-            {coldEmail}
+            {currentColdEmail}
           </p>
         </div>
       ) : (
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3 }}>
-          Ingen AI-generert kladd for denne leaden — skriv e-posten selv.
+          Ingen AI-generert kladd for denne leaden ennå — trykk &quot;Generer e-post&quot;, eller skriv den selv.
         </p>
       )}
 
@@ -173,7 +238,7 @@ export function ColdEmailCard({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
-                {coldEmail ? 'Send kald e-post' : 'Send e-post'}
+                {currentColdEmail ? 'Send kald e-post' : 'Send e-post'}
               </p>
               <button
                 onClick={() => setComposing(false)}

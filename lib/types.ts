@@ -44,9 +44,9 @@ export type PipelineData = {
 export type Customer = {
   id: string
   name: string
-  email: string | null
-  company: string | null
-  phone: string | null
+  // email, phone og company er fjernet — se migrasjon 186/187.
+  // All kontaktinfo bor i customer_contacts, med nøyaktig én is_primary-rad per kunde.
+  invoice_company_name: string | null
   address: string | null
   notes: string | null
   customer_number: number
@@ -119,6 +119,8 @@ export type Project = {
   pitch_reviewer_id?: string | null
   quote_review_enabled?: boolean
   quote_reviewer_id?: string | null
+  /** Settes automatisk første gang en e-post sendes fra prosjektet (via /api/send-email). Vises som "Kontaktet"-badge på lead-kort i Kanban. */
+  first_contacted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -209,6 +211,17 @@ export type GalleryReviewMark = {
   image_id: string
   keep: boolean
   note: string | null
+}
+
+export type GalleryReviewPin = {
+  id: string
+  review_id: string
+  image_id: string
+  x_pct: number
+  y_pct: number
+  text: string
+  created_by: string | null
+  created_at: string
 }
 
 export type CrewMember = {
@@ -350,6 +363,15 @@ export type ProjectDocument = {
   file_path: string
   file_type: string | null
   file_size: number | null
+  created_at: string
+}
+
+export type ProjectLink = {
+  id: string
+  project_id: string
+  created_by: string | null
+  label: string
+  url: string
   created_at: string
 }
 
@@ -605,6 +627,35 @@ export type CaseStudy = {
   updated_at: string
 }
 
+export type IndustryLandingPage = {
+  id: string
+  slug: string
+  published: boolean
+  meta_title: string
+  meta_description: string
+  hero_type: 'video' | 'image'
+  hero_video_path: string | null
+  hero_poster_path: string | null
+  hero_headline: string
+  lede_text: string
+  about_heading: string
+  about_content: string
+  about_image_path: string | null
+  cta_headline: string
+  cta_subtext: string
+  cta_email: string
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export type IndustryLandingPageCase = {
+  id: string
+  page_id: string
+  case_study_id: string
+  order_index: number
+}
+
 export type Image = {
   id: string
   filename: string
@@ -771,6 +822,7 @@ export type AdminTask = {
   status: TaskStatus
   assignee: { id: string; name: string | null; email: string; color: string | null } | null
   due_date: string | null
+  due_time: string | null
   sort_order: number
   created_by: string | null
   created_at: string
@@ -807,7 +859,7 @@ export type DailyPlanItem =
       kind: 'task'
       sort_order: number
       task: Task & {
-        project: { id: string; title: string; pipeline_stage: string; customer: { name: string; company: string | null } | null } | null
+        project: { id: string; title: string; pipeline_stage: string; customer: { name: string } | null } | null
       }
     }
   | {
@@ -848,9 +900,7 @@ export type ProjectWithPipeline = Project & {
   customer?: {
     id: string
     name: string
-    company: string | null
-    email?: string | null
-    phone?: string | null
+    invoice_company_name?: string | null
     org_nummer?: string | null
     address?: string | null
     invoice_email?: string | null
@@ -981,5 +1031,22 @@ export type BoardComment = {
   content: string
   mentions: string[]
   created_at: string
+}
+
+export type DashboardWidgetKey =
+  | 'stats'
+  | 'pipeline'
+  | 'calendar'
+  | 'recent_projects'
+  | 'customers'
+  | 'market_analysis'
+  | 'my_tasks'
+  | 'leads_follow_up'
+  | 'upcoming_shoots'
+
+export type DashboardLayoutItem = {
+  widgetKey: DashboardWidgetKey
+  column: number
+  position: number
 }
 

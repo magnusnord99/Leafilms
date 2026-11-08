@@ -28,10 +28,23 @@ function displayName(p: { name: string | null; email: string }) {
   return p.name || p.email
 }
 
+// Samtalens motparter samlet til én visningstekst — "Navn" for en vanlig 1:1,
+// "Navn1, Navn2" for en gruppesamtale.
+function participantNames(participants: ConversationParticipant[]) {
+  return participants.map(displayName).join(', ')
+}
+
 // Usendte utkast lagres lokalt per bruker og samtale, slik at man kan bytte samtale
 // eller forlate siden uten å miste det man har begynt å skrive.
 function draftKey(userId: string, conversationId: string) {
   return `meldinger-draft-${userId}-${conversationId}`
+}
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
+function isRecent(c: ConversationListItem) {
+  if (!c.lastMessage) return false
+  return Date.now() - new Date(c.lastMessage.created_at).getTime() <= THIRTY_DAYS_MS
 }
 
 export function MeldingerClient({ currentUser, initialConversations, allProfiles }: Props) {
@@ -43,9 +56,14 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const [sending, setSending] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
   const [pickerFilter, setPickerFilter] = useState('')
+  const [recentOnly, setRecentOnly] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null
+  // Listen er allerede sortert nyeste-først; dette filteret skjuler i tillegg
+  // samtaler uten aktivitet de siste 30 dagene (inkl. tomme "Ingen meldinger
+  // ennå"-tråder) når Magnus slår det på, uten å slette noe.
+  const visibleConversations = recentOnly ? conversations.filter(isRecent) : conversations
 
   async function refreshConversations() {
     const fresh = await getConversations()
@@ -209,7 +227,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   }
 
   async function handleStartConversation(profile: ConversationParticipant) {
-    const existing = conversations.find((c) => c.otherParticipant.id === profile.id)
+    const existing = conversations.find((c) => c.otherParticipants.length === 1 && c.otherParticipants[0].id === profile.id)
     if (existing) {
       setSelectedId(existing.id)
       setShowPicker(false)
@@ -219,7 +237,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
     const conversationId = await startConversation(profile.id)
     if (!conversationId) return
     setConversations((prev) => [
-      { id: conversationId, otherParticipant: profile, lastMessage: null, unreadCount: 0 },
+      { id: conversationId, otherParticipants: [profile], lastMessage: null, unreadCount: 0 },
       ...prev,
     ])
     setSelectedId(conversationId)
@@ -260,6 +278,21 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
             title="Ny melding"
           >
             +
+          </button>
+        </div>
+
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <button
+            onClick={() => setRecentOnly((r) => !r)}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
+              padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+              background: recentOnly ? C.accentBg : 'transparent',
+              border: `1px solid ${recentOnly ? C.accent : C.border}`,
+              color: recentOnly ? C.accent : C.text3,
+            }}
+          >
+            Siste 30 dager
           </button>
         </div>
 
@@ -309,7 +342,12 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
               Ingen samtaler ennå. Trykk + for å starte en.
             </p>
           )}
-          {conversations.map((c) => {
+          {conversations.length > 0 && visibleConversations.length === 0 && (
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
+              Ingen samtaler med aktivitet siste 30 dager.
+            </p>
+          )}
+          {visibleConversations.map((c) => {
             const active = c.id === selectedId
             return (
               <button
@@ -322,15 +360,18 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                 }}
               >
                 <span style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipant), color: '#fff',
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipants[0]), color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 700,
                 }}>
-                  {displayName(c.otherParticipant)[0].toUpperCase()}
+                  {displayName(c.otherParticipants[0])[0].toUpperCase()}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text }}>
-                      {displayName(c.otherParticipant)}
+                    <span style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {participantNames(c.otherParticipants)}
                     </span>
                     {c.unreadCount > 0 && (
                       <span style={{
@@ -379,13 +420,13 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
                 </svg>
               </button>
               <span style={{
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(selected.otherParticipant), color: '#fff',
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(selected.otherParticipants[0]), color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 700,
               }}>
-                {displayName(selected.otherParticipant)[0].toUpperCase()}
+                {displayName(selected.otherParticipants[0])[0].toUpperCase()}
               </span>
               <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
-                {displayName(selected.otherParticipant)}
+                {participantNames(selected.otherParticipants)}
               </p>
             </div>
 

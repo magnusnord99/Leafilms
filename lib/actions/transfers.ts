@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
+import { headers } from 'next/headers'
 import { randomBytes } from 'crypto'
 import { r2, R2_BUCKET } from '@/lib/r2'
 import {
@@ -26,7 +27,8 @@ export type ProjectForTransfer = {
   customer: {
     id: string
     name: string
-    company: string | null
+    // email hentes fra primærkontakten i customer_contacts (se getProjectForTransfer)
+    contactName: string | null
     email: string | null
     logo_path: string | null
   } | null
@@ -48,7 +50,7 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     .from('projects')
     .select(`
       id, title, language, deliverables,
-      customers (id, name, company, email, logo_path)
+      customers (id, name, logo_path, customer_contacts(name, email, is_primary))
     `)
     .eq('id', projectId)
     .single()
@@ -57,9 +59,17 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
 
   const deliverables = (project as { deliverables?: ProjectForTransfer['deliverables'] }).deliverables ?? []
 
+  type TransferCustomerRow = {
+    id: string
+    name: string
+    logo_path: string | null
+    customer_contacts?: { name: string | null; email: string | null; is_primary: boolean }[]
+  }
+
   const customer = Array.isArray(project.customers)
-    ? project.customers[0] ?? null
-    : (project.customers as ProjectForTransfer['customer'] | null)
+    ? (project.customers[0] as TransferCustomerRow | undefined) ?? null
+    : (project.customers as TransferCustomerRow | null)
+  const primaryContact = customer?.customer_contacts?.find(c => c.is_primary) ?? null
 
   return {
     id: project.id,
@@ -68,8 +78,8 @@ export async function getProjectForTransfer(projectId: string): Promise<ProjectF
     customer: customer ? {
       id: customer.id,
       name: customer.name,
-      company: customer.company ?? null,
-      email: customer.email ?? null,
+      contactName: primaryContact?.name ?? null,
+      email: primaryContact?.email ?? null,
       logo_path: customer.logo_path ?? null,
     } : null,
     deliverables,
@@ -388,6 +398,18 @@ export async function recordDownload(token: string): Promise<{
     })
     .eq('id', result.transfer.id)
 
+  // Detaljert logg pr. nedlasting (i tillegg til den aggregerte telleren over) —
+  // lar oss se enhet/nettleser og tidspunkt for hvert forsøk, se 181_transfer_downloads.sql.
+  const headerList = await headers()
+  const userAgent = headerList.get('user-agent')
+  const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+  await supabase.from('transfer_downloads').insert({
+    transfer_id: result.transfer.id,
+    link_id: result.link.id,
+    user_agent: userAgent,
+    ip_address: ipAddress,
+  })
+
   try {
     const downloadUrl = await getSignedUrl(r2, new GetObjectCommand({
       Bucket: R2_BUCKET,
@@ -400,6 +422,33 @@ export async function recordDownload(token: string): Promise<{
     console.error('[recordDownload]', err)
     return { error: 'Kunne ikke generere nedlastingslenke' }
   }
+}
+
+export type TransferDownloadEvent = {
+  id: string
+  downloaded_at: string
+  user_agent: string | null
+  ip_address: string | null
+}
+
+// Henter detaljert nedlastingslogg for én leveranse (nyeste først), for
+// "Nedlastinger"-detaljvisningen i /admin/transfers.
+export async function getTransferDownloadHistory(transferId: string): Promise<TransferDownloadEvent[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('transfer_downloads')
+    .select('id, downloaded_at, user_agent, ip_address')
+    .eq('transfer_id', transferId)
+    .order('downloaded_at', { ascending: false })
+
+  if (error) {
+    console.error('[getTransferDownloadHistory]', error)
+    return []
+  }
+  return data as TransferDownloadEvent[]
 }
 
 // Sletter en leveranse (soft delete)

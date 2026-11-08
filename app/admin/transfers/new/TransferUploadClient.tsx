@@ -331,6 +331,7 @@ export default function TransferUploadClient({ initialProject, deliveryType }: P
               to: recipientEmail.trim(),
               subject,
               body: htmlBody,
+              isRawHtml: true,
               useLeafilmsAddress,
             }),
           })

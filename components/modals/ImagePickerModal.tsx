@@ -214,7 +214,7 @@ export function ImagePickerModal({
         </div>
 
         {/* Images Grid */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0" data-lenis-prevent>
           {loading ? (
             <div className="text-center py-12">
               <Text variant="body">Laster bilder...</Text>

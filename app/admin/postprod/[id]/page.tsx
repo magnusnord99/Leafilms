@@ -19,6 +19,7 @@ import { buildTaskCalendarLabel, companyLabel } from '@/lib/calendar-label'
 import { getSelectedImagesForProject } from '@/lib/actions/selection-albums'
 import type { SelectedImageForEditor } from '@/lib/actions/selection-albums'
 import { deleteImageComment, getGalleryIdForProject, getOrCreateDeliveryGallery } from '@/lib/actions/selections'
+import { getGalleryReviewByTaskId, overrideWaitingReview } from '@/lib/actions/gallery-reviews'
 import type { ProjectType, Task, ProjectWithPipeline, DeliverableItem as SignedDeliverableItem } from '@/lib/types'
 import TaskChatPanel from '@/components/task/TaskChatPanel'
 import { TaskList } from '@/components/task/TaskList'
@@ -29,6 +30,7 @@ import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { DeliverablesButton } from '@/components/project/DeliverablesButton'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
+import { ProjectLinks } from '@/components/project/ProjectLinks'
 import { TaskVideoFiles } from '@/components/postprod/TaskVideoFiles'
 import { C } from '@/lib/admin-theme'
 
@@ -261,6 +263,8 @@ export default function PostProdDetailPage() {
   const [selectionImages, setSelectionImages] = useState<SelectedImageForEditor[]>([])
   const [selectionLightbox, setSelectionLightbox] = useState<number | null>(null)
   const [gallerySummary, setGallerySummary] = useState<{ id: string; status: 'open' | 'submitted' | 'purged' } | null>(null)
+  const [waitingReviewInfo, setWaitingReviewInfo] = useState<{ reviewId: string; galleryId: string; reviewerName: string | null } | null>(null)
+  const [overridingReview, setOverridingReview] = useState(false)
 
   const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video')
   const [activeVideoDeliverableId, setActiveVideoDeliverableId] = useState<string | null>(null)
@@ -305,6 +309,21 @@ export default function PostProdDetailPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [leadDropdownOpen])
 
+  async function handleOverrideWaitingReview(taskId: string) {
+    if (readOnly) return
+    if (!confirm('Fortsette uten at reviewen er godkjent? Reviewer får et varsel om at dere fortsatte uten svar, og kan fortsatt svare etterpå.')) return
+    setOverridingReview(true)
+    setActionError(null)
+    const result = await overrideWaitingReview(taskId)
+    if (result.ok) {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t))
+      setWaitingReviewInfo(null)
+    } else {
+      setActionError(result.error ?? 'Kunne ikke låse opp steget — sjekk nettverket og prøv igjen.')
+    }
+    setOverridingReview(false)
+  }
+
   function toggleSidebarCollapsed() {
     setSidebarCollapsed(prev => {
       const next = !prev
@@ -341,6 +360,21 @@ export default function PostProdDetailPage() {
   const allDone = displayTasks.length > 0 && activeIdx === -1
   const selectedTask = displayTasks[selectedIdx] ?? null
 
+  // Henter hvem som reviewer og en lenke til tilbakemeldingene så langt når det
+  // valgte steget står fast i 'waiting_review' — uten dette var steget helt tomt
+  // mens man ventet (feedback 9841b60e).
+  useEffect(() => {
+    if (!selectedTask || selectedTask.status !== 'waiting_review') {
+      setWaitingReviewInfo(null)
+      return
+    }
+    let cancelled = false
+    getGalleryReviewByTaskId(selectedTask.id).then(info => {
+      if (!cancelled) setWaitingReviewInfo(info)
+    })
+    return () => { cancelled = true }
+  }, [selectedTask?.id, selectedTask?.status])
+
   async function handleDeleteSelectionComment(imageId: string, commentId: string) {
     if (readOnly) return
     await deleteImageComment(commentId)
@@ -372,20 +406,22 @@ export default function PostProdDetailPage() {
     setDeliverableItems(((currentProj?.deliverables ?? []) as SignedDeliverableItem[]))
     setCurrentUser(userProfile)
 
-    // Åpne på et steg prosjektet ikke er i akkurat nå (forbi eller ikke nådd
-    // ennå) skal aldri seede/reseede oppgaver — det ville mutert data fra en
-    // rent skrivebeskyttet visning. Se lib/pipeline-stage-lock.ts.
-    const isCurrentStage = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) === 'current'
+    // Åpner man på et steg prosjektet allerede har passert, skal oppgaver
+    // aldri seedes/reseedes på nytt — det ville mutert data fra en
+    // skrivebeskyttet visning. Steg prosjektet ikke har nådd ennå er derimot
+    // fullt redigerbare (feedback 2e41d344/b0d97ab3), så de seedes på samme
+    // måte som det faktiske nåværende steget. Se lib/pipeline-stage-lock.ts.
+    const canSeedTasks = currentProj != null && getStageAccess('post_prod', currentProj.pipeline_stage) !== 'past'
 
     // Prosjekter som fikk post-prod-stegene sine seedet FØR de hadde 2+
     // video-leveranser sitter igjen med gamle flate (deliverable_id=NULL)
     // rader, som computeDisplayTasks viser delt på tvers av alle video-faner.
     // Splitt dem per leveranse før tasks hentes. Se ensurePostProdVideoTasksSeeded.
-    if (isCurrentStage && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
+    if (canSeedTasks && currentProjVideoDeliverables.length >= 2) await ensurePostProdVideoTasksSeeded(projectId)
 
     const projectTasks = await getTasksForProject(projectId, 'post_prod')
 
-    if (isCurrentStage && projectTasks.length === 0 && currentProj?.project_type) {
+    if (canSeedTasks && projectTasks.length === 0 && currentProj?.project_type) {
       const result = await reseedPostProdTasks(projectId)
       if (result.error) {
         setSeedError(result.error)
@@ -865,21 +901,10 @@ export default function PostProdDetailPage() {
 
   const access = getStageAccess('post_prod', currentProject.pipeline_stage)
 
-  if (access === 'not_yet_reached') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text3, marginBottom: 16 }}>
-            Prosjektet har ikke nådd post-produksjon ennå
-          </p>
-          <button onClick={() => router.push('/admin/postprod')} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 500, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', background: C.surface2, color: C.text2, border: `1px solid ${C.border}` }}>
-            ← Tilbake
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  // Steg prosjektet ikke har nådd ennå er fullt redigerbare her, ikke
+  // blokkert — man skal kunne jobbe med alle deler av prosjektet, ikke bare
+  // der det er nå (feedback 2e41d344/b0d97ab3). Kun "past"-steg er
+  // skrivebeskyttet (med opplåsingsmulighet).
   const readOnly = access === 'past' && !unlocked
 
   const typeConf = currentProject.project_type ? TYPE_CONFIG[currentProject.project_type] : null
@@ -1023,7 +1048,7 @@ export default function PostProdDetailPage() {
                 </div>
                 {currentProject.customer && (
                   <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3 }}>
-                    {currentProject.customer.name}{currentProject.customer.company ? ` — ${currentProject.customer.company}` : ''}
+                    {currentProject.customer.name}
                   </p>
                 )}
                 {/* Prosjektleder */}
@@ -1210,8 +1235,13 @@ export default function PostProdDetailPage() {
               {showDeliveryInfo && (
                 <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <DeliverablesButton projectId={projectId} items={deliverableItems} onSaved={handleDeliverablesSaved} variant="inline" readOnly={readOnly} />
-                  <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <ProjectDocuments projectId={projectId} defaultCollapsed />
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                      <ProjectDocuments projectId={projectId} defaultCollapsed />
+                    </div>
+                    <div style={{ padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                      <ProjectLinks projectId={projectId} defaultCollapsed />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1492,6 +1522,11 @@ export default function PostProdDetailPage() {
                 {isSelectedActive && selectedTask.status === 'todo' && (
                   <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent, background: C.accentBg, border: `1px solid rgba(124,92,252,0.25)`, padding: '2px 8px', borderRadius: 4 }}>
                     Aktiv
+                  </span>
+                )}
+                {isSelectedActive && selectedTask.status === 'waiting_review' && (
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#C49434', background: 'rgba(196,148,52,0.1)', border: `1px solid rgba(196,148,52,0.25)`, padding: '2px 8px', borderRadius: 4 }}>
+                    Venter på review
                   </span>
                 )}
                 {isSelectedLocked && (
@@ -2135,6 +2170,38 @@ export default function PostProdDetailPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              ) : isSelectedActive && selectedTask.status === 'waiting_review' ? (
+                /* Steget er sendt til en kollega for intern review (requestGalleryReview
+                   i lib/actions/gallery-reviews.ts) og venter på svar derfra — uten denne
+                   grenen falt verken "Sett i gang"- eller "Merk som ferdig"-betingelsen
+                   under til, og steget sto helt tomt (feedback 9841b60e). */
+                <div>
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text2, fontStyle: 'italic', marginBottom: 10 }}>
+                    🕒 Venter på at {waitingReviewInfo?.reviewerName ?? 'kollegaen'} godkjenner bildeutvalget
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {waitingReviewInfo && (
+                      <Link
+                        href={`/admin/selections/${waitingReviewInfo.galleryId}/review/${waitingReviewInfo.reviewId}`}
+                        style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, color: C.accent, textDecoration: 'underline' }}
+                      >
+                        Se tilbakemeldinger så langt →
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => handleOverrideWaitingReview(selectedTask.id)}
+                      disabled={readOnly || overridingReview}
+                      style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                        padding: '8px 16px', borderRadius: 7, cursor: overridingReview ? 'default' : 'pointer',
+                        background: 'transparent', color: C.text3, border: `1px solid ${C.border}`,
+                        opacity: overridingReview ? 0.6 : 1,
+                      }}
+                    >
+                      {overridingReview ? 'Låser opp...' : 'Fortsett uten godkjenning'}
+                    </button>
+                  </div>
                 </div>
               ) : isSelectedActive && selectedTask.title === SELEKSJON_TITLE ? (
                 /* Spesialbehandling: Selektering fullføres normalt av kundens innsending,

@@ -136,7 +136,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }, comments] = await Promise.all([
       supabase.from('board_cards').select('*').eq('board_id', boardId).order('z_index'),
       supabase.from('board_edges').select('*').eq('board_id', boardId),
-      supabase.from('projects').select('id, title, customer_id, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, customers(name, company)').eq('id', board.project_id).single(),
+      supabase.from('projects').select('id, title, customer_id, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, customers(name)').eq('id', board.project_id).single(),
       board.lead_profile_id
         ? supabase.from('profiles').select('id, name, email, color, phone').eq('id', board.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -147,7 +147,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
     ])
     const breadcrumbs = await buildBreadcrumbs(supabase, board)
     const childMeta = await loadChildMeta(supabase, (cards ?? []) as BoardCard[])
-    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const customer = (project as unknown as { customers?: { name: string | null } | null } | null)?.customers
     const proj = project as unknown as {
       customer_id?: string | null
       board_summary?: string | null
@@ -166,7 +166,7 @@ export async function getBoardData(boardId: string): Promise<BoardData | null> {
       projectId: board.project_id,
       projectTitle: project?.title ?? '',
       projectCustomerId: proj?.customer_id ?? null,
-      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      customerName: customer?.name || 'Ingen kunde satt',
       leadProfile: leadProfile as BoardLeadProfile | null,
       customerContact: customerContact as BoardCustomerContact | null,
       childMeta,
@@ -255,10 +255,10 @@ export async function getScheduleCardData(cardId: string): Promise<ScheduleCardP
 
     const { data: project } = await supabase
       .from('projects')
-      .select('id, title, shoot_start, shoot_end, customers(name, company)')
+      .select('id, title, shoot_start, shoot_end, customers(name)')
       .eq('id', board.project_id)
       .single()
-    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const customer = (project as unknown as { customers?: { name: string | null } | null } | null)?.customers
 
     return {
       card: card as BoardCard,
@@ -266,7 +266,7 @@ export async function getScheduleCardData(cardId: string): Promise<ScheduleCardP
       boardTitle: board.title,
       projectId: board.project_id,
       projectTitle: project?.title ?? '',
-      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      customerName: customer?.name || 'Ingen kunde satt',
       shootStart: (project as { shoot_start?: string | null } | null)?.shoot_start ?? null,
       shootEnd: (project as { shoot_end?: string | null } | null)?.shoot_end ?? null,
     }
@@ -306,10 +306,10 @@ export async function getSharedScheduleCard(token: string, cardId: string): Prom
 
     const { data: project } = await service
       .from('projects')
-      .select('id, title, shoot_start, shoot_end, customers(name, company)')
+      .select('id, title, shoot_start, shoot_end, customers(name)')
       .eq('id', root.project_id)
       .single()
-    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const customer = (project as unknown as { customers?: { name: string | null } | null } | null)?.customers
 
     return {
       card: card as BoardCard,
@@ -317,7 +317,7 @@ export async function getSharedScheduleCard(token: string, cardId: string): Prom
       boardTitle: board.title,
       projectId: board.project_id,
       projectTitle: project?.title ?? '',
-      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      customerName: customer?.name || 'Ingen kunde satt',
       shootStart: (project as { shoot_start?: string | null } | null)?.shoot_start ?? null,
       shootEnd: (project as { shoot_end?: string | null } | null)?.shoot_end ?? null,
     }
@@ -1141,7 +1141,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
     const [{ data: cards }, { data: edges }, { data: project }, { data: leadProfile }, { data: customerContact }] = await Promise.all([
       service.from('board_cards').select('*').eq('board_id', target.id).order('z_index'),
       service.from('board_edges').select('*').eq('board_id', target.id),
-      service.from('projects').select('title, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, language, customers(name, company)').eq('id', root.project_id).single(),
+      service.from('projects').select('title, board_summary, delivery_description, delivery_video, delivery_photo, shoot_start, shoot_end, language, customers(name)').eq('id', root.project_id).single(),
       target.lead_profile_id
         ? service.from('profiles').select('id, name, email, color, phone').eq('id', target.lead_profile_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -1149,7 +1149,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
         ? service.from('customer_contacts').select('id, name, role, phone').eq('id', target.customer_contact_id).maybeSingle()
         : Promise.resolve({ data: null }),
     ])
-    const customer = (project as unknown as { customers?: { name: string | null; company: string | null } | null } | null)?.customers
+    const customer = (project as unknown as { customers?: { name: string | null } | null } | null)?.customers
     const proj = project as unknown as {
       board_summary?: string | null
       delivery_description?: string | null
@@ -1192,7 +1192,7 @@ export async function getSharedBoard(token: string, childBoardId?: string): Prom
       breadcrumbs: crumbs,
       projectTitle: (project as { title?: string } | null)?.title ?? '',
       projectCustomerId: null,
-      customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+      customerName: customer?.name || 'Ingen kunde satt',
       // Prosjektinfo, leveranse, opptak og kontaktpersoner er alle ment for kunden
       // og vises derfor på delte boards (board_summary er en egen, manuelt
       // redigert tekst — ikke den interne AI-oppsummeringen av møtenotater).
@@ -1229,7 +1229,7 @@ export async function getAllBoards(): Promise<BoardOverviewItem[]> {
     const supabase = await createClient()
     const { data: roots } = await supabase
       .from('boards')
-      .select('id, title, project_id, share_token, updated_at, projects(title, customers(name, company))')
+      .select('id, title, project_id, share_token, updated_at, projects(title, customers(name))')
       .is('parent_board_id', null)
       .order('updated_at', { ascending: false })
     if (!roots || roots.length === 0) return []
@@ -1246,14 +1246,14 @@ export async function getAllBoards(): Promise<BoardOverviewItem[]> {
     for (const s of subs ?? []) subCounts[s.project_id] = (subCounts[s.project_id] ?? 0) + 1
 
     return roots.map(r => {
-      const project = r.projects as unknown as { title: string; customers?: { name: string | null; company: string | null } | null } | null
+      const project = r.projects as unknown as { title: string; customers?: { name: string | null } | null } | null
       const customer = project?.customers
       return {
         id: r.id,
         title: r.title,
         projectId: r.project_id,
         projectTitle: project?.title ?? r.title,
-        customerName: customer?.name || customer?.company || 'Ingen kunde satt',
+        customerName: customer?.name || 'Ingen kunde satt',
         cardCount: cardCounts[r.id] ?? 0,
         subBoardCount: subCounts[r.project_id] ?? 0,
         shared: !!r.share_token,

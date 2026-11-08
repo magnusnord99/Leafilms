@@ -32,6 +32,7 @@ const navGroups: NavGroup[] = [
     label: 'Salg & CRM',
     items: [
       { href: '/admin/retning',   label: 'Vår retning' },
+      { href: '/admin/landingssider', label: 'Landingssider' },
       { href: '/admin/leads',     label: 'Leads' },
       { href: '/admin/pitches',   label: 'Pitcher' },
       { href: '/admin/quotes',    label: 'Tilbud' },

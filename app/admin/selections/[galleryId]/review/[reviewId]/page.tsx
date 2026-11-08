@@ -17,5 +17,7 @@ export default async function GalleryReviewPage({
   const data = await getGalleryForInternalReview(reviewId)
   if (!data) notFound()
 
-  return <GalleryReviewClient data={data} />
+  const isReviewer = user.id === data.review.reviewer_id
+
+  return <GalleryReviewClient data={data} isReviewer={isReviewer} />
 }

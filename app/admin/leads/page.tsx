@@ -52,7 +52,15 @@ export default function LeadsPage() {
     })
   }, [])
 
-  const filtered = filter === 'all' ? leads : leads.filter(l => l.status === filter)
+  // Nye (status "new") leads skal ligge før alle andre i lista, uansett
+  // opprettelsesdato — resten holder seg til created_at-sorteringen fra
+  // getLeadsWithMeta() (feedback 29afb03e/80d61a54).
+  const sorted = [...leads].sort((a, b) => {
+    const aNew = a.status === 'new' ? 0 : 1
+    const bNew = b.status === 'new' ? 0 : 1
+    return aNew - bNew
+  })
+  const filtered = filter === 'all' ? sorted : sorted.filter(l => l.status === filter)
 
   async function handleDelete(id: string) {
     if (confirmId !== id) { setConfirmId(id); return }

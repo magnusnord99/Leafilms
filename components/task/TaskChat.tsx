@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getTaskMessages, sendTaskMessage } from '@/lib/actions/pipeline'
+import { getTaskMessages, markTaskMessagesRead, sendTaskMessage } from '@/lib/actions/pipeline'
 import { extractMentionIds, splitMentionSegments, type MentionableProfile } from '@/lib/mentions'
 import { MentionTextInput } from '@/components/shared/MentionTextInput'
 import { MessageReactions } from '@/components/shared/MessageReactions'
@@ -52,6 +52,7 @@ export function TaskChat({ taskId, taskTitle, currentUserId, profiles }: Props) 
 
   useEffect(() => {
     loadMessages()
+    markTaskMessagesRead(taskId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
 

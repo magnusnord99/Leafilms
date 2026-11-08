@@ -310,9 +310,10 @@ export default function OkonomiPage() {
       })[0]
     )
 
-    function toAmountRows(stages: PipelineStage[]): ProjectWithAmount[] {
+    function toAmountRows(stages: PipelineStage[], requireQuote = false): ProjectWithAmount[] {
       return rows
         .filter(p => p.pipeline_stage && stages.includes(p.pipeline_stage))
+        .filter(p => !requireQuote || (p.quotes ?? []).length > 0)
         .map(p => {
           const quote = pickBestQuote(p.quotes ?? [])
           return {
@@ -369,7 +370,7 @@ export default function OkonomiPage() {
       }
     }
 
-    setPotential([...toAmountRows(POTENTIAL_STAGES), ...pendingAddonRows])
+    setPotential([...toAmountRows(POTENTIAL_STAGES, true), ...pendingAddonRows])
     setUpcoming(toAmountRows(UPCOMING_STAGES))
     setEarned(toAmountRows(EARNED_STAGES))
     setLoading(false)

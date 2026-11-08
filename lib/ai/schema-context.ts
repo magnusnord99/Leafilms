@@ -33,8 +33,13 @@ contracts — Kontrakter
   id, project_id, status, signed_at, is_current
   status: pending | sent | signed | cancelled
 
-customers — Kunder
-  id, name, company, email, phone, notes
+customers — Kunder (kontokort — kun firma eller privatperson, IKKE kontaktinfo)
+  id, name, invoice_company_name, org_nummer, invoice_email, notes
+  NB: email/phone/company er fjernet — se customer_contacts
+
+customer_contacts — Kontaktpersoner på en kunde
+  id, customer_id, name, email, phone, role, is_primary
+  is_primary=true: én per kunde, brukes som standard mottaker
 
 leads — Potensielle kunder (CRM)
   id, name, company, email, status, source, reason, notes, assigned_to, created_at

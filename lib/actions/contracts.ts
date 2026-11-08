@@ -65,7 +65,7 @@ async function buildContractContext(projectId: string) {
 
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('*, customers(*)')
+    .select('*, customers(id, name, org_nummer, customer_contacts(name, email, is_primary))')
     .eq('id', projectId)
     .single()
 
@@ -114,7 +114,9 @@ async function buildContractContext(projectId: string) {
     template = fallbackRows?.[0]?.content ?? ''
   }
 
-  const customer = (project as unknown as { customers?: { name: string | null; company: string | null; org_nummer: string | null } | null }).customers ?? null
+  const rawCustomer = (project as unknown as { customers?: { name: string | null; org_nummer: string | null; customer_contacts?: { name: string | null; email: string | null; is_primary: boolean }[] } | null }).customers ?? null
+  const primaryContact = rawCustomer?.customer_contacts?.find(c => c.is_primary) ?? null
+  const customer = rawCustomer ? { ...rawCustomer, customer_contacts: undefined } : null
   const proj = project as unknown as {
     shoot_start?: string | null
     shoot_end?: string | null
@@ -148,8 +150,9 @@ async function buildContractContext(projectId: string) {
       : oppstartDato
 
   const autoVars = {
-    bedrift: customer?.company || customer?.name || '',
-    kunde_kontakt: customer?.name || '',
+    // Etter migrasjon 186 er customers.name allerede kontonavnet (firma eller privatperson).
+    bedrift: customer?.name || '',
+    kunde_kontakt: primaryContact?.name || customer?.name || '',
     oppstart_dato: oppstartDato,
     opptak_datoer: opptakDatoer,
     leveranse: combinedDeliveryText(proj, lang) || '___',

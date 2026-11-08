@@ -28,6 +28,7 @@ export default function RecentProjectsWidget() {
       const { data } = await supabase
         .from('projects')
         .select('id, title, status, pipeline_stage, client_name, updated_at, parent_project_id, version_number')
+        .eq('is_package_template', false)
         .order('updated_at', { ascending: false })
         .limit(5)
       const projects = (data || []) as Project[]

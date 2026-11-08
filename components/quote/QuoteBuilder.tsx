@@ -2,62 +2,15 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, OptionalAddonCategory, TeamMember, Customer, PriceCatalogItem, DiscountFactor, EquipmentGroupWithItems, DeliverableItem, CustomerContact } from '@/lib/types'
-import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost } from '@/lib/quote-builder-utils'
+import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost, createEmptyBuilderData } from '@/lib/quote-builder-utils'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { Button } from '@/components/ui'
 import { C } from '@/lib/admin-theme'
 
-const DEFAULT_TERMS = `Leafilms vil være ansvarlig for planleggingen, produksjonen og leveringen av prosjektet slik det er beskrevet i dette tilbudet. Prosjektets omfang, tidslinje og leveranser avtales før produksjonen starter. Eventuelle endringer i omfanget underveis kan medføre ekstra kostnader.
-Reise-, overnattings- og oppholdsutgifter for teamet er inkludert i budsjettet med mindre annet er spesifisert.
-Dersom uforutsette omstendigheter (f.eks. ekstremvær eller andre faktorer utenfor Leafilms' kontroll) hindrer produksjonen i å gjennomføres som planlagt, vil alternative løsninger utarbeides i samråd med kunden. Eventuelle forsinkelser eller omlegginger kan medføre ekstra kostnader.
-Kansellering innen 14 dager før startdato: 50 % av den avtalte prisen vil bli fakturert.
-Kansellering innen 48 timer før startdato: 100 % av den avtalte prisen vil bli fakturert.
-Leafilms beholder full opphavsrett til alt produsert materiale. Kunden gis bruksrettigheter for det avtalte formålet og prosjektet. Videre salg eller distribusjon er ikke tillatt uten skriftlig samtykke fra Leafilms. Leafilms må krediteres i henhold til bransjestandarder der materialet brukes, der det er praktisk mulig.
-Alt materiale, inkludert opptak og prosjektfiler, vil bli levert til kunden som avtalt. Lagring og arkivering av materialet utover leveringsdatoen er kundens ansvar.
-Fakturaen deles opp i to like betalinger. Den første halvparten faktureres ved signering av produksjonsavtalen, og den andre halvparten faktureres etter siste produksjonsdag. Vær oppmerksom på at forsinkede betalinger kan medføre ekstra gebyrer.`
-
-// Oversettelse av DEFAULT_TERMS over — hold de to i sync ved endringer (feedback fd02da09:
-// engelske tilbud viste norsk vilkårstekst siden det ikke fantes noen engelsk standardtekst).
-const EN_DEFAULT_TERMS = `Leafilms will be responsible for the planning, production and delivery of the project as described in this offer. The project's scope, timeline and deliverables are agreed before production begins. Any changes to the scope along the way may incur additional costs.
-Travel, accommodation and subsistence costs for the team are included in the budget unless otherwise specified.
-If unforeseen circumstances (e.g. extreme weather or other factors beyond Leafilms' control) prevent the production from being carried out as planned, alternative solutions will be arranged in consultation with the client. Any delays or rescheduling may incur additional costs.
-Cancellation within 14 days before the start date: 50% of the agreed price will be invoiced.
-Cancellation within 48 hours before the start date: 100% of the agreed price will be invoiced.
-Leafilms retains full copyright to all produced material. The client is granted usage rights for the agreed purpose and project. Further sale or distribution is not permitted without written consent from Leafilms. Leafilms must be credited in accordance with industry standards wherever the material is used, where practically possible.
-All material, including recordings and project files, will be delivered to the client as agreed. Storage and archiving of the material beyond the delivery date is the client's responsibility.
-The invoice is split into two equal payments. The first half is invoiced upon signing of the production agreement, and the second half is invoiced after the last day of production. Please note that late payments may incur additional fees.`
-
-export function createEmptyBuilderData(projectName = ''): QuoteBuilderData {
-  return {
-    version: 'V1',
-    quoteDate: new Date().toISOString().split('T')[0],
-    projectName,
-    reference: 'Video produksjon',
-    clientContact: '',
-    customerNumber: '',
-    ourContact: '',
-    paymentInfo: '14 dager',
-    deliveryDate: '',
-    deliveryDescription: '',
-    deliverables: [],
-    terms: DEFAULT_TERMS,
-    termsEn: EN_DEFAULT_TERMS,
-    language: 'NO',
-    startupCrew: [],
-    shootDays: 1,
-    crew: [],
-    equipment: [],
-    postProductionCrew: [],
-    postProduction: [],
-    otherCosts: [],
-    licensing: [],
-    vatRate: 25,
-    discountFactor: 0,
-    includeVat: true,
-    companyEmail: 'eivind@leafilms.no',
-    optionalAddons: [],
-  }
-}
+// createEmptyBuilderData (med standard vilkårstekst) bor i lib/quote-builder-utils.ts slik at
+// også server-kode (lib/actions/quote-packages.ts) kan bruke nøyaktig samme standard-skjelett —
+// en 'use client'-modul kan ikke kalles fra server. Re-eksporteres her for eksisterende importører.
+export { createEmptyBuilderData }
 
 function newId() { return Math.random().toString(36).slice(2) }
 

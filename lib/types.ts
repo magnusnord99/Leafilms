@@ -121,6 +121,8 @@ export type Project = {
   quote_reviewer_id?: string | null
   /** Settes automatisk første gang en e-post sendes fra prosjektet (via /api/send-email). Vises som "Kontaktet"-badge på lead-kort i Kanban. */
   first_contacted_at?: string | null
+  /** Settes på prosjekter som er pakkemaler for salgsflyere (ikke ekte kundeprosjekter). */
+  is_package_template: boolean
   created_at: string
   updated_at: string
 }
@@ -141,6 +143,12 @@ export type Quote = {
   selected_addon_ids: string[]
   /** Hvem i teamet som opprettet tilbudet — NULL for tilbud opprettet før migrasjon 146. */
   created_by: string | null
+  /** Pakkeetikett når tilbudet er en salgsflyer-pakke (NULL ellers). */
+  package_label: string | null
+  /** Pakkekategori når tilbudet er en salgsflyer-pakke (NULL ellers). */
+  package_category: SalesFlyerPackageCategory | null
+  /** Rekkefølge blant salgsflyer-pakker. */
+  package_order: number
   created_at: string
   updated_at: string
 }
@@ -654,6 +662,47 @@ export type IndustryLandingPageCase = {
   page_id: string
   case_study_id: string
   order_index: number
+}
+
+export type SalesFlyerPackageCategory = 'foto' | 'film' | 'foto_film'
+
+export type SalesFlyer = {
+  id: string
+  slug: string
+  published: boolean
+  meta_title: string
+  meta_description: string
+  hero_video_path: string | null
+  hero_poster_path: string | null
+  headline: string
+  engagement_text: string
+  cta_headline: string
+  cta_subtext: string
+  cta_email: string
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export type SalesFlyerCase = {
+  id: string
+  flyer_id: string
+  case_study_id: string
+  order_index: number
+}
+
+export type SalesFlyerPackage = {
+  id: string
+  flyer_id: string
+  quote_id: string
+  order_index: number
+}
+
+export type SalesFlyerView = {
+  id: string
+  flyer_id: string
+  viewed_at: string
+  referrer: string | null
 }
 
 export type Image = {

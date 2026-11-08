@@ -22,7 +22,7 @@ export default function PipelineWidget() {
 
   async function fetchData() {
     try {
-      const { data } = await supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead')
+      const { data } = await supabase.from('projects').select('pipeline_stage').not('pipeline_stage', 'eq', 'lead').eq('is_package_template', false)
       const counts: Record<string, number> = {}
       for (const row of data ?? []) {
         const stage = (row as { pipeline_stage: string }).pipeline_stage

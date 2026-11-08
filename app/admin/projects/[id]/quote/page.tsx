@@ -2,15 +2,23 @@
 
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote, EquipmentGroupWithItems } from '@/lib/types'
+import { Project, TeamMember, Customer, QuoteBuilderData, CrewMember, PriceCatalogItem, DiscountFactor, Quote, EquipmentGroupWithItems, SalesFlyerPackageCategory } from '@/lib/types'
 import { QuoteBuilder, createEmptyBuilderData } from '@/components/quote/QuoteBuilder'
 import QuoteChat from '@/components/quote/QuoteChat'
 import { convertBuilderDataToQuoteData, pickBestQuote, addonTotalPrice } from '@/lib/quote-builder-utils'
 import { C } from '@/lib/admin-theme'
 import { usePublishing } from '@/hooks/project/usePublishing'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
+import { markQuoteAsPackage, checkQuoteUsedOnPublishedFlyers, unmarkQuoteAsPackage, duplicatePackageAsNewProject } from '@/lib/actions/quote-packages'
+
+// Samme kategori-tekster som Pakkemaler-fanen i /admin/quotes.
+const PACKAGE_CATEGORY_LABEL: Record<SalesFlyerPackageCategory, string> = {
+  foto: 'Bilder',
+  film: 'Film',
+  foto_film: 'Bilder og film',
+}
 
 type Props = {
   params: Promise<{ id: string }>
@@ -19,6 +27,7 @@ type Props = {
 export default function ProjectQuotePage({ params }: Props) {
   const { id: projectId } = use(params)
   const searchParams = useSearchParams()
+  const router = useRouter()
   const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [loading, setLoading] = useState(true)
@@ -45,6 +54,22 @@ export default function ProjectQuotePage({ params }: Props) {
   // Hindrer at samtidige "Lagre tilbud" + "Generer PDF"-kall begge tror det ikke finnes
   // en rad ennå og oppretter to quotes-rader for samme prosjekt (én av dem tom).
   const savingRef = useRef(false)
+
+  // Pakke-merking — se Task 4 (lib/actions/quote-packages.ts) og Task 6 (Pakkemaler-fanen
+  // i /admin/quotes som lenker hit med ?quote=<id>).
+  const [pkgLabel, setPkgLabel] = useState('')
+  const [pkgCategory, setPkgCategory] = useState<SalesFlyerPackageCategory>('foto')
+  const [pkgSaving, setPkgSaving] = useState(false)
+  const [pkgError, setPkgError] = useState<string | null>(null)
+  const [unmarking, setUnmarking] = useState(false)
+  // Non-null => bekreftelsesdialogen vises, med listen over flyer-slugs som bruker den.
+  const [unmarkConfirmSlugs, setUnmarkConfirmSlugs] = useState<string[] | null>(null)
+  const [showDuplicate, setShowDuplicate] = useState(false)
+  // '' = "ny kunde" valgt i selecten (se duplicateNewName under)
+  const [duplicateCustomerId, setDuplicateCustomerId] = useState('')
+  const [duplicateNewName, setDuplicateNewName] = useState('')
+  const [duplicating, setDuplicating] = useState(false)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -83,10 +108,18 @@ export default function ProjectQuotePage({ params }: Props) {
       const members = (teamRes.data || []) as TeamMember[]
       const custs = (customersRes.data || []) as Customer[]
       const allQuotes = (quoteRes.data || []) as Quote[]
+      // En ?quote=<id>-param (fra pakke-malenes liste i /admin/quotes, se Task 6 i
+      // sales-flyers-planen) velger et spesifikt tilbud eksplisitt — nødvendig fordi
+      // flere pakke-maler kan dele samme skjulte prosjekt, og da er de alle is_current,
+      // så pickBestQuote alene ikke kunne skille dem fra hverandre. Faller tilbake til
+      // vanlig oppslag når parameteren er borte eller ikke treffer noe tilbud på dette
+      // prosjektet — ingen endring i oppførsel for alle andre prosjektsider.
+      const requestedQuoteId = searchParams?.get('quote')
+      const requestedQuote = requestedQuoteId ? allQuotes.find(q => q.id === requestedQuoteId) : undefined
       // Et akseptert/signert tilbud vinner alltid over "gjeldende versjon" —
       // ellers åpnes plutselig et nyere, usignert tilleggstilbud som om DET var
       // det kunden hadde akseptert (feedback 08a0235b).
-      const existingQuote = pickBestQuote(allQuotes)
+      const existingQuote = requestedQuote ?? pickBestQuote(allQuotes)
 
       const shareToken = (shareRes.data as { token: string } | null)?.token
       setShareLink(shareToken ? `${window.location.origin}/p/${shareToken}` : null)
@@ -385,6 +418,99 @@ export default function ProjectQuotePage({ params }: Props) {
     }
   }
 
+  // Det lastede tilbudet (hvis noe), for pakke-panelet under.
+  const activeQuote = quotes.find(q => q.id === existingQuoteId) ?? null
+
+  async function handleMarkAsPackage() {
+    if (!activeQuote) return
+    const label = pkgLabel.trim()
+    if (!label) {
+      setPkgError('Pakken må ha et navn')
+      return
+    }
+    setPkgSaving(true)
+    setPkgError(null)
+    try {
+      const result = await markQuoteAsPackage(activeQuote.id, { package_label: label, package_category: pkgCategory })
+      if ('error' in result) {
+        setPkgError(result.error)
+        return
+      }
+      setQuotes(prev => prev.map(q => q.id === activeQuote.id ? { ...q, package_label: label, package_category: pkgCategory } : q))
+      setPkgLabel('')
+    } finally {
+      setPkgSaving(false)
+    }
+  }
+
+  async function doUnmark() {
+    if (!activeQuote) return
+    const result = await unmarkQuoteAsPackage(activeQuote.id)
+    if ('error' in result) {
+      setPkgError(result.error)
+      return
+    }
+    setQuotes(prev => prev.map(q => q.id === activeQuote.id ? { ...q, package_label: null, package_category: null, package_order: 0 } : q))
+    setUnmarkConfirmSlugs(null)
+  }
+
+  async function handleUnmarkClick() {
+    if (!activeQuote) return
+    setUnmarking(true)
+    setPkgError(null)
+    try {
+      const { flyerSlugs } = await checkQuoteUsedOnPublishedFlyers(activeQuote.id)
+      if (flyerSlugs.length > 0) {
+        setUnmarkConfirmSlugs(flyerSlugs)
+        return
+      }
+      await doUnmark()
+    } finally {
+      setUnmarking(false)
+    }
+  }
+
+  async function handleConfirmUnmark() {
+    setUnmarking(true)
+    setPkgError(null)
+    try {
+      await doUnmark()
+    } finally {
+      setUnmarking(false)
+    }
+  }
+
+  function openDuplicateModal() {
+    setDuplicateCustomerId('')
+    setDuplicateNewName('')
+    setDuplicateError(null)
+    setShowDuplicate(true)
+  }
+
+  async function handleDuplicateSubmit() {
+    if (!activeQuote) return
+    const customer = duplicateCustomerId
+      ? { existingCustomerId: duplicateCustomerId }
+      : { newCustomerName: duplicateNewName.trim() }
+    if (!duplicateCustomerId && !('newCustomerName' in customer && customer.newCustomerName)) {
+      setDuplicateError('Velg en eksisterende kunde, eller skriv inn navn på en ny kunde')
+      return
+    }
+    setDuplicating(true)
+    setDuplicateError(null)
+    try {
+      const result = await duplicatePackageAsNewProject(activeQuote.id, customer)
+      if ('error' in result) {
+        setDuplicateError(result.error)
+        return
+      }
+      setShowDuplicate(false)
+      router.push(`/admin/projects/${result.projectId}/quote?quote=${result.quoteId}`)
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
@@ -644,6 +770,92 @@ export default function ProjectQuotePage({ params }: Props) {
           )
         })()}
 
+        {/* Pakke-merking — gjør tilbudet til en gjenbrukbar pakke-mal for salgsflyere
+            (sales-flyers-planen, Task 7). Kun synlig når tilbudet faktisk er lagret. */}
+        {activeQuote && (
+          <div
+            className="mb-6"
+            style={{ padding: '14px 18px', borderRadius: 8, background: C.surface, border: `1px solid ${C.border}` }}
+          >
+            {activeQuote.package_label ? (
+              <div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent, marginBottom: 3 }}>
+                      Pakke-mal
+                    </p>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text }}>
+                      {activeQuote.package_label}
+                      <span style={{ color: C.text3, marginLeft: 8, fontSize: '0.72rem' }}>
+                        ({activeQuote.package_category ? PACKAGE_CATEGORY_LABEL[activeQuote.package_category] : '—'})
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openDuplicateModal}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: C.accentBg, color: C.accent, border: '1px solid rgba(124,92,252,0.25)' }}
+                    >
+                      Dupliser som nytt tilbud
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUnmarkClick}
+                      disabled={unmarking}
+                      style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', padding: '6px 12px', borderRadius: 6, cursor: unmarking ? 'default' : 'pointer', background: 'transparent', color: C.danger, border: `1px solid ${C.border}`, opacity: unmarking ? 0.6 : 1 }}
+                    >
+                      {unmarking ? 'Sjekker…' : 'Fjern pakke-merking'}
+                    </button>
+                  </div>
+                </div>
+                {pkgError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, marginTop: 6 }}>
+                    {pkgError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, letterSpacing: '0.04em', marginBottom: 8 }}>
+                  Merk som pakke-mal (vises i Pakkemaler-fanen og kan brukes på en salgsflyer)
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    value={pkgLabel}
+                    onChange={e => setPkgLabel(e.target.value)}
+                    placeholder="F.eks. Liten pakke"
+                    style={{ padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none', width: 220 }}
+                  />
+                  <select
+                    value={pkgCategory}
+                    onChange={e => setPkgCategory(e.target.value as SalesFlyerPackageCategory)}
+                    style={{ padding: '7px 10px', borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                  >
+                    <option value="foto">Bilder</option>
+                    <option value="film">Film</option>
+                    <option value="foto_film">Bilder og film</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleMarkAsPackage}
+                    disabled={pkgSaving}
+                    style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '7px 14px', borderRadius: 6, cursor: pkgSaving ? 'default' : 'pointer', background: C.accent, color: '#fff', border: 'none', opacity: pkgSaving ? 0.6 : 1 }}
+                  >
+                    {pkgSaving ? 'Lagrer…' : 'Lagre som pakke'}
+                  </button>
+                </div>
+                {pkgError && (
+                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger, marginTop: 6 }}>
+                    {pkgError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Builder */}
         {builderData && (
           <QuoteBuilder
@@ -670,6 +882,133 @@ export default function ProjectQuotePage({ params }: Props) {
             profiles={profiles}
             forceOpen={forceOpenChat}
           />
+        )}
+
+        {/* Bekreftelse før pakke-merkingen fjernes mens tilbudet fortsatt er i bruk på én
+            eller flere publiserte flyere (sales-flyers Task 7, Step 2). */}
+        {unmarkConfirmSlugs && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px', zIndex: 50 }}
+            onClick={() => !unmarking && setUnmarkConfirmSlugs(null)}
+          >
+            <div
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
+                Dette tilbudet vises på {unmarkConfirmSlugs.length === 1 ? 'flyeren' : 'flyerne'}:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {unmarkConfirmSlugs.map(slug => (
+                  <li key={slug} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text2 }}>
+                    {slug}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text2 }}>
+                Fjern merkingen likevel? Pakken forsvinner da fra disse flyerne.
+              </p>
+              {pkgError && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>
+                  {pkgError}
+                </p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUnmarkConfirmSlugs(null)}
+                  disabled={unmarking}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', padding: '7px 14px', borderRadius: 6, cursor: 'pointer', background: 'transparent', color: C.text3, border: `1px solid ${C.border}` }}
+                >
+                  Avbryt
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmUnmark}
+                  disabled={unmarking}
+                  style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '7px 14px', borderRadius: 6, cursor: unmarking ? 'default' : 'pointer', background: C.danger, color: '#fff', border: 'none', opacity: unmarking ? 0.6 : 1 }}
+                >
+                  {unmarking ? 'Fjerner…' : 'Fjern merkingen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Kundevelger for "Dupliser som nytt tilbud" (sales-flyers Task 7, Step 3) —
+            enkel select over eksisterende kunder (samme customers-prop som QuoteBuilder
+            allerede får) + fritekst for en ny kunde, siden QuoteBuilders egen
+            CustomerSelector ikke er eksportert ut av den filen. */}
+        {showDuplicate && activeQuote && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px', zIndex: 50 }}
+            onClick={() => !duplicating && setShowDuplicate(false)}
+          >
+            <div
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', fontWeight: 600, color: C.text }}>
+                  Dupliser som nytt tilbud
+                </p>
+                <button
+                  onClick={() => setShowDuplicate(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text3, fontSize: '1.1rem', lineHeight: 1, padding: 4 }}
+                >
+                  ×
+                </button>
+              </div>
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text2 }}>
+                Oppretter et helt nytt prosjekt og tilbud, basert på &quot;{activeQuote.package_label}&quot;. Pakke-malen selv endres ikke.
+              </p>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                  Kunde
+                </label>
+                <select
+                  value={duplicateCustomerId}
+                  onChange={e => setDuplicateCustomerId(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                >
+                  <option value="">— Ny kunde —</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.customer_number ? ` — #${c.customer_number}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {!duplicateCustomerId && (
+                <div>
+                  <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                    Navn på ny kunde
+                  </label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={duplicateNewName}
+                    onChange={e => setDuplicateNewName(e.target.value)}
+                    placeholder="Kundenavn"
+                    style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                  />
+                </div>
+              )}
+              {duplicateError && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.danger }}>
+                  {duplicateError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleDuplicateSubmit}
+                disabled={duplicating}
+                style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 600, padding: '9px 18px', borderRadius: 8, cursor: duplicating ? 'default' : 'pointer', background: C.accent, color: '#fff', border: 'none', opacity: duplicating ? 0.6 : 1 }}
+              >
+                {duplicating ? 'Dupliserer…' : 'Dupliser'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

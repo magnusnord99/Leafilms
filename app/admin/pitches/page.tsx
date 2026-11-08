@@ -60,6 +60,7 @@ export default function PitchesPage() {
           customers(name)
         `)
         .neq('status', 'archived')
+        .eq('is_package_template', false)
         .order('updated_at', { ascending: false })
 
       if (error) throw error

@@ -23,7 +23,7 @@ export default function CustomersWidget() {
 
       const customerIds = customerList.map((c) => c.id)
       if (customerIds.length > 0) {
-        const { data: countsData } = await supabase.from('projects').select('customer_id').in('customer_id', customerIds)
+        const { data: countsData } = await supabase.from('projects').select('customer_id').in('customer_id', customerIds).eq('is_package_template', false)
         if (countsData) {
           const counts: Record<string, number> = {}
           countsData.forEach((p) => { if (p.customer_id) counts[p.customer_id] = (counts[p.customer_id] || 0) + 1 })

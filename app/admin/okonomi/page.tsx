@@ -288,6 +288,7 @@ export default function OkonomiPage() {
       .select('id, title, pipeline_stage, parent_project_id, updated_at, customers(name), quotes(id, status, quote_data, selected_addon_ids, created_at, is_current)')
       .neq('status', 'archived')
       .neq('status', 'lost')
+      .eq('is_package_template', false)
       .order('created_at', { ascending: false })
 
     const allRows = (data ?? []) as unknown as ProjectRow[]

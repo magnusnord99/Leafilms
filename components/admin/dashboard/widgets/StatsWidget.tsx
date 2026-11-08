@@ -19,10 +19,10 @@ export default function StatsWidget() {
   async function fetchData() {
     try {
       const [totalResult, pipelineResult, customersResult, activeProjectsResult] = await Promise.all([
-        supabase.from('projects').select('*', { count: 'exact', head: true }),
-        supabase.from('projects').select('*', { count: 'exact', head: true }).not('pipeline_stage', 'eq', 'lead'),
+        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('is_package_template', false),
+        supabase.from('projects').select('*', { count: 'exact', head: true }).not('pipeline_stage', 'eq', 'lead').eq('is_package_template', false),
         supabase.from('customers').select('*', { count: 'exact', head: true }),
-        supabase.from('projects').select('id').in('pipeline_stage', ACTIVE_STAGES),
+        supabase.from('projects').select('id').in('pipeline_stage', ACTIVE_STAGES).eq('is_package_template', false),
       ])
 
       setTotalProjects(totalResult.count ?? 0)

@@ -708,6 +708,18 @@ export type SalesFlyerView = {
   referrer: string | null
 }
 
+export type QuotePackageShowcaseKind = 'main_video' | 'social_clip' | 'photo'
+
+export type QuotePackageShowcaseItem = {
+  id: string
+  quote_id: string
+  kind: QuotePackageShowcaseKind
+  media_type: 'image' | 'video'
+  path: string
+  caption: string | null
+  order_index: number
+}
+
 export type Image = {
   id: string
   filename: string

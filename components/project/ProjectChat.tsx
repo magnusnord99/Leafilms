@@ -26,11 +26,6 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null))
-  }, [])
 
   useEffect(() => {
     getAllProfiles().then(setProfiles)

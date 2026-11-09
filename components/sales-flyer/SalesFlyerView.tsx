@@ -52,6 +52,59 @@ function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
 
+// Pakkekortets ikon-chips — ett ikon pr. leveransegruppe (hovedvideo/bilder/nedklipp), se
+// 2026-11-09-flyer-package-showcase-design.md §"Ikon-chips". Kun grupper med count > 0 vises;
+// en pakke uten leveranser (f.eks. en helt ny mal) viser ingen chip-rad.
+function VideoChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="15" height="14" rx="2" />
+      <path d="M17 10l5-3v10l-5-3" />
+    </svg>
+  )
+}
+
+function PhotoChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  )
+}
+
+function ClipChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
+    </svg>
+  )
+}
+
+function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; photo: number }) {
+  const chips: { icon: React.ReactNode; label: string }[] = [
+    { icon: <VideoChipIcon />, label: `${counts.hovedvideo} hovedvideo` },
+    { icon: <PhotoChipIcon />, label: `${counts.photo} bilder` },
+    { icon: <ClipChipIcon />, label: `${counts.klipp} nedklipp` },
+  ].filter((_, i) => [counts.hovedvideo, counts.photo, counts.klipp][i] > 0)
+
+  if (chips.length === 0) return null
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {chips.map((chip, i) => (
+        <span key={i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
+          {chip.icon}
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 type Field = keyof SalesFlyerUpdate
 type FlyerPackage = SalesFlyerWithRelations['packages'][number]
 
@@ -422,6 +475,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           </div>
         )}
         <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+        {renderDeliverableChips(pkg.deliverableCounts)}
         <div className="mt-8">
           {amount !== null ? (
             <>

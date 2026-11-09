@@ -153,6 +153,29 @@ export function getQuoteAmountExclVat(data: unknown, selectedAddonIds?: string[]
   return typeof finalPriceExclVat === 'number' ? finalPriceExclVat : null
 }
 
+// Pakkekortets ikon-chips (flyer-pakker) telles herfra — samme rå/konvertert-robusthet som
+// getQuoteAmountExclVat over, siden begge leser quotes.quote_data. Video-rader har ikke noe
+// quantity-felt (1 rad = 1 navngitt element, se DeliverableItem) og telles derfor som stykk,
+// gruppert på videoRole (udefinert → 'hovedvideo' — rent additivt, se migrasjon/feltkommentar
+// i lib/types.ts). Foto-rader telles på quantity, der en rad uten quantity satt ennå regnes
+// som 1 (en rad som finnes representerer minst ett element). 'annet'-rader er bevisst utelatt
+// — designet spesifiserer kun 3 chip-ikoner (video/bilde/klipp), se
+// 2026-11-09-flyer-package-showcase-design.md. Konvertert (akseptert) form har ingen
+// deliverables-liste og gir derfor alltid 0/0/0 her — amount-visningen er uendret av dette.
+export function getPackageDeliverableCounts(data: unknown): { hovedvideo: number; klipp: number; photo: number } {
+  const zero = { hovedvideo: 0, klipp: 0, photo: 0 }
+  if (!isBuilderData(data)) return zero
+  return (data.deliverables ?? []).reduce((acc, item) => {
+    if (item.type === 'video') {
+      const role = item.videoRole ?? 'hovedvideo'
+      acc[role] += 1
+    } else if (item.type === 'photo') {
+      acc.photo += item.quantity ?? 1
+    }
+    return acc
+  }, zero)
+}
+
 // selectedAddonIds er valgfri: uoppgitt = ingen tillegg inkludert (dagens oppførsel, brukt av
 // admin-byggeren og alle andre kallere). Når oppgitt (kundens avkryssede tillegg på den
 // offentlige pristilbudssiden) summeres tilleggenes poster inn i riktig kategori — samme

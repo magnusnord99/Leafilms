@@ -4,7 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
-import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+import { getQuoteAmountExclVat, getPackageDeliverableCounts } from '@/lib/quote-builder-utils'
 
 // Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
 // ALDRI hele Quote-raden. getSalesFlyerBySlug serialiseres som initialFlyer
@@ -21,6 +21,7 @@ export type SalesFlyerPackageItem = {
   package_label: string
   package_category: SalesFlyerPackageCategory
   amount: number
+  deliverableCounts: { hovedvideo: number; klipp: number; photo: number }
 }
 
 export type SalesFlyerWithRelations = SalesFlyer & {
@@ -153,6 +154,7 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
       package_label: row.quotes.package_label,
       package_category: row.quotes.package_category,
       amount: getQuoteAmountExclVat(row.quotes.quote_data) ?? 0,
+      deliverableCounts: getPackageDeliverableCounts(row.quotes.quote_data),
     }))
 }
 

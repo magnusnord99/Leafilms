@@ -84,6 +84,9 @@ export type DeliverableItem = {
   /** Lengde på video, valgt strukturert i stedet for fritekst — se DeliverablesButton. */
   durationValue?: number
   durationUnit?: 'sek' | 'min'
+  /** Skiller en hovedvideo-rad fra en nedklipp-rad for pakkekortets ikon-chips — se
+   * 2026-11-09-flyer-package-showcase-design.md. Rent additivt: udefinert = 'hovedvideo'. */
+  videoRole?: 'hovedvideo' | 'klipp'
 }
 
 export type Project = {

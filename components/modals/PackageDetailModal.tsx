@@ -35,11 +35,32 @@ const arrowButtonStyle: React.CSSProperties = {
   lineHeight: 1,
 }
 
+// pointer-events-none på strippen + pointer-events-auto kun på knappene: en
+// full-bredde stripe her ville ellers ligget rett over <video controls>-baren
+// (scrub/volum/fullskjerm) og svelget klikk over hele bredden. Knappene er nå
+// plassert vertikalt midt på mediet, ved venstre/høyre kant — ikke langs
+// bunnkanten der native kontroller ligger.
 function CarouselArrows({ onPrev, onNext }: { onPrev: () => void; onNext: () => void }) {
   return (
-    <div className="absolute inset-x-0 bottom-3 z-10 flex items-center justify-center gap-3">
-      <button type="button" onClick={onPrev} aria-label="Forrige" style={arrowButtonStyle}>‹</button>
-      <button type="button" onClick={onNext} aria-label="Neste" style={arrowButtonStyle}>›</button>
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-2">
+      <button
+        type="button"
+        onClick={onPrev}
+        aria-label="Forrige"
+        className="pointer-events-auto"
+        style={arrowButtonStyle}
+      >
+        ‹
+      </button>
+      <button
+        type="button"
+        onClick={onNext}
+        aria-label="Neste"
+        className="pointer-events-auto"
+        style={arrowButtonStyle}
+      >
+        ›
+      </button>
     </div>
   )
 }

@@ -87,8 +87,8 @@ function ClipChipIcon() {
 
 function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; photo: number }) {
   const chips: { icon: React.ReactNode; label: string }[] = [
-    { icon: <VideoChipIcon />, label: `${counts.hovedvideo} hovedvideo` },
-    { icon: <PhotoChipIcon />, label: `${counts.photo} bilder` },
+    { icon: <VideoChipIcon />, label: `${counts.hovedvideo} hovedvideo${counts.hovedvideo === 1 ? '' : 'er'}` },
+    { icon: <PhotoChipIcon />, label: `${counts.photo} bilde${counts.photo === 1 ? '' : 'r'}` },
     { icon: <ClipChipIcon />, label: `${counts.klipp} nedklipp` },
   ].filter((_, i) => [counts.hovedvideo, counts.photo, counts.klipp][i] > 0)
 

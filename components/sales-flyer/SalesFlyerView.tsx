@@ -19,6 +19,7 @@ import { CasePickerModal } from '@/components/modals/CasePickerModal'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
+import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
 import { supabase } from '@/lib/supabase'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
@@ -52,6 +53,59 @@ function toTitleCase(text: string): string {
 
 function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
+}
+
+// Pakkekortets ikon-chips — ett ikon pr. leveransegruppe (hovedvideo/bilder/nedklipp), se
+// 2026-11-09-flyer-package-showcase-design.md §"Ikon-chips". Kun grupper med count > 0 vises;
+// en pakke uten leveranser (f.eks. en helt ny mal) viser ingen chip-rad.
+function VideoChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="15" height="14" rx="2" />
+      <path d="M17 10l5-3v10l-5-3" />
+    </svg>
+  )
+}
+
+function PhotoChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  )
+}
+
+function ClipChipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
+    </svg>
+  )
+}
+
+function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; photo: number }) {
+  const chips: { icon: React.ReactNode; label: string }[] = [
+    { icon: <VideoChipIcon />, label: `${counts.hovedvideo} hovedvideo${counts.hovedvideo === 1 ? '' : 'er'}` },
+    { icon: <PhotoChipIcon />, label: `${counts.photo} bilde${counts.photo === 1 ? '' : 'r'}` },
+    { icon: <ClipChipIcon />, label: `${counts.klipp} nedklipp` },
+  ].filter((_, i) => [counts.hovedvideo, counts.photo, counts.klipp][i] > 0)
+
+  if (chips.length === 0) return null
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {chips.map((chip, i) => (
+        <span key={i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
+          {chip.icon}
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 type Field = keyof SalesFlyerUpdate
@@ -119,6 +173,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [packagesLoaded, setPackagesLoaded] = useState(false)
   const [packageMutating, setPackageMutating] = useState(false)
   const [packagesError, setPackagesError] = useState<string | null>(null)
+
+  // "Se mer"-modalen — id-en til pakke-kortets EGEN id (sales_flyer_packages-
+  // raden, pkg.id), ikke quote_id, siden det er feltet hvert kort allerede
+  // bruker som nøkkel.
+  const [detailPackageId, setDetailPackageId] = useState<string | null>(null)
+
 
   const slug = flyer.slug
   const engagementParagraphs = splitParagraphs(flyer.engagement_text)
@@ -408,6 +468,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     .map(category => ({ category, items: flyer.packages.filter(p => p.package_category === category) }))
     .filter(group => group.items.length > 0)
 
+  const detailPackage = flyer.packages.find(p => p.id === detailPackageId) ?? null
+
   const editableStyle = (extra?: React.CSSProperties): React.CSSProperties => ({ ...editableBase, ...extra })
   const heroHasMedia = Boolean(flyer.hero_video_path || flyer.hero_poster_path)
   const listError = casesError ?? packagesError
@@ -417,6 +479,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   function renderPackageCard(pkg: FlyerPackage, positionInGroup: number, groupSize: number) {
     const amount = pkg.amount
     const title = pkg.package_label
+    const hasShowcase = pkg.showcaseItems.length > 0
     return (
       <div key={pkg.id} className="relative flex flex-col justify-between rounded-[2px] p-6 md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {editing && (
@@ -426,7 +489,21 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <button onClick={() => removePackage(pkg.quote_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
           </div>
         )}
-        <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+        <div>
+          <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+          {renderDeliverableChips(pkg.deliverableCounts)}
+          {hasShowcase && (
+            <button
+              type="button"
+              onClick={() => setDetailPackageId(pkg.id)}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
+              style={{ color: GOLD, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Se mer
+              <span aria-hidden>→</span>
+            </button>
+          )}
+        </div>
         <div className="mt-8">
           {amount !== null ? (
             <>
@@ -857,6 +934,13 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         selectedVideoIds={EMPTY_SELECTION}
         maxSelection={1}
         category="hero"
+      />
+      <PackageDetailModal
+        key={detailPackage?.id ?? 'none'}
+        isOpen={detailPackage !== null}
+        onClose={() => setDetailPackageId(null)}
+        packageLabel={detailPackage?.package_label ?? ''}
+        items={detailPackage?.showcaseItems ?? []}
       />
     </main>
   )

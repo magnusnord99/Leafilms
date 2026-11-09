@@ -84,6 +84,9 @@ export type DeliverableItem = {
   /** Lengde på video, valgt strukturert i stedet for fritekst — se DeliverablesButton. */
   durationValue?: number
   durationUnit?: 'sek' | 'min'
+  /** Skiller en hovedvideo-rad fra en nedklipp-rad for pakkekortets ikon-chips — se
+   * 2026-11-09-flyer-package-showcase-design.md. Rent additivt: udefinert = 'hovedvideo'. */
+  videoRole?: 'hovedvideo' | 'klipp'
 }
 
 export type Project = {
@@ -705,6 +708,18 @@ export type SalesFlyerView = {
   flyer_id: string
   viewed_at: string
   referrer: string | null
+}
+
+export type QuotePackageShowcaseKind = 'main_video' | 'social_clip' | 'photo'
+
+export type QuotePackageShowcaseItem = {
+  id: string
+  quote_id: string
+  kind: QuotePackageShowcaseKind
+  media_type: 'image' | 'video'
+  path: string
+  caption: string | null
+  order_index: number
 }
 
 export type Image = {

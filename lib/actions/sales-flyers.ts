@@ -1,10 +1,10 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
+import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, QuotePackageShowcaseItem } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
-import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
+import { getQuoteAmountExclVat, getPackageDeliverableCounts } from '@/lib/quote-builder-utils'
 
 // Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
 // ALDRI hele Quote-raden. getSalesFlyerBySlug serialiseres som initialFlyer
@@ -21,6 +21,8 @@ export type SalesFlyerPackageItem = {
   package_label: string
   package_category: SalesFlyerPackageCategory
   amount: number
+  deliverableCounts: { hovedvideo: number; klipp: number; photo: number }
+  showcaseItems: QuotePackageShowcaseItem[]
 }
 
 export type SalesFlyerWithRelations = SalesFlyer & {
@@ -142,7 +144,7 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
   // Samme defensive filter som listPackageTemplateQuotes: package_category
   // (og dermed package_label) er nullbar i DB uavhengig av koblingen her —
   // en pakke uten kategori kan ikke plasseres i noen fane og utelates.
-  return rows
+  const packages = rows
     .filter((row): row is Row & { quotes: { package_label: string; package_category: SalesFlyerPackageCategory; quote_data: unknown } } =>
       row.quotes !== null && row.quotes.package_label !== null && row.quotes.package_category !== null
     )
@@ -153,7 +155,42 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
       package_label: row.quotes.package_label,
       package_category: row.quotes.package_category,
       amount: getQuoteAmountExclVat(row.quotes.quote_data) ?? 0,
+      deliverableCounts: getPackageDeliverableCounts(row.quotes.quote_data),
     }))
+
+  // Separat oppslag (ikke et embed over) fordi quote_package_showcase_items
+  // har en annen kardinalitet (0-mange pr. quote) enn quotes-embedet over, og
+  // fordi batch-henting via .in() på quote_id-listen er billigere enn ett
+  // PostgREST-embed pr. pakke.
+  const showcaseByQuoteId = await getShowcaseItemsByQuoteId(packages.map(p => p.quote_id))
+  return packages.map(p => ({ ...p, showcaseItems: showcaseByQuoteId.get(p.quote_id) ?? [] }))
+}
+
+// quote_package_showcase_items har ingen public/anon-policy (kun staff, se
+// migrasjon 193) — samme autorisasjonsbegrunnelse som resten av denne filen
+// for quotes/quote_data: en publisert flyer er anonymt besøkt, og uten
+// service-klienten her ville RLS stille nullet ut eksempelmedia for alle
+// ekte besøkende.
+async function getShowcaseItemsByQuoteId(quoteIds: string[]): Promise<Map<string, QuotePackageShowcaseItem[]>> {
+  const map = new Map<string, QuotePackageShowcaseItem[]>()
+  if (quoteIds.length === 0) return map
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('quote_package_showcase_items')
+    .select('*')
+    .in('quote_id', quoteIds)
+    .order('kind', { ascending: true })
+    .order('order_index', { ascending: true })
+  if (error) {
+    console.error('getShowcaseItemsByQuoteId:', error)
+    return map
+  }
+  for (const row of (data ?? []) as QuotePackageShowcaseItem[]) {
+    const existing = map.get(row.quote_id)
+    if (existing) existing.push(row)
+    else map.set(row.quote_id, [row])
+  }
+  return map
 }
 
 // Standard sitat-tekst for en ny flyer — en hilsen fra Leafilms, vist i

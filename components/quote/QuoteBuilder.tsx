@@ -631,7 +631,7 @@ function DeliverablesSection({
   items: DeliverableItem[]
   onChange: (items: DeliverableItem[]) => void
 }) {
-  const update = (id: string, field: 'type' | 'name' | 'format' | 'description' | 'quantity', value: string) =>
+  const update = (id: string, field: 'type' | 'name' | 'format' | 'description' | 'quantity' | 'videoRole', value: string) =>
     onChange(items.map(i => (i.id === id ? { ...i, [field]: field === 'quantity' ? (parseInt(value, 10) || undefined) : value } : i)))
   const add = () => onChange([...items, { id: newId(), type: 'video', name: '' }])
   const remove = (id: string) => onChange(items.filter(i => i.id !== id))
@@ -672,6 +672,16 @@ function DeliverablesSection({
                   <option value="photo">Foto</option>
                   <option value="annet">Annet</option>
                 </select>
+                {item.type === 'video' && (
+                  <select
+                    style={{ ...inputBase, width: 110, flexShrink: 0 }}
+                    value={item.videoRole ?? 'hovedvideo'}
+                    onChange={e => update(item.id, 'videoRole', e.target.value)}
+                  >
+                    <option value="hovedvideo">Hovedvideo</option>
+                    <option value="klipp">Nedklipp</option>
+                  </select>
+                )}
                 <input
                   style={{ ...inputBase, flex: 1 }}
                   value={item.name}

@@ -57,7 +57,8 @@ export default function PitchesPage() {
         .from('projects')
         .select(`
           id, title, status, client_name, pipeline_stage, project_type, updated_at,
-          customers(name)
+          customers(name),
+          sections(count)
         `)
         .neq('status', 'archived')
         .eq('is_package_template', false)
@@ -65,8 +66,12 @@ export default function PitchesPage() {
 
       if (error) throw error
 
-      type PitchRow = { id: string; title: string; status: 'draft' | 'published' | 'archived'; client_name: string | null; pipeline_stage: string | null; project_type: 'video' | 'photo' | 'mixed' | null; updated_at: string; customers?: { name: string | null } | null }
-      const allProjects: PitchProject[] = ((data || []) as unknown as PitchRow[]).map((p) => ({
+      type PitchRow = { id: string; title: string; status: 'draft' | 'published' | 'archived'; client_name: string | null; pipeline_stage: string | null; project_type: 'video' | 'photo' | 'mixed' | null; updated_at: string; customers?: { name: string | null } | null; sections?: { count: number }[] | null }
+      // Kun prosjekter som faktisk har en pitch (minst én seksjon) — samme definisjon som
+      // hasSections på prosjektsiden og hasAnySections på tilbudssiden (feedback e2697cc6).
+      const mapped: PitchProject[] = ((data || []) as unknown as PitchRow[])
+        .filter((p) => (p.sections?.[0]?.count ?? 0) > 0)
+        .map((p) => ({
         id: p.id,
         title: p.title,
         status: p.status,
@@ -76,18 +81,6 @@ export default function PitchesPage() {
         updated_at: p.updated_at,
         customer_name: p.customers?.name ?? null,
       }))
-
-      // En pitch er bare "laget" når prosjektet faktisk har minst én seksjon —
-      // ellers er det bare et prosjekt i pipelinen uten pitch-innhold ennå (feedback e2697cc6).
-      let mapped = allProjects
-      if (allProjects.length > 0) {
-        const { data: sectionRows } = await supabase
-          .from('sections')
-          .select('project_id')
-          .in('project_id', allProjects.map(p => p.id))
-        const projectIdsWithPitch = new Set((sectionRows ?? []).map((s: { project_id: string }) => s.project_id))
-        mapped = allProjects.filter(p => projectIdsWithPitch.has(p.id))
-      }
 
       setProjects(mapped)
 

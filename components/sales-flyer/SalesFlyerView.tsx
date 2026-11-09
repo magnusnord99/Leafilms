@@ -17,6 +17,7 @@ import { HeroMedia } from '@/components/marketing/HeroMedia'
 import { CasePickerModal } from '@/components/modals/CasePickerModal'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
+import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
 import { supabase } from '@/lib/supabase'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
@@ -166,6 +167,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [packagesLoaded, setPackagesLoaded] = useState(false)
   const [packageMutating, setPackageMutating] = useState(false)
   const [packagesError, setPackagesError] = useState<string | null>(null)
+
+  // "Se mer"-modalen — id-en til pakke-kortets EGEN id (sales_flyer_packages-
+  // raden, pkg.id), ikke quote_id, siden det er feltet hvert kort allerede
+  // bruker som nøkkel.
+  const [detailPackageId, setDetailPackageId] = useState<string | null>(null)
 
   const videoFileInputRef = useRef<HTMLInputElement>(null)
   const posterFileInputRef = useRef<HTMLInputElement>(null)
@@ -456,6 +462,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     .map(category => ({ category, items: flyer.packages.filter(p => p.package_category === category) }))
     .filter(group => group.items.length > 0)
 
+  const detailPackage = flyer.packages.find(p => p.id === detailPackageId) ?? null
+
   const editableStyle = (extra?: React.CSSProperties): React.CSSProperties => ({ ...editableBase, ...extra })
   const heroHasMedia = Boolean(flyer.hero_video_path || flyer.hero_poster_path)
   const listError = casesError ?? packagesError
@@ -465,6 +473,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   function renderPackageCard(pkg: FlyerPackage, positionInGroup: number, groupSize: number) {
     const amount = pkg.amount
     const title = pkg.package_label
+    const hasShowcase = pkg.showcaseItems.length > 0
     return (
       <div key={pkg.id} className="relative flex flex-col justify-between rounded-[2px] p-6 md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {editing && (
@@ -474,8 +483,21 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <button onClick={() => removePackage(pkg.quote_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
           </div>
         )}
-        <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
-        {renderDeliverableChips(pkg.deliverableCounts)}
+        <div>
+          <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+          {renderDeliverableChips(pkg.deliverableCounts)}
+          {hasShowcase && (
+            <button
+              type="button"
+              onClick={() => setDetailPackageId(pkg.id)}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
+              style={{ color: GOLD, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Se mer
+              <span aria-hidden>→</span>
+            </button>
+          )}
+        </div>
         <div className="mt-8">
           {amount !== null ? (
             <>
@@ -846,6 +868,13 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onSelect={handleImagePicked}
         selectedImageIds={EMPTY_SELECTION}
         maxSelection={1}
+      />
+      <PackageDetailModal
+        key={detailPackage?.id ?? 'none'}
+        isOpen={detailPackage !== null}
+        onClose={() => setDetailPackageId(null)}
+        packageLabel={detailPackage?.package_label ?? ''}
+        items={detailPackage?.showcaseItems ?? []}
       />
     </main>
   )

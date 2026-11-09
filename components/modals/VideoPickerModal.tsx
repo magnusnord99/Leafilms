@@ -38,10 +38,119 @@ export function VideoPickerModal({
     { value: 'urban', label: 'Urban' },
     { value: 'sport', label: 'Sport' }
   ]
+  const uploadCategories = categories.filter(c => c.value !== 'all')
+
+  // Last opp ny video uten å forlate plukkeren — samme begrunnelse som
+  // ImagePickerModal: biblioteket skal kunne fylles direkte fra "Velg
+  // video"-knappen, ikke kreve en tur til en egen /admin/videos/new-side.
+  const [mode, setMode] = useState<'browse' | 'upload'>('browse')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null)
+  const [uploadTitle, setUploadTitle] = useState('')
+  const [uploadCategory, setUploadCategory] = useState(category && category !== 'all' ? category : 'hero')
+  const [uploadTags, setUploadTags] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  function startUpload() {
+    setUploadError(null)
+    setMode('upload')
+  }
+
+  function cancelUpload() {
+    if (uploadPreview) URL.revokeObjectURL(uploadPreview)
+    setUploadFile(null)
+    setUploadPreview(null)
+    setUploadTitle('')
+    setUploadTags('')
+    setUploadError(null)
+    setMode('browse')
+  }
+
+  function handleUploadFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('video/')) {
+      setUploadError('Filen er ikke en video')
+      return
+    }
+    const maxSize = 50 * 1024 * 1024
+    if (file.size > maxSize) {
+      setUploadError(`Videoen er for stor (${(file.size / (1024 * 1024)).toFixed(1)}MB, maks 50MB)`)
+      return
+    }
+    setUploadError(null)
+    setUploadFile(file)
+    setUploadPreview(URL.createObjectURL(file))
+  }
+
+  async function submitUpload() {
+    if (!uploadFile) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const ext = uploadFile.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2)}.${ext}`
+      const filePath = `videos/${fileName}`
+
+      const { error: uploadErr } = await supabase.storage
+        .from('assets')
+        .upload(filePath, uploadFile, { cacheControl: '3600', upsert: false, contentType: uploadFile.type || 'video/mp4' })
+      if (uploadErr) throw uploadErr
+
+      let videoWidth: number | null = null
+      let videoHeight: number | null = null
+      let duration: number | null = null
+      try {
+        const videoEl = document.createElement('video')
+        videoEl.src = uploadPreview || URL.createObjectURL(uploadFile)
+        await new Promise((resolve, reject) => {
+          videoEl.onloadedmetadata = () => {
+            videoWidth = videoEl.videoWidth
+            videoHeight = videoEl.videoHeight
+            duration = Math.floor(videoEl.duration)
+            resolve(null)
+          }
+          videoEl.onerror = reject
+        })
+      } catch (err) {
+        console.warn('Could not extract video metadata:', err)
+      }
+
+      const tagsArray = uploadTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+
+      const { data: inserted, error: dbError } = await supabase
+        .from('video_library')
+        .insert({
+          filename: uploadFile.name,
+          file_path: filePath,
+          title: uploadTitle || null,
+          category: uploadCategory,
+          tags: tagsArray,
+          duration,
+          width: videoWidth,
+          height: videoHeight,
+          file_size: uploadFile.size,
+        })
+        .select('id, filename, file_path, title, category, thumbnail_path, duration')
+        .single()
+      if (dbError || !inserted) throw dbError || new Error('Ingen rad returnert')
+
+      setVideos(prev => [inserted as VideoLibrary, ...prev])
+      toggleSelection(inserted.id)
+      cancelUpload()
+    } catch (err) {
+      console.error('Error uploading video:', err)
+      setUploadError('Kunne ikke laste opp videoen')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
       setSelectedIds(selectedVideoIds)
+      setMode('browse')
     }
   }, [isOpen, selectedVideoIds])
 
@@ -118,17 +227,26 @@ export function VideoPickerModal({
         {/* Header */}
         <div className="p-6 border-b border-zinc-700">
           <div className="flex items-center justify-between">
-            <Heading as="h2" size="lg" className="text-white">Velg video</Heading>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Lukk"
-              style={{ color: '#62594E', lineHeight: 0 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
-              </svg>
-            </button>
+            <Heading as="h2" size="lg" className="text-white">
+              {mode === 'upload' ? 'Last opp ny video' : 'Velg video'}
+            </Heading>
+            <div className="flex items-center gap-3">
+              {mode === 'browse' && (
+                <Button type="button" variant="secondary" size="sm" onClick={startUpload}>
+                  + Last opp ny video
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Lukk"
+                style={{ color: '#62594E', lineHeight: 0 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+                </svg>
+              </button>
+            </div>
           </div>
           {limitWarning && (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', marginTop: 8 }}>
@@ -137,6 +255,71 @@ export function VideoPickerModal({
           )}
         </div>
 
+        {mode === 'upload' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-md space-y-4">
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleUploadFileChange}
+                className="hidden"
+                id="video-picker-upload"
+              />
+              <label htmlFor="video-picker-upload" className="cursor-pointer block">
+                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-600 transition-colors">
+                  {uploadPreview ? (
+                    <video src={uploadPreview} className="max-h-48 mx-auto rounded" controls />
+                  ) : (
+                    <Text variant="body" className="text-white">Klikk for å velge en video (maks 50MB)</Text>
+                  )}
+                </div>
+              </label>
+
+              <Input
+                label="Tittel (valgfritt)"
+                type="text"
+                value={uploadTitle}
+                onChange={(e) => setUploadTitle(e.target.value)}
+                className="bg-zinc-800 border-zinc-700 text-white"
+              />
+
+              <div>
+                <Text variant="body" className="mb-2 block text-white">Kategori</Text>
+                <select
+                  value={uploadCategory}
+                  onChange={(e) => setUploadCategory(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-2 text-white"
+                >
+                  {uploadCategories.map((cat) => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Tags (komma-separert, valgfritt)"
+                type="text"
+                value={uploadTags}
+                onChange={(e) => setUploadTags(e.target.value)}
+                className="bg-zinc-800 border-zinc-700 text-white"
+              />
+
+              {uploadError && (
+                <p style={{ fontSize: '0.75rem', color: '#E05A4A' }}>{uploadError}</p>
+              )}
+
+              <div className="flex gap-3">
+                <Button type="button" variant="secondary" onClick={cancelUpload} disabled={uploading}>
+                  Avbryt
+                </Button>
+                <Button type="button" variant="primary" onClick={submitUpload} disabled={uploading || !uploadFile}>
+                  {uploading ? 'Laster opp...' : 'Last opp og velg'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Search and Filters */}
         <div className="p-6 border-b border-zinc-700 space-y-4">
           <Input
@@ -169,9 +352,9 @@ export function VideoPickerModal({
           ) : videos.length === 0 ? (
             <div className="text-center py-12">
               <Text variant="body" className="text-white mb-4">Ingen videoer funnet</Text>
-              <Text variant="small" className="text-gray-400">
-                {searchQuery ? 'Prøv et annet søkeord' : 'Last opp videoer i videobiblioteket'}
-              </Text>
+              <Button type="button" variant="primary" onClick={startUpload}>
+                Last opp ny video
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -247,28 +430,31 @@ export function VideoPickerModal({
             </div>
           )}
         </div>
+        </>
+        )}
 
-        {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6 border-t border-zinc-700">
-          <Text variant="small" className="text-gray-400">
-            {selectedIds.length > 0
-              ? `${selectedIds.length} video${selectedIds.length > 1 ? 'er' : ''} valgt`
-              : 'Ingen videoer valgt'}
-          </Text>
-          <div className="flex gap-2 flex-shrink-0">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              Avbryt
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleConfirm}
-              disabled={selectedIds.length === 0}
-            >
-              Velg ({selectedIds.length})
-            </Button>
+        {mode === 'browse' && (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6 border-t border-zinc-700">
+            <Text variant="small" className="text-gray-400">
+              {selectedIds.length > 0
+                ? `${selectedIds.length} video${selectedIds.length > 1 ? 'er' : ''} valgt`
+                : 'Ingen videoer valgt'}
+            </Text>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                Avbryt
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirm}
+                disabled={selectedIds.length === 0}
+              >
+                Velg ({selectedIds.length})
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   )

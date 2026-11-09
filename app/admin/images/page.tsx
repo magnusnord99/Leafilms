@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import NextImage from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { Image } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
@@ -617,10 +618,12 @@ export default function ImagesPage() {
                   }}
                 >
                   <div style={{ position: 'relative', aspectRatio: '4/3', overflow: 'hidden', background: C.surface2 }}>
-                    <img
+                    <NextImage
                       src={imgUrl}
                       alt={image.title || image.filename}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      fill
+                      sizes={`${zoom}px`}
+                      style={{ objectFit: 'cover' }}
                       loading="lazy"
                     />
                     <label

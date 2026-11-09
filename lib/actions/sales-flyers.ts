@@ -156,6 +156,12 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
     }))
 }
 
+// Standard sitat-tekst for en ny flyer — en hilsen fra Leafilms, vist i
+// anførselstegn (se SalesFlyerView). Satt som verdi ved opprettelse, ikke
+// som DB-kolonnedefault, siden dette er redigerbar markedstekst som kan
+// endres over tid, ikke en strukturell standardverdi.
+const DEFAULT_ENGAGEMENT_TEXT = 'Vi tror på innhold som rører — som får folk til å stoppe opp, føle noe, og huske det.'
+
 export async function createSalesFlyer(slug: string): Promise<{ id: string } | { error: string }> {
   const trimmed = slug.trim().toLowerCase()
   const validationError = validateSlug(trimmed)
@@ -164,7 +170,7 @@ export async function createSalesFlyer(slug: string): Promise<{ id: string } | {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('sales_flyers')
-    .insert({ slug: trimmed, published: false })
+    .insert({ slug: trimmed, published: false, engagement_text: DEFAULT_ENGAGEMENT_TEXT })
     .select('id')
     .single()
 
@@ -251,7 +257,7 @@ export async function deleteSalesFlyer(id: string): Promise<{ ok: true } | { err
 export async function copyLibraryImageToFlyer(
   slug: string,
   imageId: string,
-  field: 'hero_poster'
+  field: 'hero_poster' | 'bts_image_1' | 'bts_image_2'
 ): Promise<{ url: string } | { error: string }> {
   const supabase = await createClient()
 
@@ -280,6 +286,48 @@ export async function copyLibraryImageToFlyer(
   if (uploadError) {
     console.error('copyLibraryImageToFlyer upload:', uploadError)
     return { error: 'Kunne ikke kopiere bildet' }
+  }
+
+  const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(destPath)
+  return { url: publicUrl }
+}
+
+// Samme kopier-ikke-referer-begrunnelse som copyLibraryImageToFlyer over:
+// /admin/videos sletter det underliggende storage-objektet når en video
+// slettes fra biblioteket, så en levende referanse ville kunne brekke en
+// publisert flyers hero uten varsel.
+export async function copyLibraryVideoToFlyer(
+  slug: string,
+  videoId: string,
+  field: 'hero_video'
+): Promise<{ url: string } | { error: string }> {
+  const supabase = await createClient()
+
+  const { data: video, error: videoError } = await supabase
+    .from('video_library')
+    .select('file_path')
+    .eq('id', videoId)
+    .maybeSingle()
+  if (videoError || !video) {
+    console.error('copyLibraryVideoToFlyer lookup:', videoError)
+    return { error: 'Fant ikke videoen' }
+  }
+
+  const { data: fileBlob, error: downloadError } = await supabase.storage.from('assets').download(video.file_path)
+  if (downloadError || !fileBlob) {
+    console.error('copyLibraryVideoToFlyer download:', downloadError)
+    return { error: 'Kunne ikke laste ned videoen' }
+  }
+
+  const ext = video.file_path.split('.').pop() ?? 'mp4'
+  const destPath = `sales-flyers/${slug}/${field}-${Math.random().toString(36).substring(2)}.${ext}`
+
+  const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, fileBlob, {
+    contentType: fileBlob.type || 'video/mp4',
+  })
+  if (uploadError) {
+    console.error('copyLibraryVideoToFlyer upload:', uploadError)
+    return { error: 'Kunne ikke kopiere videoen' }
   }
 
   const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(destPath)

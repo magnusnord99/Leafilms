@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
 import { splitParagraphs } from '@/lib/industry-landing-pages'
 import {
@@ -10,12 +10,14 @@ import {
   setSalesFlyerCases,
   setSalesFlyerPackages,
   copyLibraryImageToFlyer,
+  copyLibraryVideoToFlyer,
   getSalesFlyerBySlug,
 } from '@/lib/actions/sales-flyers'
 import { listPackageTemplateQuotes, PackageTemplateQuote } from '@/lib/actions/quote-packages'
 import { HeroMedia } from '@/components/marketing/HeroMedia'
 import { CasePickerModal } from '@/components/modals/CasePickerModal'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
+import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
 import { supabase } from '@/lib/supabase'
 
@@ -93,7 +95,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // kunne bli usynlig fordi et HELT ANNET felt lagres (og lykkes) rett etter.
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({})
   const [savingFields, setSavingFields] = useState<Set<Field>>(new Set())
-  const [imagePickerOpen, setImagePickerOpen] = useState(false)
+  // Samme ImagePickerModal gjenbrukes for tre ulike bildefelt (hero-poster,
+  // de to BTS-bildene) — target husker hvilket felt plukkeren nettopp åpnet
+  // for, siden handleImagePicked ellers ikke vet hvor valget skal lagres.
+  const [imagePickerTarget, setImagePickerTarget] = useState<'hero_poster' | 'bts_image_1' | 'bts_image_2' | null>(null)
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false)
 
   const [casePickerOpen, setCasePickerOpen] = useState(false)
   const [pendingCaseIds, setPendingCaseIds] = useState<string[]>([])
@@ -113,9 +119,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [packagesLoaded, setPackagesLoaded] = useState(false)
   const [packageMutating, setPackageMutating] = useState(false)
   const [packagesError, setPackagesError] = useState<string | null>(null)
-
-  const videoFileInputRef = useRef<HTMLInputElement>(null)
-  const posterFileInputRef = useRef<HTMLInputElement>(null)
 
   const slug = flyer.slug
   const engagementParagraphs = splitParagraphs(flyer.engagement_text)
@@ -171,52 +174,54 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     )
   }
 
-  async function uploadToStorage(file: File, prefix: string): Promise<string | null> {
-    try {
-      const ext = file.name.split('.').pop()
-      const fileName = `${prefix}-${Math.random().toString(36).substring(2)}.${ext}`
-      const filePath = `sales-flyers/${slug}/${fileName}`
-      const { error } = await supabase.storage.from('assets').upload(filePath, file)
-      if (error) {
-        console.error('uploadToStorage:', error)
-        return null
-      }
-      const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(filePath)
-      return publicUrl
-    } catch (err) {
-      console.error('uploadToStorage:', err)
-      return null
-    }
-  }
-
-  // Opplastingen markeres som "lagrer" mens den pågår (en hero-video kan ta
-  // en stund) — ellers ser det ut som ingenting skjer før saveField starter.
-  async function handleMediaFileChange(file: File, field: 'hero_video_path' | 'hero_poster_path') {
+  // Hero-media velges alltid fra biblioteket (video_library/images), aldri
+  // en direkte rå-opplasting her — Magnus var eksplisitt på dette. Biblioteks-
+  // plukkerne (VideoPickerModal/ImagePickerModal) har sin egen "last opp ny"-
+  // flyt innebygd, så en ny video/bilde kan legges til biblioteket uten å
+  // forlate denne plukkeren. Selve filen KOPIERES inn i flyerens egne
+  // sales-flyers/${slug}/-mappe (copyLibraryImageToFlyer/copyLibraryVideoToFlyer)
+  // i stedet for å peke direkte på biblioteks-raden — samme begrunnelse som på
+  // bransjesidene: en senere sletting i biblioteket skal ikke kunne brekke en
+  // allerede publisert flyer.
+  async function handleVideoPicked(videoIds: string[]) {
+    setVideoPickerOpen(false)
+    if (videoIds.length === 0) return
+    const field = 'hero_video_path'
     markSaving(field, true)
-    const url = await uploadToStorage(file, field === 'hero_video_path' ? 'hero-video' : 'hero-poster')
-    if (url) {
-      set(field, url)
-      await saveField(field, url)
-    } else {
-      markSaving(field, false)
-      setFieldErrors(prev => ({ ...prev, [field]: 'kunne ikke laste opp' }))
-    }
-  }
-
-  async function handleImagePicked(imageIds: string[]) {
-    setImagePickerOpen(false)
-    if (imageIds.length === 0) return
-    const field = 'hero_poster_path'
     try {
-      const result = await copyLibraryImageToFlyer(slug, imageIds[0], 'hero_poster')
+      const result = await copyLibraryVideoToFlyer(slug, videoIds[0], 'hero_video')
       if ('url' in result) {
         set(field, result.url)
         await saveField(field, result.url)
       } else {
+        markSaving(field, false)
+        setFieldErrors(prev => ({ ...prev, [field]: result.error }))
+      }
+    } catch (err) {
+      console.error('handleVideoPicked:', err)
+      markSaving(field, false)
+      setFieldErrors(prev => ({ ...prev, [field]: 'sjekk nettforbindelsen' }))
+    }
+  }
+
+  async function handleImagePicked(imageIds: string[]) {
+    const target = imagePickerTarget
+    setImagePickerTarget(null)
+    if (imageIds.length === 0 || !target) return
+    const field = target === 'hero_poster' ? 'hero_poster_path' : target === 'bts_image_1' ? 'bts_image_1_path' : 'bts_image_2_path'
+    markSaving(field, true)
+    try {
+      const result = await copyLibraryImageToFlyer(slug, imageIds[0], target)
+      if ('url' in result) {
+        set(field, result.url)
+        await saveField(field, result.url)
+      } else {
+        markSaving(field, false)
         setFieldErrors(prev => ({ ...prev, [field]: result.error }))
       }
     } catch (err) {
       console.error('handleImagePicked:', err)
+      markSaving(field, false)
       setFieldErrors(prev => ({ ...prev, [field]: 'sjekk nettforbindelsen' }))
     }
   }
@@ -431,6 +436,24 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           ) : (
             <p className="text-sm" style={{ color: MUTED }}>Pris på forespørsel</p>
           )}
+          {/* Egen CTA pr. pakke — mailto med pakkenavnet i emnefeltet, så
+              henvendelsen allerede sier hvilken pakke det gjelder. Samme
+              cta_email som flyerens hoved-CTA, siden det er én mottaker pr.
+              flyer, ikke pr. pakke. */}
+          {flyer.cta_email ? (
+            <a
+              href={`mailto:${flyer.cta_email}?subject=${encodeURIComponent(`Forespørsel: ${title}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${title}". Kan dere ta kontakt?`)}`}
+              className="mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] transition hover:opacity-80"
+              style={{ color: GOLD }}
+            >
+              Spør om denne pakken
+              <span aria-hidden>→</span>
+            </a>
+          ) : editing ? (
+            <p className="mt-6 text-xs" style={{ color: '#E05A4A' }}>
+              Ingen CTA-e-post satt — legg den inn under ⚙ Innstillinger.
+            </p>
+          ) : null}
         </div>
       </div>
     )
@@ -540,18 +563,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
         {editing && (
           <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 20, display: 'flex', gap: 8, flexWrap: 'wrap', maxWidth: 'calc(100% - 32px)' }}>
-            <input ref={videoFileInputRef} type="file" accept="video/*" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleMediaFileChange(f, 'hero_video_path'); e.target.value = '' }} />
-            <button onClick={() => videoFileInputRef.current?.click()} disabled={savingFields.has('hero_video_path')} style={smallControl}>
-              {savingFields.has('hero_video_path') ? 'Laster opp video…' : 'Last opp video'}
+            <button onClick={() => setVideoPickerOpen(true)} disabled={savingFields.has('hero_video_path')} style={smallControl}>
+              {savingFields.has('hero_video_path') ? 'Henter video…' : 'Velg video'}
             </button>
-            <input ref={posterFileInputRef} type="file" accept="image/*" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleMediaFileChange(f, 'hero_poster_path'); e.target.value = '' }} />
-            <button onClick={() => posterFileInputRef.current?.click()} disabled={savingFields.has('hero_poster_path')} style={smallControl}>
-              Last opp poster
-            </button>
-            <button onClick={() => setImagePickerOpen(true)} style={smallControl}>
-              Velg poster fra bibliotek
+            <button onClick={() => setImagePickerTarget('hero_poster')} disabled={savingFields.has('hero_poster_path')} style={smallControl}>
+              {savingFields.has('hero_poster_path') ? 'Henter bilde…' : 'Velg bilde'}
             </button>
           </div>
         )}
@@ -642,36 +658,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         </section>
       )}
 
-      {/* ── Engasjement-tekst ── */}
-      {(engagementParagraphs.length > 0 || editing) && (
-        <section className="px-6 py-20 md:px-16 md:py-28" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <div className="max-w-3xl">
-            {editing ? (
-              <>
-                <textarea
-                  value={flyer.engagement_text}
-                  placeholder="Kort tekst om hvorfor godt innhold engasjerer"
-                  onChange={e => set('engagement_text', e.target.value)}
-                  onBlur={e => saveField('engagement_text', e.target.value)}
-                  rows={6}
-                  className="font-display text-2xl leading-snug md:text-4xl"
-                  style={editableStyle({ color: CREAM, fontWeight: 300 })}
-                />
-                <FieldError field="engagement_text" />
-              </>
-            ) : (
-              <div className="space-y-6">
-                {engagementParagraphs.map((paragraph, index) => (
-                  <p key={index} className="font-display text-2xl leading-snug md:text-4xl" style={{ color: CREAM, fontWeight: 300 }}>
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
       {/* ── Pakker ── */}
       {(packagesByCategory.length > 0 || editing) && (
         <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
@@ -706,6 +692,77 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               </button>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── Engasjement-tekst — vises som et sitat/hilsen fra Leafilms, ikke
+          løpende brødtekst. Standardverdi satt i createSalesFlyer, redigerbar
+          per flyer. */}
+      {(engagementParagraphs.length > 0 || editing) && (
+        <section className="px-6 py-20 text-center md:px-16 md:py-28" style={{ borderTop: `1px solid ${BORDER}` }}>
+          <div className="mx-auto max-w-3xl">
+            <span className="font-display block select-none" aria-hidden style={{ color: GOLD, fontSize: '4.5rem', lineHeight: 0.5, fontWeight: 300 }}>&ldquo;</span>
+            {editing ? (
+              <>
+                <textarea
+                  value={flyer.engagement_text}
+                  placeholder="Kort tekst om hvorfor godt innhold engasjerer"
+                  onChange={e => set('engagement_text', e.target.value)}
+                  onBlur={e => saveField('engagement_text', e.target.value)}
+                  rows={4}
+                  className="font-display text-center text-2xl italic leading-snug md:text-4xl"
+                  style={editableStyle({ color: CREAM, fontWeight: 300 })}
+                />
+                <FieldError field="engagement_text" />
+              </>
+            ) : (
+              <div className="space-y-6">
+                {engagementParagraphs.map((paragraph, index) => (
+                  <p key={index} className="font-display text-2xl italic leading-snug md:text-4xl" style={{ color: CREAM, fontWeight: 300 }}>
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            )}
+            <p className="mt-8 text-xs font-medium uppercase tracking-[0.3em]" style={{ color: GOLD }}>— Leafilms</p>
+          </div>
+        </section>
+      )}
+
+      {/* ── BTS-bilder — to bilder side ved side, rett under sitatet ── */}
+      {(flyer.bts_image_1_path || flyer.bts_image_2_path || editing) && (
+        <section className="grid grid-cols-2">
+          {([
+            { path: flyer.bts_image_1_path, field: 'bts_image_1_path' as const, target: 'bts_image_1' as const },
+            { path: flyer.bts_image_2_path, field: 'bts_image_2_path' as const, target: 'bts_image_2' as const },
+          ]).map(({ path, field, target }) => (
+            <div key={field} className="relative aspect-square md:aspect-[4/5]" style={{ background: SURFACE }}>
+              {path ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : editing ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="text-xs" style={{ color: SUBTLE }}>Ingen bilde ennå</p>
+                </div>
+              ) : null}
+              {editing && (
+                <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12 }}>
+                  <button
+                    onClick={() => setImagePickerTarget(target)}
+                    disabled={savingFields.has(field)}
+                    style={smallControl}
+                  >
+                    {savingFields.has(field) ? 'Henter bilde…' : 'Velg bilde'}
+                  </button>
+                  {fieldErrors[field] && (
+                    <div style={{ marginTop: 4, background: '#fff', borderRadius: 6, padding: '4px 10px', display: 'inline-block' }}>
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       )}
 
@@ -787,11 +844,19 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onSave={handlePackagePickerSave}
       />
       <ImagePickerModal
-        isOpen={imagePickerOpen}
-        onClose={() => setImagePickerOpen(false)}
+        isOpen={imagePickerTarget !== null}
+        onClose={() => setImagePickerTarget(null)}
         onSelect={handleImagePicked}
         selectedImageIds={EMPTY_SELECTION}
         maxSelection={1}
+      />
+      <VideoPickerModal
+        isOpen={videoPickerOpen}
+        onClose={() => setVideoPickerOpen(false)}
+        onSelect={handleVideoPicked}
+        selectedVideoIds={EMPTY_SELECTION}
+        maxSelection={1}
+        category="hero"
       />
     </main>
   )

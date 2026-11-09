@@ -676,6 +676,8 @@ export type SalesFlyer = {
   hero_poster_path: string | null
   headline: string
   engagement_text: string
+  bts_image_1_path: string | null
+  bts_image_2_path: string | null
   cta_headline: string
   cta_subtext: string
   cta_email: string

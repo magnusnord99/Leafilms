@@ -37,6 +37,103 @@ export function ImagePickerModal({
     ...categoryList.map(cat => ({ value: cat.slug, label: cat.label })),
   ]
 
+  // Last opp nytt bilde uten å forlate plukkeren — i stedet for det gamle
+  // window.open('/admin/images/new')-unnslippshullet, som kun dukket opp når
+  // biblioteket allerede var tomt og ikke valgte det nye bildet automatisk.
+  const [mode, setMode] = useState<'browse' | 'upload'>('browse')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null)
+  const [uploadTitle, setUploadTitle] = useState('')
+  const [uploadCategory, setUploadCategory] = useState('')
+  const [uploadTags, setUploadTags] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!uploadCategory && categoryList.length > 0) setUploadCategory(categoryList[0].slug)
+  }, [categoryList, uploadCategory])
+
+  function startUpload() {
+    setUploadError(null)
+    setMode('upload')
+  }
+
+  function cancelUpload() {
+    if (uploadPreview) URL.revokeObjectURL(uploadPreview)
+    setUploadFile(null)
+    setUploadPreview(null)
+    setUploadTitle('')
+    setUploadTags('')
+    setUploadError(null)
+    setMode('browse')
+  }
+
+  function handleUploadFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Filen er ikke et bilde')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Bildet er for stort (maks 10MB)')
+      return
+    }
+    setUploadError(null)
+    setUploadFile(file)
+    setUploadPreview(URL.createObjectURL(file))
+  }
+
+  async function submitUpload() {
+    if (!uploadFile) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const ext = uploadFile.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2)}.${ext}`
+      const filePath = `images/${fileName}`
+
+      const { error: uploadErr } = await supabase.storage
+        .from('assets')
+        .upload(filePath, uploadFile, { cacheControl: '3600', upsert: false })
+      if (uploadErr) throw uploadErr
+
+      const dims = await new Promise<{ width: number; height: number }>((resolve) => {
+        const img = new window.Image()
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+        img.onerror = () => resolve({ width: 0, height: 0 })
+        img.src = uploadPreview || URL.createObjectURL(uploadFile)
+      })
+
+      const tagsArray = uploadTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+
+      const { data: inserted, error: dbError } = await supabase
+        .from('images')
+        .insert({
+          filename: uploadFile.name,
+          file_path: filePath,
+          title: uploadTitle || null,
+          category: uploadCategory || null,
+          tags: tagsArray,
+          width: dims.width || null,
+          height: dims.height || null,
+          file_size: uploadFile.size,
+        })
+        .select('id, filename, file_path, title, category, subcategory, tags')
+        .single()
+      if (dbError || !inserted) throw dbError || new Error('Ingen rad returnert')
+
+      setImages(prev => [inserted as Image, ...prev])
+      toggleSelection(inserted.id)
+      cancelUpload()
+    } catch (err) {
+      console.error('Error uploading image:', err)
+      setUploadError('Kunne ikke laste opp bildet')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   // Rediger navn/tags direkte her — uten dette må man forlate pitchen og inn i det separate
   // bildebiblioteket for å f.eks. legge til en manglende tag (feedback 3bba01ce).
   const [editingImageId, setEditingImageId] = useState<string | null>(null)
@@ -74,6 +171,7 @@ export function ImagePickerModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedIds(selectedImageIds)
+      setMode('browse')
     }
   }, [isOpen, selectedImageIds])
 
@@ -162,19 +260,26 @@ export function ImagePickerModal({
                 {maxSelection && ` (maks ${maxSelection})`}
               </Heading>
               <Text variant="muted">
-                Klikk for å velge/fjerne bilder
+                {mode === 'upload' ? 'Last opp et nytt bilde til biblioteket' : 'Klikk for å velge/fjerne bilder'}
               </Text>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Lukk"
-              style={{ color: '#62594E', lineHeight: 0, flexShrink: 0, marginLeft: 16 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-3 flex-shrink-0" style={{ marginLeft: 16 }}>
+              {mode === 'browse' && (
+                <Button type="button" variant="secondary" size="sm" onClick={startUpload}>
+                  + Last opp nytt bilde
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Lukk"
+                style={{ color: '#62594E', lineHeight: 0 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" d="M2 2l12 12M14 2L2 14" />
+                </svg>
+              </button>
+            </div>
           </div>
           {limitWarning && (
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', color: '#C49434', marginTop: 8 }}>
@@ -183,6 +288,69 @@ export function ImagePickerModal({
           )}
         </div>
 
+        {mode === 'upload' ? (
+          <div className="flex-1 overflow-y-auto min-h-0" data-lenis-prevent>
+            <div className="max-w-md space-y-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleUploadFileChange}
+                className="hidden"
+                id="image-picker-upload"
+              />
+              <label htmlFor="image-picker-upload" className="cursor-pointer block">
+                <div className="border-2 border-dashed border-admin-border rounded-lg p-6 text-center hover:border-zinc-500 transition-colors">
+                  {uploadPreview ? (
+                    <img src={uploadPreview} alt="" className="max-h-48 mx-auto rounded object-contain" />
+                  ) : (
+                    <Text variant="body">Klikk for å velge et bilde</Text>
+                  )}
+                </div>
+              </label>
+
+              <Input
+                label="Tittel (valgfritt)"
+                type="text"
+                value={uploadTitle}
+                onChange={(e) => setUploadTitle(e.target.value)}
+              />
+
+              <div>
+                <Text variant="body" className="mb-2 block">Kategori</Text>
+                <select
+                  value={uploadCategory}
+                  onChange={(e) => setUploadCategory(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-2 text-white"
+                >
+                  {categoryList.map((cat) => (
+                    <option key={cat.slug} value={cat.slug}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Tags (komma-separert, valgfritt)"
+                type="text"
+                value={uploadTags}
+                onChange={(e) => setUploadTags(e.target.value)}
+              />
+
+              {uploadError && (
+                <p style={{ fontSize: '0.75rem', color: '#E05A4A' }}>{uploadError}</p>
+              )}
+
+              <div className="flex gap-3">
+                <Button type="button" variant="secondary" onClick={cancelUpload} disabled={uploading}>
+                  Avbryt
+                </Button>
+                <Button type="button" variant="primary" onClick={submitUpload} disabled={uploading || !uploadFile}>
+                  {uploading ? 'Laster opp...' : 'Last opp og velg'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Søk og filtrering */}
         <div className="mb-6 space-y-4 flex-shrink-0">
           <Input
@@ -313,35 +481,35 @@ export function ImagePickerModal({
               <Text variant="body" className="mb-4">
                 Ingen bilder funnet
               </Text>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => window.open('/admin/images/new', '_blank')}
-              >
-                Last opp bilde
+              <Button type="button" variant="primary" onClick={startUpload}>
+                Last opp nytt bilde
               </Button>
             </div>
           )}
         </div>
+        </>
+        )}
 
-        <div className="flex gap-4 pt-6 border-t border-admin-border flex-shrink-0">
-          <Button
-            type="button"
-            onClick={onClose}
-            variant="secondary"
-            className="flex-1"
-          >
-            Avbryt
-          </Button>
-          <Button
-            type="button"
-            onClick={handleConfirm}
-            variant="primary"
-            className="flex-1"
-          >
-            Bekreft ({selectedIds.length} valgt)
-          </Button>
-        </div>
+        {mode === 'browse' && (
+          <div className="flex gap-4 pt-6 border-t border-admin-border flex-shrink-0">
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="secondary"
+              className="flex-1"
+            >
+              Avbryt
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirm}
+              variant="primary"
+              className="flex-1"
+            >
+              Bekreft ({selectedIds.length} valgt)
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   )

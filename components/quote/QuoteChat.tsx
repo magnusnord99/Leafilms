@@ -36,6 +36,11 @@ export default function QuoteChat({
   const [unread, setUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null))
+  }, [])
   const messagesRef = useRef<QuoteMessage[]>([])
 
   // Deep-link fra varsel — åpne chatten automatisk (samme mønster som TaskChatToggle)
@@ -259,8 +264,10 @@ export default function QuoteChat({
               Ingen meldinger ennå. Bruk @navn for å tagge noen.
             </p>
           )}
-          {messages.map(msg => (
-            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+          {messages.map(msg => {
+            const isMe = currentUserId === msg.user_id
+            return (
+            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.text3 }}>
                   {msg.user?.name ?? msg.user?.email ?? 'Ukjent'}
@@ -272,9 +279,9 @@ export default function QuoteChat({
               <div style={{
                 maxWidth: '90%',
                 padding: '8px 12px',
-                borderRadius: '12px 12px 12px 4px',
-                background: C.surface,
-                border: `1px solid ${C.border}`,
+                borderRadius: isMe ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                background: isMe ? C.accentBg : C.surface,
+                border: `1px solid ${isMe ? 'rgba(124,92,252,0.2)' : C.border}`,
               }}>
                 <p style={{
                   fontFamily: 'var(--font-dm-sans)',
@@ -296,7 +303,8 @@ export default function QuoteChat({
                 onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
               />
             </div>
-          ))}
+          )
+          })}
           <div ref={bottomRef} />
         </div>
 

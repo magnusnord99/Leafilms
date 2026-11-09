@@ -57,7 +57,8 @@ export default function PitchesPage() {
         .from('projects')
         .select(`
           id, title, status, client_name, pipeline_stage, project_type, updated_at,
-          customers(name)
+          customers(name),
+          sections(count)
         `)
         .neq('status', 'archived')
         .eq('is_package_template', false)
@@ -65,8 +66,12 @@ export default function PitchesPage() {
 
       if (error) throw error
 
-      type PitchRow = { id: string; title: string; status: 'draft' | 'published' | 'archived'; client_name: string | null; pipeline_stage: string | null; project_type: 'video' | 'photo' | 'mixed' | null; updated_at: string; customers?: { name: string | null } | null }
-      const mapped: PitchProject[] = ((data || []) as unknown as PitchRow[]).map((p) => ({
+      type PitchRow = { id: string; title: string; status: 'draft' | 'published' | 'archived'; client_name: string | null; pipeline_stage: string | null; project_type: 'video' | 'photo' | 'mixed' | null; updated_at: string; customers?: { name: string | null } | null; sections?: { count: number }[] | null }
+      // Kun prosjekter som faktisk har en pitch (minst én seksjon) — samme definisjon som
+      // hasSections på prosjektsiden og hasAnySections på tilbudssiden.
+      const mapped: PitchProject[] = ((data || []) as unknown as PitchRow[])
+        .filter((p) => (p.sections?.[0]?.count ?? 0) > 0)
+        .map((p) => ({
         id: p.id,
         title: p.title,
         status: p.status,

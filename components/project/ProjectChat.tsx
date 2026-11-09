@@ -23,11 +23,13 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
   const [unread, setUnread] = useState(0)
   const [profiles, setProfiles] = useState<MentionableProfile[]>([])
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
 
   useEffect(() => {
     getAllProfiles().then(setProfiles)
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
   }, [])
 
   // Deep-link fra varsel — åpne chatten automatisk (samme mønster som TaskChatToggle)
@@ -300,53 +302,56 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
               Ingen meldinger ennå
             </p>
           )}
-          {messages.map((msg) => (
-            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.65rem',
-                  fontWeight: 500,
-                  color: C.text3,
+          {messages.map((msg) => {
+            const isMe = currentUserId === msg.user_id
+            return (
+              <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: isMe ? C.accent : C.text3,
+                  }}>
+                    {isMe ? 'Du' : (msg.user_name || 'Ukjent')}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.6rem',
+                    color: C.text3,
+                  }}>
+                    {formatDate(msg.created_at)} {formatTime(msg.created_at)}
+                  </span>
+                </div>
+                <div style={{
+                  maxWidth: '90%',
+                  padding: '8px 12px',
+                  borderRadius: isMe ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                  background: isMe ? C.accentBg : C.surface,
+                  border: `1px solid ${isMe ? 'rgba(124,92,252,0.2)' : C.border}`,
                 }}>
-                  {msg.user_name || 'Ukjent'}
-                </span>
-                <span style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.6rem',
-                  color: C.text3,
-                }}>
-                  {formatDate(msg.created_at)} {formatTime(msg.created_at)}
-                </span>
+                  <p style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.78rem',
+                    color: C.text,
+                    lineHeight: 1.5,
+                    margin: 0,
+                    wordBreak: 'break-word',
+                  }}>
+                    {splitMentionSegments(msg.content, msg.mentions, profiles).map((seg, i) =>
+                      seg.isMention
+                        ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
+                        : <span key={i}>{seg.text}</span>
+                    )}
+                  </p>
+                </div>
+                <MessageReactions
+                  reactions={reactions[msg.id] ?? []}
+                  onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+                />
               </div>
-              <div style={{
-                maxWidth: '90%',
-                padding: '8px 12px',
-                borderRadius: '12px 12px 12px 4px',
-                background: C.surface,
-                border: `1px solid ${C.border}`,
-              }}>
-                <p style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.78rem',
-                  color: C.text,
-                  lineHeight: 1.5,
-                  margin: 0,
-                  wordBreak: 'break-word',
-                }}>
-                  {splitMentionSegments(msg.content, msg.mentions, profiles).map((seg, i) =>
-                    seg.isMention
-                      ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
-                      : <span key={i}>{seg.text}</span>
-                  )}
-                </p>
-              </div>
-              <MessageReactions
-                reactions={reactions[msg.id] ?? []}
-                onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
-              />
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
 

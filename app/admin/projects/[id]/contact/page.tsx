@@ -10,11 +10,11 @@ import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { ColdEmailCard } from '@/components/admin/ColdEmailCard'
 import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
 import { LEAD_TEMPERATURE_CONFIG } from '@/lib/lead-temperature'
-import { ProjectMessage } from '@/lib/types'
 import { getStageAccess } from '@/lib/pipeline-stage-lock'
 import { STAGE_LABEL } from '@/lib/pipeline-ui'
 import { PastStageBanner } from '@/components/admin/PastStageBanner'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
+import { ProjectChat } from '@/components/project/ProjectChat'
 import type { PipelineStage } from '@/lib/types'
 import { C } from '@/lib/admin-theme'
 
@@ -116,25 +116,6 @@ export default function ProjectContactPage() {
   const [leadSaved, setLeadSaved] = useState(false)
   const leadSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [messages, setMessages] = useState<ProjectMessage[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [sendingMsg, setSendingMsg] = useState(false)
-  const chatEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  async function fetchMessages() {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/messages`)
-      if (res.ok) {
-        const { messages: data } = await res.json()
-        setMessages(data ?? [])
-      }
-    } catch { /* ignore */ }
-  }
-
   useEffect(() => {
     Promise.all([
       getProjectHub(projectId),
@@ -161,27 +142,7 @@ export default function ProjectContactPage() {
       setNotes(notesToHtml(leadData?.notes ?? ''))
       setLoading(false)
     })
-    fetchMessages()
   }, [projectId])
-
-  async function handleSendMessage() {
-    if (!newMessage.trim() || sendingMsg) return
-    setSendingMsg(true)
-    const content = newMessage.trim()
-    setNewMessage('')
-    try {
-      const res = await fetch(`/api/projects/${projectId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      })
-      if (res.ok) {
-        const { message } = await res.json()
-        setMessages(prev => [...prev, message])
-      }
-    } catch { /* ignore */ }
-    setSendingMsg(false)
-  }
 
   async function handleStatusChange(status: LeadStatus) {
     if (!lead) return
@@ -671,86 +632,10 @@ export default function ProjectContactPage() {
           </div>
         </div>
 
-        {/* Chat */}
-        <div style={{ marginTop: 28 }}>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.text3, marginBottom: 14 }}>
-            Intern chat
-          </p>
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            {/* Meldinger */}
-            <div style={{ minHeight: 120, maxHeight: 340, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {messages.length === 0 ? (
-                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', color: C.text3, textAlign: 'center', marginTop: 16 }}>
-                  Ingen meldinger ennå. Skriv en logg eller notat om kontakten.
-                </p>
-              ) : (
-                messages.map(msg => (
-                  <div key={msg.id} style={{ display: 'flex', gap: 10 }}>
-                    <span style={{
-                      width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-                      background: C.surface2, border: `1px solid ${C.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', fontWeight: 700, color: C.text2,
-                      marginTop: 1,
-                    }}>
-                      {(msg.user_name ?? '?')[0].toUpperCase()}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2 }}>
-                          {msg.user_name ?? 'Ukjent'}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: C.text3 }}>
-                          {new Date(msg.created_at).toLocaleString('nb-NO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', color: C.text, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {msg.content}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Input */}
-            <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-              <textarea
-                value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() } }}
-                placeholder="Logg en samtale, send en oppdatering... (Enter for å sende)"
-                rows={2}
-                style={{
-                  flex: 1, fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem',
-                  color: C.text, background: C.surface2,
-                  border: `1px solid ${C.border}`, borderRadius: 8,
-                  padding: '8px 12px', resize: 'none', outline: 'none', lineHeight: 1.5,
-                  transition: 'border-color 0.15s',
-                }}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border }}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sendingMsg}
-                style={{
-                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  background: newMessage.trim() && !sendingMsg ? C.accent : C.surface2,
-                  border: 'none', cursor: newMessage.trim() && !sendingMsg ? 'pointer' : 'default',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: !newMessage.trim() || sendingMsg ? 0.45 : 1,
-                  transition: 'background 0.15s, opacity 0.15s',
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M12.5 7L1.5 2.5L4.5 7L1.5 11.5L12.5 7Z" fill="white" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Chat — samme flytende chat-komponent (ikon øverst til høyre) som resten av
+            appen bruker, med @-tagging, i stedet for den tidligere alltid-synlige inline-
+            chatten uten tagging (feedback 66f69c70). */}
+        <ProjectChat projectId={projectId} />
 
       </div>
     </div>

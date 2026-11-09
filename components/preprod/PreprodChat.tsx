@@ -34,9 +34,14 @@ export default function PreprodChat({
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
   const messagesRef = useRef<PreprodMessage[]>([])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
+  }, [])
 
   useEffect(() => {
     if (forceOpen) setOpen(true)
@@ -250,44 +255,47 @@ export default function PreprodChat({
               Ingen meldinger ennå. Bruk @navn for å tagge noen.
             </p>
           )}
-          {messages.map(msg => (
-            <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: C.text3 }}>
-                  {msg.user?.name ?? msg.user?.email ?? 'Ukjent'}
-                </span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
-                  {formatTime(msg.created_at)}
-                </span>
-              </div>
-              <div style={{
-                maxWidth: '90%',
-                padding: '8px 12px',
-                borderRadius: '12px 12px 12px 4px',
-                background: C.surface,
-                border: `1px solid ${C.border}`,
-              }}>
-                <p style={{
-                  fontFamily: 'var(--font-dm-sans)',
-                  fontSize: '0.78rem',
-                  color: C.text,
-                  lineHeight: 1.5,
-                  margin: 0,
-                  wordBreak: 'break-word',
+          {messages.map(msg => {
+            const isMe = currentUserId === msg.user_id
+            return (
+              <div key={msg.id} className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 500, color: isMe ? C.accent : C.text3 }}>
+                    {isMe ? 'Du' : (msg.user?.name ?? msg.user?.email ?? 'Ukjent')}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: C.text3 }}>
+                    {formatTime(msg.created_at)}
+                  </span>
+                </div>
+                <div style={{
+                  maxWidth: '90%',
+                  padding: '8px 12px',
+                  borderRadius: isMe ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                  background: isMe ? C.accentBg : C.surface,
+                  border: `1px solid ${isMe ? 'rgba(124,92,252,0.2)' : C.border}`,
                 }}>
-                  {splitMentionSegments(msg.message, msg.mentions, profiles).map((seg, i) =>
-                    seg.isMention
-                      ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
-                      : <span key={i}>{seg.text}</span>
-                  )}
-                </p>
+                  <p style={{
+                    fontFamily: 'var(--font-dm-sans)',
+                    fontSize: '0.78rem',
+                    color: C.text,
+                    lineHeight: 1.5,
+                    margin: 0,
+                    wordBreak: 'break-word',
+                  }}>
+                    {splitMentionSegments(msg.message, msg.mentions, profiles).map((seg, i) =>
+                      seg.isMention
+                        ? <span key={i} style={{ color: C.accent, fontWeight: 600 }}>{seg.text}</span>
+                        : <span key={i}>{seg.text}</span>
+                    )}
+                  </p>
+                </div>
+                <MessageReactions
+                  reactions={reactions[msg.id] ?? []}
+                  onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
+                />
               </div>
-              <MessageReactions
-                reactions={reactions[msg.id] ?? []}
-                onToggle={(emoji) => handleToggleReaction(msg.id, emoji)}
-              />
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
 

@@ -9,6 +9,7 @@ import { QuotePackageShowcaseItem, QuotePackageShowcaseKind } from '@/lib/types'
 // underliggende storage-objektet når et biblioteksbilde slettes, uavhengig
 // av pakke-visningen.
 export async function copyLibraryImageToQuotePackage(
+  flyerId: string,
   quoteId: string,
   imageId: string,
   kind: 'photo' | 'social_clip'
@@ -32,7 +33,7 @@ export async function copyLibraryImageToQuotePackage(
   }
 
   const ext = image.file_path.split('.').pop() ?? 'jpg'
-  const destPath = `quote-packages/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
+  const destPath = `quote-packages/${flyerId}/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
 
   const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, fileBlob, {
     contentType: fileBlob.type || 'image/jpeg',
@@ -48,6 +49,7 @@ export async function copyLibraryImageToQuotePackage(
 
 // Samme kopi-mønster for video_library-rader.
 export async function copyLibraryVideoToQuotePackage(
+  flyerId: string,
   quoteId: string,
   videoId: string,
   kind: 'main_video' | 'social_clip'
@@ -71,7 +73,7 @@ export async function copyLibraryVideoToQuotePackage(
   }
 
   const ext = video.file_path.split('.').pop() ?? 'mp4'
-  const destPath = `quote-packages/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
+  const destPath = `quote-packages/${flyerId}/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
 
   const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, fileBlob, {
     contentType: fileBlob.type || 'video/mp4',
@@ -85,11 +87,12 @@ export async function copyLibraryVideoToQuotePackage(
   return { url: publicUrl }
 }
 
-export async function listQuotePackageShowcaseItems(quoteId: string): Promise<QuotePackageShowcaseItem[]> {
+export async function listQuotePackageShowcaseItems(flyerId: string, quoteId: string): Promise<QuotePackageShowcaseItem[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('quote_package_showcase_items')
     .select('*')
+    .eq('flyer_id', flyerId)
     .eq('quote_id', quoteId)
     .order('kind')
     .order('order_index')
@@ -104,6 +107,7 @@ export async function listQuotePackageShowcaseItems(quoteId: string): Promise<Qu
 // atomisk via replace_quote_package_showcase_items (migrasjon 193) — samme
 // mønster som setSalesFlyerCases/setSalesFlyerPackages.
 export async function setQuotePackageShowcaseItems(
+  flyerId: string,
   quoteId: string,
   kind: QuotePackageShowcaseKind,
   items: { media_type: 'image' | 'video'; path: string; caption?: string | null }[]
@@ -111,6 +115,7 @@ export async function setQuotePackageShowcaseItems(
   const supabase = await createClient()
   const { error } = await supabase.rpc('replace_quote_package_showcase_items', {
     p_quote_id: quoteId,
+    p_flyer_id: flyerId,
     p_kind: kind,
     p_items: items,
   })

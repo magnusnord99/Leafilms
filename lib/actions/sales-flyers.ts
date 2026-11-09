@@ -162,7 +162,7 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
   // har en annen kardinalitet (0-mange pr. quote) enn quotes-embedet over, og
   // fordi batch-henting via .in() på quote_id-listen er billigere enn ett
   // PostgREST-embed pr. pakke.
-  const showcaseByQuoteId = await getShowcaseItemsByQuoteId(packages.map(p => p.quote_id))
+  const showcaseByQuoteId = await getShowcaseItemsByFlyerAndQuoteId(flyerId, packages.map(p => p.quote_id))
   return packages.map(p => ({ ...p, showcaseItems: showcaseByQuoteId.get(p.quote_id) ?? [] }))
 }
 
@@ -170,19 +170,21 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
 // migrasjon 193) — samme autorisasjonsbegrunnelse som resten av denne filen
 // for quotes/quote_data: en publisert flyer er anonymt besøkt, og uten
 // service-klienten her ville RLS stille nullet ut eksempelmedia for alle
-// ekte besøkende.
-async function getShowcaseItemsByQuoteId(quoteIds: string[]): Promise<Map<string, QuotePackageShowcaseItem[]>> {
+// ekte besøkende. Scopet på flyer_id i tillegg til quote_id (migrasjon 194)
+// — samme pakke kan nå vise forskjellig eksempelmedia på to ulike flyers.
+async function getShowcaseItemsByFlyerAndQuoteId(flyerId: string, quoteIds: string[]): Promise<Map<string, QuotePackageShowcaseItem[]>> {
   const map = new Map<string, QuotePackageShowcaseItem[]>()
   if (quoteIds.length === 0) return map
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('quote_package_showcase_items')
     .select('*')
+    .eq('flyer_id', flyerId)
     .in('quote_id', quoteIds)
     .order('kind', { ascending: true })
     .order('order_index', { ascending: true })
   if (error) {
-    console.error('getShowcaseItemsByQuoteId:', error)
+    console.error('getShowcaseItemsByFlyerAndQuoteId:', error)
     return map
   }
   for (const row of (data ?? []) as QuotePackageShowcaseItem[]) {
@@ -294,7 +296,9 @@ export async function deleteSalesFlyer(id: string): Promise<{ ok: true } | { err
 export async function copyLibraryImageToFlyer(
   slug: string,
   imageId: string,
-  field: 'hero_poster' | 'bts_image_1' | 'bts_image_2'
+  field: 'hero_poster' | 'bts_image_1' | 'bts_image_2' |
+    'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
+    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8'
 ): Promise<{ url: string } | { error: string }> {
   const supabase = await createClient()
 

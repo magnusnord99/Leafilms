@@ -681,6 +681,14 @@ export type SalesFlyer = {
   engagement_text: string
   bts_image_1_path: string | null
   bts_image_2_path: string | null
+  example_image_1_path: string | null
+  example_image_2_path: string | null
+  example_image_3_path: string | null
+  example_image_4_path: string | null
+  example_image_5_path: string | null
+  example_image_6_path: string | null
+  example_image_7_path: string | null
+  example_image_8_path: string | null
   cta_headline: string
   cta_subtext: string
   cta_email: string
@@ -715,6 +723,7 @@ export type QuotePackageShowcaseKind = 'main_video' | 'social_clip' | 'photo'
 export type QuotePackageShowcaseItem = {
   id: string
   quote_id: string
+  flyer_id: string
   kind: QuotePackageShowcaseKind
   media_type: 'image' | 'video'
   path: string

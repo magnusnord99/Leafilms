@@ -12,7 +12,7 @@ import {
 } from '@/lib/actions/quote-package-showcase'
 import { QuotePackageShowcaseItem, QuotePackageShowcaseKind } from '@/lib/types'
 
-type Props = { quoteId: string }
+type Props = { flyerId: string; quoteId: string }
 
 // Hvilken picker-modal som er åpen akkurat nå, og hvilken kind/media_type den
 // skriver til. 'social_clip' har to varianter siden den kinden kan ta begge
@@ -45,7 +45,7 @@ function makeTempId(): string {
   return `tmp-${Math.random().toString(36).slice(2)}-${Date.now()}`
 }
 
-export function PackageShowcasePanel({ quoteId }: Props) {
+export function PackageShowcasePanel({ flyerId, quoteId }: Props) {
   const [items, setItems] = useState<QuotePackageShowcaseItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,14 +59,14 @@ export function PackageShowcasePanel({ quoteId }: Props) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    listQuotePackageShowcaseItems(quoteId).then(result => {
+    listQuotePackageShowcaseItems(flyerId, quoteId).then(result => {
       if (!cancelled) {
         setItems(result)
         setLoading(false)
       }
     })
     return () => { cancelled = true }
-  }, [quoteId])
+  }, [flyerId, quoteId])
 
   function setSaving(kind: QuotePackageShowcaseKind, value: boolean) {
     setSavingKinds(prev => ({ ...prev, [kind]: value }))
@@ -84,7 +84,7 @@ export function PackageShowcasePanel({ quoteId }: Props) {
     setSaving(kind, true)
     try {
       const payload = nextKindItems.map(i => ({ media_type: i.media_type, path: i.path, caption: i.caption }))
-      const result = await setQuotePackageShowcaseItems(quoteId, kind, payload)
+      const result = await setQuotePackageShowcaseItems(flyerId, quoteId, kind, payload)
       if ('error' in result) {
         setError(result.error)
         setItems(prev => [...prev.filter(i => i.kind !== kind), ...previousKindItems])
@@ -108,7 +108,7 @@ export function PackageShowcasePanel({ quoteId }: Props) {
       const current = itemsForKind(kind)
       const additions: QuotePackageShowcaseItem[] = []
       for (const id of ids) {
-        const result = await copyLibraryVideoToQuotePackage(quoteId, id, kind)
+        const result = await copyLibraryVideoToQuotePackage(flyerId, quoteId, id, kind)
         if ('error' in result) {
           setError(result.error)
           return
@@ -116,6 +116,7 @@ export function PackageShowcasePanel({ quoteId }: Props) {
         additions.push({
           id: makeTempId(),
           quote_id: quoteId,
+          flyer_id: flyerId,
           kind,
           media_type: 'video',
           path: result.url,
@@ -137,7 +138,7 @@ export function PackageShowcasePanel({ quoteId }: Props) {
       const current = itemsForKind(kind)
       const additions: QuotePackageShowcaseItem[] = []
       for (const id of ids) {
-        const result = await copyLibraryImageToQuotePackage(quoteId, id, kind)
+        const result = await copyLibraryImageToQuotePackage(flyerId, quoteId, id, kind)
         if ('error' in result) {
           setError(result.error)
           return
@@ -145,6 +146,7 @@ export function PackageShowcasePanel({ quoteId }: Props) {
         additions.push({
           id: makeTempId(),
           quote_id: quoteId,
+          flyer_id: flyerId,
           kind,
           media_type: 'image',
           path: result.url,

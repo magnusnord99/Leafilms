@@ -209,7 +209,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // urørt ved feil — brukeren skal ikke miste det de nettopp skrev.
   async function saveField<K extends keyof SalesFlyerWithRelations>(
     field: Field,
-    value: string | boolean | null,
+    value: string | boolean | number | null,
     previousValue?: SalesFlyerWithRelations[K]
   ) {
     setSavingFields(prev => new Set(prev).add(field))
@@ -573,27 +573,58 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   ] as const
   const exampleImageSlots = EXAMPLE_IMAGE_TARGETS.map(target => {
     const field = `${target}_path` as Field
-    return { target, field, path: (flyer[field] as string | null) }
+    const posXField = `${target}_position_x` as Field
+    const posYField = `${target}_position_y` as Field
+    return {
+      target, field, posXField, posYField,
+      path: (flyer[field] as string | null),
+      posX: (flyer[posXField] as unknown as number) ?? 50,
+      posY: (flyer[posYField] as unknown as number) ?? 50,
+    }
   })
   const hasAnyExampleImage = exampleImageSlots.some(s => s.path)
 
   function renderExampleImageSlot(slot: typeof exampleImageSlots[number], className: string) {
-    const { path, field, target } = slot
+    const { path, field, target, posXField, posYField, posX, posY } = slot
     return (
       <div key={field} className={`relative overflow-hidden ${className}`} style={{ background: SURFACE }}>
         {path ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${posX}% ${posY}%` }} />
             {editing && (
-              <button
-                onClick={() => { set(field, null); saveField(field, null) }}
-                disabled={savingFields.has(field)}
-                aria-label="Fjern bilde"
-                style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
-              >
-                ×
-              </button>
+              <>
+                <button
+                  onClick={() => { set(field, null); saveField(field, null) }}
+                  disabled={savingFields.has(field)}
+                  aria-label="Fjern bilde"
+                  style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
+                >
+                  ×
+                </button>
+                {/* Posisjonering innenfor rammen — lagres kun på slipp (mouseUp/touchEnd),
+                    ikke på hvert onChange-tick, for å unngå én lagring pr. piksel dratt. */}
+                <div style={{ position: 'absolute', top: 8, left: 8, right: 44, background: 'rgba(0,0,0,0.55)', borderRadius: 6, padding: '6px 8px' }}>
+                  <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', marginBottom: 2 }}>X</label>
+                  <input
+                    type="range" min={0} max={100}
+                    value={posX}
+                    onChange={e => set(posXField, Number(e.target.value))}
+                    onMouseUp={e => saveField(posXField, Number((e.target as HTMLInputElement).value))}
+                    onTouchEnd={e => saveField(posXField, Number((e.target as HTMLInputElement).value))}
+                    style={{ width: '100%', display: 'block' }}
+                  />
+                  <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', margin: '4px 0 2px' }}>Y</label>
+                  <input
+                    type="range" min={0} max={100}
+                    value={posY}
+                    onChange={e => set(posYField, Number(e.target.value))}
+                    onMouseUp={e => saveField(posYField, Number((e.target as HTMLInputElement).value))}
+                    onTouchEnd={e => saveField(posYField, Number((e.target as HTMLInputElement).value))}
+                    style={{ width: '100%', display: 'block' }}
+                  />
+                </div>
+              </>
             )}
           </>
         ) : editing ? (

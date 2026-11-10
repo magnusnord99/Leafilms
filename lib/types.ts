@@ -689,6 +689,22 @@ export type SalesFlyer = {
   example_image_6_path: string | null
   example_image_7_path: string | null
   example_image_8_path: string | null
+  example_image_1_position_x: number
+  example_image_1_position_y: number
+  example_image_2_position_x: number
+  example_image_2_position_y: number
+  example_image_3_position_x: number
+  example_image_3_position_y: number
+  example_image_4_position_x: number
+  example_image_4_position_y: number
+  example_image_5_position_x: number
+  example_image_5_position_y: number
+  example_image_6_position_x: number
+  example_image_6_position_y: number
+  example_image_7_position_x: number
+  example_image_7_position_y: number
+  example_image_8_position_x: number
+  example_image_8_position_y: number
   cta_headline: string
   cta_subtext: string
   cta_email: string

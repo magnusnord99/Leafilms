@@ -163,6 +163,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [imagePickerTarget, setImagePickerTarget] = useState<'hero_poster' | 'bts_image_1' | 'bts_image_2' |
     'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
     'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | null>(null)
+  const [referenceImageLinkId, setReferenceImageLinkId] = useState<string | null>(null)
   const [videoPickerOpen, setVideoPickerOpen] = useState(false)
 
   const [casePickerOpen, setCasePickerOpen] = useState(false)
@@ -593,6 +594,27 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     } catch (err) {
       console.error('fetchMissingPreview:', err)
       setLinksError('Kunne ikke hente forhåndsvisningsbilde — sjekk nettforbindelsen')
+    } finally {
+      setLinksMutating(false)
+    }
+  }
+
+  async function handleReferenceImagePicked(imageIds: string[]) {
+    const linkId = referenceImageLinkId
+    setReferenceImageLinkId(null)
+    if (!linkId || !imageIds[0] || linksMutating) return
+    setLinksMutating(true)
+    setLinksError(null)
+    try {
+      const copied = await copyLibraryImageToFlyer(slug, imageIds[0], 'reference_preview')
+      if ('error' in copied) { setLinksError(copied.error); return }
+      const next = flyer.referenceLinks.map(link => link.id === linkId ? { ...link, preview_image_path: copied.url } : link)
+      const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
+      if ('error' in result) { setLinksError(result.error); return }
+      setFlyer(previous => ({ ...previous, referenceLinks: next }))
+    } catch (error) {
+      console.error('handleReferenceImagePicked:', error)
+      setLinksError('Kunne ikke lagre forhåndsvisningsbildet — prøv igjen')
     } finally {
       setLinksMutating(false)
     }
@@ -1083,11 +1105,22 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                         <button onClick={() => removeReferenceLink(link.id)} disabled={linksMutating} aria-label="Fjern lenke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>×</button>
                       </div>
                     )}
+                    {editing && (
+                      <button
+                        type="button"
+                        onClick={() => setReferenceImageLinkId(link.id)}
+                        disabled={linksMutating}
+                        className="mb-2 rounded-md px-3 py-2 text-xs font-semibold"
+                        style={{ background: ADMIN, color: '#fff' }}
+                      >
+                        {link.preview_image_path ? 'Bytt bilde / skjermdump' : 'Legg ved bilde / skjermdump'}
+                      </button>
+                    )}
                     {editing && !link.preview_image_path && (
                       <button
                         onClick={() => fetchMissingPreview(link)}
                         disabled={linksMutating}
-                        style={{ position: 'absolute', top: 8, left: 8, zIndex: 5, fontSize: '0.65rem', fontWeight: 600, padding: '5px 10px', borderRadius: 6, background: 'rgba(124,92,252,0.9)', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.6 : 1 }}
+                        style={{ marginLeft: 8, marginBottom: 8, fontSize: '0.65rem', fontWeight: 600, padding: '5px 10px', borderRadius: 6, background: 'rgba(124,92,252,0.9)', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.6 : 1 }}
                       >
                         Hent bilde
                       </button>
@@ -1343,6 +1376,13 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         isOpen={imagePickerTarget !== null}
         onClose={() => setImagePickerTarget(null)}
         onSelect={handleImagePicked}
+        selectedImageIds={EMPTY_SELECTION}
+        maxSelection={1}
+      />
+      <ImagePickerModal
+        isOpen={referenceImageLinkId !== null}
+        onClose={() => setReferenceImageLinkId(null)}
+        onSelect={handleReferenceImagePicked}
         selectedImageIds={EMPTY_SELECTION}
         maxSelection={1}
       />

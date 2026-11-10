@@ -460,8 +460,10 @@ export async function copyLibraryImageToFlyer(
   imageId: string,
   field: 'hero_poster' | 'bts_image_1' | 'bts_image_2' |
     'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
-    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8'
+    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | 'reference_preview'
 ): Promise<{ url: string } | { error: string }> {
+  const staff = await getAuthenticatedStaffUser()
+  if (!staff.ok) return { error: 'Du har ikke tilgang til å laste opp bilder' }
   const supabase = await createClient()
 
   const { data: image, error: imageError } = await supabase

@@ -114,11 +114,17 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Bytt fane: lukk ev. åpen "ny melding"-søker — den gjelder kun direkte meldinger.
+  // Nullstill også valgt DM-samtale ved bytte til Prosjekttråder, slik at høyre
+  // panel ikke fortsetter å vise en gammel DM-samtale som ikke lenger er relevant
+  // (samme mønster som tilbake-knappen i trådvisningen, se setSelectedId(null) der).
+  // Ved bytte tilbake til Direkte skal valgt samtale IKKE røres — den er fortsatt
+  // meningsfull i den fanen.
   function handleViewChange(next: 'direct' | 'threads') {
     setView(next)
     if (next === 'threads') {
       setShowPicker(false)
       setPickerFilter('')
+      setSelectedId(null)
     }
   }
 

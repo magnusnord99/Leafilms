@@ -798,6 +798,50 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
                     )}
                   </div>
                 )}
+
+                {/* Forklarer leveransen i tomrommet til høyre for klipp/bunke
+                    — kun i kundevisning, ikke redigeringsmodus (der fyller
+                    seksjons-etikettene/EditStrip-ene allerede samme rom med
+                    tilsvarende forklaring, se feedback 2026-11-10). */}
+                {!editable && (mainVideos.length > 0 || socialClips.length > 0 || photos.length > 0 || websitePhotos.length > 0) && (
+                  <div className="flex flex-col gap-5" style={{ maxWidth: 280 }}>
+                    <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>
+                    <div className="flex flex-col gap-4">
+                      {mainVideos.length > 0 && (
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hovedvideo</p>
+                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
+                            Klar til bruk på landingssiden eller forsiden av nettstedet ditt.
+                          </p>
+                        </div>
+                      )}
+                      {socialClips.length > 0 && (
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Klipp</p>
+                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
+                            Tilpasset sosiale medier — Instagram, TikTok og Stories.
+                          </p>
+                        </div>
+                      )}
+                      {photos.length > 0 && (
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bilder</p>
+                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
+                            Fri bruk i nyhetsbrev, trykksaker og egne kanaler.
+                          </p>
+                        </div>
+                      )}
+                      {websitePhotos.length > 0 && (
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Nettside-bilder</p>
+                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
+                            Ferdig tilpasset til bruk direkte på nettsiden.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

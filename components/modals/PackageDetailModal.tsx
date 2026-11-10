@@ -73,6 +73,7 @@ function PhotoStack({ photos, size = 150 }: { photos: QuotePackageShowcaseItem[]
   return (
     <div className="relative" style={{ width: size, height: size }}>
       {visible.map((photo, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           key={photo.id}
           src={photo.path}

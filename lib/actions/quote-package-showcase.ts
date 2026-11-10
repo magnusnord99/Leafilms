@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
-import { QuotePackageShowcaseItem, QuotePackageShowcaseKind } from '@/lib/types'
+import { QuotePackageShowcaseKind } from '@/lib/types'
 
 // Kopierer et valgt biblioteksbilde (images-tabellen) til pakkens eget
 // lagringsområde i stedet for å lagre en levende referanse — samme grunn som
@@ -85,22 +85,6 @@ export async function copyLibraryVideoToQuotePackage(
 
   const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(destPath)
   return { url: publicUrl }
-}
-
-export async function listQuotePackageShowcaseItems(flyerId: string, quoteId: string): Promise<QuotePackageShowcaseItem[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('quote_package_showcase_items')
-    .select('*')
-    .eq('flyer_id', flyerId)
-    .eq('quote_id', quoteId)
-    .order('kind')
-    .order('order_index')
-  if (error) {
-    console.error('listQuotePackageShowcaseItems:', error)
-    return []
-  }
-  return (data ?? []) as QuotePackageShowcaseItem[]
 }
 
 // Erstatter hele vareliste-fanen (main_video/social_clip/photo) for en pakke

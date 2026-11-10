@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CaseStudy, SalesFlyerPackageCategory } from '@/lib/types'
+import { CaseStudy, SalesFlyerPackageCategory, QuotePackageShowcaseItem } from '@/lib/types'
 import { splitParagraphs } from '@/lib/industry-landing-pages'
 import {
   SalesFlyerWithRelations,
@@ -22,7 +22,6 @@ import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
 import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
-import { PackageShowcasePanel } from '@/components/quote/PackageShowcasePanel'
 import { supabase } from '@/lib/supabase'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
@@ -164,9 +163,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [imagePickerTarget, setImagePickerTarget] = useState<'hero_poster' | 'bts_image_1' | 'bts_image_2' |
     'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
     'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | null>(null)
-  // Hvilken pakkes eksempelmedia (quote_id) som redigeres akkurat nå — satt via
-  // "Eksempelmedia"-knappen på pakkekortet, null når editoren er lukket.
-  const [showcaseEditorQuoteId, setShowcaseEditorQuoteId] = useState<string | null>(null)
   const [videoPickerOpen, setVideoPickerOpen] = useState(false)
 
   const [casePickerOpen, setCasePickerOpen] = useState(false)
@@ -435,17 +431,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     }
   }
 
-  // Henter pakkelisten på nytt etter at eksempelmedia er redigert i den nye,
-  // per-flyer "Eksempelmedia"-editoren — samme mønster som handlePackagePickerSave,
-  // slik at "Se mer"-knappens synlighet oppdateres uten en full sideoppfriskning.
-  async function refreshPackagesAfterShowcaseEdit() {
-    const fresh = await getSalesFlyerBySlug(slug, { includeDraft: true })
-    if (fresh) set('packages', fresh.packages)
-  }
-
-  function closeShowcaseEditor() {
-    setShowcaseEditorQuoteId(null)
-    refreshPackagesAfterShowcaseEdit()
+  // Eksempelmedia redigeres nå inline i "Se mer"-modalen (PackageDetailModal)
+  // i stedet for i et eget tabell-vindu — denne oppdaterer bare den ene
+  // pakkens showcaseItems lokalt når modalen melder fra om en endring, uten
+  // en full sideoppfriskning (feedback 2026-11-10).
+  function updatePackageShowcaseItems(quoteId: string, items: QuotePackageShowcaseItem[]) {
+    set('packages', flyer.packages.map(p => p.quote_id === quoteId ? { ...p, showcaseItems: items } : p))
   }
 
   // Pakkene vises gruppert per kategori, så "flytt opp/ned" bytter plass med
@@ -615,7 +606,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         <div>
           <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
           {renderDeliverableChips(pkg.deliverableCounts)}
-          {hasShowcase && (
+          {/* Når editing: alltid synlig, selv uten eksempelmedia ennå — det er
+              nå eneste vei inn til å LEGGE TIL det første elementet, siden
+              redigeringen skjer inline i PackageDetailModal (feedback
+              2026-11-10) i stedet for i et eget tabell-vindu. */}
+          {(hasShowcase || editing) && (
             <button
               type="button"
               onClick={() => setDetailPackageId(pkg.id)}
@@ -624,16 +619,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             >
               Se mer
               <span aria-hidden>→</span>
-            </button>
-          )}
-          {editing && (
-            <button
-              type="button"
-              onClick={() => setShowcaseEditorQuoteId(pkg.quote_id)}
-              className="mt-3 block text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
-              style={{ color: ADMIN, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              Eksempelmedia
             </button>
           )}
         </div>
@@ -1316,23 +1301,9 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onClose={() => setDetailPackageId(null)}
         packageLabel={detailPackage?.package_label ?? ''}
         items={detailPackage?.showcaseItems ?? []}
+        editable={editing && detailPackage ? { flyerId: flyer.id, quoteId: detailPackage.quote_id } : undefined}
+        onItemsChanged={detailPackage ? items => updatePackageShowcaseItems(detailPackage.quote_id, items) : undefined}
       />
-      {showcaseEditorQuoteId && (
-        // z-index:50, ikke høyere — PackageShowcasePanels egne interne
-        // ImagePickerModal/VideoPickerModal bruker også z-50 og stables oppå
-        // via DOM-rekkefølge (rendret etter denne overlayen i markup), ikke zIndex.
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fff', color: '#1A1812', border: '1px solid #ddd', borderRadius: 10, padding: 20, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
-            <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-              <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888' }}>
-                Eksempelmedia for Se mer-visningen
-              </p>
-              <button onClick={closeShowcaseEditor} aria-label="Lukk" style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#888' }}>×</button>
-            </div>
-            <PackageShowcasePanel flyerId={flyer.id} quoteId={showcaseEditorQuoteId} />
-          </div>
-        </div>
-      )}
     </main>
   )
 }

@@ -11,6 +11,7 @@ import { toggleReaction, type MessageType } from '@/lib/actions/reactions'
 import { respondToMeetingInvite } from '@/lib/actions/meetings'
 import { PushNotificationToggle } from '@/components/admin/PushNotificationToggle'
 import { getStageHref } from '@/lib/pipeline-stage-nav'
+import { getThreadHref } from '@/lib/notification-routing'
 import { C } from '@/lib/admin-theme'
 
 const QUICK_EMOJIS = ['❗', '❤️', '👍'] // samme sett som chattene (components/shared/MessageReactions)
@@ -184,11 +185,13 @@ export default function VarslerClient({ notifications: initialNotifications }: {
     } else if (n.type === 'meeting_invite' || n.type === 'meeting_response') {
       router.push('/admin/calendar')
     } else if (n.type === 'project_message' || n.type === 'project_message_mention' || n.type === 'project_message_reaction') {
-      router.push(`/admin/projects/${n.project_id}?chat=1`)
+      router.push(getThreadHref({ kind: 'project', projectId: n.project_id as string }))
     } else if (n.type === 'quote_mention' || n.type === 'quote_assigned' || n.type === 'quote_message' || n.type === 'quote_message_reaction') {
-      router.push(`/admin/projects/${n.project_id}/quote${n.type === 'quote_assigned' ? '' : '?chat=1'}`)
+      router.push(n.type === 'quote_assigned'
+        ? `/admin/projects/${n.project_id}/quote`
+        : getThreadHref({ kind: 'quote', projectId: n.project_id as string }))
     } else if (n.type === 'preprod_mention' || n.type === 'preprod_message' || n.type === 'preprod_message_reaction') {
-      router.push(`/admin/preprod/${n.project_id}?chat=1`)
+      router.push(getThreadHref({ kind: 'preprod', projectId: n.project_id as string }))
     } else if (n.type === 'pitch_review_requested' || n.type === 'pitch_review_responded' || n.type === 'quote_review_requested' || n.type === 'quote_review_responded') {
       router.push(`/admin/projects/${n.project_id}?tab=pitch`)
     } else if (n.type === 'gallery_review_requested' || n.type === 'gallery_review_responded') {
@@ -208,18 +211,15 @@ export default function VarslerClient({ notifications: initialNotifications }: {
     } else if (n.type === 'feedback_reply') {
       // Ingen egen visningsside — svaret vises allerede i varselteksten under
     } else if (n.type === 'task_message' || n.type === 'task_message_mention' || n.type === 'task_message_reaction') {
-      const stage = n.tasks?.pipeline_stage
       if (!n.task_id) {
         router.push(`/admin/postprod/${n.project_id}`)
-      } else if (stage === 'post_prod') {
-        // &chat=1 åpner det flytende oppgave-chat-panelet automatisk (samme mønster
-        // som project_message/quote_message/preprod_message under) — uten dette valgte
-        // siden bare riktig oppgave, men chatten forble lukket.
-        router.push(`/admin/postprod/${n.project_id}?task=${n.task_id}&chat=1`)
-      } else if (stage === 'pre_prod') {
-        router.push(`/admin/preprod/${n.project_id}?task=${n.task_id}`)
       } else {
-        router.push(`/admin/projects/${n.project_id}?task=${n.task_id}`)
+        router.push(getThreadHref({
+          kind: 'task',
+          projectId: n.project_id as string,
+          taskId: n.task_id,
+          pipelineStage: n.tasks?.pipeline_stage ?? null,
+        }))
       }
     } else if (n.type === 'board_comment_mention' || n.type === 'board_comment_reply') {
       router.push(`/admin/boards/${n.board_id}?comment=${n.board_card_id}`)

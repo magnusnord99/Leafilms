@@ -103,15 +103,16 @@ function renderPackageDeliverables(counts: { hovedvideo: number; klipp: number; 
   if (items.length === 0) return null
   return (
     <div className="border-t pt-6 @min-[420px]:border-l @min-[420px]:border-t-0 @min-[420px]:pl-8 @min-[420px]:pt-0" style={{ borderColor: BORDER }}>
-      <p className="mb-6 text-xs font-medium uppercase tracking-[0.18em]" style={{ color: MUTED }}>Dette får dere</p>
-      <div className="flex flex-wrap gap-x-8 gap-y-6 @min-[420px]:flex-col">
+      <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em]" style={{ color: MUTED }}>Dette får dere</p>
+      <div className="flex flex-wrap gap-x-6 gap-y-3 @min-[420px]:flex-col">
         {items.map(item => (
-          <div key={item.label}>
-            <p className="font-display text-5xl leading-none md:text-6xl" style={{ color: CREAM, fontWeight: 300 }}>
-              {new Intl.NumberFormat('nb-NO').format(item.count)}
-            </p>
-            <p className="mt-2 flex items-center gap-2 text-base" style={{ color: MUTED }}>
-              <span aria-hidden="true" style={{ color: GOLD }}>{item.icon}</span>{item.label}
+          <div key={item.label} className="flex items-center gap-3">
+            <span aria-hidden="true" className="shrink-0" style={{ color: GOLD }}>{item.icon}</span>
+            <p className="flex items-baseline gap-2">
+              <span className="font-display text-3xl leading-none" style={{ color: CREAM, fontWeight: 300 }}>
+                {new Intl.NumberFormat('nb-NO').format(item.count)}
+              </span>
+              <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
             </p>
           </div>
         ))}

@@ -209,7 +209,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // urørt ved feil — brukeren skal ikke miste det de nettopp skrev.
   async function saveField<K extends keyof SalesFlyerWithRelations>(
     field: Field,
-    value: string | boolean,
+    value: string | boolean | null,
     previousValue?: SalesFlyerWithRelations[K]
   ) {
     setSavingFields(prev => new Set(prev).add(field))
@@ -582,8 +582,20 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     return (
       <div key={field} className={`relative overflow-hidden ${className}`} style={{ background: SURFACE }}>
         {path ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            {editing && (
+              <button
+                onClick={() => { set(field, null); saveField(field, null) }}
+                disabled={savingFields.has(field)}
+                aria-label="Fjern bilde"
+                style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
+              >
+                ×
+              </button>
+            )}
+          </>
         ) : editing ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-xs" style={{ color: SUBTLE }}>Ingen bilde ennå</p>
@@ -812,11 +824,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           av pitch-byggerens ExampleWorkSection-rytme (hero/tårn/tårn/bunn) ── */}
       {(hasAnyExampleImage || editing) && (
         <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <div className="mb-12 flex items-center gap-6 md:mb-16">
-            <span className="h-px w-12" style={{ background: GOLD }} />
-            <p className="text-xs font-medium uppercase tracking-[0.3em]" style={{ color: MUTED }}>Eksempelbilder</p>
-          </div>
-
           {/* Mobil: vertikal stabling */}
           <div className="flex flex-col gap-0 md:hidden">
             {exampleImageSlots.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CaseStudy, SalesFlyerPackageCategory, QuotePackageShowcaseItem } from '@/lib/types'
 import { splitParagraphs } from '@/lib/industry-landing-pages'
 import {
@@ -23,6 +23,7 @@ import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
 import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
 import { supabase } from '@/lib/supabase'
+import { FlyerGalleryDragArea, FlyerGalleryImage } from './FlyerGalleryDrag'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
 // #0C0B09 / #C49434), som allerede er rot-standarden i app/layout.tsx og
@@ -153,6 +154,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [flyer, setFlyer] = useState(initialFlyer)
   const [editing, setEditing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [galleryError, setGalleryError] = useState<string | null>(null)
+  const gallerySwapInFlight = useRef(false)
   // Per felt, ikke ett delt par — en mislykket lagring av ett felt skal ikke
   // kunne bli usynlig fordi et HELT ANNET felt lagres (og lykkes) rett etter.
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({})
@@ -705,19 +708,53 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     exampleImageGroups.push(selectedExampleImages.slice(index, index + 3))
   }
 
+  const galleryBusy = Array.from(savingFields).some(field => field.startsWith('example_image_'))
+  const galleryDragImages = selectedExampleImages.map(slot => ({ id: slot.target, path: slot.path }))
+
+  async function swapExampleImages(source: string, destination: string) {
+    if (!editing || galleryBusy || gallerySwapInFlight.current || source === destination) return
+    const from = exampleImageSlots.find(slot => slot.target === source)
+    const to = exampleImageSlots.find(slot => slot.target === destination)
+    if (!from?.path || !to?.path) return
+    const previous = {
+      [from.field]: from.path, [from.posXField]: from.posX, [from.posYField]: from.posY,
+      [to.field]: to.path, [to.posXField]: to.posX, [to.posYField]: to.posY,
+    }
+    const next = {
+      [from.field]: to.path, [from.posXField]: to.posX, [from.posYField]: to.posY,
+      [to.field]: from.path, [to.posXField]: from.posX, [to.posYField]: from.posY,
+    }
+    gallerySwapInFlight.current = true
+    const fields = Object.keys(next) as Field[]
+    fields.forEach(field => markSaving(field, true))
+    setGalleryError(null)
+    setFlyer(current => ({ ...current, ...next }))
+    try {
+      // Ett UPDATE lagrer begge bildene og utsnittene samlet.
+      const result = await updateSalesFlyer(flyer.id, next as SalesFlyerUpdate)
+      if ('error' in result) throw new Error(result.error)
+    } catch {
+      setFlyer(current => ({ ...current, ...previous }))
+      setGalleryError('Kunne ikke bytte plass på bildene. Prøv igjen.')
+    } finally {
+      fields.forEach(field => markSaving(field, false))
+      gallerySwapInFlight.current = false
+    }
+  }
+
   function renderExampleImageSlot(slot: typeof exampleImageSlots[number], className: string) {
     const { path, field, target, posXField, posYField, posX, posY } = slot
     return (
-      <div key={field} className={`relative overflow-hidden ${className}`} style={{ background: SURFACE }}>
+      <FlyerGalleryImage key={field} id={target} editing={editing} disabled={galleryBusy} className={className}>
         {path ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${posX}% ${posY}%` }} />
+            <img src={path} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${posX}% ${posY}%` }} />
             {editing && (
               <>
                 <button
                   onClick={() => { set(field, null); saveField(field, null, path) }}
-                  disabled={savingFields.has(field)}
+                  disabled={galleryBusy}
                   aria-label="Fjern bilde"
                   style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
                 >
@@ -728,7 +765,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                 <div style={{ position: 'absolute', top: 8, left: 8, right: 44, background: 'rgba(0,0,0,0.55)', borderRadius: 6, padding: '6px 8px' }}>
                   <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', marginBottom: 2 }}>X</label>
                   <input
-                    type="range" min={0} max={100}
+                    type="range" min={0} max={100} disabled={galleryBusy}
                     value={posX}
                     onChange={e => set(posXField, Number(e.target.value))}
                     onMouseUp={e => saveField(posXField, Number((e.target as HTMLInputElement).value))}
@@ -737,7 +774,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                   />
                   <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', margin: '4px 0 2px' }}>Y</label>
                   <input
-                    type="range" min={0} max={100}
+                    type="range" min={0} max={100} disabled={galleryBusy}
                     value={posY}
                     onChange={e => set(posYField, Number(e.target.value))}
                     onMouseUp={e => saveField(posYField, Number((e.target as HTMLInputElement).value))}
@@ -757,7 +794,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12 }}>
             <button
               onClick={() => setImagePickerTarget(target)}
-              disabled={savingFields.has(field)}
+              disabled={galleryBusy}
               style={smallControl}
             >
               {savingFields.has(field) ? 'Henter bilde…' : 'Velg bilde'}
@@ -769,7 +806,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             )}
           </div>
         )}
-      </div>
+      </FlyerGalleryImage>
     )
   }
 
@@ -1027,24 +1064,27 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
       {/* ── Eksempelbilder — rutenettet følger antall valgte bilder ── */}
       {(hasAnyExampleImage || editing) && (
         <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <div className="flex flex-col gap-0 md:hidden">
-            {selectedExampleImages.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}
-          </div>
-
-          <div className="hidden md:block">
-            {selectedExampleImages[0] && renderExampleImageSlot(selectedExampleImages[0], 'h-[700px]')}
-            {exampleImageGroups.map(group => (
-              <div key={group[0].field} className={group.length > 1 ? 'grid grid-cols-2 gap-0' : ''}>
-                {group.length === 3 ? (
-                  <>
-                    <div className="row-span-2 h-[800px]">{renderExampleImageSlot(group[0], 'h-full')}</div>
-                    {renderExampleImageSlot(group[1], 'h-[400px]')}
-                    {renderExampleImageSlot(group[2], 'h-[400px]')}
-                  </>
-                ) : group.map(slot => renderExampleImageSlot(slot, group.length === 1 ? 'h-[600px]' : 'h-[400px]'))}
-              </div>
-            ))}
-          </div>
+          <FlyerGalleryDragArea images={galleryDragImages} onSwap={swapExampleImages}>
+            <div className="flex flex-col gap-0 md:hidden">
+              {selectedExampleImages.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}
+            </div>
+          </FlyerGalleryDragArea>
+          <FlyerGalleryDragArea images={galleryDragImages} onSwap={swapExampleImages}>
+            <div className="hidden md:block">
+              {selectedExampleImages[0] && renderExampleImageSlot(selectedExampleImages[0], 'h-[700px]')}
+              {exampleImageGroups.map(group => (
+                <div key={group[0].field} className={group.length > 1 ? 'grid grid-cols-2 gap-0' : ''}>
+                  {group.length === 3 ? (
+                    <>
+                      <div className="row-span-2 h-[800px]">{renderExampleImageSlot(group[0], 'h-full')}</div>
+                      {renderExampleImageSlot(group[1], 'h-[400px]')}
+                      {renderExampleImageSlot(group[2], 'h-[400px]')}
+                    </>
+                  ) : group.map(slot => renderExampleImageSlot(slot, group.length === 1 ? 'h-[600px]' : 'h-[400px]'))}
+                </div>
+              ))}
+            </div>
+          </FlyerGalleryDragArea>
 
           {editing && (
             <div className="mt-6 flex items-center gap-4">
@@ -1059,6 +1099,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               )}
             </div>
           )}
+          {editing && galleryError && <p role="alert" className="mt-3 text-sm" style={{ color: '#E05A4A' }}>{galleryError}</p>}
           {editing && exampleImageSlots.filter(slot => !slot.path && fieldErrors[slot.field]).map(slot => (
             <p key={slot.field} role="alert" className="mt-2 text-xs" style={{ color: '#E05A4A' }}>
               Ikke lagret: {fieldErrors[slot.field]}

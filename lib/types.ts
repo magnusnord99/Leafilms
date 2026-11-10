@@ -757,6 +757,14 @@ export type QuotePackageShowcaseItem = {
   order_index: number
 }
 
+// Redigerbar tekst for "Slik bruker du leveransen"-panelet i PackageDetailModal
+// — én rad pr. kind, delt globalt (se 198_package_usage_notes.sql).
+export type PackageUsageNote = {
+  kind: QuotePackageShowcaseKind
+  label: string
+  note: string
+}
+
 export type Image = {
   id: string
   filename: string

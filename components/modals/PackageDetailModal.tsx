@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { QuotePackageShowcaseItem, QuotePackageShowcaseKind } from '@/lib/types'
+import { useRef, useState } from 'react'
+import { QuotePackageShowcaseItem, QuotePackageShowcaseKind, PackageUsageNote } from '@/lib/types'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import {
@@ -9,6 +9,8 @@ import {
   copyLibraryVideoToQuotePackage,
   setQuotePackageShowcaseItems,
 } from '@/lib/actions/quote-package-showcase'
+import { updatePackageUsageNote } from '@/lib/actions/package-usage-notes'
+import { DEFAULT_PACKAGE_USAGE_NOTES } from '@/lib/package-usage-notes'
 
 // Samme cinematiske fargesett som components/sales-flyer/SalesFlyerView.tsx
 // (denne modalen er kun montert fra den filen, og vises for anonyme flyer-
@@ -35,6 +37,11 @@ interface PackageDetailModalProps {
   items: QuotePackageShowcaseItem[]
   editable?: EditableTarget
   onItemsChanged?: (items: QuotePackageShowcaseItem[]) => void
+  // Reell leveranse-mengde fra tilbudet (f.eks. "20 bilder"), ikke antall
+  // opplastede eksempelbilder — se PhotoStack sin `count`-prop.
+  deliverableCounts?: { hovedvideo: number; klipp: number; photo: number }
+  usageNotes: PackageUsageNote[]
+  onUsageNotesChanged?: (notes: PackageUsageNote[]) => void
 }
 
 // Beskrivende tekst ved siden av hver seksjon i redigeringsmodus — forklarer
@@ -107,8 +114,14 @@ const STACK_TRANSFORMS = [
 // bilde enkeltvis. Pakker har sjelden mer enn noen få bilder (se feedback
 // 2026-11-10: "jeg kommer aldri til å legge 40 bilder inn her"), så en enkel,
 // statisk bunke er nok — ingen egen bla-i-bunken-interaksjon.
-function PhotoStack({ photos, size = 150 }: { photos: QuotePackageShowcaseItem[]; size?: number }) {
+// `count` er den reelle leveranse-mengden (f.eks. fra tilbudets "20 bilder"-
+// linje), IKKE antall opplastede eksempelbilder — de to kan avvike siden
+// staff normalt bare laster opp noen få eksempler, ikke hele leveransen
+// (feedback 2026-11-10: badge viste 5 mens leveransen var 20). Faller
+// tilbake til photos.length kun hvis ingen leveranse-tall er tilgjengelig.
+function PhotoStack({ photos, size = 150, count }: { photos: QuotePackageShowcaseItem[]; size?: number; count?: number }) {
   if (photos.length === 0) return null
+  const displayCount = count ?? photos.length
   const visible = photos.slice(0, 3)
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -143,7 +156,7 @@ function PhotoStack({ photos, size = 150 }: { photos: QuotePackageShowcaseItem[]
           zIndex: visible.length + 1,
         }}
       >
-        {photos.length}
+        {displayCount}
       </div>
     </div>
   )
@@ -392,10 +405,69 @@ function sectionLabelStyle(): React.CSSProperties {
   return { fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em' }
 }
 
-export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initialItems, editable, onItemsChanged }: PackageDetailModalProps) {
+function UsageNoteEditor({ value, editable, busy, saving, onSave }: {
+  value: PackageUsageNote
+  editable: boolean
+  busy: boolean
+  saving: boolean
+  onSave: (kind: QuotePackageShowcaseKind, label: string, note: string) => Promise<boolean>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [label, setLabel] = useState(value.label)
+  const [note, setNote] = useState(value.note)
+  const fieldStyle = { width: '100%', background: BLACK, color: CREAM, border: `1px solid ${BORDER}`, borderRadius: 4, padding: 8, fontSize: '0.78rem' }
+
+  if (editable && editing) {
+    return (
+      <form className="flex flex-col gap-2" onSubmit={async event => {
+        event.preventDefault()
+        if (await onSave(value.kind, label, note)) setEditing(false)
+      }}>
+        <label style={{ color: MUTED, fontSize: '0.74rem' }}>
+          Overskrift
+          <input value={label} onChange={event => setLabel(event.target.value)} required maxLength={80} disabled={busy} style={fieldStyle} />
+        </label>
+        <label style={{ color: MUTED, fontSize: '0.74rem' }}>
+          Beskrivelse
+          <textarea value={note} onChange={event => setNote(event.target.value)} required maxLength={2000} rows={4} disabled={busy} style={fieldStyle} />
+        </label>
+        <div className="flex gap-4 text-xs">
+          <button type="submit" disabled={busy || !label.trim() || !note.trim()} style={{ color: GOLD }}>{saving ? 'Lagrer…' : 'Lagre'}</button>
+          <button type="button" disabled={busy} onClick={() => setEditing(false)} style={{ color: MUTED }}>Avbryt</button>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <p style={{ ...sectionLabelStyle(), color: GOLD }}>{value.label}</p>
+        {editable && (
+          <button type="button" disabled={busy} className="text-xs" style={{ color: GOLD }} aria-label={`Rediger ${value.label}`} onClick={() => {
+            setLabel(value.label)
+            setNote(value.note)
+            setEditing(true)
+          }}>Rediger</button>
+        )}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>{value.note}</p>
+    </div>
+  )
+}
+
+export function PackageDetailModal({
+  isOpen, onClose, packageLabel, items: initialItems, editable, onItemsChanged,
+  deliverableCounts, usageNotes: initialUsageNotes, onUsageNotesChanged,
+}: PackageDetailModalProps) {
   const [mainVideoIndex, setMainVideoIndex] = useState(0)
   const [socialClipIndex, setSocialClipIndex] = useState(0)
   const [items, setItems] = useState(initialItems)
+  const [usageNotes, setUsageNotes] = useState(() => DEFAULT_PACKAGE_USAGE_NOTES.map(
+    fallback => initialUsageNotes.find(note => note.kind === fallback.kind) ?? fallback
+  ))
+  const savingNoteRef = useRef(false)
+  const [savingNoteKind, setSavingNoteKind] = useState<QuotePackageShowcaseKind | null>(null)
   const [savingKinds, setSavingKinds] = useState<Record<QuotePackageShowcaseKind, boolean>>({
     main_video: false,
     social_clip: false,
@@ -406,6 +478,31 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
   const [error, setError] = useState<string | null>(null)
 
   if (!isOpen) return null
+
+  async function saveUsageNote(kind: QuotePackageShowcaseKind, label: string, note: string): Promise<boolean> {
+    if (savingNoteRef.current) return false
+    savingNoteRef.current = true
+    setSavingNoteKind(kind)
+    setError(null)
+    try {
+      const result = await updatePackageUsageNote(kind, label, note)
+      if ('error' in result) {
+        setError(result.error)
+        return false
+      }
+      const next = usageNotes.map(n => n.kind === kind ? result.data : n)
+      setUsageNotes(next)
+      onUsageNotesChanged?.(next)
+      return true
+    } catch (err) {
+      console.error('PackageDetailModal saveUsageNote:', err)
+      setError('Kunne ikke lagre teksten — sjekk nettforbindelsen')
+      return false
+    } finally {
+      savingNoteRef.current = false
+      setSavingNoteKind(null)
+    }
+  }
 
   function setSaving(kind: QuotePackageShowcaseKind, value: boolean) {
     setSavingKinds(prev => ({ ...prev, [kind]: value }))
@@ -540,6 +637,7 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
   const socialClips = itemsForKind('social_clip')
   const photos = itemsForKind('photo')
   const websitePhotos = itemsForKind('website_photo')
+  const photoCount = deliverableCounts?.photo ?? photos.length
 
   const activeVideo = mainVideos.length > 0 ? mainVideos[Math.min(mainVideoIndex, mainVideos.length - 1)] : null
   const activeClip = socialClips.length > 0 ? socialClips[Math.min(socialClipIndex, socialClips.length - 1)] : null
@@ -558,6 +656,26 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
   }
 
   const isEmpty = mainVideos.length === 0 && socialClips.length === 0 && photos.length === 0
+
+  const visibleNotes = usageNotes.filter(note => editable || itemsForKind(note.kind).length > 0)
+  const usageNotesPanel = visibleNotes.length > 0 ? (
+    <div className="flex w-full flex-col gap-5 md:max-w-[280px]">
+      <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>
+      {editable && (
+        <p style={{ fontSize: '0.74rem', color: MUTED }}>Tekstene er felles for alle pakker og landingssider.</p>
+      )}
+      {visibleNotes.map(note => (
+        <UsageNoteEditor
+          key={note.kind}
+          value={note}
+          editable={!!editable}
+          busy={savingNoteKind !== null}
+          saving={savingNoteKind === note.kind}
+          onSave={saveUsageNote}
+        />
+      ))}
+    </div>
+  ) : null
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50">
@@ -583,7 +701,7 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
         </div>
 
         {error && (
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', color: '#E05A4A', marginBottom: 14 }}>
+          <p role="alert" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', color: '#E05A4A', marginBottom: 14 }}>
             {error}
           </p>
         )}
@@ -617,9 +735,9 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
             ))}
             {photos.length > 0 && (
               <div className="flex shrink-0 flex-col items-center justify-center" style={{ width: 240, scrollSnapAlign: 'center' }}>
-                <PhotoStack photos={photos} size={170} />
+                <PhotoStack photos={photos} size={170} count={photoCount} />
                 <p className="mt-5" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: MUTED }}>
-                  {photos.length} bilder inkludert
+                  {photoCount} bilder inkludert
                 </p>
               </div>
             )}
@@ -668,7 +786,7 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
               />
             )}
 
-            {(socialClips.length > 0 || photos.length > 0 || editable) && (
+            {(mainVideos.length > 0 || socialClips.length > 0 || photos.length > 0 || websitePhotos.length > 0 || editable) && (
               <div className="mt-10 flex flex-wrap items-start gap-12">
                 {(socialClips.length > 0 || editable) && (
                   <div className="flex flex-col items-start" style={{ width: 200 }}>
@@ -776,9 +894,9 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
                     {editable && <p className="mb-2" style={sectionLabelStyle()}>{KIND_LABEL.photo}</p>}
                     {photos.length > 0 ? (
                       <div className="flex flex-col items-center self-center">
-                        <PhotoStack photos={photos} />
+                        <PhotoStack photos={photos} count={photoCount} />
                         <p className="mt-5" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: MUTED }}>
-                          {photos.length} bilder inkludert
+                          {photoCount} bilder inkludert
                         </p>
                       </div>
                     ) : editable ? (
@@ -799,53 +917,13 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
                   </div>
                 )}
 
-                {/* Forklarer leveransen i tomrommet til høyre for klipp/bunke
-                    — kun i kundevisning, ikke redigeringsmodus (der fyller
-                    seksjons-etikettene/EditStrip-ene allerede samme rom med
-                    tilsvarende forklaring, se feedback 2026-11-10). */}
-                {!editable && (mainVideos.length > 0 || socialClips.length > 0 || photos.length > 0 || websitePhotos.length > 0) && (
-                  <div className="flex flex-col gap-5" style={{ maxWidth: 280 }}>
-                    <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>
-                    <div className="flex flex-col gap-4">
-                      {mainVideos.length > 0 && (
-                        <div>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hovedvideo</p>
-                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
-                            Klar til bruk på landingssiden eller forsiden av nettstedet ditt.
-                          </p>
-                        </div>
-                      )}
-                      {socialClips.length > 0 && (
-                        <div>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Klipp</p>
-                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
-                            Tilpasset sosiale medier — Instagram, TikTok og Stories.
-                          </p>
-                        </div>
-                      )}
-                      {photos.length > 0 && (
-                        <div>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bilder</p>
-                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
-                            Fri bruk i nyhetsbrev, trykksaker og egne kanaler.
-                          </p>
-                        </div>
-                      )}
-                      {websitePhotos.length > 0 && (
-                        <div>
-                          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600, color: GOLD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Nettside-bilder</p>
-                          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', lineHeight: 1.5, color: MUTED }}>
-                            Ferdig tilpasset til bruk direkte på nettsiden.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                {usageNotesPanel}
               </div>
             )}
           </div>
         )}
+
+        <div className="mt-8 md:hidden">{usageNotesPanel}</div>
 
         <div className="mt-8 flex justify-end">
           <button

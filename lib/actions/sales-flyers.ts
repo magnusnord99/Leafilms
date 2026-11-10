@@ -1,7 +1,8 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, SalesFlyerReferenceLink, QuotePackageShowcaseItem } from '@/lib/types'
+import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, SalesFlyerReferenceLink, QuotePackageShowcaseItem, PackageUsageNote } from '@/lib/types'
+import { getPackageUsageNotes } from '@/lib/actions/package-usage-notes'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { getQuoteAmountExclVat, getPackageDeliverableCounts } from '@/lib/quote-builder-utils'
@@ -29,6 +30,7 @@ export type SalesFlyerWithRelations = SalesFlyer & {
   cases: (CaseStudy & { order_index: number })[]
   packages: SalesFlyerPackageItem[]
   referenceLinks: SalesFlyerReferenceLink[]
+  usageNotes: PackageUsageNote[]
 }
 
 // view_count er totalt antall rader i sales_flyer_views for flyeren (ikke
@@ -98,12 +100,13 @@ export async function getSalesFlyerBySlug(
     if (error) console.error('getSalesFlyerBySlug:', error)
     return null
   }
-  const [cases, packages, referenceLinks] = await Promise.all([
+  const [cases, packages, referenceLinks, usageNotes] = await Promise.all([
     getOrderedCases(flyer.id),
     getOrderedPackages(flyer.id),
     getOrderedReferenceLinks(flyer.id),
+    getPackageUsageNotes(),
   ])
-  return { ...(flyer as SalesFlyer), cases, packages, referenceLinks }
+  return { ...(flyer as SalesFlyer), cases, packages, referenceLinks, usageNotes }
 }
 
 async function getOrderedReferenceLinks(flyerId: string): Promise<SalesFlyerReferenceLink[]> {

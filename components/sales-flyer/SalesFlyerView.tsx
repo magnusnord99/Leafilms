@@ -677,7 +677,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     )
   }
 
-  // ── Eksempelbilder (8 faste bilder i et asymmetrisk rutenett) ────────────
+  // ── Eksempelbilder: inntil åtte bilder, uten tomme plasser ───────────────
   const EXAMPLE_IMAGE_TARGETS = [
     'example_image_1', 'example_image_2', 'example_image_3', 'example_image_4',
     'example_image_5', 'example_image_6', 'example_image_7', 'example_image_8',
@@ -693,7 +693,13 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
       posY: (flyer[posYField] as unknown as number) ?? 50,
     }
   })
-  const hasAnyExampleImage = exampleImageSlots.some(s => s.path)
+  const selectedExampleImages = exampleImageSlots.filter(slot => slot.path)
+  const nextExampleImageSlot = exampleImageSlots.find(slot => !slot.path)
+  const hasAnyExampleImage = selectedExampleImages.length > 0
+  const exampleImageGroups = []
+  for (let index = 1; index < selectedExampleImages.length; index += 3) {
+    exampleImageGroups.push(selectedExampleImages.slice(index, index + 3))
+  }
 
   function renderExampleImageSlot(slot: typeof exampleImageSlots[number], className: string) {
     const { path, field, target, posXField, posYField, posX, posY } = slot
@@ -706,7 +712,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             {editing && (
               <>
                 <button
-                  onClick={() => { set(field, null); saveField(field, null) }}
+                  onClick={() => { set(field, null); saveField(field, null, path) }}
                   disabled={savingFields.has(field)}
                   aria-label="Fjern bilde"
                   style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
@@ -1003,30 +1009,46 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         </section>
       )}
 
-      {/* ── Eksempelbilder — 8 bilder i et fast asymmetrisk rutenett, utvidelse
-          av pitch-byggerens ExampleWorkSection-rytme (hero/tårn/tårn/bunn) ── */}
+      {/* ── Eksempelbilder — rutenettet følger antall valgte bilder ── */}
       {(hasAnyExampleImage || editing) && (
         <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
-          {/* Mobil: vertikal stabling */}
           <div className="flex flex-col gap-0 md:hidden">
-            {exampleImageSlots.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}
+            {selectedExampleImages.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}
           </div>
 
-          {/* Desktop: hero / tårn-blokk / tårn-blokk / bunn */}
           <div className="hidden md:block">
-            {renderExampleImageSlot(exampleImageSlots[0], 'h-[700px]')}
-            <div className="grid grid-cols-2 gap-0">
-              <div className="row-span-2 h-[800px]">{renderExampleImageSlot(exampleImageSlots[1], 'h-full')}</div>
-              {renderExampleImageSlot(exampleImageSlots[2], 'h-[400px]')}
-              {renderExampleImageSlot(exampleImageSlots[3], 'h-[400px]')}
-            </div>
-            <div className="grid grid-cols-2 gap-0">
-              <div className="row-span-2 h-[800px]">{renderExampleImageSlot(exampleImageSlots[4], 'h-full')}</div>
-              {renderExampleImageSlot(exampleImageSlots[5], 'h-[400px]')}
-              {renderExampleImageSlot(exampleImageSlots[6], 'h-[400px]')}
-            </div>
-            {renderExampleImageSlot(exampleImageSlots[7], 'h-[600px]')}
+            {selectedExampleImages[0] && renderExampleImageSlot(selectedExampleImages[0], 'h-[700px]')}
+            {exampleImageGroups.map(group => (
+              <div key={group[0].field} className={group.length > 1 ? 'grid grid-cols-2 gap-0' : ''}>
+                {group.length === 3 ? (
+                  <>
+                    <div className="row-span-2 h-[800px]">{renderExampleImageSlot(group[0], 'h-full')}</div>
+                    {renderExampleImageSlot(group[1], 'h-[400px]')}
+                    {renderExampleImageSlot(group[2], 'h-[400px]')}
+                  </>
+                ) : group.map(slot => renderExampleImageSlot(slot, group.length === 1 ? 'h-[600px]' : 'h-[400px]'))}
+              </div>
+            ))}
           </div>
+
+          {editing && (
+            <div className="mt-6 flex items-center gap-4">
+              <p className="text-xs" style={{ color: MUTED }}>{selectedExampleImages.length} av 8 bilder</p>
+              {nextExampleImageSlot && (
+                <button
+                  type="button"
+                  onClick={() => setImagePickerTarget(nextExampleImageSlot.target)}
+                  disabled={EXAMPLE_IMAGE_TARGETS.some(target => savingFields.has(`${target}_path` as Field))}
+                  style={smallControl}
+                >+ Legg til bilde</button>
+              )}
+            </div>
+          )}
+          {editing && exampleImageSlots.filter(slot => !slot.path && fieldErrors[slot.field]).map(slot => (
+            <p key={slot.field} role="alert" className="mt-2 text-xs" style={{ color: '#E05A4A' }}>
+              Ikke lagret: {fieldErrors[slot.field]}
+            </p>
+          ))}
         </section>
       )}
 
@@ -1333,6 +1355,9 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onClose={() => setDetailPackageId(null)}
         packageLabel={detailPackage?.package_label ?? ''}
         items={detailPackage?.showcaseItems ?? []}
+        deliverableCounts={detailPackage?.deliverableCounts}
+        usageNotes={flyer.usageNotes}
+        onUsageNotesChanged={usageNotes => setFlyer(previous => ({ ...previous, usageNotes }))}
         editable={editing && detailPackage ? { flyerId: flyer.id, quoteId: detailPackage.quote_id } : undefined}
         onItemsChanged={detailPackage ? items => updatePackageShowcaseItems(detailPackage.quote_id, items) : undefined}
       />

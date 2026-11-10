@@ -295,13 +295,134 @@ export async function setSalesFlyerPackages(flyerId: string, quoteIds: string[])
   return { ok: true }
 }
 
+// Grov SSRF-sperre: kun http(s), ingen localhost/.local eller IP-literaler i
+// private/loopback-områder. Dekker ikke DNS-rebinding, men lenkene legges
+// inn av betrodd staff i et internt admin-verktøy — dette er forsvar i
+// dybden, ikke en garanti mot en ondsinnet ekstern aktør.
+function isSafeExternalUrl(urlStr: string): boolean {
+  let url: URL
+  try {
+    url = new URL(urlStr)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  const host = url.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.local') || host === '0.0.0.0') return false
+  const ipMatch = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipMatch) {
+    const a = Number(ipMatch[1])
+    const b = Number(ipMatch[2])
+    if (a === 127 || a === 10 || a === 0 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)) {
+      return false
+    }
+  }
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return false
+  return true
+}
+
+// Henter og:image/twitter:image fra target-URL-en til en referanselenke, og
+// kopierer bildet inn i flyerens egen lagring — samme kopier-ikke-referer-
+// begrunnelse som copyLibraryImageToFlyer, men kilden her er en ekstern,
+// ukontrollert nettside i stedet for biblioteket: en levende referanse ville
+// også vært en upålitelig hotlink, siden kundens side kan endre/fjerne
+// bildet når som helst. Feiler aldri hardt — en lenke uten og:image skal
+// bare vises uten bilde, ikke blokkere lagring av selve lenken.
+async function fetchReferenceLinkPreviewImage(slug: string, targetUrl: string): Promise<string | null> {
+  if (!isSafeExternalUrl(targetUrl)) return null
+
+  let html: string
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const pageRes = await fetch(targetUrl, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeafilmsPreviewBot/1.0)' },
+    })
+    clearTimeout(timeout)
+    if (!pageRes.ok || !pageRes.body) return null
+    // og:image ligger alltid i <head> — leser maks ~300kB, ingen grunn til å
+    // laste ned hele siden bare for å finne én meta-tag.
+    const reader = pageRes.body.getReader()
+    const chunks: Uint8Array[] = []
+    let received = 0
+    while (received < 300_000) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        chunks.push(value)
+        received += value.length
+      }
+    }
+    reader.cancel().catch(() => {})
+    html = Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf-8')
+  } catch (err) {
+    console.error('fetchReferenceLinkPreviewImage page fetch:', err)
+    return null
+  }
+
+  const match =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
+    html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)
+  if (!match) return null
+
+  let imageUrl: string
+  try {
+    imageUrl = new URL(match[1], targetUrl).toString()
+  } catch {
+    return null
+  }
+  if (!isSafeExternalUrl(imageUrl)) return null
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const imgRes = await fetch(imageUrl, { signal: controller.signal, redirect: 'follow' })
+    clearTimeout(timeout)
+    if (!imgRes.ok) return null
+    const contentType = imgRes.headers.get('content-type') ?? ''
+    if (!contentType.startsWith('image/')) return null
+    const arrayBuffer = await imgRes.arrayBuffer()
+    if (arrayBuffer.byteLength > 5_000_000) return null // 5MB tak
+
+    const ext = contentType.split('/')[1]?.split(';')[0]?.replace('jpeg', 'jpg') || 'jpg'
+    const destPath = `sales-flyers/${slug}/reference-links/${Math.random().toString(36).substring(2)}.${ext}`
+
+    const supabase = await createClient()
+    const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, Buffer.from(arrayBuffer), {
+      contentType,
+    })
+    if (uploadError) {
+      console.error('fetchReferenceLinkPreviewImage upload:', uploadError)
+      return null
+    }
+    const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(destPath)
+    return publicUrl
+  } catch (err) {
+    console.error('fetchReferenceLinkPreviewImage image fetch:', err)
+    return null
+  }
+}
+
+// Kalt fra klienten rett før en ny referanselenke legges til — se
+// SalesFlyerView.tsx sin addReferenceLink(). Returnerer alltid ok (aldri
+// {error}): manglende og:image er en gyldig, forventet utfall, ikke en feil.
+export async function getReferenceLinkPreviewImage(slug: string, url: string): Promise<{ previewImagePath: string | null }> {
+  const previewImagePath = await fetchReferenceLinkPreviewImage(slug, url)
+  return { previewImagePath }
+}
+
 // Samme atomiske mønster som setSalesFlyerCases/setSalesFlyerPackages, men
-// via replace_sales_flyer_reference_links (migrasjon 194) — lenkene er
-// fritekst (navn + URL), ikke referanse-id-er inn mot en annen tabell, så
-// RPC-en tar et jsonb-array og regenererer radene (inkl. id) fra bunnen.
+// via replace_sales_flyer_reference_links (migrasjon 194/197) — lenkene er
+// fritekst (navn + URL + valgfritt previewbilde), ikke referanse-id-er inn
+// mot en annen tabell, så RPC-en tar et jsonb-array og regenererer radene
+// (inkl. id) fra bunnen.
 export async function setSalesFlyerReferenceLinks(
   flyerId: string,
-  links: { label: string; url: string }[]
+  links: { label: string; url: string; preview_image_path?: string | null }[]
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient()
   const { error } = await supabase.rpc('replace_sales_flyer_reference_links', {

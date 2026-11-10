@@ -732,6 +732,7 @@ export type SalesFlyerReferenceLink = {
   flyer_id: string
   label: string
   url: string
+  preview_image_path: string | null
   order_index: number
   created_at: string
 }

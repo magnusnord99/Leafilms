@@ -10,6 +10,7 @@ import {
   setSalesFlyerCases,
   setSalesFlyerPackages,
   setSalesFlyerReferenceLinks,
+  getReferenceLinkPreviewImage,
   copyLibraryImageToFlyer,
   copyLibraryVideoToFlyer,
   getSalesFlyerBySlug,
@@ -506,7 +507,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // for id-er mot et bibliotek — se setSalesFlyerReferenceLinks.
 
   function toLinkPayload(links: typeof flyer.referenceLinks) {
-    return links.map(l => ({ label: l.label, url: l.url }))
+    return links.map(l => ({ label: l.label, url: l.url, preview_image_path: l.preview_image_path }))
   }
 
   async function addReferenceLink() {
@@ -515,10 +516,16 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     if (!label || !url || linksMutating) return
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url
 
-    const previous = flyer.referenceLinks
-    const next = [...previous, { id: `pending-${Date.now()}`, flyer_id: flyer.id, label, url, order_index: previous.length, created_at: new Date().toISOString() }]
-    set('referenceLinks', next)
     setLinksMutating(true)
+    // Henter og:image FØR selve lenken legges til lokalt, slik at kortet
+    // dukker opp ferdig med bilde med én gang (ikke uten, så en etterfølgende
+    // oppdatering) — koster noen ekstra sekunder ved klikk, men gir et
+    // enklere lagrings-flow (én persist-kall, ikke to).
+    const { previewImagePath } = await getReferenceLinkPreviewImage(slug, url)
+
+    const previous = flyer.referenceLinks
+    const next = [...previous, { id: `pending-${Date.now()}`, flyer_id: flyer.id, label, url, preview_image_path: previewImagePath, order_index: previous.length, created_at: new Date().toISOString() }]
+    set('referenceLinks', next)
     try {
       const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
       if ('error' in result) { setLinksError(`Kunne ikke lagre lenken: ${result.error}`); set('referenceLinks', previous); return }
@@ -1045,14 +1052,25 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-full items-center justify-between gap-4 rounded-[2px] p-6 transition hover:opacity-80"
+                      className="flex h-full flex-col overflow-hidden rounded-[2px] transition hover:opacity-80"
                       style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
                     >
-                      <span className="min-w-0">
-                        <span className="font-display block text-xl md:text-2xl" style={{ color: CREAM, fontWeight: 400 }}>{link.label}</span>
-                        <span className="mt-1 block truncate text-xs" style={{ color: MUTED }}>{hostname}</span>
+                      {link.preview_image_path && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={link.preview_image_path}
+                          alt=""
+                          className="aspect-video w-full object-cover"
+                          style={{ borderBottom: `1px solid ${BORDER}` }}
+                        />
+                      )}
+                      <span className="flex flex-1 items-center justify-between gap-4 p-6">
+                        <span className="min-w-0">
+                          <span className="font-display block text-xl md:text-2xl" style={{ color: CREAM, fontWeight: 400 }}>{link.label}</span>
+                          <span className="mt-1 block truncate text-xs" style={{ color: MUTED }}>{hostname}</span>
+                        </span>
+                        <span aria-hidden style={{ color: GOLD, fontSize: '1.1rem', flexShrink: 0 }}>↗</span>
                       </span>
-                      <span aria-hidden style={{ color: GOLD, fontSize: '1.1rem', flexShrink: 0 }}>↗</span>
                     </a>
                   </div>
                 )
@@ -1085,7 +1103,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                 className="mt-3"
                 style={{ fontSize: '0.78rem', fontWeight: 600, padding: '8px 16px', borderRadius: 8, background: ADMIN, color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating || !newLinkLabel.trim() || !newLinkUrl.trim() ? 0.6 : 1 }}
               >
-                + Legg til lenke
+                {linksMutating ? 'Henter forhåndsvisning…' : '+ Legg til lenke'}
               </button>
             </div>
           )}

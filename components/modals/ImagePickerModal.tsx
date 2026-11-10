@@ -27,6 +27,7 @@ export function ImagePickerModal({
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
+  const [selectedSubcategory, setSelectedSubcategory] = useState('all')
   const [selectedIds, setSelectedIds] = useState<string[]>(selectedImageIds)
   const [limitWarning, setLimitWarning] = useState(false)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
@@ -45,6 +46,7 @@ export function ImagePickerModal({
   const [uploadPreview, setUploadPreview] = useState<string | null>(null)
   const [uploadTitle, setUploadTitle] = useState('')
   const [uploadCategory, setUploadCategory] = useState('')
+  const [uploadSubcategory, setUploadSubcategory] = useState('')
   const [uploadTags, setUploadTags] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -114,6 +116,7 @@ export function ImagePickerModal({
           file_path: filePath,
           title: uploadTitle || null,
           category: uploadCategory || null,
+          subcategory: uploadSubcategory || null,
           tags: tagsArray,
           width: dims.width || null,
           height: dims.height || null,
@@ -187,6 +190,10 @@ export function ImagePickerModal({
         query = query.eq('category', selectedCategory)
       }
 
+      if (selectedCategory !== 'all' && selectedSubcategory !== 'all') {
+        query = query.eq('subcategory', selectedSubcategory)
+      }
+
       if (debouncedSearchQuery.trim()) {
         query = query.or(`title.ilike.%${debouncedSearchQuery}%,description.ilike.%${debouncedSearchQuery}%`)
       }
@@ -214,7 +221,7 @@ export function ImagePickerModal({
     if (isOpen) {
       fetchImages()
     }
-  }, [isOpen, selectedCategory, debouncedSearchQuery])
+  }, [isOpen, selectedCategory, selectedSubcategory, debouncedSearchQuery])
 
   function toggleSelection(imageId: string) {
     // Hvis maxSelection er 1, erstatt alltid det gamle bildet med det nye
@@ -319,7 +326,7 @@ export function ImagePickerModal({
                 <Text variant="body" className="mb-2 block">Kategori</Text>
                 <select
                   value={uploadCategory}
-                  onChange={(e) => setUploadCategory(e.target.value)}
+                  onChange={(e) => { setUploadCategory(e.target.value); setUploadSubcategory('') }}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-2 text-white"
                 >
                   {categoryList.map((cat) => (
@@ -327,6 +334,22 @@ export function ImagePickerModal({
                   ))}
                 </select>
               </div>
+
+              {categoryList.find(cat => cat.slug === uploadCategory)?.subcategories.length ? (
+                <label className="block text-white">
+                  Underkategori
+                  <select
+                    value={uploadSubcategory}
+                    onChange={event => setUploadSubcategory(event.target.value)}
+                    className="mt-2 w-full rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-white"
+                  >
+                    <option value="">Ingen underkategori</option>
+                    {categoryList.find(cat => cat.slug === uploadCategory)?.subcategories.map(sub => (
+                      <option key={sub.id} value={`${uploadCategory}/${sub.slug}`}>{sub.label}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
               <Input
                 label="Tags (komma-separert, valgfritt)"
@@ -366,12 +389,23 @@ export function ImagePickerModal({
                 key={cat.value}
                 variant={selectedCategory === cat.value ? 'primary' : 'secondary'}
                 size="sm"
-                onClick={() => setSelectedCategory(cat.value)}
+                onClick={() => { setSelectedCategory(cat.value); setSelectedSubcategory('all') }}
               >
                 {cat.label}
               </Button>
             ))}
           </div>
+          {categoryList.find(cat => cat.slug === selectedCategory)?.subcategories.length ? (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Underkategorier">
+              <Button size="sm" variant={selectedSubcategory === 'all' ? 'primary' : 'secondary'} onClick={() => setSelectedSubcategory('all')}>Alle underkategorier</Button>
+              {categoryList.find(cat => cat.slug === selectedCategory)?.subcategories.map(sub => {
+                const value = `${selectedCategory}/${sub.slug}`
+                return (
+                  <Button key={sub.id} size="sm" variant={selectedSubcategory === value ? 'primary' : 'secondary'} onClick={() => setSelectedSubcategory(value)}>{sub.label}</Button>
+                )
+              })}
+            </div>
+          ) : null}
         </div>
 
         {/* Images Grid */}

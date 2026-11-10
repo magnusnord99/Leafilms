@@ -1470,6 +1470,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onClose={() => setDetailPackageId(null)}
         packageLabel={detailPackage?.package_label ?? ''}
         inquiryEmail={flyer.cta_email}
+        flyerVideoPath={flyer.hero_video_path}
+        flyerImages={selectedExampleImages.map(slot => slot.path).filter((path): path is string => Boolean(path))}
         items={detailPackage?.showcaseItems ?? []}
         deliverableCounts={detailPackage?.deliverableCounts}
         usageNotes={flyer.usageNotes}

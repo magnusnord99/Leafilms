@@ -35,6 +35,8 @@ interface PackageDetailModalProps {
   onClose: () => void
   packageLabel: string
   inquiryEmail?: string
+  flyerVideoPath?: string | null
+  flyerImages?: string[]
   items: QuotePackageShowcaseItem[]
   editable?: EditableTarget
   onItemsChanged?: (items: QuotePackageShowcaseItem[]) => void
@@ -460,6 +462,7 @@ function UsageNoteEditor({ value, editable, busy, saving, onSave }: {
 export function PackageDetailModal({
   isOpen, onClose, packageLabel, items: initialItems, editable, onItemsChanged,
   deliverableCounts, usageNotes: initialUsageNotes, onUsageNotesChanged, inquiryEmail,
+  flyerVideoPath, flyerImages,
 }: PackageDetailModalProps) {
   const [mainVideoIndex, setMainVideoIndex] = useState(0)
   const [socialClipIndex, setSocialClipIndex] = useState(0)
@@ -634,10 +637,23 @@ export function PackageDetailModal({
     persistKind('social_clip', next)
   }
 
-  const mainVideos = itemsForKind('main_video')
+  function automaticItem(kind: QuotePackageShowcaseKind, path: string, index: number): QuotePackageShowcaseItem {
+    return {
+      id: `flyer-${kind}-${index}-${path}`, package_id: '', flyer_id: '', kind,
+      media_type: kind === 'main_video' ? 'video' : 'image', path,
+      caption: null, order_index: index,
+    }
+  }
+  const mainVideos = flyerVideoPath !== undefined
+    ? flyerVideoPath ? [automaticItem('main_video', flyerVideoPath, 0)] : []
+    : itemsForKind('main_video')
   const socialClips = itemsForKind('social_clip')
-  const photos = itemsForKind('photo')
-  const websitePhotos = itemsForKind('website_photo')
+  const photos = flyerImages !== undefined
+    ? flyerImages.map((path, index) => automaticItem('photo', path, index))
+    : itemsForKind('photo')
+  const websitePhotos = flyerImages !== undefined
+    ? flyerImages.map((path, index) => automaticItem('website_photo', path, index))
+    : itemsForKind('website_photo')
   const photoCount = deliverableCounts?.photo ?? photos.length
 
   const activeVideo = mainVideos.length > 0 ? mainVideos[Math.min(mainVideoIndex, mainVideos.length - 1)] : null
@@ -764,7 +780,10 @@ export function PackageDetailModal({
                 Ingen hovedvideo lagt til ennå.
               </p>
             ) : null}
-            {editable && (
+            {editable && flyerVideoPath !== undefined && (
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>Hentes automatisk fra videoen øverst på flyeren. Endre toppvideoen for å bytte eksempel.</p>
+            )}
+            {editable && flyerVideoPath === undefined && (
               <EditStrip
                 kindItems={mainVideos}
                 busy={savingKinds.main_video}
@@ -776,7 +795,10 @@ export function PackageDetailModal({
             )}
 
             {editable && <p className="mt-8" style={sectionLabelStyle()}>{KIND_LABEL.website_photo}</p>}
-            {editable && (
+            {editable && flyerImages !== undefined && (
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>Bildene hentes automatisk fra flyeren og følger rekkefølgen der.</p>
+            )}
+            {editable && flyerImages === undefined && (
               <EditStrip
                 kindItems={websitePhotos}
                 busy={savingKinds.website_photo}
@@ -905,7 +927,10 @@ export function PackageDetailModal({
                         Ingen bilder lagt til ennå.
                       </p>
                     ) : null}
-                    {editable && (
+                    {editable && flyerImages !== undefined && (
+                      <p className="mt-3 text-sm" style={{ color: MUTED }}>Bildene hentes automatisk fra flyeren.</p>
+                    )}
+                    {editable && flyerImages === undefined && (
                       <EditStrip
                         kindItems={photos}
                         busy={savingKinds.photo}

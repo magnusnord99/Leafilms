@@ -660,15 +660,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               nå eneste vei inn til å LEGGE TIL det første elementet, siden
               redigeringen skjer inline i PackageDetailModal (feedback
               2026-11-10) i stedet for i et eget tabell-vindu. */}
-          {/* Tydelig knapp (ramme + bakgrunnstint), ikke en bar tekstlenke —
-              den druknet tidligere ved siden av leveranse-chipsene (feedback
-              2026-11-10: "se mer kommer tydelig frem"). */}
           {(hasShowcase || editing) && (
             <button
               type="button"
               onClick={() => setDetailPackageId(pkg.id)}
-              className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
-              style={{ color: GOLD, background: 'rgba(196,148,52,0.1)', border: `1px solid ${GOLD}`, cursor: 'pointer' }}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
+              style={{ color: GOLD, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
             >
               Se mer
               <span aria-hidden>→</span>
@@ -852,18 +849,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           </label>
           <FieldError field="published" />
 
-          <label style={settingsLabel}>Kontakt-e-post ("Ta kontakt"-knappen nederst)</label>
-          <input
-            type="email"
-            value={flyer.contact_email}
-            placeholder="navn@leafilms.no"
-            onChange={e => set('contact_email', e.target.value)}
-            onBlur={e => saveField('contact_email', e.target.value)}
-            style={settingsInput}
-          />
-          <FieldError field="contact_email" />
-
-          <label style={settingsLabel}>CTA-e-post (mottaker for pakke-forespørsler)</label>
+          <label style={settingsLabel}>CTA-e-post (mottaker av forespørsler)</label>
           <input
             type="email"
             value={flyer.cta_email}
@@ -1346,14 +1332,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <p className="mt-6 max-w-xl text-base leading-relaxed md:text-lg" style={{ color: MUTED }}>{flyer.cta_subtext}</p>
           ) : null}
 
-          {/* contact_email redigeres i innstillingspanelet, ikke her — knappen
-              ser lik ut av og på redigeringsmodus. Egen e-post fra cta_email
-              (brukt av pakke-knappene), se 199_sales_flyer_contact_email.sql.
-              Uten e-post vises ingen knapp for besøkende (en tom mailto: er
-              en død lenke). */}
-          {flyer.contact_email ? (
+          {/* cta_email redigeres i innstillingspanelet, ikke her — knappen ser
+              lik ut av og på redigeringsmodus. Uten e-post vises ingen knapp
+              for besøkende (en tom mailto: er en død lenke). */}
+          {flyer.cta_email ? (
             <a
-              href={`mailto:${flyer.contact_email}`}
+              href={`mailto:${flyer.cta_email}`}
               className="mt-12 inline-flex items-center gap-3 px-8 py-4 text-sm font-medium uppercase tracking-[0.15em] transition hover:opacity-90"
               style={{ background: GOLD, color: '#0C0B09' }}
             >
@@ -1362,7 +1346,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             </a>
           ) : editing ? (
             <p className="mt-12 text-sm" style={{ color: '#E05A4A' }}>
-              Ingen kontakt-e-post satt — legg den inn under ⚙ Innstillinger, ellers vises ingen kontaktknapp.
+              Ingen CTA-e-post satt — legg den inn under ⚙ Innstillinger, ellers vises ingen kontaktknapp.
             </p>
           ) : null}
         </div>

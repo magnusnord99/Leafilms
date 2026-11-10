@@ -8,17 +8,15 @@ import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { getQuoteAmountExclVat, getPackageDeliverableCounts, getPackageShootDays } from '@/lib/quote-builder-utils'
 
 // Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
-// ALDRI hele Quote-raden. getSalesFlyerBySlug serialiseres som initialFlyer
-// til den klient-rendrede SalesFlyerView, og denne listen går derfor rett i
-// side-payloaden til hver anonyme flyer-besøkende. Et fullt quotes(*)-embed
-// (som tidligere) lekket crew-navn/dagspriser, linjepriser, discountFactor,
-// ourContact/companyEmail, kontraktsvilkår, project_id, created_by, pdf_path
-// — og hvis et ekte kundetilbud merkes som pakke, kundens navn/nummer/
-// prosjektnavn også.
+// ALDRI hele packages-raden. getSalesFlyerBySlug serialiseres som
+// initialFlyer til den klient-rendrede SalesFlyerView, og denne listen går
+// derfor rett i side-payloaden til hver anonyme flyer-besøkende. Et fullt
+// packages(*)-embed ville lekket crew-navn/dagspriser, linjepriser,
+// discountFactor, ourContact/companyEmail og kontraktsvilkår fra quote_data.
 export type SalesFlyerPackageItem = {
   id: string
   order_index: number
-  quote_id: string
+  package_id: string
   package_label: string
   package_category: SalesFlyerPackageCategory
   amount: number
@@ -147,7 +145,7 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
   // internt i denne funksjonen og går aldri ut til kalleren/klienten.
   const { data, error } = await supabase
     .from('sales_flyer_packages')
-    .select('id, order_index, quote_id, quotes (package_label, package_category, quote_data)')
+    .select('id, order_index, package_id, packages (label, category, quote_data)')
     .eq('flyer_id', flyerId)
     .order('order_index', { ascending: true })
   if (error) {
@@ -157,61 +155,61 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
   type Row = {
     id: string
     order_index: number
-    quote_id: string
-    quotes: { package_label: string | null; package_category: SalesFlyerPackageCategory | null; quote_data: unknown } | null
+    package_id: string
+    packages: { label: string | null; category: SalesFlyerPackageCategory | null; quote_data: unknown } | null
   }
   const rows = (data ?? []) as unknown as Row[]
-  // Samme defensive filter som listPackageTemplateQuotes: package_category
-  // (og dermed package_label) er nullbar i DB uavhengig av koblingen her —
-  // en pakke uten kategori kan ikke plasseres i noen fane og utelates.
+  // Samme defensive filter som listAllPackagesForPicker: category er nullbar
+  // i DB uavhengig av koblingen her — en pakke uten kategori kan ikke
+  // plasseres i noen fane og utelates.
   const packages = rows
-    .filter((row): row is Row & { quotes: { package_label: string; package_category: SalesFlyerPackageCategory; quote_data: unknown } } =>
-      row.quotes !== null && row.quotes.package_label !== null && row.quotes.package_category !== null
+    .filter((row): row is Row & { packages: { label: string; category: SalesFlyerPackageCategory; quote_data: unknown } } =>
+      row.packages !== null && row.packages.label !== null && row.packages.category !== null
     )
     .map(row => ({
       id: row.id,
       order_index: row.order_index,
-      quote_id: row.quote_id,
-      package_label: row.quotes.package_label,
-      package_category: row.quotes.package_category,
-      amount: getQuoteAmountExclVat(row.quotes.quote_data) ?? 0,
-      deliverableCounts: getPackageDeliverableCounts(row.quotes.quote_data),
-      shootDays: getPackageShootDays(row.quotes.quote_data),
+      package_id: row.package_id,
+      package_label: row.packages.label,
+      package_category: row.packages.category,
+      amount: getQuoteAmountExclVat(row.packages.quote_data) ?? 0,
+      deliverableCounts: getPackageDeliverableCounts(row.packages.quote_data),
+      shootDays: getPackageShootDays(row.packages.quote_data),
     }))
 
   // Separat oppslag (ikke et embed over) fordi quote_package_showcase_items
-  // har en annen kardinalitet (0-mange pr. quote) enn quotes-embedet over, og
-  // fordi batch-henting via .in() på quote_id-listen er billigere enn ett
-  // PostgREST-embed pr. pakke.
-  const showcaseByQuoteId = await getShowcaseItemsByFlyerAndQuoteId(flyerId, packages.map(p => p.quote_id))
-  return packages.map(p => ({ ...p, showcaseItems: showcaseByQuoteId.get(p.quote_id) ?? [] }))
+  // har en annen kardinalitet (0-mange pr. pakke) enn packages-embedet over,
+  // og fordi batch-henting via .in() på package_id-listen er billigere enn
+  // ett PostgREST-embed pr. pakke.
+  const showcaseByPackageId = await getShowcaseItemsByFlyerAndPackageId(flyerId, packages.map(p => p.package_id))
+  return packages.map(p => ({ ...p, showcaseItems: showcaseByPackageId.get(p.package_id) ?? [] }))
 }
 
 // quote_package_showcase_items har ingen public/anon-policy (kun staff, se
 // migrasjon 193) — samme autorisasjonsbegrunnelse som resten av denne filen
-// for quotes/quote_data: en publisert flyer er anonymt besøkt, og uten
+// for packages/quote_data: en publisert flyer er anonymt besøkt, og uten
 // service-klienten her ville RLS stille nullet ut eksempelmedia for alle
-// ekte besøkende. Scopet på flyer_id i tillegg til quote_id (migrasjon 194)
+// ekte besøkende. Scopet på flyer_id i tillegg til package_id (migrasjon 194)
 // — samme pakke kan nå vise forskjellig eksempelmedia på to ulike flyers.
-async function getShowcaseItemsByFlyerAndQuoteId(flyerId: string, quoteIds: string[]): Promise<Map<string, QuotePackageShowcaseItem[]>> {
+async function getShowcaseItemsByFlyerAndPackageId(flyerId: string, packageIds: string[]): Promise<Map<string, QuotePackageShowcaseItem[]>> {
   const map = new Map<string, QuotePackageShowcaseItem[]>()
-  if (quoteIds.length === 0) return map
+  if (packageIds.length === 0) return map
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('quote_package_showcase_items')
     .select('*')
     .eq('flyer_id', flyerId)
-    .in('quote_id', quoteIds)
+    .in('package_id', packageIds)
     .order('kind', { ascending: true })
     .order('order_index', { ascending: true })
   if (error) {
-    console.error('getShowcaseItemsByFlyerAndQuoteId:', error)
+    console.error('getShowcaseItemsByFlyerAndPackageId:', error)
     return map
   }
   for (const row of (data ?? []) as QuotePackageShowcaseItem[]) {
-    const existing = map.get(row.quote_id)
+    const existing = map.get(row.package_id)
     if (existing) existing.push(row)
-    else map.set(row.quote_id, [row])
+    else map.set(row.package_id, [row])
   }
   return map
 }
@@ -285,13 +283,13 @@ export async function setSalesFlyerCases(flyerId: string, caseStudyIds: string[]
   return { ok: true }
 }
 
-// Samme atomiske mønster for pakke-listen (quote-id-er) via
-// replace_sales_flyer_packages (migrasjon 191).
-export async function setSalesFlyerPackages(flyerId: string, quoteIds: string[]): Promise<{ ok: true } | { error: string }> {
+// Samme atomiske mønster for pakke-listen (pakke-id-er) via
+// replace_sales_flyer_packages (migrasjon 191/200).
+export async function setSalesFlyerPackages(flyerId: string, packageIds: string[]): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient()
   const { error } = await supabase.rpc('replace_sales_flyer_packages', {
     p_flyer_id: flyerId,
-    p_quote_ids: quoteIds,
+    p_package_ids: packageIds,
   })
   if (error) {
     console.error('setSalesFlyerPackages:', error)

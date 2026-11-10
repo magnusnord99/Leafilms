@@ -124,7 +124,7 @@ export type Project = {
   quote_reviewer_id?: string | null
   /** Settes automatisk første gang en e-post sendes fra prosjektet (via /api/send-email). Vises som "Kontaktet"-badge på lead-kort i Kanban. */
   first_contacted_at?: string | null
-  /** Settes på prosjekter som er pakkemaler for salgsflyere (ikke ekte kundeprosjekter). */
+  /** Legacy (migrasjon 190) — erstattet av package_offers/packages (migrasjon 199). Ikke lenger satt av noen kode; alltid false på nye prosjekter. */
   is_package_template: boolean
   created_at: string
   updated_at: string
@@ -146,11 +146,11 @@ export type Quote = {
   selected_addon_ids: string[]
   /** Hvem i teamet som opprettet tilbudet — NULL for tilbud opprettet før migrasjon 146. */
   created_by: string | null
-  /** Pakkeetikett når tilbudet er en salgsflyer-pakke (NULL ellers). */
+  /** Legacy (migrasjon 190) — erstattet av packages.label (migrasjon 199). Ikke lenger satt av noen kode. */
   package_label: string | null
-  /** Pakkekategori når tilbudet er en salgsflyer-pakke (NULL ellers). */
+  /** Legacy (migrasjon 190) — erstattet av packages.category (migrasjon 199). Ikke lenger satt av noen kode. */
   package_category: SalesFlyerPackageCategory | null
-  /** Rekkefølge blant salgsflyer-pakker. */
+  /** Legacy (migrasjon 190) — erstattet av packages.display_order (migrasjon 199). Ikke lenger satt av noen kode. */
   package_order: number
   created_at: string
   updated_at: string
@@ -723,8 +723,30 @@ export type SalesFlyerCase = {
 export type SalesFlyerPackage = {
   id: string
   flyer_id: string
-  quote_id: string
+  package_id: string
   order_index: number
+}
+
+// Kunde (eller intern/Leafilms når customer_id er null) -> pakketilbud ->
+// pakker (se packages under), side ved side i samme pakketilbud — ikke
+// versjoner av hverandre. Se 199_package_offers.sql.
+export type PackageOffer = {
+  id: string
+  customer_id: string | null
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export type Package = {
+  id: string
+  package_offer_id: string
+  label: string
+  category: SalesFlyerPackageCategory | null
+  display_order: number
+  quote_data: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
 }
 
 export type SalesFlyerReferenceLink = {
@@ -748,7 +770,7 @@ export type QuotePackageShowcaseKind = 'main_video' | 'social_clip' | 'photo' | 
 
 export type QuotePackageShowcaseItem = {
   id: string
-  quote_id: string
+  package_id: string
   flyer_id: string
   kind: QuotePackageShowcaseKind
   media_type: 'image' | 'video'

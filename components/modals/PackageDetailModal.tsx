@@ -5,9 +5,9 @@ import { QuotePackageShowcaseItem, QuotePackageShowcaseKind, PackageUsageNote } 
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import {
-  copyLibraryImageToQuotePackage,
-  copyLibraryVideoToQuotePackage,
-  setQuotePackageShowcaseItems,
+  copyLibraryImageToPackage,
+  copyLibraryVideoToPackage,
+  setPackageShowcaseItems,
 } from '@/lib/actions/quote-package-showcase'
 import { updatePackageUsageNote } from '@/lib/actions/package-usage-notes'
 import { DEFAULT_PACKAGE_USAGE_NOTES } from '@/lib/package-usage-notes'
@@ -28,7 +28,7 @@ const BLACK = '#0C0B09'
 // det tidligere separate PackageShowcasePanel-tabellvinduet (feedback
 // 2026-11-10: "redigeringen ... bli inline ... ikke i en tabell"). Panelet
 // er fjernet — all legg til/fjern/flytt-logikk bor nå her.
-type EditableTarget = { flyerId: string; quoteId: string }
+type EditableTarget = { flyerId: string; packageId: string }
 
 interface PackageDetailModalProps {
   isOpen: boolean
@@ -513,7 +513,7 @@ export function PackageDetailModal({
   }
 
   // Erstatter hele vareliste-fanen for én kind — aldri en partiell diff, se
-  // setQuotePackageShowcaseItems' atomiske replace-kontrakt.
+  // setPackageShowcaseItems' atomiske replace-kontrakt.
   async function persistKind(kind: QuotePackageShowcaseKind, nextKindItems: QuotePackageShowcaseItem[]) {
     if (!editable) return
     const previousKindItems = itemsForKind(kind)
@@ -523,7 +523,7 @@ export function PackageDetailModal({
     setSaving(kind, true)
     try {
       const payload = nextKindItems.map(i => ({ media_type: i.media_type, path: i.path, caption: i.caption }))
-      const result = await setQuotePackageShowcaseItems(editable.flyerId, editable.quoteId, kind, payload)
+      const result = await setPackageShowcaseItems(editable.flyerId, editable.packageId, kind, payload)
       if ('error' in result) {
         setError(result.error)
         const reverted = [...items.filter(i => i.kind !== kind), ...previousKindItems]
@@ -551,14 +551,14 @@ export function PackageDetailModal({
       const current = itemsForKind(kind)
       const additions: QuotePackageShowcaseItem[] = []
       for (const id of ids) {
-        const result = await copyLibraryVideoToQuotePackage(editable.flyerId, editable.quoteId, id, kind)
+        const result = await copyLibraryVideoToPackage(editable.flyerId, editable.packageId, id, kind)
         if ('error' in result) {
           setError(result.error)
           return
         }
         additions.push({
           id: makeTempId(),
-          quote_id: editable.quoteId,
+          package_id: editable.packageId,
           flyer_id: editable.flyerId,
           kind,
           media_type: 'video',
@@ -581,14 +581,14 @@ export function PackageDetailModal({
       const current = itemsForKind(kind)
       const additions: QuotePackageShowcaseItem[] = []
       for (const id of ids) {
-        const result = await copyLibraryImageToQuotePackage(editable.flyerId, editable.quoteId, id, kind)
+        const result = await copyLibraryImageToPackage(editable.flyerId, editable.packageId, id, kind)
         if ('error' in result) {
           setError(result.error)
           return
         }
         additions.push({
           id: makeTempId(),
-          quote_id: editable.quoteId,
+          package_id: editable.packageId,
           flyer_id: editable.flyerId,
           kind,
           media_type: 'image',

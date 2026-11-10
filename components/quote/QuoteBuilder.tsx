@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 
 // createEmptyBuilderData (med standard vilkårstekst) bor i lib/quote-builder-utils.ts slik at
-// også server-kode (lib/actions/quote-packages.ts) kan bruke nøyaktig samme standard-skjelett —
+// også server-kode (lib/actions/package-offers.ts) kan bruke nøyaktig samme standard-skjelett —
 // en 'use client'-modul kan ikke kalles fra server. Re-eksporteres her for eksisterende importører.
 export { createEmptyBuilderData }
 

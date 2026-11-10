@@ -1,6 +1,6 @@
 'use client'
 
-import { PackageTemplateQuote } from '@/lib/actions/quote-packages'
+import { PickerPackageItem } from '@/lib/actions/package-offers'
 import { SalesFlyerPackageCategory } from '@/lib/types'
 import { Button, Card, Heading, Text } from '@/components/ui'
 
@@ -17,9 +17,9 @@ function formatNok(amount: number): string {
 interface PackagePickerModalProps {
   isOpen: boolean
   onClose: () => void
-  allPackages: PackageTemplateQuote[]
-  selectedQuoteIds: string[]
-  onToggleSelection: (quoteId: string) => void
+  allPackages: PickerPackageItem[]
+  selectedPackageIds: string[]
+  onToggleSelection: (packageId: string) => void
   onSave: () => void
 }
 
@@ -27,7 +27,7 @@ export function PackagePickerModal({
   isOpen,
   onClose,
   allPackages,
-  selectedQuoteIds,
+  selectedPackageIds,
   onToggleSelection,
   onSave,
 }: PackagePickerModalProps) {
@@ -55,7 +55,7 @@ export function PackagePickerModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
           {allPackages.map((pkg) => {
-            const isSelected = selectedQuoteIds.includes(pkg.id)
+            const isSelected = selectedPackageIds.includes(pkg.id)
             return (
               <div
                 key={pkg.id}
@@ -72,10 +72,13 @@ export function PackagePickerModal({
                   </div>
                 )}
                 <Heading as="h4" size="sm" className="text-sm mb-1 pr-16">
-                  {pkg.package_label}
+                  {pkg.label}
                 </Heading>
                 <Text variant="small" className="text-xs">
-                  {PACKAGE_CATEGORY_LABEL[pkg.package_category]} · {formatNok(pkg.amount)}
+                  {PACKAGE_CATEGORY_LABEL[pkg.category]} · {formatNok(pkg.amount)}
+                </Text>
+                <Text variant="small" className="text-xs opacity-60">
+                  {pkg.customerName ?? 'Intern'} — {pkg.offerTitle}
                 </Text>
               </div>
             )
@@ -102,9 +105,9 @@ export function PackagePickerModal({
             onClick={onSave}
             variant="primary"
             className="flex-1"
-            disabled={selectedQuoteIds.length === 0}
+            disabled={selectedPackageIds.length === 0}
           >
-            Bruk valgte ({selectedQuoteIds.length})
+            Bruk valgte ({selectedPackageIds.length})
           </Button>
         </div>
       </Card>

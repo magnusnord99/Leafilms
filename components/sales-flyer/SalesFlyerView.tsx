@@ -15,7 +15,7 @@ import {
   copyLibraryVideoToFlyer,
   getSalesFlyerBySlug,
 } from '@/lib/actions/sales-flyers'
-import { listPackageTemplateQuotes, PackageTemplateQuote } from '@/lib/actions/quote-packages'
+import { listAllPackagesForPicker, PickerPackageItem } from '@/lib/actions/package-offers'
 import { HeroMedia } from '@/components/marketing/HeroMedia'
 import { CasePickerModal } from '@/components/modals/CasePickerModal'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
@@ -180,7 +180,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
   const [packagePickerOpen, setPackagePickerOpen] = useState(false)
   const [pendingPackageIds, setPendingPackageIds] = useState<string[]>([])
-  const [allPackages, setAllPackages] = useState<PackageTemplateQuote[]>([])
+  const [allPackages, setAllPackages] = useState<PickerPackageItem[]>([])
   // Egen "lastet"-flagg i stedet for allPackages.length === 0 — en tom liste
   // (ingen pakker opprettet ennå) er et gyldig svar og skal ikke hentes på nytt
   // hver gang plukkeren åpnes.
@@ -189,7 +189,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [packagesError, setPackagesError] = useState<string | null>(null)
 
   // "Se mer"-modalen — id-en til pakke-kortets EGEN id (sales_flyer_packages-
-  // raden, pkg.id), ikke quote_id, siden det er feltet hvert kort allerede
+  // raden, pkg.id), ikke package_id, siden det er feltet hvert kort allerede
   // bruker som nøkkel.
   const [detailPackageId, setDetailPackageId] = useState<string | null>(null)
 
@@ -394,10 +394,10 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // ── Pakker ───────────────────────────────────────────────────────────────
 
   async function openPackagePicker() {
-    setPendingPackageIds(flyer.packages.map(p => p.quote_id))
+    setPendingPackageIds(flyer.packages.map(p => p.package_id))
     if (!packagesLoaded) {
       try {
-        const packages = await listPackageTemplateQuotes()
+        const packages = await listAllPackagesForPicker()
         setAllPackages(packages)
         setPackagesLoaded(true)
       } catch (err) {
@@ -409,8 +409,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     setPackagePickerOpen(true)
   }
 
-  function togglePackageSelection(quoteId: string) {
-    setPendingPackageIds(prev => prev.includes(quoteId) ? prev.filter(id => id !== quoteId) : [...prev, quoteId])
+  function togglePackageSelection(packageId: string) {
+    setPendingPackageIds(prev => prev.includes(packageId) ? prev.filter(id => id !== packageId) : [...prev, packageId])
   }
 
   async function handlePackagePickerSave() {
@@ -436,18 +436,18 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // i stedet for i et eget tabell-vindu — denne oppdaterer bare den ene
   // pakkens showcaseItems lokalt når modalen melder fra om en endring, uten
   // en full sideoppfriskning (feedback 2026-11-10).
-  function updatePackageShowcaseItems(quoteId: string, items: QuotePackageShowcaseItem[]) {
-    set('packages', flyer.packages.map(p => p.quote_id === quoteId ? { ...p, showcaseItems: items } : p))
+  function updatePackageShowcaseItems(packageId: string, items: QuotePackageShowcaseItem[]) {
+    set('packages', flyer.packages.map(p => p.package_id === packageId ? { ...p, showcaseItems: items } : p))
   }
 
   // Pakkene vises gruppert per kategori, så "flytt opp/ned" bytter plass med
   // nærmeste pakke i SAMME kategori i den flate, ordnede listen — ellers ville
   // et klikk ofte ikke gitt noen synlig endring (bytte med en pakke i en annen
   // kategori-gruppe).
-  async function movePackage(quoteId: string, direction: 'up' | 'down') {
+  async function movePackage(packageId: string, direction: 'up' | 'down') {
     if (packageMutating) return
     const previous = flyer.packages
-    const index = previous.findIndex(p => p.quote_id === quoteId)
+    const index = previous.findIndex(p => p.package_id === packageId)
     if (index === -1) return
     const category = previous[index].package_category
     let swapWith = -1
@@ -462,7 +462,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     set('packages', next)
     setPackageMutating(true)
     try {
-      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote_id))
+      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.package_id))
       if ('error' in result) { setPackagesError(`Kunne ikke lagre rekkefølgen: ${result.error}`); set('packages', previous) }
       else setPackagesError(null)
     } catch (err) {
@@ -474,14 +474,14 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     }
   }
 
-  async function removePackage(quoteId: string) {
+  async function removePackage(packageId: string) {
     if (packageMutating) return
     const previous = flyer.packages
-    const next = flyer.packages.filter(p => p.quote_id !== quoteId)
+    const next = flyer.packages.filter(p => p.package_id !== packageId)
     set('packages', next)
     setPackageMutating(true)
     try {
-      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.quote_id))
+      const result = await setSalesFlyerPackages(flyer.id, next.map(p => p.package_id))
       if ('error' in result) { setPackagesError(`Kunne ikke fjerne pakken: ${result.error}`); set('packages', previous) }
       else setPackagesError(null)
     } catch (err) {
@@ -643,9 +643,9 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
       <div key={pkg.id} className="relative flex flex-col justify-between rounded-[2px] p-6 md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {editing && (
           <div style={{ position: 'absolute', top: -14, right: -14, zIndex: 5, display: 'flex', gap: 4 }}>
-            <button onClick={() => movePackage(pkg.quote_id, 'up')} disabled={positionInGroup === 0 || packageMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === 0 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↑</button>
-            <button onClick={() => movePackage(pkg.quote_id, 'down')} disabled={positionInGroup === groupSize - 1 || packageMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === groupSize - 1 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↓</button>
-            <button onClick={() => removePackage(pkg.quote_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
+            <button onClick={() => movePackage(pkg.package_id, 'up')} disabled={positionInGroup === 0 || packageMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === 0 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↑</button>
+            <button onClick={() => movePackage(pkg.package_id, 'down')} disabled={positionInGroup === groupSize - 1 || packageMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === groupSize - 1 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↓</button>
+            <button onClick={() => removePackage(pkg.package_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
           </div>
         )}
         <div>
@@ -1368,7 +1368,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         isOpen={packagePickerOpen}
         onClose={() => setPackagePickerOpen(false)}
         allPackages={allPackages}
-        selectedQuoteIds={pendingPackageIds}
+        selectedPackageIds={pendingPackageIds}
         onToggleSelection={togglePackageSelection}
         onSave={handlePackagePickerSave}
       />
@@ -1403,8 +1403,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         deliverableCounts={detailPackage?.deliverableCounts}
         usageNotes={flyer.usageNotes}
         onUsageNotesChanged={usageNotes => setFlyer(previous => ({ ...previous, usageNotes }))}
-        editable={editing && detailPackage ? { flyerId: flyer.id, quoteId: detailPackage.quote_id } : undefined}
-        onItemsChanged={detailPackage ? items => updatePackageShowcaseItems(detailPackage.quote_id, items) : undefined}
+        editable={editing && detailPackage ? { flyerId: flyer.id, packageId: detailPackage.package_id } : undefined}
+        onItemsChanged={detailPackage ? items => updatePackageShowcaseItems(detailPackage.package_id, items) : undefined}
       />
     </main>
   )

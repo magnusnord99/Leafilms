@@ -8,9 +8,9 @@ import { QuotePackageShowcaseKind } from '@/lib/types'
 // copyLibraryImageToFlyer/copyLibraryImageToPage: /admin/images sletter det
 // underliggende storage-objektet når et biblioteksbilde slettes, uavhengig
 // av pakke-visningen.
-export async function copyLibraryImageToQuotePackage(
+export async function copyLibraryImageToPackage(
   flyerId: string,
-  quoteId: string,
+  packageId: string,
   imageId: string,
   kind: 'photo' | 'social_clip' | 'website_photo'
 ): Promise<{ url: string } | { error: string }> {
@@ -22,24 +22,24 @@ export async function copyLibraryImageToQuotePackage(
     .eq('id', imageId)
     .maybeSingle()
   if (imageError || !image) {
-    console.error('copyLibraryImageToQuotePackage lookup:', imageError)
+    console.error('copyLibraryImageToPackage lookup:', imageError)
     return { error: 'Fant ikke bildet' }
   }
 
   const { data: fileBlob, error: downloadError } = await supabase.storage.from('assets').download(image.file_path)
   if (downloadError || !fileBlob) {
-    console.error('copyLibraryImageToQuotePackage download:', downloadError)
+    console.error('copyLibraryImageToPackage download:', downloadError)
     return { error: 'Kunne ikke laste ned bildet' }
   }
 
   const ext = image.file_path.split('.').pop() ?? 'jpg'
-  const destPath = `quote-packages/${flyerId}/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
+  const destPath = `packages/${flyerId}/${packageId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
 
   const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, fileBlob, {
     contentType: fileBlob.type || 'image/jpeg',
   })
   if (uploadError) {
-    console.error('copyLibraryImageToQuotePackage upload:', uploadError)
+    console.error('copyLibraryImageToPackage upload:', uploadError)
     return { error: 'Kunne ikke kopiere bildet' }
   }
 
@@ -48,9 +48,9 @@ export async function copyLibraryImageToQuotePackage(
 }
 
 // Samme kopi-mønster for video_library-rader.
-export async function copyLibraryVideoToQuotePackage(
+export async function copyLibraryVideoToPackage(
   flyerId: string,
-  quoteId: string,
+  packageId: string,
   videoId: string,
   kind: 'main_video' | 'social_clip'
 ): Promise<{ url: string } | { error: string }> {
@@ -62,24 +62,24 @@ export async function copyLibraryVideoToQuotePackage(
     .eq('id', videoId)
     .maybeSingle()
   if (videoError || !video) {
-    console.error('copyLibraryVideoToQuotePackage lookup:', videoError)
+    console.error('copyLibraryVideoToPackage lookup:', videoError)
     return { error: 'Fant ikke videoen' }
   }
 
   const { data: fileBlob, error: downloadError } = await supabase.storage.from('assets').download(video.file_path)
   if (downloadError || !fileBlob) {
-    console.error('copyLibraryVideoToQuotePackage download:', downloadError)
+    console.error('copyLibraryVideoToPackage download:', downloadError)
     return { error: 'Kunne ikke laste ned videoen' }
   }
 
   const ext = video.file_path.split('.').pop() ?? 'mp4'
-  const destPath = `quote-packages/${flyerId}/${quoteId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
+  const destPath = `packages/${flyerId}/${packageId}/${kind}-${Math.random().toString(36).substring(2)}.${ext}`
 
   const { error: uploadError } = await supabase.storage.from('assets').upload(destPath, fileBlob, {
     contentType: fileBlob.type || 'video/mp4',
   })
   if (uploadError) {
-    console.error('copyLibraryVideoToQuotePackage upload:', uploadError)
+    console.error('copyLibraryVideoToPackage upload:', uploadError)
     return { error: 'Kunne ikke kopiere videoen' }
   }
 
@@ -88,23 +88,23 @@ export async function copyLibraryVideoToQuotePackage(
 }
 
 // Erstatter hele vareliste-fanen (main_video/social_clip/photo) for en pakke
-// atomisk via replace_quote_package_showcase_items (migrasjon 193) — samme
-// mønster som setSalesFlyerCases/setSalesFlyerPackages.
-export async function setQuotePackageShowcaseItems(
+// atomisk via replace_quote_package_showcase_items (migrasjon 193/200) —
+// samme mønster som setSalesFlyerCases/setSalesFlyerPackages.
+export async function setPackageShowcaseItems(
   flyerId: string,
-  quoteId: string,
+  packageId: string,
   kind: QuotePackageShowcaseKind,
   items: { media_type: 'image' | 'video'; path: string; caption?: string | null }[]
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient()
   const { error } = await supabase.rpc('replace_quote_package_showcase_items', {
-    p_quote_id: quoteId,
+    p_package_id: packageId,
     p_flyer_id: flyerId,
     p_kind: kind,
     p_items: items,
   })
   if (error) {
-    console.error('setQuotePackageShowcaseItems:', error)
+    console.error('setPackageShowcaseItems:', error)
     return { error: 'Kunne ikke oppdatere eksempelmedia' }
   }
   return { ok: true }

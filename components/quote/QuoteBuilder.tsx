@@ -801,12 +801,25 @@ function PostProductionSection({
 // alle tillegg som standard. Bruker samme delte funksjon som PDF-en for å garantere at tallene
 // aldri kan divergere igjen når ingenting er ekskludert.
 function TotalsPanel({ data, excludedAddonIds }: { data: QuoteBuilderData; excludedAddonIds: Set<string> }) {
+  const [showDiscountDetails, setShowDiscountDetails] = useState(false)
   const includedAddonIds = (data.optionalAddons ?? []).filter(a => !excludedAddonIds.has(a.id)).map(a => a.id)
   const t = calculateQuoteTotals(data, includedAddonIds)
   const quote = convertBuilderDataToQuoteData(data, includedAddonIds)
   const discountPct = Math.round((data.discountFactor ?? 0) * 100)
   const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
   const discountRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: C.danger, fontWeight: 600, fontFamily: 'var(--font-dm-sans)' }
+  const detailRowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: C.text2, fontFamily: 'var(--font-dm-sans)' }
+
+  // Samme poster som discountBase/subtotal i calculateQuoteTotals — vist i to grupper
+  // (rabatterbart vs. ikke) slik at admin kan se nøyaktig hva rabatten regnes på, til
+  // bruk når samme rabatt skal legges inn manuelt på fakturaen i Fiken (feedback d9f63473).
+  const postCrewTotal = (data.postProductionCrew ?? []).reduce((sum, m) => sum + m.dailyRate * m.days, 0)
+  const postItemsTotal = t.postProductionTotal - postCrewTotal
+  const addonDiscountableTotal = t.discountBase - t.crewTotal - postCrewTotal
+  const addonNonDiscountableTotal =
+    t.addonTotalsByCategory.startup + t.addonTotalsByCategory.production + t.addonTotalsByCategory.post + t.addonTotalsByCategory.expenses -
+    addonDiscountableTotal
+
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <p style={{ ...sectionLabelStyle, marginBottom: 12 }}>Totaler (eks. MVA)</p>
@@ -816,9 +829,38 @@ function TotalsPanel({ data, excludedAddonIds }: { data: QuoteBuilderData; exclu
       ))}
 
       {t.discountAmount > 0 && (
-        <div style={discountRowStyle}>
-          <span>Rabatt ({discountPct}%) på mannskap (opptak + post-produksjon)</span>
-          <span>−{formatNOK(t.discountAmount)}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={discountRowStyle}>
+            <span>Rabatt ({discountPct}%) på mannskap (opptak + post-produksjon)</span>
+            <span>−{formatNOK(t.discountAmount)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDiscountDetails(v => !v)}
+            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, fontSize: '0.75rem', color: C.accent, cursor: 'pointer', fontFamily: 'var(--font-dm-sans)', textDecoration: 'underline' }}
+          >
+            {showDiscountDetails ? 'Skjul' : 'Vis'} hva rabatten er beregnet av {showDiscountDetails ? '▲' : '▼'}
+          </button>
+          {showDiscountDetails && (
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <p style={{ fontSize: '0.7rem', color: C.text2, fontWeight: 600, margin: 0 }}>Rabattgrunnlag (det rabatten regnes på)</p>
+                {t.startupTotal > 0 && <div style={detailRowStyle}><span>Oppstart (mannskap)</span><span>{formatNOK(t.startupTotal)}</span></div>}
+                {t.shootCrewTotal > 0 && <div style={detailRowStyle}><span>Opptak (mannskap)</span><span>{formatNOK(t.shootCrewTotal)}</span></div>}
+                {postCrewTotal > 0 && <div style={detailRowStyle}><span>Post-produksjon (mannskap)</span><span>{formatNOK(postCrewTotal)}</span></div>}
+                {addonDiscountableTotal > 0 && <div style={detailRowStyle}><span>Rabatterbare tillegg</span><span>{formatNOK(addonDiscountableTotal)}</span></div>}
+                <div style={{ ...detailRowStyle, fontWeight: 600, color: C.text, borderTop: `1px solid ${C.border}`, paddingTop: 4 }}><span>Rabattgrunnlag</span><span>{formatNOK(t.discountBase)}</span></div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <p style={{ fontSize: '0.7rem', color: C.text2, fontWeight: 600, margin: 0 }}>Rabatteres aldri</p>
+                {t.equipmentTotal > 0 && <div style={detailRowStyle}><span>Utstyr</span><span>{formatNOK(t.equipmentTotal)}</span></div>}
+                {postItemsTotal > 0 && <div style={detailRowStyle}><span>Post-produksjon (kostnader)</span><span>{formatNOK(postItemsTotal)}</span></div>}
+                {t.otherCostsTotal > 0 && <div style={detailRowStyle}><span>Andre kostnader</span><span>{formatNOK(t.otherCostsTotal)}</span></div>}
+                {t.licensingTotal > 0 && <div style={detailRowStyle}><span>Lisensiering</span><span>{formatNOK(t.licensingTotal)}</span></div>}
+                {addonNonDiscountableTotal > 0 && <div style={detailRowStyle}><span>Ikke-rabatterbare tillegg</span><span>{formatNOK(addonNonDiscountableTotal)}</span></div>}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -26,6 +26,7 @@ export type SalesFlyerPackageItem = {
 }
 
 export type SalesFlyerWithRelations = SalesFlyer & {
+  customer: { name: string; logo_path: string | null } | null
   cases: (CaseStudy & { order_index: number })[]
   packages: SalesFlyerPackageItem[]
   referenceLinks: SalesFlyerReferenceLink[]
@@ -105,7 +106,12 @@ export async function getSalesFlyerBySlug(
     getOrderedReferenceLinks(flyer.id),
     getPackageUsageNotes(),
   ])
-  return { ...(flyer as SalesFlyer), cases, packages, referenceLinks, usageNotes }
+  // Kun offentlig logoinformasjon for valgt kunde — ingen kontakt-/fakturafelt.
+  const { data: customer, error: customerError } = flyer.customer_id && (flyer.show_customer_logo || allowDraft)
+    ? await supabase.from('customers').select('name, logo_path').eq('id', flyer.customer_id).maybeSingle()
+    : { data: null, error: null }
+  if (customerError) console.error('getSalesFlyerBySlug customer:', customerError)
+  return { ...(flyer as SalesFlyer), customer: customerError ? null : customer, cases, packages, referenceLinks, usageNotes }
 }
 
 async function getOrderedReferenceLinks(flyerId: string): Promise<SalesFlyerReferenceLink[]> {

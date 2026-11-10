@@ -157,6 +157,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   const [flyer, setFlyer] = useState(initialFlyer)
   const [editing, setEditing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [logoCustomers, setLogoCustomers] = useState<{ id: string; name: string; logo_path: string | null }[]>([])
+  const [logoCustomersLoading, setLogoCustomersLoading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
   const gallerySwapInFlight = useRef(false)
   // Per felt, ikke ett delt par — en mislykket lagring av ett felt skal ikke
@@ -214,6 +216,35 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
   function set<K extends keyof SalesFlyerWithRelations>(key: K, value: SalesFlyerWithRelations[K]) {
     setFlyer(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function toggleSettings() {
+    setSettingsOpen(!settingsOpen)
+    if (settingsOpen || !canEdit) return
+    setLogoCustomersLoading(true)
+    try {
+      const { data, error } = await supabase.from('customers').select('id, name, logo_path').order('name')
+      if (error) throw error
+      setLogoCustomers(data ?? [])
+    } catch {
+      setFieldErrors(previous => ({ ...previous, customer_id: 'Kunne ikke hente kundene. Åpne innstillinger på nytt for å prøve igjen.' }))
+    } finally { setLogoCustomersLoading(false) }
+  }
+
+  async function changeLogoCustomer(customerId: string) {
+    const previous = { customer_id: flyer.customer_id, customer: flyer.customer }
+    const selected = logoCustomers.find(customer => customer.id === customerId)
+    const next = { customer_id: customerId || null, customer: selected ? { name: selected.name, logo_path: selected.logo_path } : null }
+    markSaving('customer_id', true)
+    setFlyer(current => ({ ...current, ...next }))
+    try {
+      const result = await updateSalesFlyer(flyer.id, { customer_id: next.customer_id })
+      if ('error' in result) throw new Error(result.error)
+      setFieldErrors(current => { const next = { ...current }; delete next.customer_id; return next })
+    } catch {
+      setFlyer(current => ({ ...current, ...previous }))
+      setFieldErrors(current => ({ ...current, customer_id: 'Kunne ikke lagre kunden. Prøv igjen.' }))
+    } finally { markSaving('customer_id', false) }
   }
 
   function markSaving(field: Field, on: boolean) {
@@ -828,7 +859,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           )}
           {editing && (
             <button
-              onClick={() => setSettingsOpen(s => !s)}
+              onClick={toggleSettings}
               style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: '0.75rem', fontWeight: 600, padding: '8px 14px', borderRadius: 20, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: 'pointer' }}
             >
               ⚙ Innstillinger
@@ -858,7 +889,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
       )}
 
       {settingsOpen && editing && (
-        <div style={{ position: 'fixed', top: 64, right: 16, zIndex: 50, background: '#fff', color: '#1A1812', border: '1px solid #ddd', borderRadius: 10, padding: 18, width: 300, boxShadow: '0 8px 30px rgba(0,0,0,0.4)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
+        <div style={{ position: 'fixed', top: 64, right: 16, zIndex: 50, maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto', background: '#fff', color: '#1A1812', border: '1px solid #ddd', borderRadius: 10, padding: 18, width: 300, boxShadow: '0 8px 30px rgba(0,0,0,0.4)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
           <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888', marginBottom: 10 }}>/flyer/{slug}</p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: '0.82rem', cursor: 'pointer' }}>
             <input
@@ -869,6 +900,32 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             Publisert
           </label>
           <FieldError field="published" />
+
+          <label style={settingsLabel} htmlFor="flyer-logo-customer">Kunde (logo ved tittelen)</label>
+          <select id="flyer-logo-customer" value={flyer.customer_id ?? ''}
+            disabled={logoCustomersLoading || savingFields.has('customer_id')}
+            onChange={event => changeLogoCustomer(event.target.value)} style={settingsInput}>
+            <option value="">Ingen kunde valgt</option>
+            {flyer.customer_id && !logoCustomers.some(customer => customer.id === flyer.customer_id) && (
+              <option value={flyer.customer_id}>{flyer.customer?.name ?? 'Valgt kunde'}</option>
+            )}
+            {logoCustomers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+          </select>
+          <FieldError field="customer_id" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: '0.82rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={flyer.show_customer_logo ?? true}
+              disabled={savingFields.has('show_customer_logo')}
+              onChange={event => {
+                const previous = flyer.show_customer_logo
+                set('show_customer_logo', event.target.checked)
+                saveField('show_customer_logo', event.target.checked, previous)
+              }} />
+            Vis kundelogo ved tittelen
+          </label>
+          <FieldError field="show_customer_logo" />
+          {flyer.customer_id && !flyer.customer?.logo_path && (
+            <p style={{ marginTop: 6, fontSize: '0.75rem', color: '#777' }}>Kunden har ingen logo ennå. Last den opp på kundesiden for å vise den her.</p>
+          )}
 
           <label style={settingsLabel}>Pakke-e-post («Velg denne pakken»)</label>
           <input
@@ -951,7 +1008,15 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         <div className="relative z-10 flex h-full flex-col justify-between px-6 py-8 md:px-16 md:py-12">
           <p className="text-xs font-medium uppercase tracking-[0.3em]" style={{ color: GOLD }}>Leafilms</p>
 
-          <div className="max-w-4xl pb-6 md:pb-12">
+          <div className="flex max-w-5xl flex-col items-start gap-6 pb-6 md:flex-row md:items-center md:gap-8 md:pb-12">
+            {flyer.show_customer_logo && flyer.customer?.logo_path && (
+              <div className="shrink-0 rounded-[2px] bg-white p-3 md:p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={supabase.storage.from('assets').getPublicUrl(flyer.customer.logo_path).data.publicUrl}
+                  alt={`${flyer.customer.name} logo`} className="max-h-20 w-auto max-w-36 object-contain md:max-h-28 md:max-w-44" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
             {editing ? (
               <>
                 <textarea
@@ -970,6 +1035,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                 {flyer.headline}
               </h1>
             ) : null}
+            </div>
           </div>
         </div>
       </section>

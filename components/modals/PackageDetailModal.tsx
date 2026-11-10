@@ -749,7 +749,7 @@ export function PackageDetailModal({
           <div className="hidden md:block">
             {editable && <p style={sectionLabelStyle()}>{KIND_LABEL.main_video}</p>}
             {activeVideo ? (
-              <div className={`mx-auto w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
+              <div className={`w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
                 <WebsiteMock
                   video={activeVideo}
                   websitePhotos={websitePhotos}

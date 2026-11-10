@@ -679,6 +679,7 @@ export type SalesFlyer = {
   hero_poster_path: string | null
   headline: string
   engagement_text: string
+  package_customization_text: string
   bts_image_1_path: string | null
   bts_image_2_path: string | null
   example_image_1_path: string | null

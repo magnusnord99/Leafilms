@@ -678,8 +678,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           )}
           {/* Egen CTA pr. pakke — mailto med pakkenavnet i emnefeltet, så
               henvendelsen allerede sier hvilken pakke det gjelder. Samme
-              cta_email som flyerens hoved-CTA, siden det er én mottaker pr.
-              flyer, ikke pr. pakke. */}
+              cta_email for pakkeforespørsler. Generell kontakt bruker contact_email. */}
           {flyer.cta_email ? (
             <a
               href={`mailto:${flyer.cta_email}?subject=${encodeURIComponent(`Forespørsel: ${title}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${title}". Kan dere ta kontakt?`)}`}
@@ -844,7 +843,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           </label>
           <FieldError field="published" />
 
-          <label style={settingsLabel}>CTA-e-post (mottaker av forespørsler)</label>
+          <label style={settingsLabel}>Pakke-e-post («Velg denne pakken»)</label>
           <input
             type="email"
             value={flyer.cta_email}
@@ -854,6 +853,17 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             style={settingsInput}
           />
           <FieldError field="cta_email" />
+
+          <label style={settingsLabel}>Kontakt-e-post («Ta kontakt» nederst)</label>
+          <input
+            type="email"
+            value={flyer.contact_email}
+            placeholder="kontakt@leafilms.no"
+            onChange={e => set('contact_email', e.target.value)}
+            onBlur={e => saveField('contact_email', e.target.value)}
+            style={settingsInput}
+          />
+          <FieldError field="contact_email" />
 
           <label style={settingsLabel}>SEO-tittel</label>
           <input
@@ -1207,9 +1217,25 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
           {packagesByCategory.length > 0 && (
             <div className="mt-12">
-              <p className="max-w-2xl text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>
-                Alle pakkene kan skreddersys til deres behov. Ønsker dere mer innhold enn det som er spesifisert her, setter vi gjerne sammen en kvantumspakke. Ta kontakt, så finner vi en løsning som passer dere.
-              </p>
+              {editing ? (
+                <div className="max-w-2xl">
+                  <textarea
+                    aria-label="Tekst om skreddersøm og kvantumspakker"
+                    value={flyer.package_customization_text}
+                    onChange={e => set('package_customization_text', e.target.value)}
+                    onBlur={e => saveField('package_customization_text', e.target.value)}
+                    placeholder="Tekst om skreddersøm og kvantumspakker"
+                    rows={4}
+                    className="text-sm leading-relaxed md:text-base"
+                    style={editableStyle({ color: MUTED })}
+                  />
+                  <FieldError field="package_customization_text" />
+                </div>
+              ) : flyer.package_customization_text && (
+                <p className="max-w-2xl whitespace-pre-line text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>
+                  {flyer.package_customization_text}
+                </p>
+              )}
               <p className="mt-4 text-xs" style={{ color: SUBTLE }}>Alle priser er oppgitt eks. mva.</p>
             </div>
           )}
@@ -1332,12 +1358,10 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <p className="mt-6 max-w-xl text-base leading-relaxed md:text-lg" style={{ color: MUTED }}>{flyer.cta_subtext}</p>
           ) : null}
 
-          {/* cta_email redigeres i innstillingspanelet, ikke her — knappen ser
-              lik ut av og på redigeringsmodus. Uten e-post vises ingen knapp
-              for besøkende (en tom mailto: er en død lenke). */}
-          {flyer.cta_email ? (
+          {/* Generell kontakt har egen mottaker, uavhengig av pakkeforespørsler. */}
+          {flyer.contact_email ? (
             <a
-              href={`mailto:${flyer.cta_email}`}
+              href={`mailto:${flyer.contact_email}`}
               className="mt-12 inline-flex items-center gap-3 px-8 py-4 text-sm font-medium uppercase tracking-[0.15em] transition hover:opacity-90"
               style={{ background: GOLD, color: '#0C0B09' }}
             >
@@ -1346,7 +1370,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             </a>
           ) : editing ? (
             <p className="mt-12 text-sm" style={{ color: '#E05A4A' }}>
-              Ingen CTA-e-post satt — legg den inn under ⚙ Innstillinger, ellers vises ingen kontaktknapp.
+              Ingen kontakt-e-post satt — legg den inn under ⚙ Innstillinger, ellers vises ingen kontaktknapp.
             </p>
           ) : null}
         </div>

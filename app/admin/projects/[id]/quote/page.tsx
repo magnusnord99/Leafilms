@@ -12,7 +12,6 @@ import { C } from '@/lib/admin-theme'
 import { usePublishing } from '@/hooks/project/usePublishing'
 import { PipelineProgress } from '@/components/admin/PipelineProgress'
 import { markQuoteAsPackage, checkQuoteUsedOnPublishedFlyers, unmarkQuoteAsPackage, duplicatePackageAsNewProject } from '@/lib/actions/quote-packages'
-import { PackageShowcasePanel } from '@/components/quote/PackageShowcasePanel'
 
 // Samme kategori-tekster som Pakkemaler-fanen i /admin/quotes.
 const PACKAGE_CATEGORY_LABEL: Record<SalesFlyerPackageCategory, string> = {
@@ -815,12 +814,6 @@ export default function ProjectQuotePage({ params }: Props) {
                     {pkgError}
                   </p>
                 )}
-                <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
-                  <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', color: C.text2, marginBottom: 10 }}>
-                    Eksempelmedia for Se mer-visningen
-                  </p>
-                  <PackageShowcasePanel quoteId={activeQuote.id} />
-                </div>
               </div>
             ) : (
               <div>

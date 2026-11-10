@@ -21,6 +21,7 @@ import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
 import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
+import { PackageShowcasePanel } from '@/components/quote/PackageShowcasePanel'
 import { supabase } from '@/lib/supabase'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
@@ -106,7 +107,7 @@ function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; pho
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {chips.map((chip, i) => (
-        <span key={i} className="inline-flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+        <span key={i} className="inline-flex items-center gap-1.5 text-sm" style={{ color: MUTED }}>
           {chip.icon}
           {chip.label}
         </span>
@@ -159,7 +160,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // Samme ImagePickerModal gjenbrukes for tre ulike bildefelt (hero-poster,
   // de to BTS-bildene) — target husker hvilket felt plukkeren nettopp åpnet
   // for, siden handleImagePicked ellers ikke vet hvor valget skal lagres.
-  const [imagePickerTarget, setImagePickerTarget] = useState<'hero_poster' | 'bts_image_1' | 'bts_image_2' | null>(null)
+  const [imagePickerTarget, setImagePickerTarget] = useState<'hero_poster' | 'bts_image_1' | 'bts_image_2' |
+    'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
+    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | null>(null)
+  // Hvilken pakkes eksempelmedia (quote_id) som redigeres akkurat nå — satt via
+  // "Eksempelmedia"-knappen på pakkekortet, null når editoren er lukket.
+  const [showcaseEditorQuoteId, setShowcaseEditorQuoteId] = useState<string | null>(null)
   const [videoPickerOpen, setVideoPickerOpen] = useState(false)
 
   const [casePickerOpen, setCasePickerOpen] = useState(false)
@@ -222,7 +228,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // urørt ved feil — brukeren skal ikke miste det de nettopp skrev.
   async function saveField<K extends keyof SalesFlyerWithRelations>(
     field: Field,
-    value: string | boolean,
+    value: string | boolean | number | null,
     previousValue?: SalesFlyerWithRelations[K]
   ) {
     setSavingFields(prev => new Set(prev).add(field))
@@ -287,7 +293,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     const target = imagePickerTarget
     setImagePickerTarget(null)
     if (imageIds.length === 0 || !target) return
-    const field = target === 'hero_poster' ? 'hero_poster_path' : target === 'bts_image_1' ? 'bts_image_1_path' : 'bts_image_2_path'
+    // Alle mål (gamle og nye) følger nøyaktig <target>_path-navnekonvensjonen.
+    const field = `${target}_path` as Field
     markSaving(field, true)
     try {
       const result = await copyLibraryImageToFlyer(slug, imageIds[0], target)
@@ -425,6 +432,19 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     } finally {
       setPackageMutating(false)
     }
+  }
+
+  // Henter pakkelisten på nytt etter at eksempelmedia er redigert i den nye,
+  // per-flyer "Eksempelmedia"-editoren — samme mønster som handlePackagePickerSave,
+  // slik at "Se mer"-knappens synlighet oppdateres uten en full sideoppfriskning.
+  async function refreshPackagesAfterShowcaseEdit() {
+    const fresh = await getSalesFlyerBySlug(slug, { includeDraft: true })
+    if (fresh) set('packages', fresh.packages)
+  }
+
+  function closeShowcaseEditor() {
+    setShowcaseEditorQuoteId(null)
+    refreshPackagesAfterShowcaseEdit()
   }
 
   // Pakkene vises gruppert per kategori, så "flytt opp/ned" bytter plass med
@@ -599,6 +619,16 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               <span aria-hidden>→</span>
             </button>
           )}
+          {editing && (
+            <button
+              type="button"
+              onClick={() => setShowcaseEditorQuoteId(pkg.quote_id)}
+              className="mt-3 block text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
+              style={{ color: ADMIN, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Eksempelmedia
+            </button>
+          )}
         </div>
         <div className="mt-8">
           {amount !== null ? (
@@ -628,6 +658,92 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             </p>
           ) : null}
         </div>
+      </div>
+    )
+  }
+
+  // ── Eksempelbilder (8 faste bilder i et asymmetrisk rutenett) ────────────
+  const EXAMPLE_IMAGE_TARGETS = [
+    'example_image_1', 'example_image_2', 'example_image_3', 'example_image_4',
+    'example_image_5', 'example_image_6', 'example_image_7', 'example_image_8',
+  ] as const
+  const exampleImageSlots = EXAMPLE_IMAGE_TARGETS.map(target => {
+    const field = `${target}_path` as Field
+    const posXField = `${target}_position_x` as Field
+    const posYField = `${target}_position_y` as Field
+    return {
+      target, field, posXField, posYField,
+      path: (flyer[field] as string | null),
+      posX: (flyer[posXField] as unknown as number) ?? 50,
+      posY: (flyer[posYField] as unknown as number) ?? 50,
+    }
+  })
+  const hasAnyExampleImage = exampleImageSlots.some(s => s.path)
+
+  function renderExampleImageSlot(slot: typeof exampleImageSlots[number], className: string) {
+    const { path, field, target, posXField, posYField, posX, posY } = slot
+    return (
+      <div key={field} className={`relative overflow-hidden ${className}`} style={{ background: SURFACE }}>
+        {path ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${posX}% ${posY}%` }} />
+            {editing && (
+              <>
+                <button
+                  onClick={() => { set(field, null); saveField(field, null) }}
+                  disabled={savingFields.has(field)}
+                  aria-label="Fjern bilde"
+                  style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, background: '#C0392B', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: savingFields.has(field) ? 'default' : 'pointer', opacity: savingFields.has(field) ? 0.5 : 1 }}
+                >
+                  ×
+                </button>
+                {/* Posisjonering innenfor rammen — lagres kun på slipp (mouseUp/touchEnd),
+                    ikke på hvert onChange-tick, for å unngå én lagring pr. piksel dratt. */}
+                <div style={{ position: 'absolute', top: 8, left: 8, right: 44, background: 'rgba(0,0,0,0.55)', borderRadius: 6, padding: '6px 8px' }}>
+                  <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', marginBottom: 2 }}>X</label>
+                  <input
+                    type="range" min={0} max={100}
+                    value={posX}
+                    onChange={e => set(posXField, Number(e.target.value))}
+                    onMouseUp={e => saveField(posXField, Number((e.target as HTMLInputElement).value))}
+                    onTouchEnd={e => saveField(posXField, Number((e.target as HTMLInputElement).value))}
+                    style={{ width: '100%', display: 'block' }}
+                  />
+                  <label style={{ display: 'block', fontSize: '0.6rem', color: '#fff', margin: '4px 0 2px' }}>Y</label>
+                  <input
+                    type="range" min={0} max={100}
+                    value={posY}
+                    onChange={e => set(posYField, Number(e.target.value))}
+                    onMouseUp={e => saveField(posYField, Number((e.target as HTMLInputElement).value))}
+                    onTouchEnd={e => saveField(posYField, Number((e.target as HTMLInputElement).value))}
+                    style={{ width: '100%', display: 'block' }}
+                  />
+                </div>
+              </>
+            )}
+          </>
+        ) : editing ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-xs" style={{ color: SUBTLE }}>Ingen bilde ennå</p>
+          </div>
+        ) : null}
+        {editing && (
+          <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12 }}>
+            <button
+              onClick={() => setImagePickerTarget(target)}
+              disabled={savingFields.has(field)}
+              style={smallControl}
+            >
+              {savingFields.has(field) ? 'Henter bilde…' : 'Velg bilde'}
+            </button>
+            {fieldErrors[field] && (
+              <div style={{ marginTop: 4, background: '#fff', borderRadius: 6, padding: '4px 10px', display: 'inline-block' }}>
+                <FieldError field={field} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -869,6 +985,33 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               </button>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── Eksempelbilder — 8 bilder i et fast asymmetrisk rutenett, utvidelse
+          av pitch-byggerens ExampleWorkSection-rytme (hero/tårn/tårn/bunn) ── */}
+      {(hasAnyExampleImage || editing) && (
+        <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
+          {/* Mobil: vertikal stabling */}
+          <div className="flex flex-col gap-0 md:hidden">
+            {exampleImageSlots.map(slot => renderExampleImageSlot(slot, 'h-[400px]'))}
+          </div>
+
+          {/* Desktop: hero / tårn-blokk / tårn-blokk / bunn */}
+          <div className="hidden md:block">
+            {renderExampleImageSlot(exampleImageSlots[0], 'h-[700px]')}
+            <div className="grid grid-cols-2 gap-0">
+              <div className="row-span-2 h-[800px]">{renderExampleImageSlot(exampleImageSlots[1], 'h-full')}</div>
+              {renderExampleImageSlot(exampleImageSlots[2], 'h-[400px]')}
+              {renderExampleImageSlot(exampleImageSlots[3], 'h-[400px]')}
+            </div>
+            <div className="grid grid-cols-2 gap-0">
+              <div className="row-span-2 h-[800px]">{renderExampleImageSlot(exampleImageSlots[4], 'h-full')}</div>
+              {renderExampleImageSlot(exampleImageSlots[5], 'h-[400px]')}
+              {renderExampleImageSlot(exampleImageSlots[6], 'h-[400px]')}
+            </div>
+            {renderExampleImageSlot(exampleImageSlots[7], 'h-[600px]')}
+          </div>
         </section>
       )}
 
@@ -1156,6 +1299,22 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         packageLabel={detailPackage?.package_label ?? ''}
         items={detailPackage?.showcaseItems ?? []}
       />
+      {showcaseEditorQuoteId && (
+        // z-index:50, ikke høyere — PackageShowcasePanels egne interne
+        // ImagePickerModal/VideoPickerModal bruker også z-50 og stables oppå
+        // via DOM-rekkefølge (rendret etter denne overlayen i markup), ikke zIndex.
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', color: '#1A1812', border: '1px solid #ddd', borderRadius: 10, padding: 20, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888' }}>
+                Eksempelmedia for Se mer-visningen
+              </p>
+              <button onClick={closeShowcaseEditor} aria-label="Lukk" style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#888' }}>×</button>
+            </div>
+            <PackageShowcasePanel flyerId={flyer.id} quoteId={showcaseEditorQuoteId} />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

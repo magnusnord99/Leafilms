@@ -167,6 +167,49 @@ export async function renamePackageOffer(offerId: string, title: string): Promis
   return { ok: true }
 }
 
+// Flytter hele pakke-gruppen (package_offer) til en annen kunde, eller til internt
+// (customerId null) — endrer hvem som eier/ser ALLE pakketilbudene i gruppen på én gang.
+export async function moveOfferToCustomer(offerId: string, customerId: string | null): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('package_offers')
+    .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+    .eq('id', offerId)
+    .select('id')
+  if (error) {
+    console.error('moveOfferToCustomer:', error)
+    return { error: 'Kunne ikke flytte pakke-gruppen' }
+  }
+  if (!data || data.length === 0) return { error: 'Pakke-gruppen finnes ikke lenger' }
+  return { ok: true }
+}
+
+// Flytter ett enkelt pakketilbud (packages-rad) til en annen pakke-gruppe — havner
+// sist i rekkefølgen der, samme append-mønster som createPackage/duplicatePackage.
+export async function movePackageToOffer(packageId: string, targetOfferId: string): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: existing } = await supabase
+    .from('packages')
+    .select('display_order')
+    .eq('package_offer_id', targetOfferId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const nextOrder = (existing?.display_order ?? -1) + 1
+
+  const { data, error } = await supabase
+    .from('packages')
+    .update({ package_offer_id: targetOfferId, display_order: nextOrder, updated_at: new Date().toISOString() })
+    .eq('id', packageId)
+    .select('id')
+  if (error) {
+    console.error('movePackageToOffer:', error)
+    return { error: 'Kunne ikke flytte pakketilbudet' }
+  }
+  if (!data || data.length === 0) return { error: 'Pakketilbudet finnes ikke lenger' }
+  return { ok: true }
+}
+
 // To separate spørringer i stedet for et embedded-resource-filter — samme
 // tryggere mønster som den gamle checkQuoteUsedOnPublishedFlyers.
 export async function checkPackagesUsedOnPublishedFlyers(packageIds: string[]): Promise<{ flyerSlugs: string[] }> {

@@ -213,7 +213,7 @@ export default function PackageEditorPage({ params }: Props) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3" style={{ background: C.bg }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.85rem', color: C.text3 }}>{notFoundError || 'Fant ikke pakken'}</p>
-        <Link href="/admin/package-offers" style={{ color: C.accent, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem' }}>← Tilbake til pakketilbud</Link>
+        <Link href="/admin/package-offers" style={{ color: C.accent, fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem' }}>← Tilbake til pakke-grupper</Link>
       </div>
     )
   }
@@ -224,7 +224,7 @@ export default function PackageEditorPage({ params }: Props) {
         <div className="flex items-center justify-between mb-6 pb-4" style={{ borderBottom: `1px solid ${C.border}` }}>
           <div>
             <Link href="/admin/package-offers" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, textDecoration: 'none' }}>
-              ← Pakketilbud
+              ← Pakke-gruppe
             </Link>
             <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.95rem', fontWeight: 600, color: C.text, marginTop: 4 }}>
               {pkg.offer.title}

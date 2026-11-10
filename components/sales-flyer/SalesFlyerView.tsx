@@ -1264,10 +1264,18 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                 </div>
               ) : flyer.package_customization_text && (
                 <p className="max-w-2xl whitespace-pre-line text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>
-                  {flyer.package_customization_text}
+                  {flyer.package_customization_text.split(/(ta kontakt)/gi).map((part, index) =>
+                    /^ta kontakt$/i.test(part) && flyer.contact_email ? (
+                      <a key={index} href={`mailto:${flyer.contact_email}`}
+                        className="underline decoration-[#C49434]/60 underline-offset-4 transition-colors hover:text-[#E8E1D5] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+                        style={{ color: GOLD }}>
+                        {part}
+                      </a>
+                    ) : part
+                  )}
                 </p>
               )}
-              <p className="mt-4 text-xs" style={{ color: SUBTLE }}>Alle priser er oppgitt eks. mva.</p>
+              <p className="mt-4 text-xs" style={{ color: SUBTLE }}>Alle priser er oppgitt eks. mva., kost, losji og reise.</p>
             </div>
           )}
 
@@ -1407,7 +1415,14 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         </div>
 
         <div className="mt-24 flex flex-col gap-2 text-xs md:flex-row md:justify-between" style={{ color: SUBTLE }}>
-          <p className="uppercase tracking-[0.3em]">Leafilms</p>
+          <a
+            href="https://leafilms.no"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 self-start uppercase tracking-[0.2em] transition-colors hover:text-[#C49434] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+          >
+            leafilms.no <span aria-hidden="true">↗</span>
+          </a>
         </div>
       </section>
 

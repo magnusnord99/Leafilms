@@ -925,6 +925,10 @@ export function PackageDetailModal({
 
         <div className="mt-8 md:hidden">{usageNotesPanel}</div>
 
+        <p className="mt-8 text-sm" style={{ fontFamily: 'var(--font-dm-sans)', color: MUTED }}>
+          Reise, kost og losji er ikke inkludert i prisen.
+        </p>
+
         <div className="mt-8 flex justify-end">
           <button
             type="button"

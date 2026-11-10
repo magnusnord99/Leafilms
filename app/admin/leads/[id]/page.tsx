@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
+import { ConvertLeadButton } from '@/components/admin/ConvertLeadButton'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { TemperatureSlider } from '@/components/admin/TemperatureSlider'
@@ -381,8 +382,9 @@ export default function LeadDetailPage() {
 
             {/* Status buttons + rediger/slett */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
+              <ConvertLeadButton lead={lead} disabled={editing} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).map(([val, conf]) => (
+                {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).filter(([value]) => value !== 'converted').map(([val, conf]) => (
                   <button
                     key={val}
                     onClick={() => handleStatusChange(val)}

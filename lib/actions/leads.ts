@@ -273,6 +273,7 @@ export type LeadRecord = {
   notes: string | null
   assigned_to: string | null
   converted_to_project_id: string | null
+  customer_id: string | null
   temperature: LeadTemperature | null
   contact_deadline: string | null
   created_at: string

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, markProjectContacted } from '@/lib/actions/pipeline'
 import { getLeadByProjectId, updateLeadStatus, updateLeadNotes, updateLead, LeadRecord, LeadStatus, LeadTemperature } from '@/lib/actions/leads'
+import { ConvertLeadButton } from '@/components/admin/ConvertLeadButton'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
 import RichNotesEditor from '@/components/admin/RichNotesEditor'
 import { ColdEmailCard } from '@/components/admin/ColdEmailCard'
@@ -360,7 +361,8 @@ export default function ProjectContactPage() {
             {/* Status-oppdatering */}
             {lead && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
-                {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).map(([val, conf]) => (
+                <ConvertLeadButton lead={lead} customerId={customer?.id} disabled={leadSaving} />
+                {(Object.entries(STATUS_CONFIG) as [LeadStatus, typeof STATUS_CONFIG[LeadStatus]][]).filter(([value]) => value !== 'converted').map(([val, conf]) => (
                   <button
                     key={val}
                     onClick={() => handleStatusChange(val)}

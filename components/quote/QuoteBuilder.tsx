@@ -5,6 +5,7 @@ import { QuoteBuilderData, CrewMember, QuoteBuilderItem, OptionalAddon, Optional
 import { calculateQuoteTotals, convertBuilderDataToQuoteData, getAddonAmounts, addonTotalPrice, crewMemberCost, createEmptyBuilderData } from '@/lib/quote-builder-utils'
 import { getCustomerContacts } from '@/lib/actions/schedule-people'
 import { Button } from '@/components/ui'
+import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 
 // createEmptyBuilderData (med standard vilkårstekst) bor i lib/quote-builder-utils.ts slik at
@@ -286,14 +287,37 @@ function GroupPicker({
 
 // ─── Customer selector ────────────────────────────────────────────────────────
 function CustomerSelector({
-  customers, selectedCustomerId, onSelect,
-}: { customers: Customer[]; selectedCustomerId: string; onSelect: (c: Customer | null) => void }) {
+  customers, selectedCustomerId, onSelect, onCreate,
+}: {
+  customers: Customer[]
+  selectedCustomerId: string
+  onSelect: (c: Customer | null) => void
+  onCreate: (name: string) => Promise<string | null>
+}) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   )
   const selected = customers.find(c => c.id === selectedCustomerId)
+  const trimmedSearch = search.trim()
+  const canCreate = trimmedSearch.length > 0 &&
+    !customers.some(c => c.name.trim().toLowerCase() === trimmedSearch.toLowerCase())
+  const handleCreate = async () => {
+    if (creating) return
+    setCreating(true)
+    setCreateError(null)
+    const error = await onCreate(trimmedSearch)
+    setCreating(false)
+    if (error) {
+      setCreateError(error)
+      return
+    }
+    setOpen(false)
+    setSearch('')
+  }
   return (
     <div style={{ position: 'relative' }}>
       <label style={labelStyle}>Kunde</label>
@@ -340,7 +364,17 @@ function CustomerSelector({
                 {c.customer_number && <span style={{ color: C.accent, marginLeft: 8, fontSize: '0.72rem' }}>#{c.customer_number}</span>}
               </button>
             ))}
-            {filtered.length === 0 && <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>}
+            {filtered.length === 0 && !canCreate && <p style={{ padding: '12px 16px', fontSize: '0.72rem', color: C.text3, fontFamily: 'var(--font-dm-sans)' }}>Ingen treff</p>}
+            {canCreate && (
+              <button type="button" disabled={creating}
+                style={{ width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: '0.8rem', color: C.accent, background: 'transparent', border: 'none', borderTop: `1px solid ${C.border}`, cursor: creating ? 'default' : 'pointer', fontFamily: 'var(--font-dm-sans)', transition: 'background 0.1s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.surface2}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+                onClick={handleCreate}>
+                {creating ? 'Oppretter...' : `+ Opprett «${trimmedSearch}» som ny kunde`}
+              </button>
+            )}
+            {createError && <p style={{ padding: '8px 16px', fontSize: '0.72rem', color: C.danger, fontFamily: 'var(--font-dm-sans)' }}>{createError}</p>}
           </div>
         </div>
       )}
@@ -1189,6 +1223,29 @@ export function QuoteBuilder({
     return () => clearTimeout(timeout)
   }, [data, autosaveEnabled, onSave])
 
+  // Kunder opprettet direkte fra kundevelgeren her (feedback 5e285e79) — legges
+  // til lokalt siden `customers`-propen kun lastes én gang av forelderen.
+  const [createdCustomers, setCreatedCustomers] = useState<Customer[]>([])
+  const allCustomers = [...customers, ...createdCustomers].sort((a, b) => a.name.localeCompare(b.name, 'nb'))
+
+  // customers-rad: kun kontonavn, samme som "Ny kunde" i ProjectForm (se migrasjon 186/187).
+  // Kontaktperson legges til via Kundekontakt-feltet / kundesiden etterpå.
+  const handleCustomerCreate = async (name: string): Promise<string | null> => {
+    const { data: newCustomer, error } = await supabase
+      .from('customers')
+      .insert({ name })
+      .select()
+      .single()
+    if (error || !newCustomer) {
+      console.error('Create customer error:', error)
+      return 'Klarte ikke opprette kunde'
+    }
+    const customer = newCustomer as Customer
+    setCreatedCustomers(prev => [...prev, customer])
+    handleCustomerSelect(customer)
+    return null
+  }
+
   const handleCustomerSelect = (customer: Customer | null) => {
     setSelectedCustomerId(customer?.id ?? '')
     if (customer) {
@@ -1340,7 +1397,7 @@ export function QuoteBuilder({
               onChange={v => set('deliverables', v)}
             />
             {customers.length > 0 && (
-              <CustomerSelector customers={customers} selectedCustomerId={selectedCustomerId} onSelect={handleCustomerSelect} />
+              <CustomerSelector customers={allCustomers} selectedCustomerId={selectedCustomerId} onSelect={handleCustomerSelect} onCreate={handleCustomerCreate} />
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>

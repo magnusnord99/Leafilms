@@ -64,9 +64,7 @@ function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
 
-// Pakkekortets ikon-chips — ett ikon pr. leveransegruppe (hovedvideo/bilder/nedklipp), se
-// 2026-11-09-flyer-package-showcase-design.md §"Ikon-chips". Kun grupper med count > 0 vises;
-// en pakke uten leveranser (f.eks. en helt ny mal) viser ingen chip-rad.
+// Leveranseoversikt i pakkekortene, basert på pakkens faktiske innhold.
 function VideoChipIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -96,23 +94,28 @@ function ClipChipIcon() {
   )
 }
 
-function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; photo: number }) {
-  const chips: { icon: React.ReactNode; label: string }[] = [
-    { icon: <VideoChipIcon />, label: `${counts.hovedvideo} hovedvideo${counts.hovedvideo === 1 ? '' : 'er'}` },
-    { icon: <PhotoChipIcon />, label: `${counts.photo} bilde${counts.photo === 1 ? '' : 'r'}` },
-    { icon: <ClipChipIcon />, label: `${counts.klipp} nedklipp` },
-  ].filter((_, i) => [counts.hovedvideo, counts.photo, counts.klipp][i] > 0)
-
-  if (chips.length === 0) return null
-
+function renderPackageDeliverables(counts: { hovedvideo: number; klipp: number; photo: number }) {
+  const items = [
+    { icon: <VideoChipIcon />, count: counts.hovedvideo, label: counts.hovedvideo === 1 ? 'hovedvideo' : 'hovedvideoer' },
+    { icon: <PhotoChipIcon />, count: counts.photo, label: counts.photo === 1 ? 'bilde' : 'bilder' },
+    { icon: <ClipChipIcon />, count: counts.klipp, label: 'nedklipp' },
+  ].filter(item => item.count > 0)
+  if (items.length === 0) return null
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      {chips.map((chip, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5 text-sm" style={{ color: MUTED }}>
-          {chip.icon}
-          {chip.label}
-        </span>
-      ))}
+    <div className="border-t pt-6 @min-[420px]:border-l @min-[420px]:border-t-0 @min-[420px]:pl-8 @min-[420px]:pt-0" style={{ borderColor: BORDER }}>
+      <p className="mb-6 text-xs font-medium uppercase tracking-[0.18em]" style={{ color: MUTED }}>Dette får dere</p>
+      <div className="flex flex-wrap gap-x-8 gap-y-6 @min-[420px]:flex-col">
+        {items.map(item => (
+          <div key={item.label}>
+            <p className="font-display text-5xl leading-none md:text-6xl" style={{ color: CREAM, fontWeight: 300 }}>
+              {new Intl.NumberFormat('nb-NO').format(item.count)}
+            </p>
+            <p className="mt-2 flex items-center gap-2 text-base" style={{ color: MUTED }}>
+              <span aria-hidden="true" style={{ color: GOLD }}>{item.icon}</span>{item.label}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -642,7 +645,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     const amount = pkg.amount
     const title = pkg.package_label
     return (
-      <div key={pkg.id} className="group relative flex flex-col justify-between rounded-[2px] p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)] focus-within:ring-1 focus-within:ring-[#C49434] md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div key={pkg.id} className="group @container relative flex flex-col justify-between rounded-[2px] p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)] focus-within:ring-1 focus-within:ring-[#C49434] md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         <button
           type="button"
           onClick={() => setDetailPackageId(pkg.id)}
@@ -657,28 +660,32 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <button onClick={() => removePackage(pkg.package_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
           </div>
         )}
-        <div>
-          <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
-          {pkg.shootDays != null && pkg.shootDays > 0 && (
-            <p className="mt-2 text-sm" style={{ color: MUTED }}>
-              {new Intl.NumberFormat('nb-NO').format(pkg.shootDays)} {pkg.shootDays === 1 ? 'dag' : 'dager'} med opptak
-            </p>
-          )}
-          {renderDeliverableChips(pkg.deliverableCounts)}
-        </div>
-        <div className="mt-8">
-          {amount !== null ? (
-            <>
-              <p className="font-display text-3xl md:text-4xl" style={{ color: GOLD, fontWeight: 400 }}>{formatNok(amount)}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.12em]" style={{ color: SUBTLE }}>eks. mva</p>
-            </>
-          ) : (
-            <p className="text-sm" style={{ color: MUTED }}>Pris på forespørsel</p>
-          )}
-          <span aria-hidden="true" className="mt-6 inline-flex items-center gap-2 rounded-[2px] border border-[#C49434] px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-[#C49434] transition-colors group-hover:bg-[#C49434] group-hover:text-[#0C0B09] group-focus-within:bg-[#C49434] group-focus-within:text-[#0C0B09]">
-            Se mer
-            <span className="transition-transform duration-200 group-hover:translate-x-1 group-focus-within:translate-x-1">→</span>
-          </span>
+        <div className={`grid gap-8 ${Object.values(pkg.deliverableCounts).some(count => count > 0) ? '@min-[420px]:grid-cols-[minmax(0,1fr)_minmax(140px,0.8fr)]' : ''}`}>
+          <div className="flex min-w-0 flex-col justify-between">
+            <div>
+              <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+              {pkg.shootDays != null && pkg.shootDays > 0 && (
+                <p className="mt-2 text-sm" style={{ color: MUTED }}>
+                  {new Intl.NumberFormat('nb-NO').format(pkg.shootDays)} {pkg.shootDays === 1 ? 'dag' : 'dager'} med opptak
+                </p>
+              )}
+            </div>
+            <div className="mt-8">
+              {amount !== null ? (
+                <>
+                  <p className="font-display text-3xl md:text-4xl" style={{ color: GOLD, fontWeight: 400 }}>{formatNok(amount)}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.12em]" style={{ color: SUBTLE }}>eks. mva</p>
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: MUTED }}>Pris på forespørsel</p>
+              )}
+              <span aria-hidden="true" className="mt-6 inline-flex items-center gap-2 rounded-[2px] border border-[#C49434] px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-[#C49434] transition-colors group-hover:bg-[#C49434] group-hover:text-[#0C0B09] group-focus-within:bg-[#C49434] group-focus-within:text-[#0C0B09]">
+                Se mer
+                <span className="transition-transform duration-200 group-hover:translate-x-1 group-focus-within:translate-x-1">→</span>
+              </span>
+            </div>
+          </div>
+          {renderPackageDeliverables(pkg.deliverableCounts)}
         </div>
       </div>
     )

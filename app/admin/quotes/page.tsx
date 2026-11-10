@@ -7,7 +7,14 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/admin-theme'
 import { timeAgo } from '@/lib/format'
 import { getQuoteAmountExclVat } from '@/lib/quote-builder-utils'
-import { listPackageTemplateQuotes, createPackageTemplateQuote, type PackageTemplateQuote } from '@/lib/actions/quote-packages'
+import {
+  listPackageTemplateQuotes,
+  createPackageTemplateQuote,
+  markQuoteAsPackage,
+  checkQuoteUsedOnPublishedFlyers,
+  deletePackageTemplateQuote,
+  type PackageTemplateQuote,
+} from '@/lib/actions/quote-packages'
 import type { QuoteBuilderData, SalesFlyerPackageCategory } from '@/lib/types'
 
 type PickerProject = {
@@ -86,6 +93,18 @@ export default function QuotesPage() {
   const [packageSaving, setPackageSaving] = useState(false)
   const [packageError, setPackageError] = useState<string | null>(null)
 
+  // Inline rename rett i oversikten
+  const [renamingPackageId, setRenamingPackageId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameSaving, setRenameSaving] = useState(false)
+  // Sletting krever samme bekreftelse-ved-flyer-bruk som "Fjern pakke"-knappen i
+  // tilbudsbyggeren (checkQuoteUsedOnPublishedFlyers) — vist som en liten dialog
+  // med listen over berørte flyer-slugs, i stedet for en enkel confirm().
+  const [deletingPackage, setDeletingPackage] = useState<PackageTemplateQuote | null>(null)
+  const [deleteFlyerSlugs, setDeleteFlyerSlugs] = useState<string[] | null>(null)
+  const [deleteChecking, setDeleteChecking] = useState(false)
+  const [deleteSaving, setDeleteSaving] = useState(false)
+
   useEffect(() => { fetchQuotes() }, [])
 
   useEffect(() => {
@@ -145,6 +164,64 @@ export default function QuotesPage() {
       router.push(`/admin/projects/${result.projectId}/quote?quote=${result.quoteId}`)
     } finally {
       setPackageSaving(false)
+    }
+  }
+
+  function startRenamePackage(pkg: PackageTemplateQuote) {
+    setRenamingPackageId(pkg.id)
+    setRenameValue(pkg.package_label)
+  }
+
+  async function saveRenamePackage(pkg: PackageTemplateQuote) {
+    const label = renameValue.trim()
+    if (!label || label === pkg.package_label) {
+      setRenamingPackageId(null)
+      return
+    }
+    setRenameSaving(true)
+    try {
+      const result = await markQuoteAsPackage(pkg.id, {
+        package_label: label,
+        package_category: pkg.package_category,
+        package_order: pkg.package_order,
+      })
+      if ('error' in result) {
+        alert(result.error)
+        return
+      }
+      setPackageQuotes(prev => (prev ?? []).map(p => p.id === pkg.id ? { ...p, package_label: label } : p))
+      setRenamingPackageId(null)
+    } finally {
+      setRenameSaving(false)
+    }
+  }
+
+  async function startDeletePackage(pkg: PackageTemplateQuote) {
+    setDeletingPackage(pkg)
+    setDeleteFlyerSlugs(null)
+    setDeleteChecking(true)
+    try {
+      const { flyerSlugs } = await checkQuoteUsedOnPublishedFlyers(pkg.id)
+      setDeleteFlyerSlugs(flyerSlugs)
+    } finally {
+      setDeleteChecking(false)
+    }
+  }
+
+  async function confirmDeletePackage() {
+    if (!deletingPackage) return
+    setDeleteSaving(true)
+    try {
+      const result = await deletePackageTemplateQuote(deletingPackage.id)
+      if ('error' in result) {
+        alert(result.error)
+        return
+      }
+      setPackageQuotes(prev => (prev ?? []).filter(p => p.id !== deletingPackage.id))
+      setDeletingPackage(null)
+      setDeleteFlyerSlugs(null)
+    } finally {
+      setDeleteSaving(false)
     }
   }
 
@@ -690,43 +767,147 @@ export default function QuotesPage() {
             <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
               {packageQuotes.map((pkg, i) => {
                 const projectId = packageProjectIds[pkg.id]
-                return (
-                  <Link
-                    key={pkg.id}
-                    href={projectId ? `/admin/projects/${projectId}/quote?quote=${pkg.id}` : '#'}
+                const isRenaming = renamingPackageId === pkg.id
+
+                const labelBlock = isRenaming ? (
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveRenamePackage(pkg)
+                      if (e.key === 'Escape') setRenamingPackageId(null)
+                    }}
+                    onBlur={() => saveRenamePackage(pkg)}
+                    disabled={renameSaving}
                     style={{
-                      display: 'block',
-                      textDecoration: 'none',
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text,
+                      background: C.surface2, border: `1px solid ${C.accent}`, borderRadius: 6,
+                      padding: '4px 8px', width: '100%', maxWidth: 260,
+                    }}
+                  />
+                ) : (
+                  <>
+                    <p style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text,
+                      marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {pkg.package_label}
+                    </p>
+                    <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
+                      {PACKAGE_CATEGORY_LABEL[pkg.package_category]}
+                    </p>
+                  </>
+                )
+
+                return (
+                  <div
+                    key={pkg.id}
+                    style={{
                       borderBottom: i < packageQuotes.length - 1 ? `1px solid ${C.border}` : 'none',
                       background: C.surface,
                       transition: 'background 0.1s',
+                      cursor: isRenaming ? 'default' : 'pointer',
                     }}
-                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = C.surface2}
-                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = C.surface}
+                    onClick={() => { if (!isRenaming && projectId) router.push(`/admin/projects/${projectId}/quote?quote=${pkg.id}`) }}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.surface2}
+                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = C.surface}
                   >
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <p style={{
-                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 500, color: C.text,
-                          marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {pkg.package_label}
-                        </p>
-                        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3 }}>
-                          {PACKAGE_CATEGORY_LABEL[pkg.package_category]}
-                        </p>
-                      </div>
+                      <div style={{ flex: 1, minWidth: 140 }}>{labelBlock}</div>
                       <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500, color: C.text, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {formatNok(pkg.amount)} eks. mva
                       </span>
+                      {!isRenaming && (
+                        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => startRenamePackage(pkg)}
+                            aria-label="Endre navn"
+                            style={{
+                              padding: '5px 10px', background: 'transparent', color: C.text3,
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                              border: `1px solid ${C.border}`, borderRadius: 6, cursor: 'pointer',
+                            }}
+                          >
+                            Endre navn
+                          </button>
+                          <button
+                            onClick={() => startDeletePackage(pkg)}
+                            aria-label="Slett pakke"
+                            style={{
+                              padding: '5px 10px', background: 'transparent', color: C.danger,
+                              fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem',
+                              border: `1px solid ${C.border}`, borderRadius: 6, cursor: 'pointer',
+                            }}
+                          >
+                            Slett
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </Link>
+                  </div>
                 )
               })}
             </div>
           )
         )}
       </div>
+
+      {deletingPackage && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}
+          onClick={() => !deleteSaving && (setDeletingPackage(null), setDeleteFlyerSlugs(null))}
+        >
+          <div
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, maxWidth: 420, width: '90%' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', fontWeight: 600, color: C.text, marginBottom: 10 }}>
+              Slette «{deletingPackage.package_label}»?
+            </p>
+            {deleteChecking ? (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 18 }}>
+                Sjekker om pakken brukes på publiserte flyere …
+              </p>
+            ) : deleteFlyerSlugs && deleteFlyerSlugs.length > 0 ? (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.danger, marginBottom: 18 }}>
+                Denne pakken vises på {deleteFlyerSlugs.length > 1 ? 'publiserte flyere' : 'en publisert flyer'}: {deleteFlyerSlugs.join(', ')}.
+                Sletter du likevel, forsvinner den fra flyeren også. Dette kan ikke angres.
+              </p>
+            ) : (
+              <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', color: C.text3, marginBottom: 18 }}>
+                Dette kan ikke angres.
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setDeletingPackage(null); setDeleteFlyerSlugs(null) }}
+                disabled={deleteSaving}
+                style={{
+                  padding: '7px 14px', background: 'transparent', color: C.text3,
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem',
+                  border: `1px solid ${C.border}`, borderRadius: 6, cursor: deleteSaving ? 'default' : 'pointer',
+                }}
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={confirmDeletePackage}
+                disabled={deleteChecking || deleteSaving}
+                style={{
+                  padding: '7px 14px', background: C.danger, color: '#fff',
+                  fontFamily: 'var(--font-dm-sans)', fontSize: '0.78rem', fontWeight: 500,
+                  border: 'none', borderRadius: 6, cursor: deleteChecking || deleteSaving ? 'default' : 'pointer',
+                  opacity: deleteChecking || deleteSaving ? 0.6 : 1,
+                }}
+              >
+                {deleteSaving ? 'Sletter …' : 'Slett pakke'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

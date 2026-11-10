@@ -28,6 +28,12 @@ export function ImagePickerModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
   const [selectedSubcategory, setSelectedSubcategory] = useState('all')
+  const [orientation, setOrientation] = useState<'all' | 'landscape' | 'portrait'>('all')
+  const visibleImages = images.filter(image => {
+    if (orientation === 'all') return true
+    if (!image.width || !image.height) return false
+    return orientation === 'landscape' ? image.width > image.height : image.height > image.width
+  })
   const [selectedIds, setSelectedIds] = useState<string[]>(selectedImageIds)
   const [limitWarning, setLimitWarning] = useState(false)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
@@ -122,7 +128,7 @@ export function ImagePickerModal({
           height: dims.height || null,
           file_size: uploadFile.size,
         })
-        .select('id, filename, file_path, title, category, subcategory, tags')
+        .select('id, filename, file_path, title, category, subcategory, tags, width, height')
         .single()
       if (dbError || !inserted) throw dbError || new Error('Ingen rad returnert')
 
@@ -183,7 +189,7 @@ export function ImagePickerModal({
       setLoading(true)
       let query = supabase
         .from('images')
-        .select('id, filename, file_path, title, category, subcategory, tags')
+        .select('id, filename, file_path, title, category, subcategory, tags, width, height')
         .order('created_at', { ascending: false })
 
       if (selectedCategory !== 'all') {
@@ -408,15 +414,28 @@ export function ImagePickerModal({
           ) : null}
         </div>
 
+        <div className="mb-4 flex flex-shrink-0 flex-wrap items-center gap-2" role="group" aria-label="Bildeformat">
+          <span className="mr-1 text-sm text-zinc-400">Format:</span>
+          {([
+            { value: 'all', label: 'Alle' },
+            { value: 'landscape', label: 'Liggende' },
+            { value: 'portrait', label: 'Stående' },
+          ] as const).map(option => (
+            <Button key={option.value} size="sm" variant={orientation === option.value ? 'primary' : 'secondary'} aria-pressed={orientation === option.value} onClick={() => setOrientation(option.value)}>
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
         {/* Images Grid */}
         <div className="flex-1 overflow-y-auto min-h-0" data-lenis-prevent>
           {loading ? (
             <div className="text-center py-12">
               <Text variant="body">Laster bilder...</Text>
             </div>
-          ) : images.length > 0 ? (
+          ) : visibleImages.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-              {images.map((image) => {
+              {visibleImages.map((image) => {
                 const isSelected = selectedIds.includes(image.id)
                 const imageUrl = supabase.storage
                   .from('assets')

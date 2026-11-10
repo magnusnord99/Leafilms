@@ -51,6 +51,12 @@ function toTitleCase(text: string): string {
   return text.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())
 }
 
+function getVimeoId(caseStudy: CaseStudy): string | null {
+  if (caseStudy.vimeo_id) return caseStudy.vimeo_id
+  const match = caseStudy.vimeo_url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/)
+  return match ? match[1] : null
+}
+
 function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
@@ -163,6 +169,9 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // ankommende rollback ikke kan overskrive en senere, vellykket mutasjon.
   const [caseMutating, setCaseMutating] = useState(false)
   const [casesError, setCasesError] = useState<string | null>(null)
+  // Hvilket case-case som nettopp har blitt klikket på og spiller inline
+  // (samme mønster som CasesSection.tsx på pitch-sidene) — kun én av gangen.
+  const [playingCaseId, setPlayingCaseId] = useState<string | null>(null)
 
   const [packagePickerOpen, setPackagePickerOpen] = useState(false)
   const [pendingPackageIds, setPendingPackageIds] = useState<string[]>([])
@@ -701,25 +710,65 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                       <button onClick={() => removeCase(caseStudy.id)} disabled={caseMutating} aria-label="Fjern case" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: caseMutating ? 'default' : 'pointer', opacity: caseMutating ? 0.5 : 1 }}>×</button>
                     </div>
                   )}
-                  <a href={caseStudy.vimeo_url} target="_blank" rel="noopener noreferrer" className="block">
-                    <div className="relative aspect-video w-full overflow-hidden" style={{ background: SURFACE }}>
-                      {caseStudy.thumbnail_path && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={caseStudy.thumbnail_path}
-                          alt={toTitleCase(caseStudy.title)}
-                          loading={index < 2 ? 'eager' : 'lazy'}
-                          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]"
-                        />
-                      )}
-                    </div>
-                    <h3 className="font-display mt-5 text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>
-                      {toTitleCase(caseStudy.title)}
-                    </h3>
-                    {caseStudy.description && (
-                      <p className="mt-2 text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>{caseStudy.description}</p>
-                    )}
-                  </a>
+                  {(() => {
+                    const vimeoId = getVimeoId(caseStudy)
+                    const isPlaying = playingCaseId === caseStudy.id && vimeoId
+                    return (
+                      <div
+                        className="relative aspect-video w-full overflow-hidden"
+                        style={{ background: SURFACE }}
+                      >
+                        {isPlaying ? (
+                          <iframe
+                            src={`https://player.vimeo.com/video/${vimeoId}?title=0&byline=0&portrait=0&color=C49434&autoplay=1`}
+                            className="h-full w-full"
+                            frameBorder="0"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            allowFullScreen
+                            title={caseStudy.title}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => vimeoId && setPlayingCaseId(caseStudy.id)}
+                            className="group block h-full w-full cursor-pointer"
+                            aria-label={`Spill ${toTitleCase(caseStudy.title)}`}
+                          >
+                            {caseStudy.thumbnail_path && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={caseStudy.thumbnail_path}
+                                alt={toTitleCase(caseStudy.title)}
+                                loading={index < 2 ? 'eager' : 'lazy'}
+                                className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]"
+                              />
+                            )}
+                            {vimeoId && (
+                              <span
+                                className="absolute inset-0 flex items-center justify-center transition group-hover:scale-110"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                <span
+                                  className="flex items-center justify-center rounded-full"
+                                  style={{ width: 64, height: 64, background: 'rgba(12,11,9,0.55)', border: `1px solid ${GOLD}` }}
+                                >
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill={GOLD}>
+                                    <path d="M8 5v14l11-7z" />
+                                  </svg>
+                                </span>
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
+                  <h3 className="font-display mt-5 text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>
+                    {toTitleCase(caseStudy.title)}
+                  </h3>
+                  {caseStudy.description && (
+                    <p className="mt-2 text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>{caseStudy.description}</p>
+                  )}
                 </div>
               )
             })}

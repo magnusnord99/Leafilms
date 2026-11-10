@@ -36,11 +36,10 @@ const arrowButtonStyle: React.CSSProperties = {
   lineHeight: 1,
 }
 
-// pointer-events-none på strippen + pointer-events-auto kun på knappene: en
-// full-bredde stripe her ville ellers ligget rett over <video controls>-baren
-// (scrub/volum/fullskjerm) og svelget klikk over hele bredden. Knappene er nå
-// plassert vertikalt midt på mediet, ved venstre/høyre kant — ikke langs
-// bunnkanten der native kontroller ligger.
+// pointer-events-none på strippen + pointer-events-auto kun på knappene —
+// videoene her er autoplay/loop uten native kontroller (se under), så dette
+// er ikke lenger strengt nødvendig for å unngå å dekke en kontroll-bar, men
+// holder likevel resten av mediet klikkbart (f.eks. lenker) utenom knappene.
 function CarouselArrows({ onPrev, onNext }: { onPrev: () => void; onNext: () => void }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-2">
@@ -139,7 +138,7 @@ function WebsiteMock({
       </div>
       <div className="relative w-full" style={{ aspectRatio: '16 / 9', background: '#000' }}>
         {video && (
-          <video key={video.id} controls src={video.path} className="absolute inset-0 h-full w-full object-cover" />
+          <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
         )}
         {hasMultipleVideos && <CarouselArrows onPrev={onPrevVideo} onNext={onNextVideo} />}
       </div>
@@ -248,13 +247,13 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items }: Pac
           >
             {mainVideos.map(video => (
               <SocialPostCard key={video.id} cardWidth={240}>
-                <video controls src={video.path} className="absolute inset-0 h-full w-full object-cover" />
+                <video autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
               </SocialPostCard>
             ))}
             {socialClips.map(clip => (
               <SocialPostCard key={clip.id} cardWidth={240} caption={clip.caption}>
                 {clip.media_type === 'video' ? (
-                  <video controls src={clip.path} className="absolute inset-0 h-full w-full object-cover" />
+                  <video autoPlay muted loop playsInline src={clip.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={clip.path} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -295,7 +294,7 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items }: Pac
                         style={{ aspectRatio: '9 / 16', background: '#000', borderRadius: 24, border: '6px solid #000' }}
                       >
                         {activeClip && activeClip.media_type === 'video' ? (
-                          <video key={activeClip.id} controls src={activeClip.path} className="absolute inset-0 h-full w-full object-cover" />
+                          <video key={activeClip.id} autoPlay muted loop playsInline src={activeClip.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
                         ) : activeClip ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img key={activeClip.id} src={activeClip.path} alt="" className="absolute inset-0 h-full w-full object-cover" />

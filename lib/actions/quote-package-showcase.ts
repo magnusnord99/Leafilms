@@ -12,7 +12,7 @@ export async function copyLibraryImageToQuotePackage(
   flyerId: string,
   quoteId: string,
   imageId: string,
-  kind: 'photo' | 'social_clip'
+  kind: 'photo' | 'social_clip' | 'website_photo'
 ): Promise<{ url: string } | { error: string }> {
   const supabase = await createClient()
 

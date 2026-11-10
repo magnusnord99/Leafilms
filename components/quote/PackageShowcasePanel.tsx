@@ -17,19 +17,21 @@ type Props = { flyerId: string; quoteId: string }
 // Hvilken picker-modal som er åpen akkurat nå, og hvilken kind/media_type den
 // skriver til. 'social_clip' har to varianter siden den kinden kan ta begge
 // media-typer (migrasjonens CHECK-constraint).
-type PickerTarget = 'main_video' | 'social_clip_video' | 'social_clip_image' | 'photo' | null
+type PickerTarget = 'main_video' | 'social_clip_video' | 'social_clip_image' | 'photo' | 'website_photo' | null
 
 const ROW_LABEL: Record<QuotePackageShowcaseKind, string> = {
   main_video: 'Hovedvideo',
   social_clip: 'Sosiale klipp',
-  photo: 'Bilder',
+  photo: 'Bilder (stack)',
+  website_photo: 'Nettside-bilder',
 }
 
 // Ikke-bindende hint, byggeren avgjør selv — se spec, "ikke et krav".
 const ROW_HINT: Record<QuotePackageShowcaseKind, string> = {
   main_video: 'f.eks. 1',
   social_clip: 'f.eks. 2-4',
-  photo: 'f.eks. 4-8',
+  photo: 'f.eks. 2-5 — vises som en bunke med antall, ikke alle enkeltvis',
+  website_photo: 'f.eks. 2-4 — vises inni nettside-moccen sammen med hovedvideoen',
 }
 
 // Stabil referanse til pickerne — unngår at de to modalene synker selectedIds
@@ -53,6 +55,7 @@ export function PackageShowcasePanel({ flyerId, quoteId }: Props) {
     main_video: false,
     social_clip: false,
     photo: false,
+    website_photo: false,
   })
   const [activePicker, setActivePicker] = useState<PickerTarget>(null)
 
@@ -130,7 +133,7 @@ export function PackageShowcasePanel({ flyerId, quoteId }: Props) {
     }
   }
 
-  async function handlePickedImages(kind: 'photo' | 'social_clip', ids: string[]) {
+  async function handlePickedImages(kind: 'photo' | 'social_clip' | 'website_photo', ids: string[]) {
     if (ids.length === 0) return
     setError(null)
     setSaving(kind, true)
@@ -292,6 +295,11 @@ export function PackageShowcasePanel({ flyerId, quoteId }: Props) {
                 </button>
               </>
             )}
+            {kind === 'website_photo' && (
+              <button type="button" onClick={() => setActivePicker('website_photo')} disabled={busy} style={addButtonStyle(busy)}>
+                + Legg til nettside-bilde
+              </button>
+            )}
           </div>
         </div>
         {kindItems.length === 0 ? (
@@ -325,13 +333,15 @@ export function PackageShowcasePanel({ flyerId, quoteId }: Props) {
       {renderRow('main_video', ROW_LABEL.main_video, itemsForKind('main_video'))}
       {renderRow('social_clip', ROW_LABEL.social_clip, itemsForKind('social_clip'))}
       {renderRow('photo', ROW_LABEL.photo, itemsForKind('photo'))}
+      {renderRow('website_photo', ROW_LABEL.website_photo, itemsForKind('website_photo'))}
 
       <ImagePickerModal
-        isOpen={activePicker === 'photo' || activePicker === 'social_clip_image'}
+        isOpen={activePicker === 'photo' || activePicker === 'social_clip_image' || activePicker === 'website_photo'}
         onClose={() => setActivePicker(null)}
         onSelect={(ids) => {
           if (activePicker === 'photo') handlePickedImages('photo', ids)
           else if (activePicker === 'social_clip_image') handlePickedImages('social_clip', ids)
+          else if (activePicker === 'website_photo') handlePickedImages('website_photo', ids)
         }}
         selectedImageIds={EMPTY_IDS}
       />

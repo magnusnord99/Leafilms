@@ -29,6 +29,10 @@ type Props = {
   // komponent, kun tittel/placeholder skiller seg fra produksjonschatten.
   title?: string
   placeholder?: string
+  // Dyplenke fra Prosjekttråder i Meldinger (?chat=1) — scroller panelet inn
+  // i syne og fokuserer meldingsfeltet ved mount. Komponenten har ingen
+  // open/lukket-state å styre, så dette er alt "deep-linking" kan gjøre her.
+  scrollToOnLoad?: boolean
 }
 
 function displayName(p: { name: string | null; email: string }) {
@@ -53,6 +57,7 @@ function Avatar({ p, size = 26 }: { p: ConversationParticipant; size?: number })
 export function ProductionChat({
   conversationId, currentUser, initialMembers, allProfiles,
   title = 'Produksjonschat', placeholder = 'Skriv en melding til produksjonsteamet...',
+  scrollToOnLoad = false,
 }: Props) {
   const [members, setMembers] = useState<ConversationParticipant[]>(initialMembers)
   const [messages, setMessages] = useState<ConversationMessage[]>([])
@@ -62,6 +67,17 @@ export function ProductionChat({
   const [showAddPicker, setShowAddPicker] = useState(false)
   const [pickerFilter, setPickerFilter] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // Dyplenke (?chat=1 på siden som rendrer denne chatten) — scroll panelet
+  // inn i syne og fokuser meldingsfeltet. MentionTextInput forwarder ikke
+  // sin interne ref, så feltet hentes via querySelector i stedet for en
+  // egen ref til inputen.
+  useEffect(() => {
+    if (!scrollToOnLoad) return
+    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    rootRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+  }, [scrollToOnLoad])
 
   useEffect(() => {
     let cancelled = false
@@ -186,7 +202,7 @@ export function ProductionChat({
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
       {/* Medlemmer */}
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.7rem', fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>

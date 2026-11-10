@@ -27,7 +27,22 @@ export async function getConversations(): Promise<ConversationListItem[]> {
       .select('conversation_id')
       .eq('profile_id', user.id)
 
-    const conversationIds = (myRows ?? []).map((r) => r.conversation_id)
+    const allConversationIds = (myRows ?? []).map((r) => r.conversation_id)
+    if (allConversationIds.length === 0) return []
+
+    // Produksjonschat, lead-chat og e-postdiskusjon er gruppesamtaler som vises
+    // under "Prosjekttråder" i stedet for her. Samtaler der en av disse kolonnene
+    // er satt utelates, så Direkte-lista kun inneholder ekte 1:1-DM-er.
+    const { data: classifiedRows } = await supabase
+      .from('conversations')
+      .select('id, project_id, lead_id, email_discussion_project_id')
+      .in('id', allConversationIds)
+    const classifiedIds = new Set(
+      (classifiedRows ?? [])
+        .filter((c) => c.project_id || c.lead_id || c.email_discussion_project_id)
+        .map((c) => c.id)
+    )
+    const conversationIds = allConversationIds.filter((id) => !classifiedIds.has(id))
     if (conversationIds.length === 0) return []
 
     const [{ data: otherRows }, { data: messages }, { data: unread }] = await Promise.all([

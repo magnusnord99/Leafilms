@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import { getConversations, startConversation, markConversationRead, type ConversationListItem, type ConversationParticipant } from '@/lib/actions/messages'
 import { getReactions, toggleReaction, type MessageReaction } from '@/lib/actions/reactions'
+import { markProjectThreadRead, type ProjectThreadListItem, type ProjectThreadKind } from '@/lib/actions/project-threads'
 import { MessageReactions } from '@/components/shared/MessageReactions'
 import { getAvatarColor } from '@/lib/avatar-colors'
 import { C } from '@/lib/admin-theme'
@@ -22,6 +24,7 @@ type Props = {
   currentUser: CurrentUser
   initialConversations: ConversationListItem[]
   allProfiles: ConversationParticipant[]
+  initialProjectThreads: ProjectThreadListItem[]
 }
 
 function displayName(p: { name: string | null; email: string }) {
@@ -47,8 +50,59 @@ function isRecent(c: ConversationListItem) {
   return Date.now() - new Date(c.lastMessage.created_at).getTime() <= THIRTY_DAYS_MS
 }
 
-export function MeldingerClient({ currentUser, initialConversations, allProfiles }: Props) {
+// Ikon per tråd-type i Prosjekttråder-fanen — samme 13x13-stil som brukes på varsel-siden.
+function ThreadIcon({ kind }: { kind: ProjectThreadKind }) {
+  switch (kind) {
+    case 'project':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
+      )
+    case 'task':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 12l2 2 4-4" />
+        </svg>
+      )
+    case 'preprod':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
+        </svg>
+      )
+    case 'quote':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 2h9l3 3v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M9 8h6M9 12h6M9 16h4" />
+        </svg>
+      )
+    case 'production':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" />
+        </svg>
+      )
+    case 'lead':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+        </svg>
+      )
+    case 'email':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 6l-10 7L2 6" />
+        </svg>
+      )
+  }
+}
+
+export function MeldingerClient({ currentUser, initialConversations, allProfiles, initialProjectThreads }: Props) {
+  const router = useRouter()
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
+  const [projectThreads, setProjectThreads] = useState<ProjectThreadListItem[]>(initialProjectThreads)
+  const [view, setView] = useState<'direct' | 'threads'>('direct')
   const [selectedId, setSelectedId] = useState<string | null>(initialConversations[0]?.id ?? null)
   const [messages, setMessages] = useState<DirectMessage[]>([])
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
@@ -58,6 +112,28 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const [pickerFilter, setPickerFilter] = useState('')
   const [recentOnly, setRecentOnly] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Bytt fane: lukk ev. åpen "ny melding"-søker — den gjelder kun direkte meldinger.
+  function handleViewChange(next: 'direct' | 'threads') {
+    setView(next)
+    if (next === 'threads') {
+      setShowPicker(false)
+      setPickerFilter('')
+    }
+  }
+
+  // Klikk på en prosjekttråd: marker lest (riktig mekanisme avhenger av om tråden
+  // er samtale-basert eller varsel-basert, se ProjectThreadListItem.conversationId),
+  // nulle ut badgen optimistisk, og naviger til tråden.
+  async function handleThreadClick(item: ProjectThreadListItem) {
+    setProjectThreads((prev) => prev.map((t) => (t.key === item.key ? { ...t, unreadCount: 0 } : t)))
+    if (item.conversationId) {
+      await markConversationRead(item.conversationId)
+    } else {
+      await markProjectThreadRead(item.descriptor)
+    }
+    router.push(item.href)
+  }
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null
   // Listen er allerede sortert nyeste-først; dette filteret skjuler i tillegg
@@ -268,35 +344,66 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Meldinger
           </p>
-          <button
-            onClick={() => setShowPicker((s) => !s)}
-            style={{
-              width: 26, height: 26, borderRadius: 6, background: showPicker ? C.accent : C.surface,
-              border: `1px solid ${showPicker ? C.accent : C.border}`, color: showPicker ? '#fff' : C.text2,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', lineHeight: 1,
-            }}
-            title="Ny melding"
-          >
-            +
-          </button>
+          {view === 'direct' && (
+            <button
+              onClick={() => setShowPicker((s) => !s)}
+              style={{
+                width: 26, height: 26, borderRadius: 6, background: showPicker ? C.accent : C.surface,
+                border: `1px solid ${showPicker ? C.accent : C.border}`, color: showPicker ? '#fff' : C.text2,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', lineHeight: 1,
+              }}
+              title="Ny melding"
+            >
+              +
+            </button>
+          )}
         </div>
 
-        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: '10px 16px', display: 'flex', gap: 6, borderBottom: view === 'threads' ? `1px solid ${C.border}` : 'none' }}>
           <button
-            onClick={() => setRecentOnly((r) => !r)}
+            onClick={() => handleViewChange('direct')}
             style={{
               fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
               padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
-              background: recentOnly ? C.accentBg : 'transparent',
-              border: `1px solid ${recentOnly ? C.accent : C.border}`,
-              color: recentOnly ? C.accent : C.text3,
+              background: view === 'direct' ? C.accentBg : 'transparent',
+              border: `1px solid ${view === 'direct' ? C.accent : C.border}`,
+              color: view === 'direct' ? C.accent : C.text3,
             }}
           >
-            Siste 30 dager
+            Direkte
+          </button>
+          <button
+            onClick={() => handleViewChange('threads')}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
+              padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+              background: view === 'threads' ? C.accentBg : 'transparent',
+              border: `1px solid ${view === 'threads' ? C.accent : C.border}`,
+              color: view === 'threads' ? C.accent : C.text3,
+            }}
+          >
+            Prosjekttråder
           </button>
         </div>
 
-        {showPicker && (
+        {view === 'direct' && (
+          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <button
+              onClick={() => setRecentOnly((r) => !r)}
+              style={{
+                fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
+                padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+                background: recentOnly ? C.accentBg : 'transparent',
+                border: `1px solid ${recentOnly ? C.accent : C.border}`,
+                color: recentOnly ? C.accent : C.text3,
+              }}
+            >
+              Siste 30 dager
+            </button>
+          </div>
+        )}
+
+        {view === 'direct' && showPicker && (
           <div style={{ padding: 12, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
             <input
               autoFocus
@@ -337,63 +444,121 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         )}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {conversations.length === 0 && !showPicker && (
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
-              Ingen samtaler ennå. Trykk + for å starte en.
-            </p>
-          )}
-          {conversations.length > 0 && visibleConversations.length === 0 && (
-            <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
-              Ingen samtaler med aktivitet siste 30 dager.
-            </p>
-          )}
-          {visibleConversations.map((c) => {
-            const active = c.id === selectedId
-            return (
-              <button
-                key={c.id}
-                onClick={() => setSelectedId(c.id)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
-                  background: active ? C.accentBg : 'transparent', border: 'none', borderLeft: `2px solid ${active ? C.accent : 'transparent'}`,
-                  cursor: 'pointer', textAlign: 'left',
-                }}
-              >
-                <span style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipants[0]), color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 700,
-                }}>
-                  {displayName(c.otherParticipants[0])[0].toUpperCase()}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          {view === 'direct' && (
+            <>
+              {conversations.length === 0 && !showPicker && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
+                  Ingen samtaler ennå. Trykk + for å starte en.
+                </p>
+              )}
+              {conversations.length > 0 && visibleConversations.length === 0 && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
+                  Ingen samtaler med aktivitet siste 30 dager.
+                </p>
+              )}
+              {visibleConversations.map((c) => {
+                const active = c.id === selectedId
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedId(c.id)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                      background: active ? C.accentBg : 'transparent', border: 'none', borderLeft: `2px solid ${active ? C.accent : 'transparent'}`,
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
                     <span style={{
-                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: getAvatarColor(c.otherParticipants[0]), color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-dm-sans)', fontSize: '0.75rem', fontWeight: 700,
                     }}>
-                      {participantNames(c.otherParticipants)}
+                      {displayName(c.otherParticipants[0])[0].toUpperCase()}
                     </span>
-                    {c.unreadCount > 0 && (
-                      <span style={{
-                        minWidth: 16, height: 16, borderRadius: 8, background: C.accent, color: '#fff', fontSize: '0.6rem', fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-dm-sans)',
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <span style={{
+                          fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: c.unreadCount > 0 ? 600 : 500, color: C.text,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {participantNames(c.otherParticipants)}
+                        </span>
+                        {c.unreadCount > 0 && (
+                          <span style={{
+                            minWidth: 16, height: 16, borderRadius: 8, background: C.accent, color: '#fff', fontSize: '0.6rem', fontWeight: 700,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-dm-sans)',
+                          }}>
+                            {c.unreadCount > 9 ? '9+' : c.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: c.unreadCount > 0 ? C.text2 : C.text3, margin: 0,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
-                        {c.unreadCount > 9 ? '9+' : c.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <p style={{
-                    fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: c.unreadCount > 0 ? C.text2 : C.text3, margin: 0,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        {c.lastMessage
+                          ? `${c.lastMessage.sender_id === currentUser.id ? 'Du: ' : ''}${c.lastMessage.content}`
+                          : 'Ingen meldinger ennå'}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </>
+          )}
+
+          {view === 'threads' && (
+            <>
+              {projectThreads.length === 0 && (
+                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
+                  Ingen prosjekttråder ennå.
+                </p>
+              )}
+              {projectThreads.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => handleThreadClick(item)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                    background: 'transparent', border: 'none', borderLeft: '2px solid transparent',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: C.surface2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {c.lastMessage
-                      ? `${c.lastMessage.sender_id === currentUser.id ? 'Du: ' : ''}${c.lastMessage.content}`
-                      : 'Ingen meldinger ennå'}
-                  </p>
-                </div>
-              </button>
-            )
-          })}
+                    <ThreadIcon kind={item.kind} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <span style={{
+                        fontFamily: 'var(--font-dm-sans)', fontSize: '0.8rem', fontWeight: item.unreadCount > 0 ? 600 : 500, color: C.text,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.label}
+                      </span>
+                      {item.unreadCount > 0 && (
+                        <span style={{
+                          minWidth: 16, height: 16, borderRadius: 8, background: C.accent, color: '#fff', fontSize: '0.6rem', fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-dm-sans)',
+                        }}>
+                          {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{
+                      fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: item.unreadCount > 0 ? C.text2 : C.text3, margin: 0,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {item.lastMessage
+                        ? `${item.lastMessage.senderName}: ${item.lastMessage.preview}`
+                        : 'Ingen meldinger ennå'}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
 

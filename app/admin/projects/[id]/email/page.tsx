@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getProjectHub, generateEmailDraft, updatePipelineStage, getCurrentUserProfile, getAllProfiles, getEmailSuggestions } from '@/lib/actions/pipeline'
 import type { EmailSuggestion } from '@/lib/actions/pipeline'
@@ -87,7 +87,9 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export default function EmailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const projectId = params.id as string
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [hubData, setHubData] = useState<HubData>(null)
   const [loadingHub, setLoadingHub] = useState(true)
@@ -587,6 +589,7 @@ export default function EmailPage() {
                 allProfiles={chatAllProfiles.filter(p => p.id !== chatCurrentUser.id)}
                 title="E-postdiskusjon"
                 placeholder="Skriv en melding om denne e-posten..."
+                scrollToOnLoad={forceOpenChat}
               />
             </div>
           )}

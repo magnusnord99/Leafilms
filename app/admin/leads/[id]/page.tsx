@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getLeadById, updateLead, updateLeadStatus, updateLeadNotes, deleteLead, LeadRecord, LeadStatus } from '@/lib/actions/leads'
 import LeadTaskPanel from '@/components/admin/LeadTaskPanel'
@@ -75,7 +75,9 @@ type EditForm = {
 export default function LeadDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const leadId = params.id as string
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [lead, setLead] = useState<LeadRecord | null>(null)
   const [loading, setLoading] = useState(true)
@@ -627,6 +629,7 @@ export default function LeadDetailPage() {
                   allProfiles={chatAllProfiles.filter(p => p.id !== chatCurrentUser.id)}
                   title="Lead-chat"
                   placeholder="Skriv en melding om denne leaden..."
+                  scrollToOnLoad={forceOpenChat}
                 />
               </div>
             )}

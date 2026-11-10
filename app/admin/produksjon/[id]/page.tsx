@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getOrCreateProjectConversation, getProductionInfo, type ProductionInfo } from '@/lib/actions/production-chat'
 import { getCurrentUserProfile, getAllProfiles } from '@/lib/actions/pipeline'
@@ -136,6 +136,8 @@ function ScheduleTable({ title, items }: { title: string | null; items: Producti
 export default function ProduksjonPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const forceOpenChat = searchParams?.get('chat') === '1'
 
   const [loading, setLoading] = useState(true)
   const [info, setInfo] = useState<ProductionInfo | null>(null)
@@ -341,6 +343,7 @@ export default function ProduksjonPage() {
               currentUser={currentUser}
               initialMembers={members}
               allProfiles={allProfiles.filter((p) => p.id !== currentUser.id)}
+              scrollToOnLoad={forceOpenChat}
             />
           </div>
         </div>

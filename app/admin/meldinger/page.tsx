@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import { getConversations } from '@/lib/actions/messages'
 import { getAllProfiles } from '@/lib/actions/pipeline'
+import { getProjectThreads } from '@/lib/actions/project-threads'
 import { MeldingerClient } from './MeldingerClient'
 
 export default async function MeldingerPage() {
@@ -15,9 +16,10 @@ export default async function MeldingerPage() {
     .eq('id', user.id)
     .single()
 
-  const [conversations, profiles] = await Promise.all([
+  const [conversations, profiles, projectThreads] = await Promise.all([
     getConversations(),
     getAllProfiles(),
+    getProjectThreads(),
   ])
 
   return (
@@ -30,6 +32,7 @@ export default async function MeldingerPage() {
       }}
       initialConversations={conversations}
       allProfiles={profiles.filter((p) => p.id !== user.id)}
+      initialProjectThreads={projectThreads}
     />
   )
 }

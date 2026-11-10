@@ -9,6 +9,7 @@ import {
   updateSalesFlyer,
   setSalesFlyerCases,
   setSalesFlyerPackages,
+  setSalesFlyerReferenceLinks,
   copyLibraryImageToFlyer,
   copyLibraryVideoToFlyer,
   getSalesFlyerBySlug,
@@ -66,7 +67,7 @@ function formatNok(amount: number): string {
 // en pakke uten leveranser (f.eks. en helt ny mal) viser ingen chip-rad.
 function VideoChipIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="5" width="15" height="14" rx="2" />
       <path d="M17 10l5-3v10l-5-3" />
     </svg>
@@ -75,7 +76,7 @@ function VideoChipIcon() {
 
 function PhotoChipIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <path d="M21 15l-5-5L5 21" />
@@ -85,7 +86,7 @@ function PhotoChipIcon() {
 
 function ClipChipIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="6" cy="6" r="3" />
       <circle cx="6" cy="18" r="3" />
       <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
@@ -103,9 +104,9 @@ function renderDeliverableChips(counts: { hovedvideo: number; klipp: number; pho
   if (chips.length === 0) return null
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {chips.map((chip, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
+        <span key={i} className="inline-flex items-center gap-2 text-sm" style={{ color: MUTED }}>
           {chip.icon}
           {chip.label}
         </span>
@@ -187,6 +188,15 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   // raden, pkg.id), ikke quote_id, siden det er feltet hvert kort allerede
   // bruker som nøkkel.
   const [detailPackageId, setDetailPackageId] = useState<string | null>(null)
+
+  // Referanselenker (eksterne nettsider Leafilms har levert innhold til,
+  // f.eks. Asker Tennis) — fritekst, ikke et bibliotek-valg, så "legg til"
+  // er et lite inline-skjema i stedet for en picker-modal (se linksMutating-
+  // mønsteret under, speilet fra case-/pakke-listene).
+  const [newLinkLabel, setNewLinkLabel] = useState('')
+  const [newLinkUrl, setNewLinkUrl] = useState('')
+  const [linksMutating, setLinksMutating] = useState(false)
+  const [linksError, setLinksError] = useState<string | null>(null)
 
 
   const slug = flyer.slug
@@ -470,6 +480,83 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     }
   }
 
+  // ── Referanselenker ─────────────────────────────────────────────────────
+  // Samme "mutér lokal liste, erstatt hele listen server-side"-mønster som
+  // cases/pakker over, men listen inneholder fritekst (label+url) i stedet
+  // for id-er mot et bibliotek — se setSalesFlyerReferenceLinks.
+
+  function toLinkPayload(links: typeof flyer.referenceLinks) {
+    return links.map(l => ({ label: l.label, url: l.url }))
+  }
+
+  async function addReferenceLink() {
+    const label = newLinkLabel.trim()
+    let url = newLinkUrl.trim()
+    if (!label || !url || linksMutating) return
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+
+    const previous = flyer.referenceLinks
+    const next = [...previous, { id: `pending-${Date.now()}`, flyer_id: flyer.id, label, url, order_index: previous.length, created_at: new Date().toISOString() }]
+    set('referenceLinks', next)
+    setLinksMutating(true)
+    try {
+      const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
+      if ('error' in result) { setLinksError(`Kunne ikke lagre lenken: ${result.error}`); set('referenceLinks', previous); return }
+      setLinksError(null)
+      setNewLinkLabel('')
+      setNewLinkUrl('')
+      const fresh = await getSalesFlyerBySlug(slug, { includeDraft: true })
+      if (fresh) set('referenceLinks', fresh.referenceLinks)
+    } catch (err) {
+      console.error('addReferenceLink:', err)
+      setLinksError('Kunne ikke lagre lenken — sjekk nettforbindelsen')
+      set('referenceLinks', previous)
+    } finally {
+      setLinksMutating(false)
+    }
+  }
+
+  async function moveReferenceLink(index: number, direction: 'up' | 'down') {
+    if (linksMutating) return
+    const previous = flyer.referenceLinks
+    const next = [...previous]
+    const swapWith = direction === 'up' ? index - 1 : index + 1
+    if (swapWith < 0 || swapWith >= next.length) return
+    ;[next[index], next[swapWith]] = [next[swapWith], next[index]]
+    set('referenceLinks', next)
+    setLinksMutating(true)
+    try {
+      const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
+      if ('error' in result) { setLinksError(`Kunne ikke lagre rekkefølgen: ${result.error}`); set('referenceLinks', previous) }
+      else setLinksError(null)
+    } catch (err) {
+      console.error('moveReferenceLink:', err)
+      setLinksError('Kunne ikke lagre rekkefølgen — sjekk nettforbindelsen')
+      set('referenceLinks', previous)
+    } finally {
+      setLinksMutating(false)
+    }
+  }
+
+  async function removeReferenceLink(id: string) {
+    if (linksMutating) return
+    const previous = flyer.referenceLinks
+    const next = previous.filter(l => l.id !== id)
+    set('referenceLinks', next)
+    setLinksMutating(true)
+    try {
+      const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
+      if ('error' in result) { setLinksError(`Kunne ikke fjerne lenken: ${result.error}`); set('referenceLinks', previous) }
+      else setLinksError(null)
+    } catch (err) {
+      console.error('removeReferenceLink:', err)
+      setLinksError('Kunne ikke fjerne lenken — sjekk nettforbindelsen')
+      set('referenceLinks', previous)
+    } finally {
+      setLinksMutating(false)
+    }
+  }
+
   // Gruppering etter kategori, flyerens egen rekkefølge innen hver gruppe.
   // getOrderedPackages (lib/actions/sales-flyers.ts) filtrerer allerede bort
   // pakker uten kategori server-side, så package_category er alltid satt her.
@@ -481,7 +568,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
   const editableStyle = (extra?: React.CSSProperties): React.CSSProperties => ({ ...editableBase, ...extra })
   const heroHasMedia = Boolean(flyer.hero_video_path || flyer.hero_poster_path)
-  const listError = casesError ?? packagesError
+  const listError = casesError ?? packagesError ?? linksError
 
   // Render-funksjon (ikke en indre komponent) så kortene ikke remountes på
   // hver render av forelderen.
@@ -575,10 +662,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50, background: '#C0392B', color: '#fff', padding: '10px 16px', borderRadius: 8, fontSize: '0.8rem', maxWidth: 320 }}>
           {casesError && <p>{casesError}</p>}
           {packagesError && <p style={{ marginTop: casesError ? 6 : 0 }}>{packagesError}</p>}
-          <button onClick={() => { setCasesError(null); setPackagesError(null) }} aria-label="Lukk" style={{ marginTop: 6, background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>✕ Lukk</button>
+          {linksError && <p style={{ marginTop: casesError || packagesError ? 6 : 0 }}>{linksError}</p>}
+          <button onClick={() => { setCasesError(null); setPackagesError(null); setLinksError(null) }} aria-label="Lukk" style={{ marginTop: 6, background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>✕ Lukk</button>
         </div>
       )}
-      {(savingFields.size > 0 || caseMutating || packageMutating) && (
+      {(savingFields.size > 0 || caseMutating || packageMutating || linksMutating) && (
         <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 50, background: '#1A1812', color: '#fff', padding: '6px 12px', borderRadius: 8, fontSize: '0.72rem', border: '1px solid #333' }}>
           Lagrer...
         </div>
@@ -778,6 +866,83 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             <div className="mt-12">
               <button onClick={openCasePicker} disabled={caseMutating} style={{ fontSize: '0.78rem', fontWeight: 600, padding: '8px 16px', borderRadius: 8, background: ADMIN, color: '#fff', border: 'none', cursor: caseMutating ? 'default' : 'pointer', opacity: caseMutating ? 0.6 : 1 }}>
                 + Legg til case
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Live hos kundene — lenker til ferdige, publiserte nettsider
+          (f.eks. Asker Tennis) som viser innholdet i praksis hos en ekte
+          kunde, i tillegg til case-videoene over. Fritekst (navn + URL), se
+          194_sales_flyer_reference_links.sql. */}
+      {(flyer.referenceLinks.length > 0 || editing) && (
+        <section className="px-6 py-20 md:px-16 md:py-32" style={{ borderTop: `1px solid ${BORDER}` }}>
+          <div className="mb-12 flex items-center gap-6 md:mb-16">
+            <span className="h-px w-12" style={{ background: GOLD }} />
+            <p className="text-xs font-medium uppercase tracking-[0.3em]" style={{ color: MUTED }}>Live hos kundene</p>
+          </div>
+
+          {flyer.referenceLinks.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {flyer.referenceLinks.map((link, index) => {
+                const isLast = index === flyer.referenceLinks.length - 1
+                let hostname = link.url
+                try { hostname = new URL(link.url).hostname.replace(/^www\./, '') } catch { /* lenken er ikke en gyldig URL (bør ikke skje, men vis rå-verdien i stedet for å krasje) */ }
+                return (
+                  <div key={link.id} className="group relative">
+                    {editing && (
+                      <div style={{ position: 'absolute', top: -14, right: -14, zIndex: 5, display: 'flex', gap: 4 }}>
+                        <button onClick={() => moveReferenceLink(index, 'up')} disabled={index === 0 || linksMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: index === 0 || linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>↑</button>
+                        <button onClick={() => moveReferenceLink(index, 'down')} disabled={isLast || linksMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: isLast || linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>↓</button>
+                        <button onClick={() => removeReferenceLink(link.id)} disabled={linksMutating} aria-label="Fjern lenke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>×</button>
+                      </div>
+                    )}
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex h-full items-center justify-between gap-4 rounded-[2px] p-6 transition hover:opacity-80"
+                      style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
+                    >
+                      <span className="min-w-0">
+                        <span className="font-display block text-xl md:text-2xl" style={{ color: CREAM, fontWeight: 400 }}>{link.label}</span>
+                        <span className="mt-1 block truncate text-xs" style={{ color: MUTED }}>{hostname}</span>
+                      </span>
+                      <span aria-hidden style={{ color: GOLD, fontSize: '1.1rem', flexShrink: 0 }}>↗</span>
+                    </a>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {editing && (
+            <div className="mt-12 max-w-lg">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={newLinkLabel}
+                  onChange={e => setNewLinkLabel(e.target.value)}
+                  placeholder="Navn, f.eks. Asker Tennis"
+                  style={{ ...settingsInput, width: 'auto', flex: 1 }}
+                />
+                <input
+                  type="text"
+                  value={newLinkUrl}
+                  onChange={e => setNewLinkUrl(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addReferenceLink() }}
+                  placeholder="askertennis.no"
+                  style={{ ...settingsInput, width: 'auto', flex: 1 }}
+                />
+              </div>
+              <button
+                onClick={addReferenceLink}
+                disabled={linksMutating || !newLinkLabel.trim() || !newLinkUrl.trim()}
+                className="mt-3"
+                style={{ fontSize: '0.78rem', fontWeight: 600, padding: '8px 16px', borderRadius: 8, background: ADMIN, color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating || !newLinkLabel.trim() || !newLinkUrl.trim() ? 0.6 : 1 }}
+              >
+                + Legg til lenke
               </button>
             </div>
           )}

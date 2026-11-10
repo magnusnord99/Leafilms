@@ -703,6 +703,15 @@ export type SalesFlyerPackage = {
   order_index: number
 }
 
+export type SalesFlyerReferenceLink = {
+  id: string
+  flyer_id: string
+  label: string
+  url: string
+  order_index: number
+  created_at: string
+}
+
 export type SalesFlyerView = {
   id: string
   flyer_id: string

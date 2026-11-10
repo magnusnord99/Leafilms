@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase-server'
-import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, QuotePackageShowcaseItem } from '@/lib/types'
+import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, SalesFlyerReferenceLink, QuotePackageShowcaseItem } from '@/lib/types'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { getQuoteAmountExclVat, getPackageDeliverableCounts } from '@/lib/quote-builder-utils'
@@ -28,6 +28,7 @@ export type SalesFlyerPackageItem = {
 export type SalesFlyerWithRelations = SalesFlyer & {
   cases: (CaseStudy & { order_index: number })[]
   packages: SalesFlyerPackageItem[]
+  referenceLinks: SalesFlyerReferenceLink[]
 }
 
 // view_count er totalt antall rader i sales_flyer_views for flyeren (ikke
@@ -97,11 +98,26 @@ export async function getSalesFlyerBySlug(
     if (error) console.error('getSalesFlyerBySlug:', error)
     return null
   }
-  const [cases, packages] = await Promise.all([
+  const [cases, packages, referenceLinks] = await Promise.all([
     getOrderedCases(flyer.id),
     getOrderedPackages(flyer.id),
+    getOrderedReferenceLinks(flyer.id),
   ])
-  return { ...(flyer as SalesFlyer), cases, packages }
+  return { ...(flyer as SalesFlyer), cases, packages, referenceLinks }
+}
+
+async function getOrderedReferenceLinks(flyerId: string): Promise<SalesFlyerReferenceLink[]> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('sales_flyer_reference_links')
+    .select('*')
+    .eq('flyer_id', flyerId)
+    .order('order_index', { ascending: true })
+  if (error) {
+    console.error('getOrderedReferenceLinks:', error)
+    return []
+  }
+  return (data ?? []) as SalesFlyerReferenceLink[]
 }
 
 async function getOrderedCases(flyerId: string): Promise<(CaseStudy & { order_index: number })[]> {
@@ -273,6 +289,26 @@ export async function setSalesFlyerPackages(flyerId: string, quoteIds: string[])
   if (error) {
     console.error('setSalesFlyerPackages:', error)
     return { error: 'Kunne ikke oppdatere pakke-listen' }
+  }
+  return { ok: true }
+}
+
+// Samme atomiske mønster som setSalesFlyerCases/setSalesFlyerPackages, men
+// via replace_sales_flyer_reference_links (migrasjon 194) — lenkene er
+// fritekst (navn + URL), ikke referanse-id-er inn mot en annen tabell, så
+// RPC-en tar et jsonb-array og regenererer radene (inkl. id) fra bunnen.
+export async function setSalesFlyerReferenceLinks(
+  flyerId: string,
+  links: { label: string; url: string }[]
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('replace_sales_flyer_reference_links', {
+    p_flyer_id: flyerId,
+    p_links: links,
+  })
+  if (error) {
+    console.error('setSalesFlyerReferenceLinks:', error)
+    return { error: 'Kunne ikke oppdatere referanselenkene' }
   }
   return { ok: true }
 }

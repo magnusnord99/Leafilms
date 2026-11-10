@@ -42,7 +42,7 @@ export function HeroMedia({
   return (
     <video
       ref={ref}
-      className="absolute inset-0 h-full w-full object-cover"
+      className="hero-bg-video absolute inset-0 h-full w-full object-cover"
       src={src}
       poster={poster ?? undefined}
       autoPlay

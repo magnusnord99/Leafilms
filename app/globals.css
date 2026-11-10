@@ -466,10 +466,18 @@ body.marketing-page::after {
   display: flex !important;
 }
 
-video::-webkit-media-controls-start-playback-button,
-video::-webkit-media-controls-play-button,
-video::-webkit-media-controls-panel,
-video::-webkit-media-controls {
+/* Kun for HeroMedia sin autoplay/loop/muted bakgrunnsvideo (.hero-bg-video) —
+   iOS/WebKit viser en native "trykk for å spille av"-knapp selv uten
+   controls-attributtet for slike bakgrunnsvideoer. Denne regelen var tidligere
+   uskopet (bare `video::-webkit-media-controls...`) og slo dermed ut native
+   avspillingskontroller for ALLE <video controls>-elementer i hele appen —
+   bl.a. "Se mer"-modalen på salgsflyere og VideoNode i boards (feedback
+   "videoen spiller heller ikke av", 2026-11-10). HeroMedia er eneste sted i
+   kodebasen som bruker autoPlay, så scoping her bryter ingenting annet. */
+.hero-bg-video::-webkit-media-controls-start-playback-button,
+.hero-bg-video::-webkit-media-controls-play-button,
+.hero-bg-video::-webkit-media-controls-panel,
+.hero-bg-video::-webkit-media-controls {
   display: none !important;
   -webkit-appearance: none;
   appearance: none;

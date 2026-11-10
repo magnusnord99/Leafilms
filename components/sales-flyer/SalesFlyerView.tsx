@@ -575,6 +575,29 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
     }
   }
 
+  // Henter og:image i etterkant for lenker som ble lagt til FØR previewbilde-
+  // funksjonen fantes (migrasjon 197) og derfor mangler preview_image_path —
+  // "Hent bilde"-knappen under, ikke automatisk ved sidelasting, se
+  // feedback 2026-11-10.
+  async function fetchMissingPreview(link: typeof flyer.referenceLinks[number]) {
+    if (linksMutating) return
+    setLinksMutating(true)
+    try {
+      const { previewImagePath } = await getReferenceLinkPreviewImage(slug, link.url)
+      if (!previewImagePath) { setLinksError(`Fant ikke noe forhåndsvisningsbilde for ${link.label}`); return }
+      const next = flyer.referenceLinks.map(l => l.id === link.id ? { ...l, preview_image_path: previewImagePath } : l)
+      set('referenceLinks', next)
+      const result = await setSalesFlyerReferenceLinks(flyer.id, toLinkPayload(next))
+      if ('error' in result) { setLinksError(`Kunne ikke lagre bildet: ${result.error}`); set('referenceLinks', flyer.referenceLinks) }
+      else setLinksError(null)
+    } catch (err) {
+      console.error('fetchMissingPreview:', err)
+      setLinksError('Kunne ikke hente forhåndsvisningsbilde — sjekk nettforbindelsen')
+    } finally {
+      setLinksMutating(false)
+    }
+  }
+
   // Gruppering etter kategori, flyerens egen rekkefølge innen hver gruppe.
   // getOrderedPackages (lib/actions/sales-flyers.ts) filtrerer allerede bort
   // pakker uten kategori server-side, så package_category er alltid satt her.
@@ -1032,6 +1055,15 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
                         <button onClick={() => moveReferenceLink(index, 'down')} disabled={isLast || linksMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: isLast || linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>↓</button>
                         <button onClick={() => removeReferenceLink(link.id)} disabled={linksMutating} aria-label="Fjern lenke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.5 : 1 }}>×</button>
                       </div>
+                    )}
+                    {editing && !link.preview_image_path && (
+                      <button
+                        onClick={() => fetchMissingPreview(link)}
+                        disabled={linksMutating}
+                        style={{ position: 'absolute', top: 8, left: 8, zIndex: 5, fontSize: '0.65rem', fontWeight: 600, padding: '5px 10px', borderRadius: 6, background: 'rgba(124,92,252,0.9)', color: '#fff', border: 'none', cursor: linksMutating ? 'default' : 'pointer', opacity: linksMutating ? 0.6 : 1 }}
+                      >
+                        Hent bilde
+                      </button>
                     )}
                     <a
                       href={link.url}

@@ -195,7 +195,7 @@ function WebsiteMock({
       </div>
       <div className="relative w-full" style={{ aspectRatio: '16 / 9', background: '#000' }}>
         {video && (
-          <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
+          <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover animate-[fade-in_0.3s_ease-out]" />
         )}
         {/* Fiktiv hero-tekst oppå videoen — samme pynt-begrunnelse som nav-raden over. */}
         <div
@@ -680,10 +680,10 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items: initi
                           style={{ aspectRatio: '9 / 16', background: '#000', borderRadius: 24, border: '6px solid #000' }}
                         >
                           {activeClip && activeClip.media_type === 'video' ? (
-                            <video key={activeClip.id} autoPlay muted loop playsInline src={activeClip.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
+                            <video key={activeClip.id} autoPlay muted loop playsInline src={activeClip.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover animate-[fade-in_0.3s_ease-out]" />
                           ) : activeClip ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img key={activeClip.id} src={activeClip.path} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                            <img key={activeClip.id} src={activeClip.path} alt="" className="absolute inset-0 h-full w-full object-cover animate-[fade-in_0.3s_ease-out]" />
                           ) : null}
 
                           {/* Reels/Stories-stil UI-overlegg oppå mediet — samme

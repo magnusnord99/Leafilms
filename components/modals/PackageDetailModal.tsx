@@ -187,24 +187,69 @@ function WebsiteMock({
   )
 }
 
+// Enkel, stabil pseudo-tilfeldig "liker dette"-tall per kort — deterministisk
+// fra id-en (ikke Math.random(), som ville gitt hydration-mismatch mellom
+// server- og klient-render siden denne modalen er 'use client').
+function fakeLikeCount(seed: string): number {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  return 200 + (hash % 1800)
+}
+
 // Mobil: hvert innholdselement som sitt eget "sosiale medier-post"-kort i en
 // bla-karusell (scroll-snap) — adresserer "vil kunne bla mellom innholdet"
-// og "se mer ut som en sosiale medier post" (feedback 2026-11-10).
-function SocialPostCard({ children, caption, cardWidth }: { children: React.ReactNode; caption?: string | null; cardWidth: number }) {
+// og "se mer ut som en sosiale medier post" (feedback 2026-11-10). Header
+// med verifisert-merke, handlingsikoner (like/kommenter/del/lagre) og
+// "X liker dette" er ren pynt for å forsterke illusjonen — ikke ekte tall.
+function SocialPostCard({ id, children, caption, cardWidth }: { id: string; children: React.ReactNode; caption?: string | null; cardWidth: number }) {
+  const likes = fakeLikeCount(id)
   return (
     <div className="shrink-0" style={{ width: cardWidth, scrollSnapAlign: 'center' }}>
       <div className="overflow-hidden rounded-[14px]" style={{ border: `1px solid ${BORDER}`, background: SURFACE }}>
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span style={{ width: 20, height: 20, borderRadius: '50%', background: GOLD, display: 'inline-block', flexShrink: 0 }} />
-          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 500, color: CREAM }}>leafilms</span>
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          <span
+            className="flex items-center justify-center rounded-full"
+            style={{ width: 26, height: 26, background: GOLD, color: '#1A1812', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 700, flexShrink: 0 }}
+          >
+            L
+          </span>
+          <span className="flex items-center gap-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', fontWeight: 600, color: CREAM }}>
+            leafilms
+            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden>
+              <circle cx="12" cy="12" r="10" fill={GOLD} />
+              <path d="M8 12.5l2.5 2.5L16 9.5" stroke="#1A1812" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="ml-auto flex gap-[3px]" aria-hidden>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: SUBTLE }} />
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: SUBTLE }} />
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: SUBTLE }} />
+          </span>
         </div>
         <div className="relative w-full" style={{ aspectRatio: '4 / 5', background: '#000' }}>
           {children}
         </div>
+        <div className="flex items-center gap-3 px-3 pt-2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={CREAM} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M20.8 7.6c0-2.8-2.3-4.9-5-4.9-1.8 0-3.4 1-4.3 2.4C10.6 3.7 9 2.7 7.2 2.7c-2.7 0-5 2.1-5 4.9 0 5.4 7.1 9.9 9.3 11.2.3.2.7.2 1 0 2.2-1.3 9.3-5.8 9.3-11.2Z" />
+          </svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={CREAM} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.5-.8L3 20l1.1-5a8.3 8.3 0 0 1-.8-3.5 8.4 8.4 0 0 1 8.4-8.9h.3a8.4 8.4 0 0 1 8 8Z" />
+          </svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={CREAM} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />
+          </svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={CREAM} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="ml-auto" aria-hidden>
+            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z" />
+          </svg>
+        </div>
+        <p className="px-3 pt-2 pb-3" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: CREAM }}>
+          {likes.toLocaleString('nb-NO')} liker dette
+        </p>
       </div>
       {caption && (
         <p className="mt-2 px-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: MUTED }}>
-          {caption}
+          <span style={{ fontWeight: 600, color: CREAM }}>leafilms</span> {caption}
         </p>
       )}
     </div>
@@ -276,12 +321,12 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items }: Pac
             style={{ scrollSnapType: 'x mandatory' }}
           >
             {mainVideos.map(video => (
-              <SocialPostCard key={video.id} cardWidth={240}>
+              <SocialPostCard key={video.id} id={video.id} cardWidth={240}>
                 <video autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
               </SocialPostCard>
             ))}
             {socialClips.map(clip => (
-              <SocialPostCard key={clip.id} cardWidth={240} caption={clip.caption}>
+              <SocialPostCard key={clip.id} id={clip.id} cardWidth={240} caption={clip.caption}>
                 {clip.media_type === 'video' ? (
                   <video autoPlay muted loop playsInline src={clip.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
                 ) : (
@@ -329,14 +374,71 @@ export function PackageDetailModal({ isOpen, onClose, packageLabel, items }: Pac
                           // eslint-disable-next-line @next/next/no-img-element
                           <img key={activeClip.id} src={activeClip.path} alt="" className="absolute inset-0 h-full w-full object-cover" />
                         ) : null}
+
+                        {/* Reels/Stories-stil UI-overlegg oppå mediet — samme
+                            "se ut som en ekte sosiale medier-post"-begrunnelse
+                            som SocialPostCard, men lagt oppå i stedet for under
+                            siden 9:16-formatet her etterligner en faktisk
+                            Reel/Story, ikke en klassisk feed-post. */}
+                        {activeClip && (
+                          <>
+                            <div
+                              className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 p-2.5"
+                              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)' }}
+                            >
+                              <span
+                                className="flex items-center justify-center rounded-full"
+                                style={{ width: 18, height: 18, background: GOLD, color: '#1A1812', fontFamily: 'var(--font-dm-sans)', fontSize: '0.55rem', fontWeight: 700, flexShrink: 0 }}
+                              >
+                                L
+                              </span>
+                              <span className="flex items-center gap-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, color: '#fff' }}>
+                                leafilms
+                                <svg width="9" height="9" viewBox="0 0 24 24" aria-hidden>
+                                  <circle cx="12" cy="12" r="10" fill={GOLD} />
+                                  <path d="M8 12.5l2.5 2.5L16 9.5" stroke="#1A1812" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            </div>
+
+                            {/* bottom, ikke midtstilt — unngår kollisjon med
+                                CarouselArrows, som er vertikalt sentrert i
+                                rammen når det er flere klipp å bla mellom. */}
+                            <div className="pointer-events-none absolute flex flex-col items-center gap-3" style={{ right: 10, bottom: 18 }}>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                  <path d="M20.8 7.6c0-2.8-2.3-4.9-5-4.9-1.8 0-3.4 1-4.3 2.4C10.6 3.7 9 2.7 7.2 2.7c-2.7 0-5 2.1-5 4.9 0 5.4 7.1 9.9 9.3 11.2.3.2.7.2 1 0 2.2-1.3 9.3-5.8 9.3-11.2Z" />
+                                </svg>
+                                <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.52rem', fontWeight: 600, color: '#fff' }}>
+                                  {fakeLikeCount(activeClip.id)}
+                                </span>
+                              </div>
+                              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.5-.8L3 20l1.1-5a8.3 8.3 0 0 1-.8-3.5 8.4 8.4 0 0 1 8.4-8.9h.3a8.4 8.4 0 0 1 8 8Z" />
+                              </svg>
+                              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />
+                              </svg>
+                              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z" />
+                              </svg>
+                            </div>
+
+                            {activeClip.caption && (
+                              <div
+                                className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5 pr-9"
+                                style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)' }}
+                              >
+                                <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', lineHeight: 1.4, color: '#fff' }}>
+                                  <span style={{ fontWeight: 600 }}>leafilms</span> {activeClip.caption}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                       {socialClips.length > 1 && <CarouselArrows onPrev={showPrevClip} onNext={showNextClip} />}
                     </div>
-                    {activeClip?.caption && (
-                      <p className="mt-3 max-w-[220px] text-center text-sm" style={{ color: MUTED }}>
-                        {activeClip.caption}
-                      </p>
-                    )}
                   </div>
                 )}
 

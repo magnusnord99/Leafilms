@@ -136,10 +136,36 @@ function WebsiteMock({
           leafilms.no
         </div>
       </div>
+      {/* Fiktiv nav-rad — ren pynt, ikke redigerbar. Gjør at det ser ut som en
+          faktisk nettside og ikke bare en videospiller med en adresselinje. */}
+      <div className="flex items-center justify-between gap-3 px-5 py-3" style={{ background: BLACK, borderBottom: `1px solid ${BORDER}` }}>
+        <span className="font-display text-sm tracking-wide" style={{ color: CREAM }}>leafilms</span>
+        <div className="flex items-center gap-4">
+          {['Hjem', 'Om oss', 'Tjenester', 'Kontakt'].map(item => (
+            <span key={item} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: MUTED }}>{item}</span>
+          ))}
+        </div>
+        <span
+          className="rounded-full px-3 py-1"
+          style={{ background: GOLD, color: '#1A1812', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}
+        >
+          Kontakt oss
+        </span>
+      </div>
       <div className="relative w-full" style={{ aspectRatio: '16 / 9', background: '#000' }}>
         {video && (
           <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover" />
         )}
+        {/* Fiktiv hero-tekst oppå videoen — samme pynt-begrunnelse som nav-raden over. */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 p-5"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.78), transparent)' }}
+        >
+          <p className="font-display text-lg md:text-xl" style={{ color: CREAM, fontWeight: 400 }}>Historier som fenger</p>
+          <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: MUTED }}>
+            Profesjonell videoproduksjon for merkevaren din
+          </p>
+        </div>
         {hasMultipleVideos && <CarouselArrows onPrev={onPrevVideo} onNext={onNextVideo} />}
       </div>
       {websitePhotos.length > 0 && (
@@ -153,6 +179,10 @@ function WebsiteMock({
           ))}
         </div>
       )}
+      {/* Fiktiv footer — fullfører "dette er en nettside"-illusjonen. */}
+      <div className="px-5 py-3 text-center" style={{ borderTop: `1px solid ${BORDER}` }}>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: SUBTLE }}>© {new Date().getFullYear()} leafilms.no — Alle rettigheter reservert</span>
+      </div>
     </div>
   )
 }

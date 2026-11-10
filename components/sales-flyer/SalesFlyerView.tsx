@@ -1010,7 +1010,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
 
           <div className="flex max-w-5xl flex-col items-start gap-6 pb-6 md:flex-row md:items-center md:gap-8 md:pb-12">
             {flyer.show_customer_logo && flyer.customer?.logo_path && (
-              <div className="shrink-0 rounded-[2px] bg-white p-3 md:p-4">
+              <div className="shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={supabase.storage.from('assets').getPublicUrl(flyer.customer.logo_path).data.publicUrl}
                   alt={`${flyer.customer.name} logo`} className="max-h-20 w-auto max-w-36 object-contain md:max-h-28 md:max-w-44" />

@@ -1,11 +1,16 @@
 import { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
+import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 
 async function assertParticipant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   conversationId: string,
   userId: string
 ): Promise<boolean> {
+  const { data: conversation, error } = await createServiceClient()
+    .from('conversations').select('sales_flyer_id').eq('id', conversationId).maybeSingle()
+  if (error || !conversation) return false
+  if (conversation.sales_flyer_id && !(await getAuthenticatedStaffUser()).ok) return false
   const { data } = await supabase
     .from('conversation_participants')
     .select('id')

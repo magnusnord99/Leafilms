@@ -662,10 +662,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             </p>
           )}
           {renderDeliverableChips(pkg.deliverableCounts)}
-          <span aria-hidden="true" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em]" style={{ color: GOLD }}>
-            Se mer
-            <span className="transition-transform duration-200 group-hover:translate-x-1 group-focus-within:translate-x-1">→</span>
-          </span>
         </div>
         <div className="mt-8">
           {amount !== null ? (
@@ -676,23 +672,10 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           ) : (
             <p className="text-sm" style={{ color: MUTED }}>Pris på forespørsel</p>
           )}
-          {/* Egen CTA pr. pakke — mailto med pakkenavnet i emnefeltet, så
-              henvendelsen allerede sier hvilken pakke det gjelder. Samme
-              cta_email for pakkeforespørsler. Generell kontakt bruker contact_email. */}
-          {flyer.cta_email ? (
-            <a
-              href={`mailto:${flyer.cta_email}?subject=${encodeURIComponent(`Forespørsel: ${title}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${title}". Kan dere ta kontakt?`)}`}
-              className="relative z-20 mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] transition hover:opacity-80"
-              style={{ color: GOLD }}
-            >
-              Velg denne pakken
-              <span aria-hidden>→</span>
-            </a>
-          ) : editing ? (
-            <p className="mt-6 text-xs" style={{ color: '#E05A4A' }}>
-              Ingen CTA-e-post satt — legg den inn under ⚙ Innstillinger.
-            </p>
-          ) : null}
+          <span aria-hidden="true" className="mt-6 inline-flex items-center gap-2 rounded-[2px] border border-[#C49434] px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-[#C49434] transition-colors group-hover:bg-[#C49434] group-hover:text-[#0C0B09] group-focus-within:bg-[#C49434] group-focus-within:text-[#0C0B09]">
+            Se mer
+            <span className="transition-transform duration-200 group-hover:translate-x-1 group-focus-within:translate-x-1">→</span>
+          </span>
         </div>
       </div>
     )
@@ -1423,6 +1406,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         isOpen={detailPackage !== null}
         onClose={() => setDetailPackageId(null)}
         packageLabel={detailPackage?.package_label ?? ''}
+        inquiryEmail={flyer.cta_email}
         items={detailPackage?.showcaseItems ?? []}
         deliverableCounts={detailPackage?.deliverableCounts}
         usageNotes={flyer.usageNotes}

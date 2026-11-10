@@ -9,6 +9,7 @@ import { getReactions, toggleReaction, type MessageReaction } from '@/lib/action
 import { supabase } from '@/lib/supabase-client'
 import { C } from '@/lib/admin-theme'
 import type { TaskMessage } from '@/lib/types'
+import { markConversationRead } from '@/lib/actions/messages'
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
@@ -29,19 +30,27 @@ export default function TaskChatPanel({
   currentUserId,
   profiles,
   forceOpen,
+  conversationId,
+  triggerTop = 58,
+  initialUnread = 0,
 }: {
   taskId: string
   taskTitle: string
   currentUserId: string | null
   profiles: MentionableProfile[]
   forceOpen?: boolean
+  conversationId?: string
+  triggerTop?: number
+  initialUnread?: number
 }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<TaskMessage[]>([])
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
-  const [unread, setUnread] = useState(0)
+  const [unread, setUnread] = useState(initialUnread)
+  const [error, setError] = useState<string | null>(null)
+  const reactionType = conversationId ? 'conversation' : 'task'
   const bottomRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
   const messagesRef = useRef<TaskMessage[]>([])
@@ -56,11 +65,29 @@ export default function TaskChatPanel({
   }, [open])
 
   async function loadMessages() {
-    const msgs = await getTaskMessages(taskId)
-    setMessages(msgs)
-    messagesRef.current = msgs
-    if (msgs.length > 0) {
-      getReactions('task', msgs.map(m => m.id)).then(setReactions)
+    try {
+      let msgs: TaskMessage[]
+      if (conversationId) {
+        const response = await fetch(`/api/messages/${conversationId}`)
+        if (!response.ok) { setError('Kunne ikke hente meldinger. Prøv igjen.'); return }
+        const data = await response.json() as { messages: { id: string; sender_id: string; content: string; mentions: string[]; urgent: boolean; created_at: string }[] }
+        msgs = data.messages.map(message => ({
+          id: message.id, task_id: taskId, user_id: message.sender_id,
+          message: message.content, mentions: message.mentions ?? [],
+          urgent: message.urgent ?? false, created_at: message.created_at,
+          user: profiles.find(profile => profile.id === message.sender_id),
+        }))
+      } else {
+        msgs = await getTaskMessages(taskId)
+      }
+      setError(null)
+      setMessages(msgs)
+      messagesRef.current = msgs
+      if (msgs.length > 0) {
+        getReactions(reactionType, msgs.map(m => m.id)).then(setReactions)
+      }
+    } catch {
+      setError('Kunne ikke hente meldinger. Sjekk forbindelsen og prøv igjen.')
     }
   }
 
@@ -71,14 +98,15 @@ export default function TaskChatPanel({
     setReactions({})
     if (open) loadMessages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId])
+  }, [taskId, conversationId, reactionType])
 
   useEffect(() => {
     if (!open) return
     loadMessages()
-    markTaskMessagesRead(taskId)
+    if (conversationId) void markConversationRead(conversationId)
+    else void markTaskMessagesRead(taskId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, taskId])
+  }, [open, taskId, conversationId])
 
   const [prevOpen, setPrevOpen] = useState(open)
   if (prevOpen !== open) {
@@ -96,9 +124,12 @@ export default function TaskChatPanel({
       .channel(`task-messages-${taskId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'task_messages', filter: `task_id=eq.${taskId}` },
+        { event: 'INSERT', schema: 'public', table: conversationId ? 'conversation_messages' : 'task_messages', filter: conversationId ? `conversation_id=eq.${conversationId}` : `task_id=eq.${taskId}` },
         () => {
-          if (openRef.current) loadMessages()
+          if (openRef.current) {
+            void loadMessages()
+            if (conversationId) void markConversationRead(conversationId)
+          }
           else setUnread(u => u + 1)
         }
       )
@@ -106,38 +137,46 @@ export default function TaskChatPanel({
 
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId])
+  }, [taskId, conversationId, reactionType])
 
   useEffect(() => {
     const channel = supabase
       .channel(`task-message-reactions-${taskId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions', filter: 'message_type=eq.task' },
+        { event: '*', schema: 'public', table: 'message_reactions', filter: `message_type=eq.${reactionType}` },
         (payload) => {
           const row = (payload.new ?? payload.old) as { message_id: string } | null
           if (!row || !messagesRef.current.some(m => m.id === row.message_id)) return
-          getReactions('task', messagesRef.current.map(m => m.id)).then(setReactions)
+          getReactions(reactionType, messagesRef.current.map(m => m.id)).then(setReactions)
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [taskId])
+  }, [taskId, conversationId, reactionType])
 
   async function handleToggleReaction(messageId: string, emoji: string) {
-    await toggleReaction('task', messageId, emoji)
+    await toggleReaction(reactionType, messageId, emoji)
   }
 
   async function handleSend() {
     if (!text.trim() || sending) return
     setSending(true)
     try {
-      const result = await sendTaskMessage(taskId, text.trim(), extractMentionIds(text.trim(), profiles))
+      const mentions = extractMentionIds(text.trim(), profiles)
+      const result = conversationId
+        ? await fetch(`/api/messages/${conversationId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text.trim(), mentions }),
+          })
+        : await sendTaskMessage(taskId, text.trim(), mentions)
       if (result.ok) {
         setText('')
         await loadMessages()
-      }
+      } else { setError('Kunne ikke sende meldingen. Prøv igjen.') }
+    } catch {
+      setError('Kunne ikke sende meldingen. Sjekk forbindelsen og prøv igjen.')
     } finally {
       setSending(false)
     }
@@ -148,9 +187,11 @@ export default function TaskChatPanel({
       {/* Trigger-knapp — fast plassert øverst til høyre, samme sted/stil som tilbuds-chatten */}
       <button
         onClick={() => setOpen(o => !o)}
-        title="Oppgave-chat"
+        title={conversationId ? 'Intern flyer-chat' : 'Oppgave-chat'}
+        aria-label={conversationId ? 'Åpne intern flyer-chat' : 'Åpne oppgave-chat'}
+        aria-expanded={open}
         style={{
-          position: 'fixed', top: 58, right: 16, zIndex: 96,
+          position: 'fixed', top: triggerTop, right: 16, zIndex: 96,
           width: 40, height: 40, borderRadius: 8,
           background: open ? C.accent : C.surface,
           border: `1px solid ${open ? C.accent : C.border}`,
@@ -248,6 +289,7 @@ export default function TaskChatPanel({
           <div ref={bottomRef} />
         </div>
 
+        {error && <p role="alert" style={{ padding: '8px 16px', color: '#E05A4A', fontSize: '0.75rem' }}>{error}</p>}
         <form
           onSubmit={(e) => { e.preventDefault(); handleSend() }}
           style={{ flexShrink: 0, padding: '12px 16px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8, alignItems: 'flex-end' }}

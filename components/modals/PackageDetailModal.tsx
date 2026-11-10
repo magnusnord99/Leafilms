@@ -34,6 +34,7 @@ interface PackageDetailModalProps {
   isOpen: boolean
   onClose: () => void
   packageLabel: string
+  inquiryEmail?: string
   items: QuotePackageShowcaseItem[]
   editable?: EditableTarget
   onItemsChanged?: (items: QuotePackageShowcaseItem[]) => void
@@ -458,7 +459,7 @@ function UsageNoteEditor({ value, editable, busy, saving, onSave }: {
 
 export function PackageDetailModal({
   isOpen, onClose, packageLabel, items: initialItems, editable, onItemsChanged,
-  deliverableCounts, usageNotes: initialUsageNotes, onUsageNotesChanged,
+  deliverableCounts, usageNotes: initialUsageNotes, onUsageNotesChanged, inquiryEmail,
 }: PackageDetailModalProps) {
   const [mainVideoIndex, setMainVideoIndex] = useState(0)
   const [socialClipIndex, setSocialClipIndex] = useState(0)
@@ -929,7 +930,19 @@ export function PackageDetailModal({
           Reise, kost og losji er ikke inkludert i prisen.
         </p>
 
-        <div className="mt-8 flex justify-end">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+          {inquiryEmail ? (
+            <a
+              href={`mailto:${inquiryEmail}?subject=${encodeURIComponent(`Forespørsel: ${packageLabel}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${packageLabel}". Kan dere ta kontakt?`)}`}
+              className="inline-flex items-center gap-3 rounded-[2px] px-6 py-4 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+              style={{ background: GOLD, color: BLACK }}
+            >
+              Velg denne pakken
+              <span aria-hidden="true">→</span>
+            </a>
+          ) : editable ? (
+            <p className="text-sm" style={{ color: MUTED }}>Legg inn pakke-e-post under Innstillinger for å vise «Velg denne pakken».</p>
+          ) : <span />}
           <button
             type="button"
             onClick={onClose}

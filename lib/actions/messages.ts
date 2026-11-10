@@ -11,6 +11,7 @@ export type ConversationParticipant = {
 
 export type ConversationListItem = {
   id: string
+  isDirect: boolean
   otherParticipants: ConversationParticipant[]
   lastMessage: { content: string; created_at: string; sender_id: string } | null
   unreadCount: number
@@ -30,20 +31,19 @@ export async function getConversations(): Promise<ConversationListItem[]> {
     const allConversationIds = (myRows ?? []).map((r) => r.conversation_id)
     if (allConversationIds.length === 0) return []
 
-    // Produksjonschat, lead-chat og e-postdiskusjon er gruppesamtaler som vises
-    // under "Prosjekttråder" i stedet for her. Samtaler der en av disse kolonnene
-    // er satt utelates, så Direkte-lista kun inneholder ekte 1:1-DM-er.
-    const { data: classifiedRows } = await supabase
+    // Behold også prosjektknyttede samtaler i historikken. Varsler alene er
+    // ikke en komplett historikk: avsenderen får ikke varsel om egne meldinger.
+    const { data: classifiedRows, error: classificationError } = await supabase
       .from('conversations')
-      .select('id, project_id, lead_id, email_discussion_project_id')
+      .select('id, project_id, lead_id, email_discussion_project_id, sales_flyer_id')
       .in('id', allConversationIds)
+    if (classificationError) throw classificationError
     const classifiedIds = new Set(
       (classifiedRows ?? [])
-        .filter((c) => c.project_id || c.lead_id || c.email_discussion_project_id)
+        .filter((c) => c.project_id || c.lead_id || c.email_discussion_project_id || c.sales_flyer_id)
         .map((c) => c.id)
     )
-    const conversationIds = allConversationIds.filter((id) => !classifiedIds.has(id))
-    if (conversationIds.length === 0) return []
+    const conversationIds = allConversationIds
 
     const [{ data: otherRows }, { data: messages }, { data: unread }] = await Promise.all([
       supabase
@@ -95,6 +95,7 @@ export async function getConversations(): Promise<ConversationListItem[]> {
     const items: ConversationListItem[] = Array.from(participantsByConversation.entries())
       .map(([conversationId, otherParticipants]) => ({
         id: conversationId,
+        isDirect: !classifiedIds.has(conversationId),
         otherParticipants,
         lastMessage: lastMessageByConversation.get(conversationId) ?? null,
         unreadCount: unreadCountByConversation.get(conversationId) ?? 0,
@@ -132,11 +133,26 @@ export async function startConversation(otherProfileId: string): Promise<string 
     const myConversationIds = (myRows ?? []).map((r) => r.conversation_id)
 
     if (myConversationIds.length > 0) {
-      const { data: sharedRows } = await supabase
+      // En prosjektchat med to medlemmer er fortsatt ikke en direkte samtale.
+      const { data: directRows, error: directError } = await supabase
+        .from('conversations')
+        .select('id')
+        .in('id', myConversationIds)
+        .is('project_id', null)
+        .is('lead_id', null)
+        .is('email_discussion_project_id', null)
+        .is('sales_flyer_id', null)
+      if (directError) throw directError
+      const directIds = (directRows ?? []).map((row) => row.id)
+
+      const { data: sharedRows, error: sharedError } = directIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
         .from('conversation_participants')
         .select('conversation_id')
         .eq('profile_id', otherProfileId)
-        .in('conversation_id', myConversationIds)
+        .in('conversation_id', directIds)
+      if (sharedError) throw sharedError
 
       const sharedConversationIds = (sharedRows ?? []).map((r) => r.conversation_id)
       if (sharedConversationIds.length > 0) {

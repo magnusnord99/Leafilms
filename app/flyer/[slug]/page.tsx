@@ -4,10 +4,11 @@ import { getSalesFlyerBySlug } from '@/lib/actions/sales-flyers'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { SalesFlyerView } from '@/components/sales-flyer/SalesFlyerView'
+import { FlyerChat } from '@/components/sales-flyer/FlyerChat'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SalesFlyerPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function SalesFlyerPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ chat?: string }> }) {
   const { slug } = await params
 
   // Staff kan forhåndsvise og redigere en upublisert kladd direkte på siden;
@@ -33,5 +34,8 @@ export default async function SalesFlyerPage({ params }: { params: Promise<{ slu
     if (error) console.error('sales_flyer_views insert:', error)
   }
 
-  return <SalesFlyerView initialFlyer={flyer} canEdit={staff.ok} />
+  return <>
+    <SalesFlyerView initialFlyer={flyer} canEdit={staff.ok} />
+    {staff.ok && <FlyerChat flyerId={flyer.id} slug={slug} forceOpen={(await searchParams).chat === '1'} />}
+  </>
 }

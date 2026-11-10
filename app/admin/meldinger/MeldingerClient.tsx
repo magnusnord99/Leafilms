@@ -102,7 +102,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   const router = useRouter()
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [projectThreads, setProjectThreads] = useState<ProjectThreadListItem[]>(initialProjectThreads)
-  const [view, setView] = useState<'direct' | 'threads'>('direct')
+  const [view, setView] = useState<'all' | 'direct' | 'threads'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(initialConversations[0]?.id ?? null)
   const [messages, setMessages] = useState<DirectMessage[]>([])
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({})
@@ -119,7 +119,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   // (samme mønster som tilbake-knappen i trådvisningen, se setSelectedId(null) der).
   // Ved bytte tilbake til Direkte skal valgt samtale IKKE røres — den er fortsatt
   // meningsfull i den fanen.
-  function handleViewChange(next: 'direct' | 'threads') {
+  function handleViewChange(next: 'all' | 'direct' | 'threads') {
     setView(next)
     if (next === 'threads') {
       setShowPicker(false)
@@ -145,7 +145,8 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   // Listen er allerede sortert nyeste-først; dette filteret skjuler i tillegg
   // samtaler uten aktivitet de siste 30 dagene (inkl. tomme "Ingen meldinger
   // ennå"-tråder) når Magnus slår det på, uten å slette noe.
-  const visibleConversations = recentOnly ? conversations.filter(isRecent) : conversations
+  const listedConversations = view === 'direct' ? conversations.filter((c) => c.isDirect) : conversations
+  const visibleConversations = recentOnly ? listedConversations.filter(isRecent) : listedConversations
 
   async function refreshConversations() {
     const fresh = await getConversations()
@@ -309,7 +310,9 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
   }
 
   async function handleStartConversation(profile: ConversationParticipant) {
-    const existing = conversations.find((c) => c.otherParticipants.length === 1 && c.otherParticipants[0].id === profile.id)
+    setRecentOnly(false)
+    setView('all')
+    const existing = conversations.find((c) => c.isDirect && c.otherParticipants.length === 1 && c.otherParticipants[0].id === profile.id)
     if (existing) {
       setSelectedId(existing.id)
       setShowPicker(false)
@@ -319,7 +322,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
     const conversationId = await startConversation(profile.id)
     if (!conversationId) return
     setConversations((prev) => [
-      { id: conversationId, otherParticipants: [profile], lastMessage: null, unreadCount: 0 },
+      { id: conversationId, isDirect: true, otherParticipants: [profile], lastMessage: null, unreadCount: 0 },
       ...prev,
     ])
     setSelectedId(conversationId)
@@ -350,7 +353,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Meldinger
           </p>
-          {view === 'direct' && (
+          {view !== 'threads' && (
             <button
               onClick={() => setShowPicker((s) => !s)}
               style={{
@@ -366,6 +369,18 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         </div>
 
         <div style={{ padding: '10px 16px', display: 'flex', gap: 6, borderBottom: view === 'threads' ? `1px solid ${C.border}` : 'none' }}>
+          <button
+            onClick={() => handleViewChange('all')}
+            style={{
+              fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', fontWeight: 600,
+              padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+              background: view === 'all' ? C.accentBg : 'transparent',
+              border: `1px solid ${view === 'all' ? C.accent : C.border}`,
+              color: view === 'all' ? C.accent : C.text3,
+            }}
+          >
+            Alle
+          </button>
           <button
             onClick={() => handleViewChange('direct')}
             style={{
@@ -392,7 +407,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
           </button>
         </div>
 
-        {view === 'direct' && (
+        {view !== 'threads' && (
           <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}` }}>
             <button
               onClick={() => setRecentOnly((r) => !r)}
@@ -409,7 +424,7 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
           </div>
         )}
 
-        {view === 'direct' && showPicker && (
+        {view !== 'threads' && showPicker && (
           <div style={{ padding: 12, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
             <input
               autoFocus
@@ -450,14 +465,14 @@ export function MeldingerClient({ currentUser, initialConversations, allProfiles
         )}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {view === 'direct' && (
+          {view !== 'threads' && (
             <>
-              {conversations.length === 0 && !showPicker && (
+              {listedConversations.length === 0 && !showPicker && (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
                   Ingen samtaler ennå. Trykk + for å starte en.
                 </p>
               )}
-              {conversations.length > 0 && visibleConversations.length === 0 && (
+              {listedConversations.length > 0 && visibleConversations.length === 0 && (
                 <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: C.text3, textAlign: 'center', marginTop: 32, padding: '0 16px' }}>
                   Ingen samtaler med aktivitet siste 30 dager.
                 </p>

@@ -638,11 +638,17 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   function renderPackageCard(pkg: FlyerPackage, positionInGroup: number, groupSize: number) {
     const amount = pkg.amount
     const title = pkg.package_label
-    const hasShowcase = pkg.showcaseItems.length > 0
     return (
-      <div key={pkg.id} className="relative flex flex-col justify-between rounded-[2px] p-6 md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div key={pkg.id} className="group relative flex flex-col justify-between rounded-[2px] p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)] focus-within:ring-1 focus-within:ring-[#C49434] md:p-8" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+        <button
+          type="button"
+          onClick={() => setDetailPackageId(pkg.id)}
+          aria-label={`Se mer om ${title}`}
+          aria-haspopup="dialog"
+          className="absolute inset-0 z-10 cursor-pointer rounded-[2px] border border-transparent bg-transparent transition-colors group-hover:border-[#C49434] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+        />
         {editing && (
-          <div style={{ position: 'absolute', top: -14, right: -14, zIndex: 5, display: 'flex', gap: 4 }}>
+          <div style={{ position: 'absolute', top: -14, right: -14, zIndex: 20, display: 'flex', gap: 4 }}>
             <button onClick={() => movePackage(pkg.package_id, 'up')} disabled={positionInGroup === 0 || packageMutating} aria-label="Flytt opp" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === 0 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↑</button>
             <button onClick={() => movePackage(pkg.package_id, 'down')} disabled={positionInGroup === groupSize - 1 || packageMutating} aria-label="Flytt ned" style={{ width: 28, height: 28, borderRadius: 14, background: '#fff', color: '#1A1812', border: '1px solid #ccc', cursor: positionInGroup === groupSize - 1 || packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>↓</button>
             <button onClick={() => removePackage(pkg.package_id)} disabled={packageMutating} aria-label="Fjern pakke" style={{ width: 28, height: 28, borderRadius: 14, background: '#C0392B', color: '#fff', border: 'none', cursor: packageMutating ? 'default' : 'pointer', opacity: packageMutating ? 0.5 : 1 }}>×</button>
@@ -656,21 +662,10 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             </p>
           )}
           {renderDeliverableChips(pkg.deliverableCounts)}
-          {/* Når editing: alltid synlig, selv uten eksempelmedia ennå — det er
-              nå eneste vei inn til å LEGGE TIL det første elementet, siden
-              redigeringen skjer inline i PackageDetailModal (feedback
-              2026-11-10) i stedet for i et eget tabell-vindu. */}
-          {(hasShowcase || editing) && (
-            <button
-              type="button"
-              onClick={() => setDetailPackageId(pkg.id)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-80"
-              style={{ color: GOLD, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              Se mer
-              <span aria-hidden>→</span>
-            </button>
-          )}
+          <span aria-hidden="true" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em]" style={{ color: GOLD }}>
+            Se mer
+            <span className="transition-transform duration-200 group-hover:translate-x-1 group-focus-within:translate-x-1">→</span>
+          </span>
         </div>
         <div className="mt-8">
           {amount !== null ? (
@@ -688,7 +683,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           {flyer.cta_email ? (
             <a
               href={`mailto:${flyer.cta_email}?subject=${encodeURIComponent(`Forespørsel: ${title}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${title}". Kan dere ta kontakt?`)}`}
-              className="mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] transition hover:opacity-80"
+              className="relative z-20 mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] transition hover:opacity-80"
               style={{ color: GOLD }}
             >
               Velg denne pakken
@@ -1211,7 +1206,12 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
           </div>
 
           {packagesByCategory.length > 0 && (
-            <p className="mt-12 text-xs" style={{ color: SUBTLE }}>Alle priser er oppgitt eks. mva.</p>
+            <div className="mt-12">
+              <p className="max-w-2xl text-sm leading-relaxed md:text-base" style={{ color: MUTED }}>
+                Alle pakkene kan skreddersys til deres behov. Ønsker dere mer innhold enn det som er spesifisert her, setter vi gjerne sammen en kvantumspakke. Ta kontakt, så finner vi en løsning som passer dere.
+              </p>
+              <p className="mt-4 text-xs" style={{ color: SUBTLE }}>Alle priser er oppgitt eks. mva.</p>
+            </div>
           )}
 
           {editing && (

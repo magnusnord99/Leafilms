@@ -708,6 +708,7 @@ export type SalesFlyer = {
   cta_headline: string
   cta_subtext: string
   cta_email: string
+  contact_email: string
   created_at: string
   updated_at: string
   updated_by: string | null

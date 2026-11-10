@@ -162,6 +162,34 @@ export async function unmarkQuoteAsPackage(quoteId: string): Promise<{ ok: true 
   return { ok: true }
 }
 
+// Fjerner pakken helt (brukt fra oversikten i /admin/quotes, "Pakkemaler"-fanen) —
+// i motsetning til unmarkQuoteAsPackage, som bare fjerner pakke-merkingen og lar
+// selve tilbudet ligge igjen i mal-prosjektet. Samme rekkefølge som unmarkQuoteAsPackage
+// (flyer-koblinger først): kalleren (Task 7-mønsteret) har allerede vist bekreftelse
+// via checkQuoteUsedOnPublishedFlyers — her sjekkes ikke på nytt.
+export async function deletePackageTemplateQuote(quoteId: string): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+
+  const { error: linksError } = await supabase
+    .from('sales_flyer_packages')
+    .delete()
+    .eq('quote_id', quoteId)
+  if (linksError) {
+    console.error('deletePackageTemplateQuote delete links:', linksError)
+    return { error: 'Kunne ikke fjerne pakken fra flyerne' }
+  }
+
+  const { error } = await supabase
+    .from('quotes')
+    .delete()
+    .eq('id', quoteId)
+  if (error) {
+    console.error('deletePackageTemplateQuote delete quote:', error)
+    return { error: 'Kunne ikke slette pakken' }
+  }
+  return { ok: true }
+}
+
 // Finner (eller oppretter) en kunde med eksakt navn, slik at en tidligere
 // halvferdig kjøring (kunde opprettet, prosjekt-insert feilet) ikke etterlater
 // en ny duplikatkunde for hvert forsøk.

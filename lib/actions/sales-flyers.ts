@@ -5,7 +5,7 @@ import { SalesFlyer, CaseStudy, SalesFlyerPackageCategory, SalesFlyerReferenceLi
 import { getPackageUsageNotes } from '@/lib/actions/package-usage-notes'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
-import { getQuoteAmountExclVat, getPackageDeliverableCounts } from '@/lib/quote-builder-utils'
+import { getQuoteAmountExclVat, getPackageDeliverableCounts, getPackageShootDays } from '@/lib/quote-builder-utils'
 
 // Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
 // ALDRI hele Quote-raden. getSalesFlyerBySlug serialiseres som initialFlyer
@@ -22,6 +22,7 @@ export type SalesFlyerPackageItem = {
   package_label: string
   package_category: SalesFlyerPackageCategory
   amount: number
+  shootDays: number | null
   deliverableCounts: { hovedvideo: number; klipp: number; photo: number }
   showcaseItems: QuotePackageShowcaseItem[]
 }
@@ -175,6 +176,7 @@ async function getOrderedPackages(flyerId: string): Promise<SalesFlyerPackageIte
       package_category: row.quotes.package_category,
       amount: getQuoteAmountExclVat(row.quotes.quote_data) ?? 0,
       deliverableCounts: getPackageDeliverableCounts(row.quotes.quote_data),
+      shootDays: getPackageShootDays(row.quotes.quote_data),
     }))
 
   // Separat oppslag (ikke et embed over) fordi quote_package_showcase_items

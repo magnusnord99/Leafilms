@@ -162,6 +162,13 @@ export function getQuoteAmountExclVat(data: unknown, selectedAddonIds?: string[]
 // — designet spesifiserer kun 3 chip-ikoner (video/bilde/klipp), se
 // 2026-11-09-flyer-package-showcase-design.md. Konvertert (akseptert) form har ingen
 // deliverables-liste og gir derfor alltid 0/0/0 her — amount-visningen er uendret av dette.
+// Samme fasit som calculateQuoteTotals: første opptaksrad, ellers shootDays.
+export function getPackageShootDays(data: unknown): number | null {
+  if (!isBuilderData(data)) return null
+  const days = data.crew.length > 0 ? data.crew[0].days : data.shootDays
+  return typeof days === 'number' && Number.isFinite(days) && days > 0 ? days : null
+}
+
 export function getPackageDeliverableCounts(data: unknown): { hovedvideo: number; klipp: number; photo: number } {
   const zero = { hovedvideo: 0, klipp: 0, photo: 0 }
   if (!isBuilderData(data)) return zero

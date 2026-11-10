@@ -628,6 +628,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         )}
         <div>
           <h4 className="font-display text-2xl md:text-3xl" style={{ color: CREAM, fontWeight: 400 }}>{title}</h4>
+          {pkg.shootDays != null && pkg.shootDays > 0 && (
+            <p className="mt-2 text-sm" style={{ color: MUTED }}>
+              {new Intl.NumberFormat('nb-NO').format(pkg.shootDays)} {pkg.shootDays === 1 ? 'dag' : 'dager'} med opptak
+            </p>
+          )}
           {renderDeliverableChips(pkg.deliverableCounts)}
           {/* Når editing: alltid synlig, selv uten eksempelmedia ennå — det er
               nå eneste vei inn til å LEGGE TIL det første elementet, siden
@@ -664,7 +669,7 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
               className="mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] transition hover:opacity-80"
               style={{ color: GOLD }}
             >
-              Spør om denne pakken
+              Velg denne pakken
               <span aria-hidden>→</span>
             </a>
           ) : editing ? (

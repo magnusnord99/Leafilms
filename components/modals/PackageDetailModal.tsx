@@ -227,12 +227,12 @@ function WebsiteMock({
       </div>
       {websitePhotos.length > 0 && (
         <div
-          className="grid gap-px p-px"
-          style={{ gridTemplateColumns: `repeat(${Math.min(websitePhotos.length, 4)}, 1fr)`, background: BORDER }}
+          className="grid gap-3 p-4 md:gap-4 md:p-5"
+          style={{ gridTemplateColumns: `repeat(${Math.min(websitePhotos.length, 2)}, minmax(0, 1fr))`, background: BLACK }}
         >
-          {websitePhotos.map(photo => (
+          {websitePhotos.slice(0, 2).map(photo => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={photo.path} alt="" className="aspect-square w-full object-cover" style={{ background: SURFACE }} />
+            <img key={photo.id} src={photo.path} alt="" className="aspect-[3/2] w-full rounded-[2px] object-cover" style={{ background: SURFACE }} />
           ))}
         </div>
       )}

@@ -1,18 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Cormorant_Garamond } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
+import "./dm-sans.css";
 
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-});
-
-const cormorant = Cormorant_Garamond({
+const cormorant = localFont({
+  src: [
+    { path: '../public/fonts/CormorantGaramond.ttf', weight: '300 700', style: 'normal' },
+    { path: '../public/fonts/CormorantGaramond-Italic.ttf', weight: '300 700', style: 'italic' },
+  ],
   variable: "--font-cormorant",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -41,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="no">
       <body
-        className={`${dmSans.variable} ${cormorant.variable} antialiased`}
+        className={`leafilms-dm-sans ${cormorant.variable} antialiased`}
       >
         {children}
       </body>

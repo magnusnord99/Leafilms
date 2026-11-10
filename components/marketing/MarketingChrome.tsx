@@ -1,4 +1,4 @@
-import { Schibsted_Grotesk, Newsreader } from 'next/font/google'
+import localFont from 'next/font/local'
 import { MarketingBodyClass } from './MarketingBodyClass'
 import { SmoothScroll } from './SmoothScroll'
 
@@ -9,17 +9,17 @@ import { SmoothScroll } from './SmoothScroll'
 // app/energi/layout.tsx (som nå kun wrapper /energi/arbeid) bruker nøyaktig
 // samme oppsett, uten duplisering.
 
-const schibsted = Schibsted_Grotesk({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+const schibsted = localFont({
+  src: '../../public/fonts/SchibstedGrotesk.ttf',
+  weight: '400 800',
   variable: '--font-schibsted',
   display: 'swap',
 })
 
-const newsreader = Newsreader({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  style: ['italic'],
+const newsreader = localFont({
+  src: '../../public/fonts/Newsreader-Italic.ttf',
+  weight: '400 500',
+  style: 'italic',
   variable: '--font-newsreader',
   display: 'swap',
 })

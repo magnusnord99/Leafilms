@@ -28,6 +28,7 @@ import {
   checkPackagesUsedOnPublishedFlyers,
   moveOfferToCustomer,
   movePackageToOffer,
+  resolveOrCreateCustomerByName,
   type PackageOfferWithPackages,
   type PackageListItem,
 } from '@/lib/actions/package-offers'
@@ -49,6 +50,20 @@ function formatNok(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(amount)
 }
 
+// Internt → null. Et valgt eksisterende kunde-id → den selv. Ellers («— Ny kunde —»
+// valgt i select'en) → slå opp/opprett kunden på det innskrevne navnet.
+async function resolveCustomerSelection(
+  isInternal: boolean,
+  customerId: string,
+  newCustomerName: string
+): Promise<{ customerId: string | null } | { error: string }> {
+  if (isInternal) return { customerId: null }
+  if (customerId) return { customerId }
+  const result = await resolveOrCreateCustomerByName(newCustomerName)
+  if ('error' in result) return { error: result.error }
+  return { customerId: result.id }
+}
+
 function offerCustomerLabel(offer: Pick<PackageOfferWithPackages, 'customerId' | 'customerName'>): string {
   return offer.customerId === null ? 'Internt' : (offer.customerName ?? '(ukjent kunde)')
 }
@@ -63,6 +78,7 @@ export default function PackageOffersPage() {
   const [showNewOffer, setShowNewOffer] = useState(false)
   const [newOfferIsInternal, setNewOfferIsInternal] = useState(false)
   const [newOfferCustomerId, setNewOfferCustomerId] = useState('')
+  const [newOfferNewCustomerName, setNewOfferNewCustomerName] = useState('')
   const [newOfferTitle, setNewOfferTitle] = useState('')
   const [newOfferSaving, setNewOfferSaving] = useState(false)
   const [newOfferError, setNewOfferError] = useState<string | null>(null)
@@ -95,6 +111,7 @@ export default function PackageOffersPage() {
   const [moveOfferModal, setMoveOfferModal] = useState<{ offerId: string; title: string; packageCount: number } | null>(null)
   const [moveOfferIsInternal, setMoveOfferIsInternal] = useState(false)
   const [moveOfferCustomerId, setMoveOfferCustomerId] = useState('')
+  const [moveOfferNewCustomerName, setMoveOfferNewCustomerName] = useState('')
   const [moveOfferSaving, setMoveOfferSaving] = useState(false)
   const [moveOfferError, setMoveOfferError] = useState<string | null>(null)
 
@@ -104,6 +121,7 @@ export default function PackageOffersPage() {
   const [movePackageTargetOfferId, setMovePackageTargetOfferId] = useState('')
   const [movePackageNewIsInternal, setMovePackageNewIsInternal] = useState(false)
   const [movePackageNewCustomerId, setMovePackageNewCustomerId] = useState('')
+  const [movePackageNewCustomerName, setMovePackageNewCustomerName] = useState('')
   const [movePackageNewTitle, setMovePackageNewTitle] = useState('')
   const [movePackageSaving, setMovePackageSaving] = useState(false)
   const [movePackageError, setMovePackageError] = useState<string | null>(null)
@@ -134,6 +152,7 @@ export default function PackageOffersPage() {
   async function openNewOffer() {
     setNewOfferIsInternal(false)
     setNewOfferCustomerId('')
+    setNewOfferNewCustomerName('')
     setNewOfferTitle('')
     setNewOfferError(null)
     setShowNewOffer(true)
@@ -146,14 +165,15 @@ export default function PackageOffersPage() {
       setNewOfferError('Pakke-gruppen må ha en tittel')
       return
     }
-    if (!newOfferIsInternal && !newOfferCustomerId) {
-      setNewOfferError('Velg en kunde, eller kryss av «Internt (Leafilms)»')
-      return
-    }
     setNewOfferSaving(true)
     setNewOfferError(null)
     try {
-      const result = await createPackageOffer({ customerId: newOfferIsInternal ? null : newOfferCustomerId, title })
+      const customer = await resolveCustomerSelection(newOfferIsInternal, newOfferCustomerId, newOfferNewCustomerName)
+      if ('error' in customer) {
+        setNewOfferError(customer.error)
+        return
+      }
+      const result = await createPackageOffer({ customerId: customer.customerId, title })
       if ('error' in result) {
         setNewOfferError(result.error)
         return
@@ -267,20 +287,22 @@ export default function PackageOffersPage() {
     setMoveOfferModal({ offerId: offer.id, title: offer.title, packageCount: offer.packages.length })
     setMoveOfferIsInternal(offer.customerId === null)
     setMoveOfferCustomerId(offer.customerId ?? '')
+    setMoveOfferNewCustomerName('')
     setMoveOfferError(null)
     await ensureCustomersLoaded()
   }
 
   async function submitMoveOffer() {
     if (!moveOfferModal) return
-    if (!moveOfferIsInternal && !moveOfferCustomerId) {
-      setMoveOfferError('Velg en kunde, eller kryss av «Internt (Leafilms)»')
-      return
-    }
     setMoveOfferSaving(true)
     setMoveOfferError(null)
     try {
-      const result = await moveOfferToCustomer(moveOfferModal.offerId, moveOfferIsInternal ? null : moveOfferCustomerId)
+      const customer = await resolveCustomerSelection(moveOfferIsInternal, moveOfferCustomerId, moveOfferNewCustomerName)
+      if ('error' in customer) {
+        setMoveOfferError(customer.error)
+        return
+      }
+      const result = await moveOfferToCustomer(moveOfferModal.offerId, customer.customerId)
       if ('error' in result) {
         setMoveOfferError(result.error)
         return
@@ -299,6 +321,7 @@ export default function PackageOffersPage() {
     setMovePackageTargetOfferId('')
     setMovePackageNewIsInternal(false)
     setMovePackageNewCustomerId('')
+    setMovePackageNewCustomerName('')
     setMovePackageNewTitle('')
     setMovePackageError(null)
     await ensureCustomersLoaded()
@@ -313,8 +336,9 @@ export default function PackageOffersPage() {
       if (movePackageMode === 'new') {
         const title = movePackageNewTitle.trim()
         if (!title) { setMovePackageError('Pakke-gruppen må ha en tittel'); return }
-        if (!movePackageNewIsInternal && !movePackageNewCustomerId) { setMovePackageError('Velg en kunde, eller kryss av «Internt (Leafilms)»'); return }
-        const created = await createPackageOffer({ customerId: movePackageNewIsInternal ? null : movePackageNewCustomerId, title })
+        const customer = await resolveCustomerSelection(movePackageNewIsInternal, movePackageNewCustomerId, movePackageNewCustomerName)
+        if ('error' in customer) { setMovePackageError(customer.error); return }
+        const created = await createPackageOffer({ customerId: customer.customerId, title })
         if ('error' in created) { setMovePackageError(created.error); return }
         targetOfferId = created.id
       } else if (!targetOfferId) {
@@ -551,11 +575,25 @@ export default function PackageOffersPage() {
                   onChange={e => setNewOfferCustomerId(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
                 >
-                  <option value="">— Velg kunde —</option>
+                  <option value="">— Ny kunde —</option>
                   {customers.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+            {!newOfferIsInternal && !newOfferCustomerId && (
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                  Navn på ny kunde
+                </label>
+                <input
+                  type="text"
+                  value={newOfferNewCustomerName}
+                  onChange={e => setNewOfferNewCustomerName(e.target.value)}
+                  placeholder="Kundenavn"
+                  style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                />
               </div>
             )}
             <div>
@@ -660,11 +698,25 @@ export default function PackageOffersPage() {
                   onChange={e => setMoveOfferCustomerId(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
                 >
-                  <option value="">— Velg kunde —</option>
+                  <option value="">— Ny kunde —</option>
                   {customers.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+            {!moveOfferIsInternal && !moveOfferCustomerId && (
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                  Navn på ny kunde
+                </label>
+                <input
+                  type="text"
+                  value={moveOfferNewCustomerName}
+                  onChange={e => setMoveOfferNewCustomerName(e.target.value)}
+                  placeholder="Kundenavn"
+                  style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                />
               </div>
             )}
             {moveOfferError && (
@@ -746,11 +798,25 @@ export default function PackageOffersPage() {
                       onChange={e => setMovePackageNewCustomerId(e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
                     >
-                      <option value="">— Velg kunde —</option>
+                      <option value="">— Ny kunde —</option>
                       {customers.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+                {!movePackageNewIsInternal && !movePackageNewCustomerId && (
+                  <div>
+                    <label style={{ display: 'block', fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, marginBottom: 4 }}>
+                      Navn på ny kunde
+                    </label>
+                    <input
+                      type="text"
+                      value={movePackageNewCustomerName}
+                      onChange={e => setMovePackageNewCustomerName(e.target.value)}
+                      placeholder="Kundenavn"
+                      style={{ width: '100%', padding: '8px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: 'var(--font-dm-sans)', fontSize: '1rem', outline: 'none' }}
+                    />
                   </div>
                 )}
                 <div>

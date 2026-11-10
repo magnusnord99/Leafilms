@@ -521,6 +521,22 @@ async function findOrCreateCustomerByName(supabase: SupabaseServerClient, name: 
   return created
 }
 
+// Slår opp en kunde på navn, eller oppretter den hvis den ikke finnes — brukt når
+// en pakke-gruppe/et pakketilbud flyttes til en kunde som ennå ikke har noe i
+// systemet (derfor heller ikke dukker opp i de vanlige kunde-nedtrekkene).
+export async function resolveOrCreateCustomerByName(name: string): Promise<{ id: string; name: string } | { error: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Kunden må ha et navn' }
+  const supabase = await createClient()
+  try {
+    const found = await findOrCreateCustomerByName(supabase, trimmed)
+    return { id: found.id, name: found.name }
+  } catch (err) {
+    console.error('resolveOrCreateCustomerByName:', err)
+    return { error: 'Kunne ikke slå opp/opprette kunden' }
+  }
+}
+
 // Oppretter et helt nytt, ekte prosjekt + tilbud for en kunde, basert på en
 // dyp kopi av pakkens quote_data — pakken selv endres aldri. Dette er den
 // eneste veien fra en pakke til et "ekte" kundetilbud; pakketilbud/pakker

@@ -1,4 +1,6 @@
--- 199_sales_flyer_contact_email.sql
+-- 202_sales_flyer_contact_email.sql
+-- (renummerert fra 199 — kolliderte med 199_package_offers.sql, som allerede
+-- var kjørt mot prod da kollisjonen ble oppdaget. Denne er fortsatt ikke kjørt.)
 --
 -- Egen e-postadresse for flyerens generelle "Ta kontakt"-knapp (bunn-CTA-en),
 -- adskilt fra cta_email som brukes av per-pakke-knappene ("Velg denne

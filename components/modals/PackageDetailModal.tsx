@@ -183,6 +183,8 @@ function WebsiteMock({
   onNextVideo: () => void
   hasMultipleVideos: boolean
 }) {
+  const heroPhoto = video ? null : websitePhotos[0]
+  const contentPhotos = video ? websitePhotos.slice(0, 2) : websitePhotos.slice(1, 2)
   return (
     <div className="overflow-hidden rounded-[6px]" style={{ border: `1px solid ${BORDER}`, background: BLACK }}>
       <div className="flex items-center gap-2 px-3 py-2" style={{ background: '#211D16', borderBottom: `1px solid ${BORDER}` }}>
@@ -209,35 +211,45 @@ function WebsiteMock({
           Kontakt oss
         </span>
       </div>
-      <div className="relative w-full" style={{ aspectRatio: '16 / 9', background: '#000' }}>
+      <div className="relative w-full" style={{ aspectRatio: '21 / 9', background: '#000' }}>
         {video && (
           <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover animate-[fade-in_0.3s_ease-out]" />
+        )}
+        {!video && heroPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={heroPhoto.path} alt="" className="absolute inset-0 h-full w-full object-cover" />
         )}
         {/* Fiktiv hero-tekst oppå videoen — samme pynt-begrunnelse som nav-raden over. */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 p-5"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.78), transparent)' }}
         >
-          <p className="font-display text-lg md:text-xl" style={{ color: CREAM, fontWeight: 400 }}>Historier som fenger</p>
+          <p className="font-display text-lg md:text-xl" style={{ color: CREAM, fontWeight: 400 }}>Opplevelser som blir med deg</p>
           <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: MUTED }}>
-            Profesjonell videoproduksjon for merkevaren din
+            Finn inspirasjon til ditt neste øyeblikk
           </p>
         </div>
         {hasMultipleVideos && <CarouselArrows onPrev={onPrevVideo} onNext={onNextVideo} />}
       </div>
-      {websitePhotos.length > 0 && (
-        <div
-          className="grid gap-3 p-4 md:gap-4 md:p-5"
-          style={{ gridTemplateColumns: `repeat(${Math.min(websitePhotos.length, 2)}, minmax(0, 1fr))`, background: BLACK }}
-        >
-          {websitePhotos.slice(0, 2).map(photo => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={photo.path} alt="" className="aspect-[3/2] w-full rounded-[2px] object-cover" style={{ background: SURFACE }} />
-          ))}
+      <div className={`grid gap-4 px-5 py-4 ${contentPhotos.length > 0 ? 'grid-cols-[1.1fr_1fr]' : ''}`} style={{ background: BLACK }}>
+        <div>
+          <p className="text-[0.55rem] uppercase tracking-[0.2em]" style={{ color: GOLD }}>Velkommen til oss</p>
+          <p className="font-display mt-1.5 text-lg" style={{ color: CREAM }}>Oppdag mulighetene</p>
+          <p className="mt-1.5 max-w-md text-[0.65rem] leading-relaxed" style={{ color: MUTED }}>
+            Bli kjent med oss og finn inspirasjon til nye opplevelser. Vi hjelper deg med å finne det som passer for deg.
+          </p>
         </div>
-      )}
+        {contentPhotos.length > 0 && (
+          <div className="grid items-center gap-2" style={{ gridTemplateColumns: `repeat(${contentPhotos.length}, minmax(0, 1fr))` }}>
+            {contentPhotos.map(photo => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo.id} src={photo.path} alt="" className="h-24 w-full rounded-[2px] object-cover md:h-28" style={{ background: SURFACE }} />
+            ))}
+          </div>
+        )}
+      </div>
       {/* Fiktiv footer — fullfører "dette er en nettside"-illusjonen. */}
-      <div className="px-5 py-3 text-center" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="px-5 py-2 text-center" style={{ borderTop: `1px solid ${BORDER}` }}>
         <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: SUBTLE }}>© {new Date().getFullYear()} leafilms.no — Alle rettigheter reservert</span>
       </div>
     </div>
@@ -644,7 +656,8 @@ export function PackageDetailModal({
       caption: null, order_index: index,
     }
   }
-  const mainVideos = flyerVideoPath !== undefined
+  const hasMainVideo = deliverableCounts === undefined || deliverableCounts.hovedvideo > 0
+  const mainVideos = !hasMainVideo ? [] : flyerVideoPath !== undefined
     ? flyerVideoPath ? [automaticItem('main_video', flyerVideoPath, 0)] : []
     : itemsForKind('main_video')
   const socialClips = itemsForKind('social_clip')
@@ -672,9 +685,14 @@ export function PackageDetailModal({
     setSocialClipIndex(i => (i + 1) % socialClips.length)
   }
 
-  const isEmpty = mainVideos.length === 0 && socialClips.length === 0 && photos.length === 0
+  const isEmpty = mainVideos.length === 0 && socialClips.length === 0 && photos.length === 0 && websitePhotos.length === 0
 
-  const visibleNotes = usageNotes.filter(note => editable || itemsForKind(note.kind).length > 0)
+  const visibleNotes = usageNotes.filter(note => {
+    if (note.kind === 'main_video') return hasMainVideo && (editable || mainVideos.length > 0)
+    if (note.kind === 'website_photo') return editable || websitePhotos.length > 0
+    if (note.kind === 'photo') return editable || photos.length > 0
+    return editable || socialClips.length > 0
+  })
   const usageNotesPanel = visibleNotes.length > 0 ? (
     <div className="flex w-full flex-col gap-5 md:max-w-[280px]">
       <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>
@@ -768,9 +786,10 @@ export function PackageDetailModal({
 
         {/* ── Desktop: nettside-mock (video + nettside-bilder) + klipp/bunke, med inline redigering når `editable` ── */}
         {(!isEmpty || editable) && (
-          <div className="hidden md:block">
-            {editable && <p style={sectionLabelStyle()}>{KIND_LABEL.main_video}</p>}
-            {activeVideo ? (
+          <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-8 lg:gap-10">
+            <div className="min-w-0">
+            {editable && <p style={sectionLabelStyle()}>{hasMainVideo ? KIND_LABEL.main_video : 'Bilder — vises på nettsiden'}</p>}
+            {activeVideo || websitePhotos.length > 0 ? (
               <div className={`w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
                 <WebsiteMock
                   video={activeVideo}
@@ -782,13 +801,13 @@ export function PackageDetailModal({
               </div>
             ) : editable ? (
               <p className="mt-2" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', color: SUBTLE }}>
-                Ingen hovedvideo lagt til ennå.
+                {hasMainVideo ? 'Ingen hovedvideo eller nettsidebilder lagt til ennå.' : 'Ingen nettsidebilder lagt til ennå.'}
               </p>
             ) : null}
-            {editable && flyerVideoPath !== undefined && (
+            {editable && hasMainVideo && flyerVideoPath !== undefined && (
               <p className="mt-3 text-sm" style={{ color: MUTED }}>Hentes automatisk fra videoen øverst på flyeren. Endre toppvideoen for å bytte eksempel.</p>
             )}
-            {editable && flyerVideoPath === undefined && (
+            {editable && hasMainVideo && flyerVideoPath === undefined && (
               <EditStrip
                 kindItems={mainVideos}
                 busy={savingKinds.main_video}
@@ -948,13 +967,18 @@ export function PackageDetailModal({
                   </div>
                 )}
 
-                {usageNotesPanel}
               </div>
+            )}
+            </div>
+            {usageNotesPanel && (
+              <aside className="border-l pl-6 lg:pl-8" style={{ borderColor: BORDER }}>
+                {usageNotesPanel}
+              </aside>
             )}
           </div>
         )}
 
-        <div className="mt-8 md:hidden">{usageNotesPanel}</div>
+        <div className="mt-8 border-t pt-6 md:hidden" style={{ borderColor: BORDER }}>{usageNotesPanel}</div>
 
         <p className="mt-8 text-sm" style={{ fontFamily: 'var(--font-dm-sans)', color: MUTED }}>
           Reise, kost og losji er ikke inkludert i prisen.

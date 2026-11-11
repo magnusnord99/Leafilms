@@ -13,7 +13,7 @@ function systemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-export function AdminThemeProvider({ children }: { children: React.ReactNode }) {
+export function AdminThemeProvider({ children, fullHeight = true }: { children: React.ReactNode; fullHeight?: boolean }) {
   const [theme, setThemeState] = useState<Theme>('dark')
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function AdminThemeProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <AdminThemeContext.Provider value={{ theme, setTheme }}>
-      <div className="admin-theme-root" data-theme={theme} style={{ minHeight: '100vh' }}>
+      <div className="admin-theme-root" data-theme={theme} style={{ minHeight: fullHeight ? '100vh' : undefined }}>
         {children}
       </div>
     </AdminThemeContext.Provider>

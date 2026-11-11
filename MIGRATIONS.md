@@ -47,6 +47,8 @@ Dette prosjektet bruker SQL-migrasjoner for å oppdatere databasestrukturen. Mig
 
 ## Migrasjonsfiler
 
+Nye filer i `supabase/migrations/` skal følge formatet `NNN_beskrivende_navn.sql` med neste ledige nummer (for eksempel `203_...`, `204_...`). Ikke bruk tidsstempel i filnavnet. Ved ren navneendring skal allerede kjørte migrasjoner ikke kjøres på nytt.
+
 Migrasjonene er nummerert og kjøres i rekkefølge:
 - `003_ai_examples.sql`
 - `004_case_studies.sql`

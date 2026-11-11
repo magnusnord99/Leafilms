@@ -695,7 +695,12 @@ export function PackageDetailModal({
   ) : null
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50">
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50"
+      onClick={event => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
       <div
         className="max-w-5xl w-full max-h-[95vh] sm:max-h-[85vh] overflow-y-auto rounded-[2px] p-6 md:p-8"
         style={{ background: SURFACE, border: `1px solid ${BORDER}` }}

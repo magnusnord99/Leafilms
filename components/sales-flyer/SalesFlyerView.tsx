@@ -24,6 +24,7 @@ import { PackagePickerModal } from '@/components/modals/PackagePickerModal'
 import { PackageDetailModal } from '@/components/modals/PackageDetailModal'
 import { supabase } from '@/lib/supabase'
 import { FlyerGalleryDragArea, FlyerGalleryImage } from './FlyerGalleryDrag'
+import { ShareFlyerButton } from './ShareFlyerButton'
 
 // Visuell stil: pitch-sidenes cinematiske tema (Cormorant Garamond + DM Sans,
 // #0C0B09 / #C49434), som allerede er rot-standarden i app/layout.tsx og
@@ -103,7 +104,6 @@ function renderPackageDeliverables(counts: { hovedvideo: number; klipp: number; 
   if (items.length === 0) return null
   return (
     <div className="border-t pt-6 @min-[420px]:border-l @min-[420px]:border-t-0 @min-[420px]:pl-8 @min-[420px]:pt-0" style={{ borderColor: BORDER }}>
-      <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em]" style={{ color: MUTED }}>Dette får dere</p>
       <div className="flex flex-wrap gap-x-6 gap-y-3 @min-[420px]:flex-col">
         {items.map(item => (
           <div key={item.label} className="flex items-center gap-3">
@@ -852,12 +852,25 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
   return (
     <main className="min-h-screen" style={{ background: '#0C0B09', color: CREAM, position: 'relative' }}>
       {canEdit && (
-        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, display: 'flex', gap: 8, alignItems: 'center' }}>
-          {!flyer.published && (
-            <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: '0.7rem', fontWeight: 600, padding: '6px 10px', borderRadius: 20, background: 'rgba(196,148,52,0.15)', color: GOLD, border: `1px solid ${GOLD}` }}>
-              Kladd — ikke publisert
-            </span>
-          )}
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 'calc(100vw - 32px)', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            disabled={savingFields.has('published')}
+            aria-pressed={flyer.published}
+            title={flyer.published ? 'Klikk for å avpublisere flyeren' : 'Klikk for å publisere flyeren'}
+            onClick={() => {
+              const previous = flyer.published
+              set('published', !previous)
+              saveField('published', !previous, previous)
+            }}
+            style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', fontWeight: 600, padding: '8px 12px', borderRadius: 20,
+              background: flyer.published ? '#173A2C' : '#292216', color: flyer.published ? '#A1E5B8' : GOLD,
+              border: `1px solid ${flyer.published ? '#438F61' : GOLD}`, cursor: savingFields.has('published') ? 'wait' : 'pointer' }}
+          >
+            {savingFields.has('published') ? 'Lagrer…' : flyer.published ? '✓ Publisert' : 'Ikke publisert · Publiser'}
+          </button>
+          {flyer.published && !savingFields.has('published') && <ShareFlyerButton slug={slug} />}
+          <FieldError field="published" />
           {editing && (
             <button
               onClick={toggleSettings}
@@ -892,15 +905,6 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
       {settingsOpen && editing && (
         <div style={{ position: 'fixed', top: 64, right: 16, zIndex: 50, maxHeight: 'calc(100dvh - 80px)', overflowY: 'auto', background: '#fff', color: '#1A1812', border: '1px solid #ddd', borderRadius: 10, padding: 18, width: 300, boxShadow: '0 8px 30px rgba(0,0,0,0.4)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
           <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888', marginBottom: 10 }}>/flyer/{slug}</p>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: '0.82rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={flyer.published}
-              onChange={e => { const prev = flyer.published; set('published', e.target.checked); saveField('published', e.target.checked, prev) }}
-            />
-            Publisert
-          </label>
-          <FieldError field="published" />
 
           <label style={settingsLabel} htmlFor="flyer-logo-customer">Kunde (logo ved tittelen)</label>
           <select id="flyer-logo-customer" value={flyer.customer_id ?? ''}

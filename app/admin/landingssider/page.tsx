@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { C } from '@/lib/admin-theme'
 import { IndustryLandingPage } from '@/lib/types'
 import { listIndustryLandingPages, createIndustryLandingPage, deleteIndustryLandingPage } from '@/lib/actions/industry-landing-pages'
-import { listSalesFlyers, createSalesFlyer, deleteSalesFlyer, SalesFlyerListItem } from '@/lib/actions/sales-flyers'
+import { listSalesFlyers, createSalesFlyer, deleteSalesFlyer, updateSalesFlyer, SalesFlyerListItem } from '@/lib/actions/sales-flyers'
+
+import { ShareFlyerButton } from '@/components/sales-flyer/ShareFlyerButton'
 
 type Tab = 'bransjesider' | 'flyers'
 
@@ -13,55 +15,44 @@ const formatDate = (ts: string) =>
   new Date(ts).toLocaleString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 function LandingPageRow<T extends { id: string; slug: string; published: boolean; updated_at: string }>({
-  item, href, onDelete, extra,
-}: { item: T; href: string; onDelete: (e: React.MouseEvent) => void; extra?: string }) {
+  item, href, onDelete, extra, onTogglePublish, publishing = false, shareFlyer = false,
+}: { item: T; href: string; onDelete: (e: React.MouseEvent) => void; extra?: string;
+  onTogglePublish?: () => void; publishing?: boolean; shareFlyer?: boolean }) {
+  const statusStyle = {
+    fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
+    padding: '6px 10px', borderRadius: 10, letterSpacing: '0.04em',
+    background: item.published ? 'rgba(76,175,125,0.12)' : C.surface2,
+    color: item.published ? C.success : C.text3,
+    border: `1px solid ${item.published ? 'rgba(76,175,125,0.3)' : C.border}`,
+  }
   return (
-    <Link
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ textDecoration: 'none', display: 'block' }}
-    >
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        padding: '14px 16px', marginBottom: 8,
-        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
-      }}>
-        <div>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', fontWeight: 600, color: C.text, margin: 0 }}>
-            {href}
-          </p>
-          <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '2px 0 0' }}>
-            Sist oppdatert {formatDate(item.updated_at)}
-            {extra ? ` · ${extra}` : ''}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', fontWeight: 600,
-            padding: '3px 10px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em',
-            background: item.published ? 'rgba(76,175,125,0.12)' : C.surface2,
-            color: item.published ? C.success : C.text3,
-            border: `1px solid ${item.published ? 'rgba(76,175,125,0.3)' : C.border}`,
-          }}>
-            {item.published ? 'Publisert' : 'Kladd'}
-          </span>
-          <button
-            onClick={onDelete}
-            style={{
-              width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, color: C.text3, cursor: 'pointer',
-            }}
-          >
-            ×
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      padding: '14px 16px', marginBottom: 8, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+      <Link href={href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', flex: 1, minWidth: 180 }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.9rem', fontWeight: 600, color: C.text, margin: 0, overflowWrap: 'anywhere' }}>{href}</p>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.68rem', color: C.text3, margin: '2px 0 0' }}>
+          Sist oppdatert {formatDate(item.updated_at)}{extra ? ` · ${extra}` : ''}
+        </p>
+      </Link>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+        {onTogglePublish ? (
+          <button type="button" onClick={onTogglePublish} disabled={publishing} aria-pressed={item.published}
+            title={item.published ? 'Klikk for å avpublisere' : 'Klikk for å publisere'}
+            style={{ ...statusStyle, cursor: publishing ? 'wait' : 'pointer' }}>
+            {publishing ? 'Lagrer…' : item.published ? '✓ Publisert' : 'Ikke publisert · Publiser'}
           </button>
-        </div>
+        ) : <span style={statusStyle}>{item.published ? 'Publisert' : 'Kladd'}</span>}
+        {shareFlyer && item.published && !publishing && <ShareFlyerButton slug={item.slug} />}
+        <button type="button" onClick={onDelete} aria-label={`Slett ${item.slug}`} disabled={publishing}
+          style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, color: C.text3, cursor: 'pointer' }}>×</button>
       </div>
-    </Link>
+    </div>
   )
 }
 
 export default function LandingssiderPage() {
+  const [publishingFlyerId, setPublishingFlyerId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('bransjesider')
 
   const [pages, setPages] = useState<IndustryLandingPage[]>([])
@@ -131,6 +122,19 @@ export default function LandingssiderPage() {
     setNewFlyerSlug('')
     await fetchFlyers()
     window.open(`/flyer/${slug}`, '_blank', 'noopener,noreferrer')
+  }
+
+  async function toggleFlyerPublished(flyer: SalesFlyerListItem) {
+    if (publishingFlyerId) return
+    setPublishingFlyerId(flyer.id)
+    setFlyerError(null)
+    try {
+      const result = await updateSalesFlyer(flyer.id, { published: !flyer.published })
+      if ('error' in result) { setFlyerError(result.error); return }
+      setFlyers(current => current.map(item => item.id === flyer.id
+        ? { ...item, published: !flyer.published, updated_at: new Date().toISOString() } : item))
+    } catch { setFlyerError('Kunne ikke endre publisering. Prøv igjen.') }
+    finally { setPublishingFlyerId(null) }
   }
 
   async function handleDeleteFlyer(e: React.MouseEvent, id: string, slug: string) {
@@ -277,6 +281,9 @@ export default function LandingssiderPage() {
                     item={flyer}
                     href={`/flyer/${flyer.slug}`}
                     onDelete={e => handleDeleteFlyer(e, flyer.id, flyer.slug)}
+                    shareFlyer
+                    onTogglePublish={() => toggleFlyerPublished(flyer)}
+                    publishing={publishingFlyerId === flyer.id}
                     extra={`${flyer.view_count} ${flyer.view_count === 1 ? 'visning' : 'visninger'}`}
                   />
                 ))

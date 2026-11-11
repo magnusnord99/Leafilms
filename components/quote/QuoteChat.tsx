@@ -127,8 +127,14 @@ export default function QuoteChat({
     }
   }, [quoteId])
 
+  // Hent reaksjonene for akkurat denne meldingen på nytt etter toggle — realtime alene
+  // holder ikke: Supabase leverer ikke DELETE-events på filtrerte kanaler, så fjernede
+  // reaksjoner ble stående til siden ble lastet på nytt (feedback c45ecd6d).
   async function handleToggleReaction(messageId: string, emoji: string) {
-    await toggleReaction('quote', messageId, emoji)
+    const result = await toggleReaction('quote', messageId, emoji)
+    if (!result.ok) return
+    const fresh = await getReactions('quote', [messageId])
+    setReactions((prev) => ({ ...prev, [messageId]: fresh[messageId] ?? [] }))
   }
 
   async function handleSend() {

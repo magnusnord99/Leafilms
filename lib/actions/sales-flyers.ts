@@ -6,6 +6,7 @@ import { getPackageUsageNotes } from '@/lib/actions/package-usage-notes'
 import { validateSlug } from '@/lib/industry-landing-pages'
 import { getAuthenticatedStaffUser } from '@/lib/auth/staff'
 import { getQuoteAmountExclVat, getPackageDeliverableCounts, getPackageShootDays } from '@/lib/quote-builder-utils'
+import { validWebsiteMock } from '@/lib/website-mock'
 
 // Kun de feltene besøkende/editoren faktisk trenger for å vise en pakke —
 // ALDRI hele packages-raden. getSalesFlyerBySlug serialiseres som
@@ -249,6 +250,7 @@ export async function createSalesFlyer(slug: string): Promise<{ id: string } | {
 export type SalesFlyerUpdate = Partial<Omit<SalesFlyer, 'id' | 'slug' | 'created_at' | 'updated_at' | 'updated_by'>>
 
 export async function updateSalesFlyer(id: string, fields: SalesFlyerUpdate): Promise<{ ok: true } | { error: string }> {
+  if ('website_mock' in fields && !validWebsiteMock(fields.website_mock)) return { error: 'Ugyldig innhold for nettsideeksempelet' }
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -464,7 +466,7 @@ export async function copyLibraryImageToFlyer(
   imageId: string,
   field: 'hero_poster' | 'bts_image_1' | 'bts_image_2' |
     'example_image_1' | 'example_image_2' | 'example_image_3' | 'example_image_4' |
-    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | 'reference_preview'
+    'example_image_5' | 'example_image_6' | 'example_image_7' | 'example_image_8' | 'reference_preview' | 'website_mock_image'
 ): Promise<{ url: string } | { error: string }> {
   const staff = await getAuthenticatedStaffUser()
   if (!staff.ok) return { error: 'Du har ikke tilgang til å laste opp bilder' }
@@ -508,7 +510,7 @@ export async function copyLibraryImageToFlyer(
 export async function copyLibraryVideoToFlyer(
   slug: string,
   videoId: string,
-  field: 'hero_video'
+  field: 'hero_video' | 'website_mock_video'
 ): Promise<{ url: string } | { error: string }> {
   const supabase = await createClient()
 

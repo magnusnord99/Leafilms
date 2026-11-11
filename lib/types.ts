@@ -671,6 +671,7 @@ export type SalesFlyerPackageCategory = 'foto' | 'film' | 'foto_film'
 
 export type SalesFlyer = {
   id: string
+  website_mock: import('./website-mock').WebsiteMockSettings
   customer_id: string | null
   show_customer_logo: boolean
   slug: string

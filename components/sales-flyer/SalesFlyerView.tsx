@@ -1541,13 +1541,15 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         onClose={() => setDetailPackageId(null)}
         packageLabel={detailPackage?.package_label ?? ''}
         inquiryEmail={flyer.cta_email}
+        websiteMock={flyer.website_mock ?? {}}
+        onWebsiteMockSaved={value => set('website_mock', value)}
         flyerVideoPath={flyer.hero_video_path}
         flyerImages={selectedExampleImages.map(slot => slot.path).filter((path): path is string => Boolean(path))}
         items={detailPackage?.showcaseItems ?? []}
         deliverableCounts={detailPackage?.deliverableCounts}
         usageNotes={flyer.usageNotes}
         onUsageNotesChanged={usageNotes => setFlyer(previous => ({ ...previous, usageNotes }))}
-        editable={editing && detailPackage ? { flyerId: flyer.id, packageId: detailPackage.package_id } : undefined}
+        editable={editing && detailPackage ? { flyerId: flyer.id, packageId: detailPackage.package_id, flyerSlug: flyer.slug } : undefined}
         onItemsChanged={detailPackage ? items => updatePackageShowcaseItems(detailPackage.package_id, items) : undefined}
       />
     </main>

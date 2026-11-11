@@ -11,6 +11,8 @@ import {
 } from '@/lib/actions/quote-package-showcase'
 import { updatePackageUsageNote } from '@/lib/actions/package-usage-notes'
 import { DEFAULT_PACKAGE_USAGE_NOTES } from '@/lib/package-usage-notes'
+import { WEBSITE_MOCK_DEFAULTS, type WebsiteMockSettings } from '@/lib/website-mock'
+import { WebsiteMockEditor } from '@/components/sales-flyer/WebsiteMockEditor'
 
 // Samme cinematiske fargesett som components/sales-flyer/SalesFlyerView.tsx
 // (denne modalen er kun montert fra den filen, og vises for anonyme flyer-
@@ -28,7 +30,7 @@ const BLACK = '#0C0B09'
 // det tidligere separate PackageShowcasePanel-tabellvinduet (feedback
 // 2026-11-10: "redigeringen ... bli inline ... ikke i en tabell"). Panelet
 // er fjernet — all legg til/fjern/flytt-logikk bor nå her.
-type EditableTarget = { flyerId: string; packageId: string }
+type EditableTarget = { flyerId: string; packageId: string; flyerSlug?: string }
 
 interface PackageDetailModalProps {
   isOpen: boolean
@@ -37,6 +39,8 @@ interface PackageDetailModalProps {
   inquiryEmail?: string
   flyerVideoPath?: string | null
   flyerImages?: string[]
+  websiteMock?: WebsiteMockSettings
+  onWebsiteMockSaved?: (value: WebsiteMockSettings) => void
   items: QuotePackageShowcaseItem[]
   editable?: EditableTarget
   onItemsChanged?: (items: QuotePackageShowcaseItem[]) => void
@@ -176,13 +180,16 @@ function WebsiteMock({
   onPrevVideo,
   onNextVideo,
   hasMultipleVideos,
+  settings,
 }: {
   video: QuotePackageShowcaseItem | null
   websitePhotos: QuotePackageShowcaseItem[]
   onPrevVideo: () => void
   onNextVideo: () => void
   hasMultipleVideos: boolean
+  settings: WebsiteMockSettings
 }) {
+  const copy = { ...WEBSITE_MOCK_DEFAULTS, ...settings }
   const heroPhoto = video ? null : websitePhotos[0]
   const contentPhotos = video ? websitePhotos.slice(0, 2) : websitePhotos.slice(1, 2)
   return (
@@ -192,13 +199,13 @@ function WebsiteMock({
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#E0B23D', display: 'inline-block' }} />
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#4CAF7D', display: 'inline-block' }} />
         <div className="ml-2 flex-1 truncate rounded-full px-3 py-1" style={{ background: SURFACE, color: SUBTLE, fontSize: '0.65rem' }}>
-          leafilms.no
+          {copy.domain}
         </div>
       </div>
       {/* Fiktiv nav-rad — ren pynt, ikke redigerbar. Gjør at det ser ut som en
           faktisk nettside og ikke bare en videospiller med en adresselinje. */}
       <div className="flex items-center justify-between gap-3 px-5 py-3" style={{ background: BLACK, borderBottom: `1px solid ${BORDER}` }}>
-        <span className="font-display text-sm tracking-wide" style={{ color: CREAM }}>leafilms</span>
+        <span className="font-display text-sm tracking-wide" style={{ color: CREAM }}>{copy.brand}</span>
         <div className="flex items-center gap-4">
           {['Hjem', 'Om oss', 'Tjenester', 'Kontakt'].map(item => (
             <span key={item} style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.65rem', color: MUTED }}>{item}</span>
@@ -208,7 +215,7 @@ function WebsiteMock({
           className="rounded-full px-3 py-1"
           style={{ background: GOLD, color: '#1A1812', fontFamily: 'var(--font-dm-sans)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}
         >
-          Kontakt oss
+          {copy.buttonText}
         </span>
       </div>
       <div className="relative w-full" style={{ aspectRatio: '21 / 9', background: '#000' }}>
@@ -224,19 +231,19 @@ function WebsiteMock({
           className="pointer-events-none absolute inset-x-0 bottom-0 p-5"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.78), transparent)' }}
         >
-          <p className="font-display text-lg md:text-xl" style={{ color: CREAM, fontWeight: 400 }}>Opplevelser som blir med deg</p>
+          <p className="font-display text-lg md:text-xl" style={{ color: CREAM, fontWeight: 400 }}>{copy.heroTitle}</p>
           <p className="mt-1" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.72rem', color: MUTED }}>
-            Finn inspirasjon til ditt neste øyeblikk
+            {copy.heroSubtitle}
           </p>
         </div>
         {hasMultipleVideos && <CarouselArrows onPrev={onPrevVideo} onNext={onNextVideo} />}
       </div>
       <div className={`grid gap-4 px-5 py-4 ${contentPhotos.length > 0 ? 'grid-cols-[1.1fr_1fr]' : ''}`} style={{ background: BLACK }}>
         <div>
-          <p className="text-[0.55rem] uppercase tracking-[0.2em]" style={{ color: GOLD }}>Velkommen til oss</p>
-          <p className="font-display mt-1.5 text-lg" style={{ color: CREAM }}>Oppdag mulighetene</p>
+          <p className="text-[0.55rem] uppercase tracking-[0.2em]" style={{ color: GOLD }}>{copy.eyebrow}</p>
+          <p className="font-display mt-1.5 text-lg" style={{ color: CREAM }}>{copy.heading}</p>
           <p className="mt-1.5 max-w-md text-[0.65rem] leading-relaxed" style={{ color: MUTED }}>
-            Bli kjent med oss og finn inspirasjon til nye opplevelser. Vi hjelper deg med å finne det som passer for deg.
+            {copy.body}
           </p>
         </div>
         {contentPhotos.length > 0 && (
@@ -250,7 +257,7 @@ function WebsiteMock({
       </div>
       {/* Fiktiv footer — fullfører "dette er en nettside"-illusjonen. */}
       <div className="px-5 py-2 text-center" style={{ borderTop: `1px solid ${BORDER}` }}>
-        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: SUBTLE }}>© {new Date().getFullYear()} leafilms.no — Alle rettigheter reservert</span>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.6rem', color: SUBTLE }}>© {new Date().getFullYear()} {copy.domain} — Alle rettigheter reservert</span>
       </div>
     </div>
   )
@@ -474,8 +481,9 @@ function UsageNoteEditor({ value, editable, busy, saving, onSave }: {
 export function PackageDetailModal({
   isOpen, onClose, packageLabel, items: initialItems, editable, onItemsChanged,
   deliverableCounts, usageNotes: initialUsageNotes, onUsageNotesChanged, inquiryEmail,
-  flyerVideoPath, flyerImages,
+  flyerVideoPath, flyerImages, websiteMock, onWebsiteMockSaved,
 }: PackageDetailModalProps) {
+  const [mockSettings, setMockSettings] = useState<WebsiteMockSettings>(websiteMock ?? {})
   const [mainVideoIndex, setMainVideoIndex] = useState(0)
   const [socialClipIndex, setSocialClipIndex] = useState(0)
   const [items, setItems] = useState(initialItems)
@@ -657,14 +665,17 @@ export function PackageDetailModal({
     }
   }
   const hasMainVideo = deliverableCounts === undefined || deliverableCounts.hovedvideo > 0
-  const mainVideos = !hasMainVideo ? [] : flyerVideoPath !== undefined
-    ? flyerVideoPath ? [automaticItem('main_video', flyerVideoPath, 0)] : []
+  const mockVideoPath = mockSettings.video !== undefined ? mockSettings.video : flyerVideoPath
+  const mainVideos = !hasMainVideo ? [] : mockVideoPath !== undefined
+    ? mockVideoPath ? [automaticItem('main_video', mockVideoPath, 0)] : []
     : itemsForKind('main_video')
   const socialClips = itemsForKind('social_clip')
   const photos = flyerImages !== undefined
     ? flyerImages.map((path, index) => automaticItem('photo', path, index))
     : itemsForKind('photo')
-  const websitePhotos = flyerImages !== undefined
+  const websitePhotos = mockSettings.images !== undefined
+    ? mockSettings.images.map((path, index) => automaticItem('website_photo', path, index))
+    : flyerImages !== undefined
     ? flyerImages.map((path, index) => automaticItem('website_photo', path, index))
     : itemsForKind('website_photo')
   const photoCount = deliverableCounts?.photo ?? photos.length
@@ -800,11 +811,15 @@ export function PackageDetailModal({
         {(!isEmpty || editable || inquiryEmail) && (
           <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-8 lg:gap-10">
             <div className="min-w-0">
+            {editable?.flyerSlug && <WebsiteMockEditor flyerId={editable.flyerId} slug={editable.flyerSlug}
+              value={mockSettings} onChange={setMockSettings} allowVideo={hasMainVideo}
+              onSaved={value => onWebsiteMockSaved?.(value)} />}
             {editable && <p style={sectionLabelStyle()}>{hasMainVideo ? KIND_LABEL.main_video : 'Bilder — vises på nettsiden'}</p>}
             {activeVideo || websitePhotos.length > 0 ? (
               <div className={`w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
                 <WebsiteMock
                   video={activeVideo}
+                  settings={mockSettings}
                   websitePhotos={websitePhotos}
                   onPrevVideo={showPrevVideo}
                   onNextVideo={showNextVideo}
@@ -817,7 +832,7 @@ export function PackageDetailModal({
               </p>
             ) : null}
             {editable && hasMainVideo && flyerVideoPath !== undefined && (
-              <p className="mt-3 text-sm" style={{ color: MUTED }}>Hentes automatisk fra videoen øverst på flyeren. Endre toppvideoen for å bytte eksempel.</p>
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.video === undefined ? 'Videoen følger toppvideoen på flyeren. Du kan overstyre den under «Tilpass nettsideeksempelet».' : 'Videoen er overstyrt for nettsideeksempelet.'}</p>
             )}
             {editable && hasMainVideo && flyerVideoPath === undefined && (
               <EditStrip
@@ -832,7 +847,7 @@ export function PackageDetailModal({
 
             {editable && <p className="mt-8" style={sectionLabelStyle()}>{KIND_LABEL.website_photo}</p>}
             {editable && flyerImages !== undefined && (
-              <p className="mt-3 text-sm" style={{ color: MUTED }}>Bildene hentes automatisk fra flyeren og følger rekkefølgen der.</p>
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.images === undefined ? 'Nettsidebildene følger flyeren. Du kan velge egne under «Tilpass nettsideeksempelet».' : 'Nettsideeksempelet bruker egne bilder.'}</p>
             )}
             {editable && flyerImages === undefined && (
               <EditStrip

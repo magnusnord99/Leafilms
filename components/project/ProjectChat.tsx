@@ -84,8 +84,9 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
         (payload) => {
           const row = payload.new as { message_id: string; user_id: string; emoji: string; user_name?: string }
           setReactions((prev) => {
-            const list = prev[row.message_id]
-            if (list === undefined) return prev
+            // Meldinger uten reaksjoner har ingen nøkkel i state (getReactions returnerer kun
+            // meldinger som har reaksjoner) — behandle som tom liste, ellers forsvant første reaksjon.
+            const list = prev[row.message_id] ?? []
             if (list.some((r) => r.userId === row.user_id && r.emoji === row.emoji)) return prev
             const profile = profiles.find((p) => p.id === row.user_id)
             return {
@@ -137,10 +138,14 @@ export function ProjectChat({ projectId, forceOpen }: Props) {
     }
   }
 
-  // Ingen optimistisk oppdatering nødvendig — realtime-subscriptionen over leverer
-  // INSERT/DELETE-eventet tilbake til samme klient i løpet av noen hundre ms.
+  // Hent reaksjonene for akkurat denne meldingen på nytt etter toggle — realtime alene
+  // holder ikke: Supabase leverer ikke DELETE-events på filtrerte kanaler, så fjernede
+  // reaksjoner ble stående til siden ble lastet på nytt (feedback c45ecd6d).
   async function handleToggleReaction(messageId: string, emoji: string) {
-    await toggleReaction('project', messageId, emoji)
+    const result = await toggleReaction('project', messageId, emoji)
+    if (!result.ok) return
+    const fresh = await getReactions('project', [messageId])
+    setReactions((prev) => ({ ...prev, [messageId]: fresh[messageId] ?? [] }))
   }
 
   // Hent meldinger når chatten åpnes

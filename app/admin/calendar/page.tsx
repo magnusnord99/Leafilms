@@ -236,6 +236,22 @@ export default function CalendarPage() {
       }
     }
 
+    // Flerdagers utilgjengelig-blokker øverst hver dag, i fast rekkefølge (startdato, så id),
+    // så samme blokk havner på samme linje på alle dagene i spennet i stedet for å hoppe
+    // under et møte/en oppgave som tilfeldigvis ble lagt til før den (feedback 9683f1c9).
+    // Stabil sortering — alt annet beholder sin opprinnelige rekkefølge.
+    const isMultiDayUnavail = (ev: CalEvent) =>
+      ev.type === 'unavailable' && ev.spanPosition !== 'only' && !!ev.unavail
+    for (const [date, events] of map) {
+      map.set(date, [...events].sort((a, b) => {
+        const am = isMultiDayUnavail(a)
+        const bm = isMultiDayUnavail(b)
+        if (am !== bm) return am ? -1 : 1
+        if (!am) return 0
+        return a.unavail!.date.localeCompare(b.unavail!.date) || a.unavail!.id.localeCompare(b.unavail!.id)
+      }))
+    }
+
     return map
   }, [shootings, tasks, meetings, unavailability, effectiveFilterId, profile?.id])
 

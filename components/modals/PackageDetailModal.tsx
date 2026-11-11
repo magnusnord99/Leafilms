@@ -693,9 +693,9 @@ export function PackageDetailModal({
     if (note.kind === 'photo') return editable || photos.length > 0
     return editable || socialClips.length > 0
   })
-  const usageNotesPanel = visibleNotes.length > 0 ? (
+  const usageNotesPanel = visibleNotes.length > 0 || inquiryEmail || editable ? (
     <div className="flex w-full flex-col gap-5 md:max-w-[280px]">
-      <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>
+      {visibleNotes.length > 0 && <p className="font-display text-xl" style={{ color: CREAM, fontWeight: 400 }}>Slik bruker du leveransen</p>}
       {editable && (
         <p style={{ fontSize: '0.74rem', color: MUTED }}>Tekstene er felles for alle pakker og landingssider.</p>
       )}
@@ -709,6 +709,18 @@ export function PackageDetailModal({
           onSave={saveUsageNote}
         />
       ))}
+      {inquiryEmail ? (
+        <a
+          href={`mailto:${inquiryEmail}?subject=${encodeURIComponent(`Forespørsel: ${packageLabel}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${packageLabel}". Kan dere ta kontakt?`)}`}
+          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[2px] px-3 py-3 text-[0.65rem] font-medium uppercase tracking-[0.08em] transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+          style={{ background: GOLD, color: BLACK }}
+        >
+          Velg denne pakken
+          <span aria-hidden="true">→</span>
+        </a>
+      ) : editable ? (
+        <p className="text-sm" style={{ color: MUTED }}>Legg inn pakke-e-post under Innstillinger for å vise «Velg denne pakken».</p>
+      ) : null}
     </div>
   ) : null
 
@@ -785,7 +797,7 @@ export function PackageDetailModal({
         )}
 
         {/* ── Desktop: nettside-mock (video + nettside-bilder) + klipp/bunke, med inline redigering når `editable` ── */}
-        {(!isEmpty || editable) && (
+        {(!isEmpty || editable || inquiryEmail) && (
           <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-8 lg:gap-10">
             <div className="min-w-0">
             {editable && <p style={sectionLabelStyle()}>{hasMainVideo ? KIND_LABEL.main_video : 'Bilder — vises på nettsiden'}</p>}
@@ -984,19 +996,8 @@ export function PackageDetailModal({
           Reise, kost og losji er ikke inkludert i prisen.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-          {inquiryEmail ? (
-            <a
-              href={`mailto:${inquiryEmail}?subject=${encodeURIComponent(`Forespørsel: ${packageLabel}`)}&body=${encodeURIComponent(`Hei,\n\nJeg er interessert i "${packageLabel}". Kan dere ta kontakt?`)}`}
-              className="inline-flex items-center gap-3 rounded-[2px] px-6 py-4 text-xs font-medium uppercase tracking-[0.12em] transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
-              style={{ background: GOLD, color: BLACK }}
-            >
-              Velg denne pakken
-              <span aria-hidden="true">→</span>
-            </a>
-          ) : editable ? (
-            <p className="text-sm" style={{ color: MUTED }}>Legg inn pakke-e-post under Innstillinger for å vise «Velg denne pakken».</p>
-          ) : <span />}
+        <div className="mt-8 flex justify-end">
+
           <button
             type="button"
             onClick={onClose}

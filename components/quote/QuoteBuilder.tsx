@@ -471,11 +471,26 @@ function CrewSection({
                 </tr>
               ))}
             </tbody>
+            {crew.length > 1 && <SubtotalRow labelColSpan={4} total={crew.reduce((s, m) => s + m.dailyRate * m.days, 0)} />}
           </table>
         </div>
       )}
       {crew.length === 0 && !libraryOpen && <p style={{ color: C.text3, fontSize: '0.72rem', padding: '8px 0', fontFamily: 'var(--font-dm-sans)' }}>Ingen lagt til ennå</p>}
     </div>
+  )
+}
+
+// Sumlinje under en kostnadstabell — vises kun ved 2+ rader, så man slipper å
+// legge sammen radene manuelt for å se hva kostnadsposten totalt er på.
+function SubtotalRow({ labelColSpan, total }: { labelColSpan: number; total: number }) {
+  return (
+    <tfoot>
+      <tr>
+        <td colSpan={labelColSpan} style={{ padding: '8px 8px 4px 0', textAlign: 'right', fontSize: '0.62rem', color: C.text2, fontFamily: 'var(--font-dm-sans)', borderTop: `1px solid ${C.border}` }}>Sum</td>
+        <td style={{ padding: '8px 8px 4px 0', textAlign: 'right', color: C.text, fontWeight: 600, whiteSpace: 'nowrap', borderTop: `1px solid ${C.border}` }}>{formatNOK(total)}</td>
+        <td style={{ borderTop: `1px solid ${C.border}` }} />
+      </tr>
+    </tfoot>
   )
 }
 
@@ -535,6 +550,7 @@ function ItemSection({
                 </tr>
               ))}
             </tbody>
+            {items.length > 1 && <SubtotalRow labelColSpan={3} total={items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)} />}
           </table>
         </div>
       )}
@@ -1153,6 +1169,7 @@ function ShootCrewSection({
                 </tr>
               )})}
             </tbody>
+            {crew.length > 1 && <SubtotalRow labelColSpan={5} total={crew.reduce((s, m) => s + crewMemberCost(m), 0)} />}
           </table>
         </div>
       )}

@@ -76,6 +76,7 @@ const PATH_ROLE_PREFIXES: { prefix: string; roles: StaffRole[] }[] = [
   { prefix: '/admin/leads', roles: ['admin', 'sales'] },
   { prefix: '/admin/pipeline', roles: ['admin', 'sales', 'production'] },
   { prefix: '/admin/pitches', roles: ['admin', 'sales'] },
+  { prefix: '/admin/statistikk', roles: ['admin', 'sales'] },
   { prefix: '/admin/tapte', roles: ['admin', 'sales'] },
   { prefix: '/admin/customers', roles: ['admin', 'sales'] },
   { prefix: '/admin/email', roles: ['admin', 'sales'] },

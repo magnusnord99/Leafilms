@@ -12,7 +12,7 @@ import {
 import { updatePackageUsageNote } from '@/lib/actions/package-usage-notes'
 import { DEFAULT_PACKAGE_USAGE_NOTES } from '@/lib/package-usage-notes'
 import { WEBSITE_MOCK_DEFAULTS, type WebsiteMockSettings } from '@/lib/website-mock'
-import { WebsiteMockEditor } from '@/components/sales-flyer/WebsiteMockEditor'
+import { WebsiteMockEditor, type WebsiteMockControls } from '@/components/sales-flyer/WebsiteMockEditor'
 
 // Samme cinematiske fargesett som components/sales-flyer/SalesFlyerView.tsx
 // (denne modalen er kun montert fra den filen, og vises for anonyme flyer-
@@ -181,6 +181,7 @@ function WebsiteMock({
   onNextVideo,
   hasMultipleVideos,
   settings,
+  controls,
 }: {
   video: QuotePackageShowcaseItem | null
   websitePhotos: QuotePackageShowcaseItem[]
@@ -188,6 +189,7 @@ function WebsiteMock({
   onNextVideo: () => void
   hasMultipleVideos: boolean
   settings: WebsiteMockSettings
+  controls?: WebsiteMockControls
 }) {
   const copy = { ...WEBSITE_MOCK_DEFAULTS, ...settings }
   const heroPhoto = video ? null : websitePhotos[0]
@@ -219,6 +221,14 @@ function WebsiteMock({
         </span>
       </div>
       <div className="relative w-full" style={{ aspectRatio: '21 / 9', background: '#000' }}>
+        {controls && (
+          <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-2">
+            {controls.changeVideo && <button type="button" onClick={controls.changeVideo} disabled={controls.busy}
+              className="rounded border border-white/30 bg-black/80 px-3 py-2 text-xs text-white disabled:opacity-50">Endre video</button>}
+            {!video && <button type="button" onClick={controls.changeImages} disabled={controls.busy}
+              className="rounded border border-white/30 bg-black/80 px-3 py-2 text-xs text-white disabled:opacity-50">Endre bilder</button>}
+          </div>
+        )}
         {video && (
           <video key={video.id} autoPlay muted loop playsInline src={video.path} className="hero-bg-video absolute inset-0 h-full w-full object-cover animate-[fade-in_0.3s_ease-out]" />
         )}
@@ -238,7 +248,7 @@ function WebsiteMock({
         </div>
         {hasMultipleVideos && <CarouselArrows onPrev={onPrevVideo} onNext={onNextVideo} />}
       </div>
-      <div className={`grid gap-4 px-5 py-4 ${contentPhotos.length > 0 ? 'grid-cols-[1.1fr_1fr]' : ''}`} style={{ background: BLACK }}>
+      <div className={`grid gap-4 px-5 py-4 ${contentPhotos.length > 0 || controls ? 'grid-cols-[1.1fr_1fr]' : ''}`} style={{ background: BLACK }}>
         <div>
           <p className="text-[0.55rem] uppercase tracking-[0.2em]" style={{ color: GOLD }}>{copy.eyebrow}</p>
           <p className="font-display mt-1.5 text-lg" style={{ color: CREAM }}>{copy.heading}</p>
@@ -246,12 +256,14 @@ function WebsiteMock({
             {copy.body}
           </p>
         </div>
-        {contentPhotos.length > 0 && (
-          <div className="grid items-center gap-2" style={{ gridTemplateColumns: `repeat(${contentPhotos.length}, minmax(0, 1fr))` }}>
+        {(contentPhotos.length > 0 || controls) && (
+          <div className="relative grid items-center gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(contentPhotos.length, 1)}, minmax(0, 1fr))` }}>
             {contentPhotos.map(photo => (
               // eslint-disable-next-line @next/next/no-img-element
               <img key={photo.id} src={photo.path} alt="" className="h-24 w-full rounded-[2px] object-cover md:h-28" style={{ background: SURFACE }} />
             ))}
+            {controls && <button type="button" onClick={controls.changeImages} disabled={controls.busy}
+              className="absolute bottom-2 right-2 rounded border border-white/30 bg-black/80 px-3 py-2 text-xs text-white disabled:opacity-50">Endre bilder</button>}
           </div>
         )}
       </div>
@@ -735,6 +747,14 @@ export function PackageDetailModal({
     </div>
   ) : null
 
+  function renderWebsitePreview(controls?: WebsiteMockControls) {
+    return <div className={`w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
+      <WebsiteMock video={activeVideo} settings={mockSettings} websitePhotos={websitePhotos}
+        onPrevVideo={showPrevVideo} onNextVideo={showNextVideo}
+        hasMultipleVideos={mainVideos.length > 1} controls={controls} />
+    </div>
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-6 md:p-8 z-50"
@@ -811,28 +831,14 @@ export function PackageDetailModal({
         {(!isEmpty || editable || inquiryEmail) && (
           <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-8 lg:gap-10">
             <div className="min-w-0">
-            {editable?.flyerSlug && <WebsiteMockEditor flyerId={editable.flyerId} slug={editable.flyerSlug}
-              value={mockSettings} onChange={setMockSettings} allowVideo={hasMainVideo}
-              onSaved={value => onWebsiteMockSaved?.(value)} />}
             {editable && <p style={sectionLabelStyle()}>{hasMainVideo ? KIND_LABEL.main_video : 'Bilder — vises på nettsiden'}</p>}
-            {activeVideo || websitePhotos.length > 0 ? (
-              <div className={`w-full max-w-[640px] ${editable ? 'mt-2' : ''}`}>
-                <WebsiteMock
-                  video={activeVideo}
-                  settings={mockSettings}
-                  websitePhotos={websitePhotos}
-                  onPrevVideo={showPrevVideo}
-                  onNextVideo={showNextVideo}
-                  hasMultipleVideos={mainVideos.length > 1}
-                />
-              </div>
-            ) : editable ? (
-              <p className="mt-2" style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '0.74rem', color: SUBTLE }}>
-                {hasMainVideo ? 'Ingen hovedvideo eller nettsidebilder lagt til ennå.' : 'Ingen nettsidebilder lagt til ennå.'}
-              </p>
-            ) : null}
+            {editable?.flyerSlug ? (
+              <WebsiteMockEditor flyerId={editable.flyerId} slug={editable.flyerSlug}
+                value={mockSettings} onChange={setMockSettings} allowVideo={hasMainVideo}
+                onSaved={value => onWebsiteMockSaved?.(value)} renderPreview={renderWebsitePreview} />
+            ) : activeVideo || websitePhotos.length > 0 ? renderWebsitePreview() : null}
             {editable && hasMainVideo && flyerVideoPath !== undefined && (
-              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.video === undefined ? 'Videoen følger toppvideoen på flyeren. Du kan overstyre den under «Tilpass nettsideeksempelet».' : 'Videoen er overstyrt for nettsideeksempelet.'}</p>
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.video === undefined ? 'Videoen følger toppvideoen på flyeren. Trykk «Endre video» for å velge en annen.' : 'Videoen er overstyrt for nettsideeksempelet.'}</p>
             )}
             {editable && hasMainVideo && flyerVideoPath === undefined && (
               <EditStrip
@@ -847,7 +853,7 @@ export function PackageDetailModal({
 
             {editable && <p className="mt-8" style={sectionLabelStyle()}>{KIND_LABEL.website_photo}</p>}
             {editable && flyerImages !== undefined && (
-              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.images === undefined ? 'Nettsidebildene følger flyeren. Du kan velge egne under «Tilpass nettsideeksempelet».' : 'Nettsideeksempelet bruker egne bilder.'}</p>
+              <p className="mt-3 text-sm" style={{ color: MUTED }}>{mockSettings.images === undefined ? 'Nettsidebildene følger flyeren. Trykk «Endre bilder» for å velge andre.' : 'Nettsideeksempelet bruker egne bilder.'}</p>
             )}
             {editable && flyerImages === undefined && (
               <EditStrip

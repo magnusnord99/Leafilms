@@ -43,6 +43,7 @@ function LandingPageRow<T extends { id: string; slug: string; published: boolean
           </button>
         ) : <span style={statusStyle}>{item.published ? 'Publisert' : 'Kladd'}</span>}
         {shareFlyer && item.published && !publishing && <ShareFlyerButton slug={item.slug} />}
+        {shareFlyer && <Link href={`/admin/statistikk/flyers/${item.id}`} className="text-xs hover:underline" style={{ color: C.accent }}>Statistikk</Link>}
         <button type="button" onClick={onDelete} aria-label={`Slett ${item.slug}`} disabled={publishing}
           style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, color: C.text3, cursor: 'pointer' }}>×</button>

@@ -35,6 +35,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/landingssider', label: 'Landingssider' },
       { href: '/admin/leads',     label: 'Leads' },
       { href: '/admin/pitches',   label: 'Pitcher' },
+      { href: '/admin/statistikk', label: 'Statistikk' },
       { href: '/admin/quotes',    label: 'Tilbud' },
       { href: '/admin/package-offers', label: 'Pakketilbud' },
       { href: '/admin/contracts', label: 'Kontrakter' },

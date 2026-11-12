@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadLink } from '@/components/shared/MediaDownloadLink'
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button, Card, Heading, Text, Input } from '@/components/ui'
@@ -475,6 +477,9 @@ export function ImagePickerModal({
                       </button>
                     </div>
 
+                    <div className="bg-zinc-900 px-2 pt-2 text-zinc-200">
+                      <MediaDownloadLink filePath={image.file_path} filename={image.filename} />
+                    </div>
                     {/* Info / inline redigering */}
                     {editingImageId === image.id ? (
                       <div

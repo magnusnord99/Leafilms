@@ -28,6 +28,7 @@ export function PageHeader({ projectId, projectTitle, projectStatus, onRefresh, 
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
       <div>
+        <Link href="/admin/statistikk" className="mb-2 mr-4 inline-block text-white/60 hover:text-white">← All statistikk</Link>
         <Link href={`/admin/projects/${projectId}/edit`} className="text-white/60 hover:text-white mb-2 inline-block">
           ← Tilbake til prosjekt
         </Link>

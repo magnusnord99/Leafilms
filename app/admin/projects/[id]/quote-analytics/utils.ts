@@ -36,9 +36,10 @@ export const formatTime = (seconds: number | null): string => {
   return `${hours}t ${remainingMinutes}m`
 }
 
-export const formatDate = (dateString: string | null): string => {
+export const formatDate = (dateString: string | null, timeZone?: string): string => {
   if (!dateString) return 'Aldri'
   return new Date(dateString).toLocaleDateString('nb-NO', {
+    timeZone,
     year: 'numeric',
     month: 'short',
     day: 'numeric',

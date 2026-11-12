@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ImagePickerModal } from '@/components/modals/ImagePickerModal'
 import { VideoPickerModal } from '@/components/modals/VideoPickerModal'
 import { copyLibraryImageToFlyer, copyLibraryVideoToFlyer, updateSalesFlyer } from '@/lib/actions/sales-flyers'
@@ -13,7 +13,10 @@ const FIELDS = [
   ['eyebrow', 'Liten overskrift'], ['heading', 'Overskrift i innholdet'], ['body', 'Brødtekst'],
 ] as const
 
-export function WebsiteMockEditor({ flyerId, slug, value, onChange, onSaved, allowVideo }: {
+export type WebsiteMockControls = { changeImages: () => void; changeVideo?: () => void; busy: boolean }
+
+export function WebsiteMockEditor({ flyerId, slug, value, onChange, onSaved, allowVideo, renderPreview }: {
+  renderPreview?: (controls: WebsiteMockControls) => ReactNode
   flyerId: string; slug: string; value: WebsiteMockSettings; allowVideo: boolean
   onChange: (value: WebsiteMockSettings) => void; onSaved: (value: WebsiteMockSettings) => void
 }) {
@@ -33,27 +36,30 @@ export function WebsiteMockEditor({ flyerId, slug, value, onChange, onSaved, all
         const results = await Promise.all(ids.slice(0, 2).map(id => copyLibraryImageToFlyer(slug, id, 'website_mock_image')))
         const failed = results.find(result => 'error' in result)
         if (failed && 'error' in failed) throw new Error(failed.error)
-        change({ ...value, images: results.flatMap(result => 'url' in result ? [result.url] : []) })
+        const next = { ...value, images: results.flatMap(result => 'url' in result ? [result.url] : []) }
+        change(next); await save(next)
       } else if (ids[0]) {
         const result = await copyLibraryVideoToFlyer(slug, ids[0], 'website_mock_video')
         if ('error' in result) throw new Error(result.error)
-        change({ ...value, video: result.url })
+        const next = { ...value, video: result.url }
+        change(next); await save(next)
       }
     } catch (error) { setError(error instanceof Error ? error.message : 'Kunne ikke hente medier') }
     finally { setBusy(false) }
   }
-  async function save() {
+  async function save(next = value) {
     setBusy(true); setError(null)
     try {
-      const result = await updateSalesFlyer(flyerId, { website_mock: value })
+      const result = await updateSalesFlyer(flyerId, { website_mock: next })
       if ('error' in result) throw new Error(result.error)
-      onSaved(value); setSaved(true); setDirty(false)
+      onSaved(next); setSaved(true); setDirty(false)
     } catch (error) { setError(error instanceof Error ? error.message : 'Kunne ikke lagre') }
     finally { setBusy(false) }
   }
-  return <details className="my-5 rounded border border-[#3C3529] p-4 text-sm text-[#E8E1D5]">
-    <summary className="cursor-pointer font-medium">Tilpass nettsideeksempelet</summary>
-    <p className="my-3 text-xs leading-relaxed text-[#9E9287]">Gjelder denne flyeren og alle pakkene på den. Bilder og video følger flyeren til du velger egne. Lagre når du er ferdig.</p>
+  return <>
+  <details className="my-5 rounded border border-[#3C3529] p-4 text-sm text-[#E8E1D5]">
+    <summary className="cursor-pointer font-medium">Tilpass tekst og innstillinger</summary>
+    <p className="my-3 text-xs leading-relaxed text-[#9E9287]">Gjelder denne flyeren og alle pakkene på den. Endre medier med knappene direkte på forhåndsvisningen. Tekstendringer lagres med knappen nedenfor.</p>
     <fieldset disabled={busy} className="space-y-4 disabled:opacity-60">
       <div className="grid gap-3 sm:grid-cols-2">
         {FIELDS.map(([key, label]) => <label key={key} className={`grid gap-1 text-xs ${key === 'body' ? 'sm:col-span-2' : ''}`}>
@@ -65,24 +71,24 @@ export function WebsiteMockEditor({ flyerId, slug, value, onChange, onSaved, all
         </label>)}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        <button type="button" className="text-[#C49434] underline" onClick={() => setPicker('images')}>Velg egne bilder</button>
         <button type="button" className="text-[#C49434] underline" onClick={() => follow('images')}>Bruk flyerens bilder</button>
         <span className="text-[#9E9287]">{value.images === undefined ? 'Følger flyeren' : `${value.images.length} egne bilder`}</span>
       </div>
       {allowVideo && <div className="flex flex-wrap items-center gap-3 text-xs">
-        <button type="button" className="text-[#C49434] underline" onClick={() => setPicker('video')}>Velg egen video</button>
         <button type="button" className="text-[#C49434] underline" onClick={() => follow('video')}>Bruk flyerens toppvideo</button>
         <button type="button" className="text-[#C49434] underline" onClick={() => change({ ...value, video: null })}>Ingen video</button>
         <span className="text-[#9E9287]">{value.video === undefined ? 'Følger flyeren' : value.video === null ? 'Video skjult' : 'Egen video'}</span>
       </div>}
       <div className="flex flex-wrap items-center gap-4">
-        <button type="button" onClick={save} className="rounded bg-[#C49434] px-4 py-2 font-medium text-black">{busy ? 'Lagrer…' : 'Lagre nettsideeksempel'}</button>
+        <button type="button" onClick={() => save()} className="rounded bg-[#C49434] px-4 py-2 font-medium text-black">{busy ? 'Lagrer…' : 'Lagre nettsideeksempel'}</button>
         <button type="button" onClick={() => change({})} className="text-xs underline">Bruk flyerens innhold og standardtekst</button>
       </div>
     </fieldset>
+  </details>
     <p role="status" className="mt-2 text-xs text-[#9E9287]">{dirty ? 'Ulagrede endringer' : saved ? 'Lagret' : ''}</p>
     {error && <p role="alert" className="mt-2 text-xs text-red-400">{error}</p>}
+    {renderPreview?.({ changeImages: () => setPicker('images'), changeVideo: allowVideo ? () => setPicker('video') : undefined, busy })}
     <ImagePickerModal isOpen={picker === 'images'} onClose={() => setPicker(null)} onSelect={ids => pick(ids, 'images')} selectedImageIds={EMPTY_IDS} maxSelection={2} />
     <VideoPickerModal isOpen={picker === 'video'} onClose={() => setPicker(null)} onSelect={ids => pick(ids, 'video')} selectedVideoIds={EMPTY_IDS} maxSelection={1} />
-  </details>
+  </>
 }

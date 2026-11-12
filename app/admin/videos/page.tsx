@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadLink } from '@/components/shared/MediaDownloadLink'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -305,6 +307,7 @@ export default function VideosPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2">
+                      <MediaDownloadLink filePath={video.file_path} filename={video.filename} style={{ flex: 1, color: C.text2, borderColor: C.border }} />
                       <Button
                         variant="ghost"
                         size="sm"

@@ -870,6 +870,8 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
             {savingFields.has('published') ? 'Lagrer…' : flyer.published ? '✓ Publisert' : 'Ikke publisert · Publiser'}
           </button>
           {flyer.published && !savingFields.has('published') && <ShareFlyerButton slug={slug} />}
+          <a href={`/admin/statistikk/flyers/${flyer.id}`} target="_blank" rel="noopener noreferrer"
+            className="rounded-full border border-white/30 bg-black/80 px-3 py-2 text-xs font-medium text-white hover:bg-black">Statistikk ↗</a>
           <FieldError field="published" />
           {editing && (
             <button
@@ -1011,7 +1013,11 @@ export function SalesFlyerView({ initialFlyer, canEdit }: SalesFlyerViewProps) {
         )}
 
         <div className="relative z-10 flex h-full flex-col justify-between px-6 py-8 md:px-16 md:py-12">
-          <p className="text-xs font-medium uppercase tracking-[0.3em]" style={{ color: GOLD }}>Leafilms</p>
+          <a href="https://leafilms.no" target="_blank" rel="noopener noreferrer"
+            className="self-start text-xs font-medium uppercase tracking-[0.3em] transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C49434]"
+            style={{ color: GOLD }}>
+            Leafilms
+          </a>
 
           <div className="flex max-w-5xl flex-col items-start gap-6 pb-6 md:flex-row md:items-center md:gap-8 md:pb-12">
             {flyer.show_customer_logo && flyer.customer?.logo_path && (

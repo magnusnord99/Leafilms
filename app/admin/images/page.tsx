@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadLink } from '@/components/shared/MediaDownloadLink'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import NextImage from 'next/image'
@@ -672,7 +674,8 @@ export default function ImagesPage() {
                       {labelForCategory(image.category)}{image.subcategory ? ` · ${labelForSubcategory(image.subcategory)}` : ''}
                     </p>
                   </div>
-                  <div style={{ display: 'flex', gap: 4, padding: '0 8px 8px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 8px 8px' }}>
+                    <MediaDownloadLink filePath={image.file_path} filename={image.filename} style={{ flexBasis: '100%', color: C.text2, borderColor: C.border }} />
                     <Link href={`/admin/images/${image.id}/edit`} style={{ textDecoration: 'none', flex: 1 }}>
                       <button style={{
                         width: '100%',

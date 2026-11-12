@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadLink } from '@/components/shared/MediaDownloadLink'
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button, Card, Heading, Text, Input } from '@/components/ui'
@@ -417,6 +419,9 @@ export function VideoPickerModal({
                           {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
                         </div>
                       )}
+                    </div>
+                    <div className="bg-zinc-800 px-2 pt-2 text-zinc-200">
+                      <MediaDownloadLink filePath={video.file_path} filename={video.filename} />
                     </div>
                     {/* Title */}
                     <div className="p-2 bg-zinc-800">
